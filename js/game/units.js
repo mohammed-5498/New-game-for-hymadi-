@@ -1,21 +1,24 @@
 // إنشاء الوحدات وحركتها على المسار
-import { UNIT_BASE, GANGS, UNITS, TICK_SEC } from '../config.js';
+import { UNIT_BASE, GANGS, HEROES, UNITS, TICK_SEC } from '../config.js';
 import { findPath, findFreeTiles, nearestWalkable } from '../map/pathfinding.js';
 import { clearCombatOrders } from './combat.js';
 
-// دمج إحصائيات الوحدة الأساسية مع ميزة العصابة
-export function unitStats(gangId) {
+// إحصائيات الوحدة: الأساس + ميزة العصابة، أو الأساس + قيم الشخصية المميزة
+export function unitStats(gangId, heroId) {
+  if (heroId) return { ...UNIT_BASE, ...HEROES[heroId].stats };
   const gang = GANGS[gangId];
   return { ...UNIT_BASE, ...(gang && gang.unit ? gang.unit : {}) };
 }
 
-export function createUnit(state, player, i, j) {
-  const stats = unitStats(player.gang);
+export function createUnit(state, player, i, j, heroId = null) {
+  const stats = unitStats(player.gang, heroId);
   return {
     id: state.nextUnitId++,
     playerId: player.id,
     gang: player.gang,
     color: player.color,
+    hero: heroId,                      // null للفرد العادي
+    name: heroId ? HEROES[heroId].name : 'فرد',
     x: i, y: j,           // الموقع الحالي بالمربعات
     prevX: i, prevY: j,   // الموقع في التحديث السابق (لتنعيم الرسم)
     stats,
@@ -32,7 +35,11 @@ export function createUnit(state, player, i, j) {
     attackCooldown: 0,
     repathTimer: 0,
     hitFlash: 0,            // ومضة عند تلقي ضربة
-    deathTimer: 0           // زمن السقوط قبل الاختفاء
+    deathTimer: 0,          // زمن السقوط قبل الاختفاء
+
+    // المكافآت المحسوبة كل تحديث (هالة الزعيم، مخزن السلاح)
+    damageMultiplier: 1,
+    aura: false             // هل هو داخل هالة زعيم
   };
 }
 

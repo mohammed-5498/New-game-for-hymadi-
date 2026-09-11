@@ -1,14 +1,25 @@
 // ظهور الأفراد عند ساحات أعلام الأحياء المملوكة
-import { TICK_SEC, SPAWN, GANGS, MAP_GEN } from '../config.js';
+import { TICK_SEC, SPAWN, GANGS, MAP_GEN, SPECIAL_BONUS } from '../config.js';
 import { createUnit } from './units.js';
 import { findFreeTiles } from '../map/pathfinding.js';
 import { isEnemy } from './combat.js';
 
 export function initSpawnTimers(state) {
   state.spawnTimers = state.players.map(player => normalInterval(state, player));
+  state.heroTimers = state.players.map(player => heroInterval(state, player));
+  state.heroTurn = state.players.map(() => 0);   // التناوب بين شخصيتي العصابة
 }
 
-// زمن ظهور الفرد العادي: max(4, 14 - (D-1)) ثانية، مضروباً بمعدل العصابة
+// هل يملك اللاعب حياً مميزاً من نوع معين؟ (نفس النوع لا يتكرر تأثيره)
+export function ownsSpecial(state, playerId, type) {
+  return state.map.districts.some(d => d.owner === playerId && d.special === type);
+}
+
+// برج الساعة: أزمنة الظهور لكل وحداته × 0.85
+const clockFactor = (state, playerId) =>
+  ownsSpecial(state, playerId, 'clock') ? SPECIAL_BONUS.clock.spawnMultiplier : 1;
+
+// زمن ظهور الفرد العادي: max(4, 14 - (D-1)) ثانية، مضروباً بمعدل العصابة وبرج الساعة
 export function normalInterval(state, player) {
   const owned = ownedDistricts(state, player.id).length;
   const seconds = Math.max(
@@ -17,7 +28,17 @@ export function normalInterval(state, player) {
   );
   const gang = GANGS[player.gang];
   const multiplier = (gang && gang.unit.spawnMultiplier) || 1;   // العقارب × 0.8
-  return seconds * multiplier;
+  return seconds * multiplier * clockFactor(state, player.id);
+}
+
+// زمن ظهور الشخصية المميزة: max(30, 75 - (D-1)×3) ثانية
+export function heroInterval(state, player) {
+  const owned = ownedDistricts(state, player.id).length;
+  const seconds = Math.max(
+    SPAWN.heroMin,
+    SPAWN.heroBase - Math.max(0, owned - 1) * SPAWN.heroPerDistrict
+  );
+  return seconds * clockFactor(state, player.id);
 }
 
 export function updateSpawn(state) {
@@ -29,14 +50,25 @@ export function updateSpawn(state) {
     if (countUnits(state, player.id) >= state.maxUnits) continue;
 
     state.spawnTimers[player.id] -= TICK_SEC;
-    if (state.spawnTimers[player.id] > 0) continue;
+    state.heroTimers[player.id] -= TICK_SEC;
 
-    spawnNormalUnit(state, player, districts);
-    state.spawnTimers[player.id] = normalInterval(state, player);
+    if (state.spawnTimers[player.id] <= 0) {
+      spawnUnit(state, player, districts, null);
+      state.spawnTimers[player.id] = normalInterval(state, player);
+    }
+
+    // الشخصيات المميزة بالتناوب بين شخصيتي العصابة
+    if (state.heroTimers[player.id] <= 0) {
+      const heroes = GANGS[player.gang].heroes;
+      const heroId = heroes[state.heroTurn[player.id] % heroes.length];
+      state.heroTurn[player.id]++;
+      spawnUnit(state, player, districts, heroId);
+      state.heroTimers[player.id] = heroInterval(state, player);
+    }
   }
 }
 
-function spawnNormalUnit(state, player, districts) {
+function spawnUnit(state, player, districts, heroId) {
   // تفضيل الأحياء التي ليس فيها أعداء
   const safe = districts.filter(d => !hasEnemyNearFlag(state, d, player.id));
   const pool = safe.length ? safe : districts;
@@ -46,7 +78,7 @@ function spawnNormalUnit(state, player, districts) {
   if (!spots.length) return;
 
   const [i, j] = spots[Math.floor(Math.random() * spots.length)];
-  state.units.push(createUnit(state, player, i, j));
+  state.units.push(createUnit(state, player, i, j, heroId));
 }
 
 function hasEnemyNearFlag(state, district, playerId) {

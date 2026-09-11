@@ -59,19 +59,79 @@ export const UNIT_BASE = {
   capturePower: 1
 };
 
-// --- العصابات: الفرد العادي فقط (الشخصيات المميزة في المرحلة 4) ---
+// --- العصابات: الفرد العادي وشخصيتاها المميزتان ---
 export const GANGS = {
-  crows:     { id: 'crows',     name: 'الغربان',  unit: { speed: 2.5, capturePower: 1.25 } },
-  hammers:   { id: 'hammers',   name: 'المطارق',  unit: { hp: 120, armor: 0.15 } },
+  crows:     { id: 'crows',     name: 'الغربان',  heroes: ['runner', 'biker'],   unit: { speed: 2.5, capturePower: 1.25 } },
+  hammers:   { id: 'hammers',   name: 'المطارق',  heroes: ['armored', 'smasher'], unit: { hp: 120, armor: 0.15 } },
   // الأفاعي يرمون حجارة من بعيد، ويقاتلون بالأيدي إذا اقترب العدو
-  vipers:    { id: 'vipers',    name: 'الأفاعي',  unit: {
+  vipers:    { id: 'vipers',    name: 'الأفاعي',  heroes: ['sniper', 'firebomber'], unit: {
     damage: 7, attackTime: 1.4, attackRange: 3.5, visionRange: 4.5,
     projectile: 'stone', meleeRange: 1.5, meleeDamage: 8, meleeAttackTime: 1.0
   } },
-  scorpions: { id: 'scorpions', name: 'العقارب',  unit: { spawnMultiplier: 0.8 } }
+  scorpions: { id: 'scorpions', name: 'العقارب',  heroes: ['boss', 'medic'],     unit: { spawnMultiplier: 0.8 } }
 };
 
 export const GANG_IDS = ['crows', 'hammers', 'vipers', 'scorpions'];
+
+// --- الشخصيات المميزة: شخصيتان لكل عصابة ---
+// كل شخصية تبدأ من الوحدة الأساسية ثم تُطبق قيمها فوقها
+export const HEROES = {
+  // الغربان
+  runner: {
+    id: 'runner', name: 'الراكض', gang: 'crows',
+    stats: { hp: 90, damage: 8, speed: 2.8, capturePower: 3 }
+  },
+  biker: {
+    id: 'biker', name: 'راكب الدراجة', gang: 'crows',
+    stats: { hp: 110, damage: 14, attackTime: 1.2, speed: 4.2, visionRange: 6 }
+  },
+
+  // المطارق
+  armored: {
+    id: 'armored', name: 'المصفّح', gang: 'hammers',
+    stats: { hp: 320, armor: 0.50, damage: 8, attackTime: 1.2, speed: 1.6 }
+  },
+  smasher: {
+    id: 'smasher', name: 'المحطِّم', gang: 'hammers',
+    // ضربته تصيب كل الأعداء داخل دائرة نصف قطرها مربع واحد حول الهدف
+    stats: { hp: 200, armor: 0.20, damage: 28, attackTime: 2.2, attackRange: 1.2, speed: 1.8, splashRadius: 1 }
+  },
+
+  // الأفاعي (زمن الضربة القريبة غير مذكور في الوصف، فيبقى على الأساس 1.0 ث)
+  sniper: {
+    id: 'sniper', name: 'القناص', gang: 'vipers',
+    stats: {
+      hp: 80, damage: 26, attackTime: 2.5, attackRange: 7, visionRange: 7.5, speed: 2.0,
+      projectile: 'arrow', meleeRange: 1.5, meleeDamage: 4, meleeAttackTime: 1.0
+    }
+  },
+  firebomber: {
+    id: 'firebomber', name: 'رامي النار', gang: 'vipers',
+    // الزجاجة لا تضر مباشرة، بل تشعل الأرض
+    stats: {
+      hp: 90, damage: 0, attackTime: 5, attackRange: 4, visionRange: 4.5, speed: 2.1,
+      projectile: 'bottle', fire: { radius: 1.2, duration: 4, damagePerSecond: 6 },
+      meleeRange: 1.5, meleeDamage: 5, meleeAttackTime: 1.0
+    }
+  },
+
+  // العقارب
+  boss: {
+    id: 'boss', name: 'الزعيم', gang: 'scorpions',
+    stats: { hp: 160, armor: 0.10, damage: 12, speed: 2.0, aura: { radius: 3, damageBonus: 0.20 } }
+  },
+  medic: {
+    id: 'medic', name: 'الطبيب', gang: 'scorpions',
+    stats: { hp: 100, damage: 5, speed: 2.2, heal: { radius: 3, perSecond: 10 } }
+  }
+};
+
+// مكافآت الأحياء المميزة لمالكها (أنواع مختلفة تتجمع، ونفس النوع لا يتكرر)
+export const SPECIAL_BONUS = {
+  hospital: { zoneHealPerSecond: 5, globalHealPerSecond: 0.5 },
+  armory:   { damageBonus: 0.10 },
+  clock:    { spawnMultiplier: 0.85 }
+};
 
 // --- ألوان اللاعبين الثمانية ---
 export const PLAYER_COLORS = [

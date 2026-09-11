@@ -40,6 +40,9 @@ export function createMatch(settings) {
     notice: null,              // إشعار قصير (استيلاء على حي)
     matchResult: null,         // نتيجة المباراة عند انتهائها
     spawnTimers: [],
+    heroTimers: [],
+    heroTurn: [],
+    fires: [],                 // مناطق نار رامي النار
     time: 0,                   // زمن المباراة بالثواني
     stats: {
       kills: players.map(() => 0),
@@ -107,6 +110,9 @@ export function resetMatch(state) {
   state.projectiles = [];
   state.stats = fresh.stats;
   state.spawnTimers = fresh.spawnTimers;
+  state.heroTimers = fresh.heroTimers;
+  state.heroTurn = fresh.heroTurn;
+  state.fires = [];
   state.nextUnitId = fresh.nextUnitId;
   state.humanId = fresh.humanId;
   state.moveMarker = null;

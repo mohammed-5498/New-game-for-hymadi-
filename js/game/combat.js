@@ -1,6 +1,7 @@
 // الهجوم التلقائي، أمر الهجوم، المقذوفات، الضرر والموت
 import { TICK_SEC, COMBAT, UNITS } from '../config.js';
 import { findPath } from '../map/pathfinding.js';
+import { createFire } from './abilities.js';
 
 // لا ضرر على وحدات نفس اللاعب ولا على الحلفاء (فريق 0 يعني بدون فريق: عدو للجميع)
 export function isEnemy(state, a, b) {
@@ -118,8 +119,9 @@ function fightTarget(state, unit, budget) {
     unit.path = [];                       // وصلت للمدى: تتوقف وتضرب
     if (unit.attackCooldown <= 0) {
       unit.attackCooldown = attackTime;
-      if (!melee && unit.stats.projectile) spawnProjectile(state, unit, target, damage);
-      else applyDamage(state, unit, target, damage);
+      const total = damage * unit.damageMultiplier;   // مخزن السلاح + هالة الزعيم
+      if (!melee && unit.stats.projectile) spawnProjectile(state, unit, target, total);
+      else strike(state, unit, target, total);
     }
     return;
   }
@@ -149,6 +151,19 @@ function returnToOrigin(state, unit) {
     unit.state = 'moving';
   } else {
     becomeIdle(unit);
+  }
+}
+
+// ضربة مباشرة: قد تكون دائرية (المحطِّم) فتصيب كل الأعداء حول الهدف
+function strike(state, attacker, target, amount) {
+  const splash = attacker.stats.splashRadius;
+  if (!splash) { applyDamage(state, attacker, target, amount); return; }
+
+  for (const other of state.units) {
+    if (other.state === 'dead' || other.hp <= 0) continue;
+    if (!isEnemy(state, attacker, other)) continue;
+    if (Math.hypot(other.x - target.x, other.y - target.y) > splash) continue;
+    applyDamage(state, attacker, other, amount);
   }
 }
 
@@ -206,7 +221,8 @@ function updateProjectiles(state) {
     shot.y = shot.startY + (endY - shot.startY) * progress;
 
     if (shot.t >= shot.duration) {
-      if (isAlive(shot.target)) applyDamage(state, shot.attacker, shot.target, shot.damage);
+      if (shot.attacker.stats.fire) createFire(state, shot.attacker, shot.x, shot.y);
+      else if (isAlive(shot.target)) strike(state, shot.attacker, shot.target, shot.damage);
       continue;
     }
     remaining.push(shot);

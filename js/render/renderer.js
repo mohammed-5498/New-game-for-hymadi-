@@ -2,7 +2,7 @@
 import { TILE_HALF_W, TILE_HALF_H, CAMERA, CAPTURE } from '../config.js';
 import { mix, PALETTES, ROAD_COLOR, BACKGROUND, UI_LIGHT } from './colors.js';
 import { drawBuilding, setFrameContext } from './buildings.js';
-import { drawUnit, drawSelectionRing, drawProjectile } from './units.js';
+import { drawUnit, drawSelectionRing, drawProjectile, drawAura, drawFire } from './units.js';
 import { drawOverlay, drawLights, drawParticles } from './weather.js';
 import { worldToTile } from '../map/coords.js';
 
@@ -48,6 +48,13 @@ export function render(ctx, state, alpha) {
   const visible = (x, y) => x > vx0 && x < vx1 && y > vy0 && y < vy1;
 
   drawGround(ctx, state, visible);
+
+  // النار والهالات على الأرض: تحتها المباني والوحدات تظهر فوقها
+  for (const fire of state.fires) {
+    drawFire(ctx, fire, state.time);
+    lights.push({ x: (fire.x - fire.y) * TILE_HALF_W, y: (fire.x + fire.y) * TILE_HALF_H,
+                  r: fire.radius * 28, c: '255,150,60', a: 0.7 });
+  }
   drawBuildingsAndUnits(ctx, state, alpha, visible);
 
   for (const shot of state.projectiles) drawProjectile(ctx, shot, alpha);
@@ -58,10 +65,12 @@ export function render(ctx, state, alpha) {
   drawOverlay(ctx, state.weather, view);
   if (state.weather === 'night') drawLights(ctx, lights, camera, view);
 
-  // دوائر التحديد وعلامة الحركة فوق طبقة الليل حتى تبقى واضحة
+  // الهالات ودوائر التحديد وعلامة الحركة فوق طبقة الليل حتى تبقى واضحة
   worldTransform(ctx, state);
   for (const unit of state.units) {
-    if (unit.selected && unit.state !== 'dead') drawSelectionRing(ctx, unit, alpha);
+    if (unit.state === 'dead') continue;
+    if (unit.stats.aura) drawAura(ctx, unit, alpha);
+    if (unit.selected) drawSelectionRing(ctx, unit, alpha);
   }
   drawMoveMarker(ctx, state);
 

@@ -5,6 +5,7 @@ import { createMatch } from './state.js';
 import { updateUnits } from './game/units.js';
 import { updateCombat, removeDeadUnits } from './game/combat.js';
 import { updateCapture, updateNotice } from './game/capture.js';
+import { updateAbilities } from './game/abilities.js';
 import { updateSpawn } from './game/spawn.js';
 import { updateVictory } from './game/victory.js';
 import { render, resizeCanvas, clampCamera } from './render/renderer.js';
@@ -28,7 +29,8 @@ function update() {
   if (state.matchResult) return;   // انتهت المباراة: تتوقف اللعبة
 
   state.time += TICK_SEC;
-  updateCombat(state);   // اختيار الأهداف والضرب قبل الحركة
+  updateAbilities(state);   // الهالات والعلاج والنار قبل حساب الضرر
+  updateCombat(state);      // اختيار الأهداف والضرب قبل الحركة
   updateUnits(state);
   removeDeadUnits(state);
   updateCapture(state);
