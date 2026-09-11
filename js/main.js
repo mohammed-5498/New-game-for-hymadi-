@@ -3,6 +3,7 @@
 import { MATCH_DEFAULTS, TICK_MS, TICK_SEC } from './config.js';
 import { createMatch } from './state.js';
 import { updateUnits } from './game/units.js';
+import { updateCombat, removeDeadUnits } from './game/combat.js';
 import { render, resizeCanvas, clampCamera } from './render/renderer.js';
 import { updateParticles, resetParticles } from './render/weather.js';
 import { setupInput } from './ui/input.js';
@@ -22,7 +23,9 @@ setupHud(state);
 // تحديث منطقي واحد بخطوة ثابتة
 function update() {
   state.time += TICK_SEC;
+  updateCombat(state);   // اختيار الأهداف والضرب قبل الحركة
   updateUnits(state);
+  removeDeadUnits(state);
   if (state.moveMarker) {
     state.moveMarker.t += TICK_SEC;
     if (state.moveMarker.t > 0.8) state.moveMarker = null;

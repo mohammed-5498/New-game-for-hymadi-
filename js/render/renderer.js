@@ -2,7 +2,7 @@
 import { TILE_HALF_W, TILE_HALF_H, CAMERA, CAPTURE } from '../config.js';
 import { mix, PALETTES, ROAD_COLOR, BACKGROUND, UI_LIGHT } from './colors.js';
 import { drawBuilding, setFrameContext } from './buildings.js';
-import { drawUnit, drawSelectionRing } from './units.js';
+import { drawUnit, drawSelectionRing, drawProjectile } from './units.js';
 import { drawOverlay, drawLights, drawParticles } from './weather.js';
 import { worldToTile } from '../map/coords.js';
 
@@ -49,6 +49,8 @@ export function render(ctx, state, alpha) {
 
   drawGround(ctx, state, visible);
   drawBuildingsAndUnits(ctx, state, alpha, visible);
+
+  for (const shot of state.projectiles) drawProjectile(ctx, shot, alpha);
 
   // طبقة الطقس فوق المشهد
   ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
@@ -131,7 +133,6 @@ function drawBuildingsAndUnits(ctx, state, alpha, visible) {
   // توزيع الوحدات على الأقطار حسب موقعها المنعّم
   const buckets = new Map();
   for (const unit of state.units) {
-    if (unit.state === 'dead') continue;
     const i = unit.prevX + (unit.x - unit.prevX) * alpha;
     const j = unit.prevY + (unit.y - unit.prevY) * alpha;
     const key = Math.round(i + j);

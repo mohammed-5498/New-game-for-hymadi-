@@ -63,7 +63,11 @@ export const UNIT_BASE = {
 export const GANGS = {
   crows:     { id: 'crows',     name: 'الغربان',  unit: { speed: 2.5, capturePower: 1.25 } },
   hammers:   { id: 'hammers',   name: 'المطارق',  unit: { hp: 120, armor: 0.15 } },
-  vipers:    { id: 'vipers',    name: 'الأفاعي',  unit: { damage: 7, attackTime: 1.4, attackRange: 3.5, visionRange: 4.5 } },
+  // الأفاعي يرمون حجارة من بعيد، ويقاتلون بالأيدي إذا اقترب العدو
+  vipers:    { id: 'vipers',    name: 'الأفاعي',  unit: {
+    damage: 7, attackTime: 1.4, attackRange: 3.5, visionRange: 4.5,
+    projectile: 'stone', meleeRange: 1.5, meleeDamage: 8, meleeAttackTime: 1.0
+  } },
   scorpions: { id: 'scorpions', name: 'العقارب',  unit: { spawnMultiplier: 0.8 } }
 };
 
@@ -90,6 +94,20 @@ export const UNITS = {
   arriveDistance: 0.06,       // اعتبار الوحدة وصلت لنقطة المسار
   groupSpotsFactor: 2,        // عدد مربعات الهدف = عدد الوحدات × هذا الرقم
   pathRequestsPerTick: 20     // حد طلبات A* في التحديث الواحد
+};
+
+// --- القتال ---
+export const COMBAT = {
+  scanInterval: 0.25,        // ثانية بين كل بحث عن هدف في حالة الانتظار
+  chaseVisionFactor: 1.5,    // حد المطاردة = مدى الرصد × هذا الرقم
+  chaseMaxTiles: 6,          // أقصى ابتعاد عن مكان بدء المطاردة
+  repathInterval: 0.5,       // إعادة حساب المسار نحو هدف متحرك
+  rangeTolerance: 0.1,       // تسامح بسيط في قياس مدى الهجوم
+  projectileMinTime: 0.3,    // زمن طيران المقذوف
+  projectileMaxTime: 0.5,
+  projectileArc: 6,          // ارتفاع قوس المقذوف أثناء الطيران
+  hitFlashTime: 0.15,        // ومضة الوحدة عند تلقي ضربة
+  deathTime: 1.0             // زمن سقوط الوحدة الميتة واختفائها
 };
 
 // --- الاستيلاء (تُستخدم في المرحلة 3) ---

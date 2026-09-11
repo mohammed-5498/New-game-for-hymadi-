@@ -1,6 +1,7 @@
 // إنشاء الوحدات وحركتها على المسار
 import { UNIT_BASE, GANGS, UNITS, TICK_SEC } from '../config.js';
 import { findPath, findFreeTiles, nearestWalkable } from '../map/pathfinding.js';
+import { clearCombatOrders } from './combat.js';
 
 // دمج إحصائيات الوحدة الأساسية مع ميزة العصابة
 export function unitStats(gangId) {
@@ -22,7 +23,16 @@ export function createUnit(state, player, i, j) {
     maxHp: stats.hp,
     state: 'idle',        // idle | moving | attacking | dead
     path: [],
-    selected: false
+    selected: false,
+
+    // القتال
+    target: null,           // الوحدة التي تهاجمها
+    commandedTarget: false, // أمر هجوم من اللاعب: بدون حد مطاردة
+    chaseOrigin: { x: i, y: j },
+    attackCooldown: 0,
+    repathTimer: 0,
+    hitFlash: 0,            // ومضة عند تلقي ضربة
+    deathTimer: 0           // زمن السقوط قبل الاختفاء
   };
 }
 
@@ -50,6 +60,7 @@ export function commandMove(state, targetI, targetJ, units) {
       const [i, j] = spots[spotIndex++];
       const path = findPath(map, Math.round(unit.x), Math.round(unit.y), i, j);
       if (path) {
+        clearCombatOrders(unit);
         unit.path = path;
         unit.state = path.length ? 'moving' : 'idle';
         ordered++;
@@ -104,7 +115,8 @@ function moveAlongPath(state, unit) {
     }
   }
 
-  if (!unit.path.length) unit.state = 'idle';
+  // الوحدة المهاجمة تبقى في حالتها؛ فقط أمر الحركة ينتهي بالانتظار
+  if (!unit.path.length && unit.state === 'moving') unit.state = 'idle';
 }
 
 // قوة تباعد خفيفة حتى لا تتداخل الوحدات، بشرط ألا تدفع أي وحدة داخل مبنى

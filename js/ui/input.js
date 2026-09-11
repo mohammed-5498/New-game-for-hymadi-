@@ -3,6 +3,7 @@ import { CAMERA, INPUT } from '../config.js';
 import { screenToWorld, worldToTile, worldToScreen } from '../map/coords.js';
 import { clampCamera } from '../render/renderer.js';
 import { commandMove } from '../game/units.js';
+import { commandAttack, isEnemy } from '../game/combat.js';
 import { selectedUnits } from '../state.js';
 import { unitWorldPos } from '../render/units.js';
 
@@ -92,25 +93,33 @@ export function setupInput(canvas, state) {
     }
   }
 
-  // لمسة سريعة: على وحدتك تحددها، وعلى الأرض أمر حركة للمحدد
+  // لمسة سريعة: على وحدتك تحددها، وعلى عدو أمر هجوم، وعلى الأرض أمر حركة
   function handleTap(sx, sy) {
-    const hit = findOwnUnitAt(sx, sy);
-    if (hit) {
+    const group = selectedUnits(state);
+    const hit = findUnitAt(sx, sy);
+
+    if (hit && hit.playerId === state.humanId) {
       for (const unit of state.units) unit.selected = false;
       hit.selected = true;
       return;
     }
-    const group = selectedUnits(state);
+
     if (!group.length) return;
+
+    if (hit && isEnemy(state, group[0], hit)) {
+      commandAttack(state, group, hit);
+      return;
+    }
+
     const world = screenToWorld(sx, sy, state.camera, state.view);
     const tile = worldToTile(world.x, world.y);
     commandMove(state, tile.i, tile.j, group);
   }
 
-  function findOwnUnitAt(sx, sy) {
+  function findUnitAt(sx, sy) {
     let best = null, bestDist = INPUT.unitTapRadiusPx;
     for (const unit of state.units) {
-      if (unit.playerId !== state.humanId || unit.state === 'dead') continue;
+      if (unit.state === 'dead') continue;
       const world = unitWorldPos(unit, 1);
       const screen = worldToScreen(world.x, world.y, state.camera, state.view);
       // نصوّب على جسم الوحدة لا على قدميها

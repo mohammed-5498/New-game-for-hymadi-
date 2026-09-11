@@ -25,6 +25,7 @@ export function createMatch(settings) {
     map,
     players,
     units: [],
+    projectiles: [],
     nextUnitId: 1,
     humanId: players.findIndex(p => p.isHuman),
     weather: WEATHER[settings.weather] ? settings.weather : 'day',
@@ -34,7 +35,11 @@ export function createMatch(settings) {
     inputMode: 'pan',          // pan | select
     selectionBox: null,        // مربع التحديد أثناء السحب
     moveMarker: null,          // حلقة مكان أمر الحركة
-    time: 0                    // زمن المباراة بالثواني
+    time: 0,                   // زمن المباراة بالثواني
+    stats: {                   // إحصائيات لكل لاعب (تُعرض في شاشة النهاية لاحقاً)
+      kills: players.map(() => 0),
+      losses: players.map(() => 0)
+    }
   };
 
   spawnStartingUnits(state);
@@ -91,6 +96,8 @@ export function resetMatch(state) {
   state.map = fresh.map;
   state.players = fresh.players;
   state.units = fresh.units;
+  state.projectiles = [];
+  state.stats = fresh.stats;
   state.nextUnitId = fresh.nextUnitId;
   state.humanId = fresh.humanId;
   state.moveMarker = null;
