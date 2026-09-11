@@ -15,10 +15,16 @@ export function updateVictory(state) {
   if (owned > state.stats.maxDistricts) state.stats.maxDistricts = owned;
 
   const alivePlayers = state.players.filter(p => isPlayerAlive(state, p.id));
-  const humanAlive = alivePlayers.some(p => p.id === state.humanId);
   const sides = new Set(alivePlayers.map(sideKey));
 
+  // مباراة بلا لاعب بشري (اختبارات أو عرض): تنتهي ببقاء جانب واحد فقط
+  if (state.humanId < 0) {
+    if (sides.size <= 1) finish(state, false);
+    return;
+  }
+
   // الفوز: آخر لاعب أو آخر فريق متحالف باقٍ
+  const humanAlive = alivePlayers.some(p => p.id === state.humanId);
   if (!humanAlive) finish(state, false);
   else if (sides.size <= 1) finish(state, true);
 }

@@ -200,7 +200,51 @@ export const WEATHER = {
 
 export const WEATHER_KEYS = ['day', 'night', 'snow', 'rain'];
 
-// --- إعدادات المباراة المؤقتة للمرحلة 1 ---
+// --- البوتات ---
+export const BOT = {
+  easy: {
+    key: 'easy', name: 'سهل',
+    decisionInterval: 4,      // ثانية بين كل قرار
+    groupSize: 2,             // حجم المجموعة المرسلة
+    attackArmy: 14,           // حجم الجيش اللازم قبل الهجوم (تهاجم متأخرة)
+    defenseFactor: 1.0,       // عدد المدافعين لكل مهاجم
+    focusTarget: false,       // تركيز كل الهجمات على هدف واحد
+    retreatWounded: false,    // سحب المصابين إلى المستشفى
+    rangedBehind: false,      // وضع الرماة خلف المقاتلين
+    bossMinGroup: 0           // 0 = يرسل الزعيم مع أي مجموعة (بلا ذكاء)
+  },
+  medium: {
+    key: 'medium', name: 'متوسط',
+    decisionInterval: 2,
+    groupSize: 3,
+    attackArmy: 8,
+    defenseFactor: 1.2,
+    focusTarget: false,
+    retreatWounded: false,
+    rangedBehind: false,
+    bossMinGroup: 0
+  },
+  hard: {
+    key: 'hard', name: 'صعب',
+    decisionInterval: 1,
+    groupSize: 4,
+    attackArmy: 6,
+    defenseFactor: 1.5,
+    focusTarget: true,
+    retreatWounded: true,
+    retreatHpRatio: 0.4,      // أقل من 40% دم: ينسحب للمستشفى
+    rangedBehind: true,
+    rangedOffset: 2,          // مربعات خلف المقاتلين
+    bossMinGroup: 5           // الزعيم يخرج مع المجموعات الكبيرة فقط
+  }
+};
+
+export const BOT_LEVELS = ['easy', 'medium', 'hard'];
+
+// منع الاكتساح: من يملك هذه النسبة من الأحياء يصير هدف كل البوتات غير المتحالفة معه
+export const SNOWBALL = { districtShare: 0.40 };
+
+// --- إعدادات المباراة المؤقتة (تُستبدل بقائمة الإعداد في المرحلة 6) ---
 // (تُستبدل بقائمة الإعداد في المرحلة 6)
 export const MATCH_DEFAULTS = {
   mapSize: 'medium',
@@ -208,8 +252,8 @@ export const MATCH_DEFAULTS = {
   maxUnits: UNITS.maxUnitsDefault,
   players: [
     { name: 'أنت',    gang: 'crows',     color: 'blue',   isHuman: true,  team: 0 },
-    { name: 'بوت 1',  gang: 'hammers',   color: 'red',    isHuman: false, team: 0 },
-    { name: 'بوت 2',  gang: 'vipers',    color: 'green',  isHuman: false, team: 0 },
-    { name: 'بوت 3',  gang: 'scorpions', color: 'yellow', isHuman: false, team: 0 }
+    { name: 'بوت 1',  gang: 'hammers',   color: 'red',    isHuman: false, team: 0, difficulty: 'medium' },
+    { name: 'بوت 2',  gang: 'vipers',    color: 'green',  isHuman: false, team: 0, difficulty: 'medium' },
+    { name: 'بوت 3',  gang: 'scorpions', color: 'yellow', isHuman: false, team: 0, difficulty: 'medium' }
   ]
 };

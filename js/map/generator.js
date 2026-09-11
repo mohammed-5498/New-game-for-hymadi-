@@ -229,8 +229,13 @@ function assignHomeDistricts(map, districts, players) {
   const big = districts.filter(d => d.tiles.length >= MAP_GEN.minHomeDistrictTiles);
   if (big.length < players.length) return false;
 
-  for (let k = 0; k < players.length; k++) {
-    const angle = -Math.PI / 2 + (2 * Math.PI * k) / players.length;
+  // اللاعبون في نفس الفريق يأخذون نقاطاً متجاورة على الدائرة
+  const order = players.map((p, index) => index)
+    .sort((a, b) => (players[a].team || 99) - (players[b].team || 99));
+
+  for (let slot = 0; slot < order.length; slot++) {
+    const k = order[slot];
+    const angle = -Math.PI / 2 + (2 * Math.PI * slot) / players.length;
     const px = center + Math.cos(angle) * radius;
     const py = center + Math.sin(angle) * radius;
 

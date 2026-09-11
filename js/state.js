@@ -5,6 +5,7 @@ import { findFreeTiles } from './map/pathfinding.js';
 import { createUnit } from './game/units.js';
 import { buildCaptureZones } from './game/capture.js';
 import { initSpawnTimers } from './game/spawn.js';
+import { initBots } from './ai/bot.js';
 import { tileToWorld } from './map/coords.js';
 
 export function createMatch(settings) {
@@ -16,6 +17,7 @@ export function createMatch(settings) {
     color: (PLAYER_COLORS.find(c => c.id === p.color) || PLAYER_COLORS[index]).hex,
     isHuman: !!p.isHuman,
     team: p.team || 0,
+    difficulty: p.difficulty || 'medium',
     homeDistrictId: -1
   }));
 
@@ -40,6 +42,7 @@ export function createMatch(settings) {
     notice: null,              // إشعار قصير (استيلاء على حي)
     matchResult: null,         // نتيجة المباراة عند انتهائها
     spawnTimers: [],
+    botTimers: [],
     heroTimers: [],
     heroTurn: [],
     fires: [],                 // مناطق نار رامي النار
@@ -54,6 +57,7 @@ export function createMatch(settings) {
   buildCaptureZones(state);
   spawnStartingUnits(state);
   initSpawnTimers(state);
+  initBots(state);
   centerCameraOnHome(state);
   return state;
 }
@@ -110,6 +114,7 @@ export function resetMatch(state) {
   state.projectiles = [];
   state.stats = fresh.stats;
   state.spawnTimers = fresh.spawnTimers;
+  state.botTimers = fresh.botTimers;
   state.heroTimers = fresh.heroTimers;
   state.heroTurn = fresh.heroTurn;
   state.fires = [];

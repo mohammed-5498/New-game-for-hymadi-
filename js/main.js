@@ -8,6 +8,7 @@ import { updateCapture, updateNotice } from './game/capture.js';
 import { updateAbilities } from './game/abilities.js';
 import { updateSpawn } from './game/spawn.js';
 import { updateVictory } from './game/victory.js';
+import { updateBots } from './ai/bot.js';
 import { render, resizeCanvas, clampCamera } from './render/renderer.js';
 import { updateParticles, resetParticles } from './render/weather.js';
 import { setupInput } from './ui/input.js';
@@ -35,6 +36,7 @@ function update() {
   removeDeadUnits(state);
   updateCapture(state);
   updateSpawn(state);
+  updateBots(state);
   updateVictory(state);
   updateNotice(state);
 
