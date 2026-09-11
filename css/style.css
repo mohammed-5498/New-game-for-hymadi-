@@ -1,0 +1,60 @@
+/* واجهة اللعبة: كلها بالعربية ومن اليمين لليسار */
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #34302b;
+  font-family: system-ui, "Segoe UI", sans-serif;
+  overscroll-behavior: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#wrap { position: fixed; inset: 0; }
+
+#game {
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none; /* نتحكم باللمس بأنفسنا */
+}
+
+.btn {
+  position: absolute;
+  background: #ffffff;
+  color: #2b2825;
+  border: 1px solid #cfc9bd;
+  border-radius: 8px;
+  min-height: 42px;
+  padding: 0 12px;
+  font-size: 14px;
+  font-family: inherit;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn:active { background: #efeae1; }
+
+/* الأزرار المؤقتة للتجربة فقط */
+.btn.tmp { opacity: .85; font-size: 13px; min-height: 36px; }
+
+.btn.on { background: #dbe8fb; color: #1b4f9c; }
+
+#info {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background: #ffffff;
+  color: #5f5a52;
+  border: 1px solid #cfc9bd;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 13px;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+#info .sep { color: #cfc9bd; }

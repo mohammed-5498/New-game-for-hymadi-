@@ -1,0 +1,173 @@
+// اللمس والتحديد والأوامر (إصبع واحد، إصبعان، وعجلة الماوس)
+import { CAMERA, INPUT } from '../config.js';
+import { screenToWorld, worldToTile, worldToScreen } from '../map/coords.js';
+import { clampCamera } from '../render/renderer.js';
+import { commandMove } from '../game/units.js';
+import { selectedUnits } from '../state.js';
+import { unitWorldPos } from '../render/units.js';
+
+export function setupInput(canvas, state) {
+  const pointers = new Map();
+  let dragStart = null;    // بداية سحب الإصبع الواحد
+  let moved = false;       // هل تجاوز السحب حد اللمسة السريعة
+  let pinch = null;        // حالة إصبعين
+
+  const pointFromEvent = (e) => {
+    const rect = canvas.getBoundingClientRect();
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  };
+
+  function onDown(id, p) {
+    pointers.set(id, p);
+    if (pointers.size === 1) {
+      dragStart = { x: p.x, y: p.y, camX: state.camera.x, camY: state.camera.y };
+      moved = false;
+      state.selectionBox = null;
+    } else if (pointers.size === 2) {
+      const v = [...pointers.values()];
+      pinch = {
+        d: Math.max(1, Math.hypot(v[0].x - v[1].x, v[0].y - v[1].y)),
+        z: state.camera.z,
+        mx: (v[0].x + v[1].x) / 2,
+        my: (v[0].y + v[1].y) / 2
+      };
+      state.selectionBox = null;
+      dragStart = null;
+    }
+  }
+
+  function onMove(id, p) {
+    if (!pointers.has(id)) return;
+    pointers.set(id, p);
+
+    // إصبعان: تكبير وتصغير حول منتصف الإصبعين مع تحريك الكاميرا
+    if (pointers.size >= 2 && pinch) {
+      const v = [...pointers.values()];
+      const d = Math.max(1, Math.hypot(v[0].x - v[1].x, v[0].y - v[1].y));
+      const mx = (v[0].x + v[1].x) / 2, my = (v[0].y + v[1].y) / 2;
+      const anchor = screenToWorld(pinch.mx, pinch.my, state.camera, state.view);
+
+      state.camera.z = Math.max(CAMERA.minZoom, Math.min(CAMERA.maxZoom, pinch.z * d / pinch.d));
+      state.camera.x = anchor.x - (mx - state.view.w / 2) / state.camera.z;
+      state.camera.y = anchor.y - (my - state.view.h / 2) / state.camera.z;
+      clampCamera(state);
+
+      pinch.mx = mx; pinch.my = my; pinch.z = state.camera.z; pinch.d = d;
+      return;
+    }
+
+    if (!dragStart) return;
+    const dx = p.x - dragStart.x, dy = p.y - dragStart.y;
+    if (Math.hypot(dx, dy) > INPUT.tapMovePx) moved = true;
+    if (!moved) return;
+
+    if (state.inputMode === 'pan') {
+      state.camera.x = dragStart.camX - dx / state.camera.z;
+      state.camera.y = dragStart.camY - dy / state.camera.z;
+      clampCamera(state);
+    } else {
+      state.selectionBox = { x0: dragStart.x, y0: dragStart.y, x1: p.x, y1: p.y };
+    }
+  }
+
+  function onUp(id) {
+    if (!pointers.has(id)) return;
+    const p = pointers.get(id);
+    pointers.delete(id);
+
+    if (pinch) {
+      if (pointers.size < 2) pinch = null;
+      dragStart = null;
+      return;
+    }
+
+    if (pointers.size === 0) {
+      if (dragStart && !moved) {
+        handleTap(p.x, p.y);
+      } else if (state.selectionBox) {
+        applySelectionBox();
+      }
+      state.selectionBox = null;
+      dragStart = null;
+    }
+  }
+
+  // لمسة سريعة: على وحدتك تحددها، وعلى الأرض أمر حركة للمحدد
+  function handleTap(sx, sy) {
+    const hit = findOwnUnitAt(sx, sy);
+    if (hit) {
+      for (const unit of state.units) unit.selected = false;
+      hit.selected = true;
+      return;
+    }
+    const group = selectedUnits(state);
+    if (!group.length) return;
+    const world = screenToWorld(sx, sy, state.camera, state.view);
+    const tile = worldToTile(world.x, world.y);
+    commandMove(state, tile.i, tile.j, group);
+  }
+
+  function findOwnUnitAt(sx, sy) {
+    let best = null, bestDist = INPUT.unitTapRadiusPx;
+    for (const unit of state.units) {
+      if (unit.playerId !== state.humanId || unit.state === 'dead') continue;
+      const world = unitWorldPos(unit, 1);
+      const screen = worldToScreen(world.x, world.y, state.camera, state.view);
+      // نصوّب على جسم الوحدة لا على قدميها
+      const dist = Math.hypot(screen.x - sx, (screen.y - 5 * state.camera.z) - sy);
+      if (dist < bestDist) { bestDist = dist; best = unit; }
+    }
+    return best;
+  }
+
+  function applySelectionBox() {
+    const sel = state.selectionBox;
+    const x0 = Math.min(sel.x0, sel.x1), x1 = Math.max(sel.x0, sel.x1);
+    const y0 = Math.min(sel.y0, sel.y1), y1 = Math.max(sel.y0, sel.y1);
+    for (const unit of state.units) {
+      if (unit.playerId !== state.humanId || unit.state === 'dead') { unit.selected = false; continue; }
+      const world = unitWorldPos(unit, 1);
+      const screen = worldToScreen(world.x, world.y, state.camera, state.view);
+      unit.selected = screen.x >= x0 && screen.x <= x1 && screen.y >= y0 && screen.y <= y1 + 5;
+    }
+  }
+
+  // أحداث المؤشر (ومع المتصفحات القديمة أحداث اللمس)
+  if (window.PointerEvent) {
+    canvas.addEventListener('pointerdown', e => {
+      e.preventDefault();
+      try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+      onDown(e.pointerId, pointFromEvent(e));
+    });
+    canvas.addEventListener('pointermove', e => { e.preventDefault(); onMove(e.pointerId, pointFromEvent(e)); });
+    canvas.addEventListener('pointerup', e => onUp(e.pointerId));
+    canvas.addEventListener('pointercancel', e => onUp(e.pointerId));
+  } else {
+    canvas.addEventListener('touchstart', e => {
+      e.preventDefault();
+      for (const t of e.changedTouches) onDown(t.identifier, pointFromEvent(t));
+    }, { passive: false });
+    canvas.addEventListener('touchmove', e => {
+      e.preventDefault();
+      for (const t of e.changedTouches) onMove(t.identifier, pointFromEvent(t));
+    }, { passive: false });
+    const end = e => { e.preventDefault(); for (const t of e.changedTouches) onUp(t.identifier); };
+    canvas.addEventListener('touchend', end, { passive: false });
+    canvas.addEventListener('touchcancel', end, { passive: false });
+  }
+
+  // عجلة الماوس على الكمبيوتر
+  canvas.addEventListener('wheel', e => {
+    e.preventDefault();
+    const p = pointFromEvent(e);
+    const anchor = screenToWorld(p.x, p.y, state.camera, state.view);
+    state.camera.z *= e.deltaY < 0 ? CAMERA.wheelStep : 1 / CAMERA.wheelStep;
+    clampCamera(state);
+    state.camera.x = anchor.x - (p.x - state.view.w / 2) / state.camera.z;
+    state.camera.y = anchor.y - (p.y - state.view.h / 2) / state.camera.z;
+    clampCamera(state);
+  }, { passive: false });
+
+  // منع قائمة الضغط المطول على الجوال
+  canvas.addEventListener('contextmenu', e => e.preventDefault());
+}
