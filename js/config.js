@@ -114,18 +114,20 @@ export const COMBAT = {
 export const CAPTURE = {
   pointsPerSecond: 8,         // × قوة الاستيلاء
   maxCapturePower: 6,
-  decayPerSecond: 5,
-  groundTintAlpha: 0.30       // نسبة صبغ أرض الحي بلون المالك
+  decayPerSecond: 5,          // رجوع التقدم لحالة المالك عند خلو المنطقة
+  groundTintAlpha: 0.30,      // نسبة صبغ أرض الحي بلون المالك
+  noticeSeconds: 2.5          // مدة ظهور إشعار الاستيلاء
 };
 
-// --- الظهور (تُستخدم في المرحلة 3) ---
+// --- الظهور ---
 export const SPAWN = {
   normalBase: 14,             // max(4, 14 - (D-1)*1) ثانية
   normalPerDistrict: 1,
   normalMin: 4,
-  heroBase: 75,               // max(30, 75 - (D-1)*3) ثانية
+  heroBase: 75,               // max(30, 75 - (D-1)*3) ثانية (المرحلة 4)
   heroPerDistrict: 3,
-  heroMin: 30
+  heroMin: 30,
+  spotSearchTiles: 6          // عدد المربعات المفحوصة حول العلم لمكان الظهور
 };
 
 // --- الطقس: الشكل الآن، والتأثير على اللعب في المرحلة 7 ---

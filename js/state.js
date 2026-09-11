@@ -3,6 +3,8 @@ import { CAMERA, PLAYER_COLORS, GANGS, UNITS, WEATHER } from './config.js';
 import { createMap } from './map/generator.js';
 import { findFreeTiles } from './map/pathfinding.js';
 import { createUnit } from './game/units.js';
+import { buildCaptureZones } from './game/capture.js';
+import { initSpawnTimers } from './game/spawn.js';
 import { tileToWorld } from './map/coords.js';
 
 export function createMatch(settings) {
@@ -35,14 +37,20 @@ export function createMatch(settings) {
     inputMode: 'pan',          // pan | select
     selectionBox: null,        // مربع التحديد أثناء السحب
     moveMarker: null,          // حلقة مكان أمر الحركة
+    notice: null,              // إشعار قصير (استيلاء على حي)
+    matchResult: null,         // نتيجة المباراة عند انتهائها
+    spawnTimers: [],
     time: 0,                   // زمن المباراة بالثواني
-    stats: {                   // إحصائيات لكل لاعب (تُعرض في شاشة النهاية لاحقاً)
+    stats: {
       kills: players.map(() => 0),
-      losses: players.map(() => 0)
+      losses: players.map(() => 0),
+      maxDistricts: 1          // أكبر عدد أحياء امتلكها اللاعب
     }
   };
 
+  buildCaptureZones(state);
   spawnStartingUnits(state);
+  initSpawnTimers(state);
   centerCameraOnHome(state);
   return state;
 }
@@ -98,10 +106,13 @@ export function resetMatch(state) {
   state.units = fresh.units;
   state.projectiles = [];
   state.stats = fresh.stats;
+  state.spawnTimers = fresh.spawnTimers;
   state.nextUnitId = fresh.nextUnitId;
   state.humanId = fresh.humanId;
   state.moveMarker = null;
   state.selectionBox = null;
+  state.notice = null;
+  state.matchResult = null;
   state.time = 0;
   centerCameraOnHome(state);
 }

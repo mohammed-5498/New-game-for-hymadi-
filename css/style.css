@@ -58,3 +58,66 @@ html, body {
 }
 
 #info .sep { color: #cfc9bd; }
+
+/* إشعار قصير أعلى الشاشة */
+#notice {
+  position: absolute;
+  top: 62px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(43, 40, 37, .88);
+  color: #f2ede4;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 14px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+#notice.mine { background: rgba(27, 79, 156, .92); }
+
+/* شاشة النهاية */
+/* لاحظ :not([hidden]) — بدونها يتغلب display على خاصية hidden فتظهر الشاشة دائماً */
+#endScreen:not([hidden]) {
+  position: absolute;
+  inset: 0;
+  background: rgba(26, 24, 21, .72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#endScreen .panel {
+  background: #fffdf8;
+  border: 1px solid #cfc9bd;
+  border-radius: 14px;
+  padding: 22px 26px;
+  min-width: 240px;
+  max-width: 86vw;
+  text-align: center;
+  color: #2b2825;
+}
+
+#endScreen h1 { margin: 0 0 14px; font-size: 26px; }
+
+#endScreen ul {
+  list-style: none;
+  margin: 0 0 18px;
+  padding: 0;
+  font-size: 15px;
+  line-height: 1.9;
+  color: #5f5a52;
+}
+
+#endScreen button {
+  background: #3b7dd8;
+  color: #ffffff;
+  border: 0;
+  border-radius: 8px;
+  min-height: 44px;
+  width: 100%;
+  font-size: 16px;
+  font-family: inherit;
+}
+
+#endScreen button:active { background: #2f66b0; }

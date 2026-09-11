@@ -51,6 +51,7 @@ export function render(ctx, state, alpha) {
   drawBuildingsAndUnits(ctx, state, alpha, visible);
 
   for (const shot of state.projectiles) drawProjectile(ctx, shot, alpha);
+  drawCaptureBars(ctx, state, visible);
 
   // طبقة الطقس فوق المشهد
   ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
@@ -157,6 +158,38 @@ function drawBuildingsAndUnits(ctx, state, alpha, visible) {
 
     const unitsHere = buckets.get(s);
     if (unitsHere) for (const unit of unitsHere) drawUnit(ctx, unit, alpha);
+  }
+}
+
+// شريط تقدم الاستيلاء فوق العلم بلون المستولي
+function drawCaptureBars(ctx, state, visible) {
+  const w = 14, h = 2.4;
+  for (const district of state.map.districts) {
+    if (!district.capture) continue;
+    const full = district.progress >= 100 && !district.contested;
+    if (district.progress <= 0 && !district.contested) continue;
+    if (full) continue;
+
+    const { i, j } = district.capture;
+    const x = (i - j) * TILE_HALF_W, y = (i + j) * TILE_HALF_H;
+    if (!visible(x, y)) continue;
+
+    const top = y - 30;
+    ctx.fillStyle = 'rgba(20,18,16,.7)';
+    ctx.fillRect(x - w / 2, top, w, h);
+
+    const color = district.progressOwner !== null
+      ? state.players[district.progressOwner].color
+      : UI_LIGHT;
+    ctx.fillStyle = color;
+    ctx.fillRect(x - w / 2, top, w * (district.progress / 100), h);
+
+    // المنطقة متنازع عليها: إطار فاتح حول الشريط
+    if (district.contested) {
+      ctx.strokeStyle = UI_LIGHT;
+      ctx.lineWidth = 0.6;
+      ctx.strokeRect(x - w / 2, top, w, h);
+    }
   }
 }
 

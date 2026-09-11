@@ -26,11 +26,49 @@ export function setupHud(state) {
     btnWeather.textContent = 'الطقس: ' + WEATHER[state.weather].name;
   });
 
-  el('btnNewMap').addEventListener('click', () => resetMatch(state));
+  el('btnNewMap').addEventListener('click', () => { resetMatch(state); hideEndScreen(); });
+  el('btnRestart').addEventListener('click', () => { resetMatch(state); hideEndScreen(); });
+}
+
+function hideEndScreen() {
+  el('endScreen').hidden = true;
+  last.result = null;
+}
+
+// إشعار قصير عند الاستيلاء على حي
+function updateNotice(state) {
+  const notice = el('notice');
+  const text = state.notice ? state.notice.text : '';
+  if (text === last.notice) return;
+  last.notice = text;
+  notice.hidden = !text;
+  notice.textContent = text;
+  notice.classList.toggle('mine', !!(state.notice && state.notice.mine));
+}
+
+// شاشة النهاية: فزت أو خسرت مع الإحصائيات
+function updateEndScreen(state) {
+  const result = state.matchResult;
+  if (result === last.result) return;
+  last.result = result;
+
+  const screen = el('endScreen');
+  if (!result) { screen.hidden = true; return; }
+
+  const minutes = Math.floor(result.duration / 60);
+  const seconds = Math.floor(result.duration % 60);
+  el('endTitle').textContent = result.won ? 'فزت' : 'خسرت';
+  el('endStats').innerHTML = [
+    'مدة المباراة: ' + minutes + ':' + String(seconds).padStart(2, '0'),
+    'أكبر عدد أحياء: ' + result.maxDistricts,
+    'أعداء قتلتهم: ' + result.kills,
+    'وحداتك التي ماتت: ' + result.losses
+  ].map(line => '<li>' + line + '</li>').join('');
+  screen.hidden = false;
 }
 
 // تحديث شريط المعلومات (بدون لمس DOM إلا عند تغير القيم)
-const last = { sel: -1, units: -1, districts: -1, weather: '' };
+const last = { sel: -1, units: -1, districts: -1, weather: '', notice: '', result: null };
 
 export function updateHud(state) {
   let selected = 0, playerUnitCount = 0;
@@ -57,4 +95,7 @@ export function updateHud(state) {
     last.weather = state.weather;
     el('infoWeather').textContent = WEATHER[state.weather].name;
   }
+
+  updateNotice(state);
+  updateEndScreen(state);
 }
