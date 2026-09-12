@@ -30,6 +30,7 @@ export function createMatch(settings) {
     players,
     units: [],
     projectiles: [],
+    pathQueue: [],             // طلبات المسار المنتظرة
     nextUnitId: 1,
     humanId: players.findIndex(p => p.isHuman),
     weather: WEATHER[settings.weather] ? settings.weather : 'day',
@@ -118,6 +119,7 @@ export function resetMatch(state, settings = state.settings) {
   state.players = fresh.players;
   state.units = fresh.units;
   state.projectiles = [];
+  state.pathQueue = [];
   state.stats = fresh.stats;
   state.spawnTimers = fresh.spawnTimers;
   state.botTimers = fresh.botTimers;

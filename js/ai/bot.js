@@ -3,6 +3,7 @@ import { TICK_SEC, BOT, SNOWBALL, MAP_GEN } from '../config.js';
 import { commandMove } from '../game/units.js';
 import { isEnemy } from '../game/combat.js';
 import { ownedDistricts } from '../game/spawn.js';
+import { forEachNearby } from '../game/spatialHash.js';
 
 export function initBots(state) {
   // نوزّع أوقات القرار حتى لا تفكر كل البوتات في نفس اللحظة
@@ -71,14 +72,15 @@ function taskStillValid(state, unit) {
   return false;
 }
 
-// عدد أعداء اللاعب قرب حيّه
+// عدد أعداء اللاعب قرب حيّه (بحث في الخلايا المجاورة فقط)
 function districtThreat(state, district, playerId) {
+  const radius = MAP_GEN.captureRadius * 2;
   let count = 0;
-  for (const unit of state.units) {
-    if (!isAlive(unit)) continue;
-    if (!isEnemy(state, { playerId }, unit)) continue;
-    if (distanceTo(unit, district) <= MAP_GEN.captureRadius * 2) count++;
-  }
+  forEachNearby(state, district.capture.i, district.capture.j, radius, (unit) => {
+    if (!isAlive(unit)) return;
+    if (!isEnemy(state, { playerId }, unit)) return;
+    if (distanceTo(unit, district) <= radius) count++;
+  });
   return count;
 }
 

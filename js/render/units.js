@@ -1,5 +1,5 @@
 // رسم الأفراد: جسم بلون اللاعب، رأس، ظل، شريط دم، ومضة الضرب، وسقوط الميت
-import { TILE_HALF_W, TILE_HALF_H, COMBAT } from '../config.js';
+import { TILE_HALF_W, TILE_HALF_H, COMBAT, PERFORMANCE } from '../config.js';
 import { UI_LIGHT } from './colors.js';
 import { mix } from './colors.js';
 
@@ -10,11 +10,20 @@ export function unitWorldPos(unit, alpha) {
   return { x: (i - j) * TILE_HALF_W, y: (i + j) * TILE_HALF_H };
 }
 
-export function drawUnit(ctx, unit, alpha) {
+export function drawUnit(ctx, unit, alpha, zoom = 99) {
   const { x, y } = unitWorldPos(unit, alpha);
 
   if (unit.state === 'dead') {
     drawDeadUnit(ctx, unit, x, y);
+    return;
+  }
+
+  // عند الإبعاد الشديد تكون الوحدة بضعة بكسلات: نرسمها نقطة واحدة
+  if (zoom < PERFORMANCE.unitDetailZoom) {
+    // بلون اللاعب دائماً: عند الإبعاد المهم معرفة جيش من أين لا من ضُرب
+    ctx.fillStyle = unit.color;
+    const size = unit.hero ? 5 : 4;
+    ctx.fillRect(x - size / 2, y - size, size, size);
     return;
   }
 

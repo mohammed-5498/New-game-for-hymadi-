@@ -1,18 +1,12 @@
 // نقطة البداية: القوائم، دورة حياة المباراة، وحلقة اللعبة
 // منطق اللعبة بخطوة زمنية ثابتة (20 تحديثاً/ث)، والرسم كل إطار مع تنعيم المواقع
-import { MATCH_DEFAULTS, TICK_MS, TICK_SEC } from './config.js';
+import { MATCH_DEFAULTS, TICK_MS } from './config.js';
 import { createMatch, resetMatch } from './state.js';
-import { updateUnits } from './game/units.js';
-import { updateCombat, removeDeadUnits } from './game/combat.js';
-import { updateCapture, updateNotice } from './game/capture.js';
-import { updateAbilities } from './game/abilities.js';
-import { updateSpawn } from './game/spawn.js';
-import { updateVictory } from './game/victory.js';
-import { updateBots } from './ai/bot.js';
+import { updateMatch } from './game/loop.js';
 import { render, resizeCanvas, clampCamera } from './render/renderer.js';
 import { updateParticles, resetParticles } from './render/weather.js';
 import { setupInput } from './ui/input.js';
-import { setupHud, updateHud } from './ui/hud.js';
+import { setupHud, updateHud, reportFrame } from './ui/hud.js';
 import { setupMenus, showScreen } from './ui/menus.js';
 
 const canvas = document.getElementById('game');
@@ -43,22 +37,7 @@ showScreen('main');
 // تحديث منطقي واحد بخطوة ثابتة
 function update() {
   if (state.paused || state.matchResult) return;   // الإيقاف ونهاية المباراة يوقفان اللعب
-
-  state.time += TICK_SEC;
-  updateAbilities(state);   // الهالات والعلاج والنار قبل حساب الضرر
-  updateCombat(state);      // اختيار الأهداف والضرب قبل الحركة
-  updateUnits(state);
-  removeDeadUnits(state);
-  updateCapture(state);
-  updateSpawn(state);
-  updateBots(state);
-  updateVictory(state);
-  updateNotice(state);
-
-  if (state.moveMarker) {
-    state.moveMarker.t += TICK_SEC;
-    if (state.moveMarker.t > 0.8) state.moveMarker = null;
-  }
+  updateMatch(state);
 }
 
 let lastTime = performance.now();
@@ -93,6 +72,7 @@ function loop(now) {
   updateParticles(state.weather, state.view, frameMs / 1000);
   render(ctx, state, accumulator / TICK_MS);
   updateHud(state);
+  reportFrame(frameMs);
 
   requestAnimationFrame(loop);
 }

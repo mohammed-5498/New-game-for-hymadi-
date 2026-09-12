@@ -3,6 +3,7 @@ import { TICK_SEC, COMBAT, UNITS } from '../config.js';
 import { findPath } from '../map/pathfinding.js';
 import { createFire } from './abilities.js';
 import { visionRange, rangedShotHits } from './weather.js';
+import { forEachNearby } from './spatialHash.js';
 
 // لا ضرر على وحدات نفس اللاعب ولا على الحلفاء (فريق 0 يعني بدون فريق: عدو للجميع)
 export function isEnemy(state, a, b) {
@@ -14,7 +15,15 @@ export function isEnemy(state, a, b) {
 }
 
 const isAlive = (unit) => unit && unit.state !== 'dead' && unit.hp > 0;
-const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+// نتجنب Math.hypot في الحلقات الساخنة: أبطأ بأربعة أضعاف من sqrt
+const distance = (a, b) => {
+  const dx = a.x - b.x, dy = a.y - b.y;
+  return Math.sqrt(dx * dx + dy * dy);
+};
+const distanceSq = (a, b) => {
+  const dx = a.x - b.x, dy = a.y - b.y;
+  return dx * dx + dy * dy;
+};
 
 // أمر هجوم من اللاعب: مطاردة بدون حد حتى يموت الهدف أو يصدر أمر آخر
 export function commandAttack(state, units, target) {
@@ -85,14 +94,21 @@ function becomeIdle(unit) {
 }
 
 // أقرب عدو داخل مدى الرصد (يتأثر بالطقس: ليلاً أقصر)
+// نبحث في الخلايا المجاورة فقط عبر الشبكة المكانية
 function findNearestEnemy(state, unit) {
   const vision = visionRange(state, unit);
-  let best = null, bestDist = vision;
-  for (const other of state.units) {
-    if (!isAlive(other) || !isEnemy(state, unit, other)) continue;
-    const d = distance(unit, other);
-    if (d < bestDist) { bestDist = d; best = other; }
-  }
+  let best = null;
+
+  // مقارنة بمربع المسافة: بلا جذر ولا Math.hypot
+  let bestSq = vision * vision;
+  forEachNearby(state, unit.x, unit.y, vision, (other) => {
+    if (other === unit) return;
+    const d2 = distanceSq(unit, other);
+    if (d2 >= bestSq) return;
+    if (!isAlive(other) || !isEnemy(state, unit, other)) return;
+    bestSq = d2;
+    best = other;
+  });
   return best;
 }
 
@@ -103,7 +119,7 @@ function fightTarget(state, unit, budget) {
   // حد المطاردة (لا ينطبق على أمر الهجوم من اللاعب)
   if (!unit.commandedTarget) {
     const visionLimit = visionRange(state, unit) * COMBAT.chaseVisionFactor;
-    const fromOrigin = Math.hypot(unit.x - unit.chaseOrigin.x, unit.y - unit.chaseOrigin.y);
+    const fromOrigin = distance(unit, unit.chaseOrigin);
     if (dist > visionLimit || fromOrigin > COMBAT.chaseMaxTiles) {
       returnToOrigin(state, unit);
       return;
@@ -160,12 +176,13 @@ function strike(state, attacker, target, amount) {
   const splash = attacker.stats.splashRadius;
   if (!splash) { applyDamage(state, attacker, target, amount); return; }
 
-  for (const other of state.units) {
-    if (other.state === 'dead' || other.hp <= 0) continue;
-    if (!isEnemy(state, attacker, other)) continue;
-    if (Math.hypot(other.x - target.x, other.y - target.y) > splash) continue;
+  const splashSq = splash * splash;
+  forEachNearby(state, target.x, target.y, splash, (other) => {
+    if (other.state === 'dead' || other.hp <= 0) return;
+    if (distanceSq(other, target) > splashSq) return;
+    if (!isEnemy(state, attacker, other)) return;
     applyDamage(state, attacker, other, amount);
-  }
+  });
 }
 
 export function applyDamage(state, attacker, target, amount) {

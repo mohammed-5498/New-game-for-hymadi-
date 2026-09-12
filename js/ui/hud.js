@@ -1,11 +1,34 @@
 // أزرار المباراة، شريط المعلومات، قائمة الإيقاف، وشاشة النهاية
-import { WEATHER } from '../config.js';
+import { WEATHER, PERFORMANCE } from '../config.js';
 import { clearSelection, selectAllUnitsOf, resetMatch, districtsOwnedBy } from '../state.js';
 import { showScreen } from './menus.js';
 
 const el = (id) => document.getElementById(id);
 
+let fpsVisible = false;
+let infoTaps = 0;
+
+// مؤشر الإطارات: يُحدَّث من حلقة اللعبة
+export function reportFrame(frameMs) {
+  if (!fpsVisible) return;
+  fpsSamples.push(frameMs);
+  if (fpsSamples.length < 20) return;
+  const average = fpsSamples.reduce((sum, ms) => sum + ms, 0) / fpsSamples.length;
+  fpsSamples.length = 0;
+  el('fps').textContent = Math.round(1000 / average) + ' إطار/ث';
+}
+const fpsSamples = [];
+
 export function setupHud(state) {
+  // لمس شريط المعلومات 3 مرات يُظهر مؤشر الإطارات أو يخفيه
+  el('info').addEventListener('click', () => {
+    infoTaps++;
+    if (infoTaps < PERFORMANCE.fpsTaps) return;
+    infoTaps = 0;
+    fpsVisible = !fpsVisible;
+    el('fps').hidden = !fpsVisible;
+  });
+
   const btnMode = el('btnMode');
   btnMode.addEventListener('click', () => {
     state.inputMode = state.inputMode === 'pan' ? 'select' : 'pan';

@@ -81,7 +81,7 @@ function windowR(cx, cy, w, d, u, v, du, dv, color) {
 
 // يرسم مبنى واحداً في إحداثيات العالم (x, y)
 // ownerColor: لون اللاعب المالك للحي (للأعلام)، أو null
-export function drawBuilding(type, x, y, region, i, j, ownerColor) {
+export function drawBuilding(type, x, y, region, i, j, ownerColor, detail = true) {
   const g = PALETTES[region] || PALETTES.neutral;
   const variant = (i * 7 + j * 3) % 3;
 
@@ -89,14 +89,16 @@ export function drawBuilding(type, x, y, region, i, j, ownerColor) {
     const walls = [['#b59a78', '#cdb391'], ['#a88f7a', '#c4ab95'], ['#9f9a86', '#bab5a0']][variant];
     box(x, y + 1, 14, 7, 14, walls[0], walls[1]);
     roof(x, y + 1, 14, 7, 14, 12, g.left, g.right);
-    windowL(x, y + 1, 14, 7, 0.2, 5, 0.25, 4, DARK);
-    windowR(x, y + 1, 14, 7, 0.6, 5, 0.22, 4, DARK);
-    windowR(x, y + 1, 14, 7, 0.15, 0, 0.2, 8, '#5b4636');
+    if (detail) {
+      windowL(x, y + 1, 14, 7, 0.2, 5, 0.25, 4, DARK);
+      windowR(x, y + 1, 14, 7, 0.6, 5, 0.22, 4, DARK);
+      windowR(x, y + 1, 14, 7, 0.15, 0, 0.2, 8, '#5b4636');
+    }
 
   } else if (type === 'A') {               // عمارة سكنية بنوافذ بعضها مضاء
     const h = 32 + ((i + j) % 2) * 8;
     box(x, y, 15, 7.5, h, '#8f8c85', '#aaa69e', '#77736c');
-    for (let v = 6; v < h - 4; v += 7) {
+    for (let v = 6; detail && v < h - 4; v += 7) {
       [0.15, 0.55].forEach((u, n) => {
         windowL(x, y, 15, 7.5, u, v, 0.25, 4, (i + j + v + n) % 4 === 0 ? LIT_WINDOW : DARK);
         windowR(x, y, 15, 7.5, u, v, 0.25, 4, (i + 2 * j + v + n) % 5 === 0 ? LIT_WINDOW : DARK);
@@ -116,8 +118,10 @@ export function drawBuilding(type, x, y, region, i, j, ownerColor) {
 
   } else if (type === 'F') {               // مصنع بمدخنة ودخان
     box(x, y, 16, 8, 18, '#7a5040', '#945f4b', '#5e4035');
-    [0.1, 0.4, 0.7].forEach(u => windowL(x, y, 16, 8, u, 7, 0.18, 6, DARK));
-    windowR(x, y, 16, 8, 0.35, 0, 0.3, 10, '#4a3b32');
+    if (detail) {
+      [0.1, 0.4, 0.7].forEach(u => windowL(x, y, 16, 8, u, 7, 0.18, 6, DARK));
+      windowR(x, y, 16, 8, 0.35, 0, 0.3, 10, '#4a3b32');
+    }
     box(x + 6, y - 19, 3, 1.5, 22, '#5d4a3f', '#6e584b', '#4a3b32');
     circ(x + 7, y - 46, 4, '#a39d95', 0.7);
     circ(x + 11, y - 52, 5, '#a39d95', 0.55);

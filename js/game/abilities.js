@@ -3,6 +3,7 @@
 import { TICK_SEC, SPECIAL_BONUS, MAP_GEN } from '../config.js';
 import { isEnemy, applyDamage } from './combat.js';
 import { ownsSpecial } from './spawn.js';
+import { forEachNearby } from './spatialHash.js';
 
 const isAlive = (unit) => unit.state !== 'dead' && unit.hp > 0;
 const allied = (state, a, b) => a.playerId === b.playerId || !isEnemy(state, a, b);
@@ -18,21 +19,27 @@ function applyDamageBonuses(state) {
   const armoryBonus = state.players.map(p =>
     ownsSpecial(state, p.id, 'armory') ? SPECIAL_BONUS.armory.damageBonus : 0);
 
-  const bosses = state.units.filter(u => isAlive(u) && u.stats.aura);
-
+  // نبدأ من مكافأة مخزن السلاح فقط
   for (const unit of state.units) {
     if (!isAlive(unit)) continue;
-    let auraBonus = 0;
+    unit.aura = false;
+    unit.damageMultiplier = 1 + armoryBonus[unit.playerId];
+  }
 
-    for (const boss of bosses) {
-      if (!allied(state, unit, boss)) continue;
-      const aura = boss.stats.aura;
-      if (Math.hypot(unit.x - boss.x, unit.y - boss.y) > aura.radius) continue;
-      auraBonus = Math.max(auraBonus, aura.damageBonus);   // لا تتجمع هالتان
-    }
+  // ثم نمر على الزعماء فقط ونعلّم من حولهم (الهالتان لا تتجمعان)
+  for (const boss of state.units) {
+    if (!isAlive(boss) || !boss.stats.aura) continue;
+    const aura = boss.stats.aura;
 
-    unit.aura = auraBonus > 0;
-    unit.damageMultiplier = 1 + armoryBonus[unit.playerId] + auraBonus;
+    const radiusSq = aura.radius * aura.radius;
+    forEachNearby(state, boss.x, boss.y, aura.radius, (unit) => {
+      if (unit.aura) return;
+      const dx = unit.x - boss.x, dy = unit.y - boss.y;
+      if (dx * dx + dy * dy > radiusSq) return;
+      if (!isAlive(unit) || !allied(state, unit, boss)) return;
+      unit.aura = true;
+      unit.damageMultiplier += aura.damageBonus;
+    });
   }
 }
 
@@ -47,7 +54,8 @@ function applyHealing(state) {
     for (const hospital of hospitals) {
       if (hospital.owner !== unit.playerId) continue;
       heal(unit, SPECIAL_BONUS.hospital.globalHealPerSecond * TICK_SEC);
-      const inside = Math.hypot(unit.x - hospital.capture.i, unit.y - hospital.capture.j) <= MAP_GEN.captureRadius;
+      const dx = unit.x - hospital.capture.i, dy = unit.y - hospital.capture.j;
+      const inside = dx * dx + dy * dy <= MAP_GEN.captureRadius * MAP_GEN.captureRadius;
       if (inside) heal(unit, SPECIAL_BONUS.hospital.zoneHealPerSecond * TICK_SEC);
     }
   }
@@ -58,15 +66,17 @@ function applyHealing(state) {
     const { radius, perSecond } = medic.stats.heal;
 
     let patient = null, worst = 0;
-    for (const other of state.units) {
-      if (other === medic || !isAlive(other)) continue;
-      if (!allied(state, medic, other)) continue;
+    const radiusSq = radius * radius;
+    forEachNearby(state, medic.x, medic.y, radius, (other) => {
+      if (other === medic) return;
       const missing = other.maxHp - other.hp;
-      if (missing <= worst) continue;
-      if (Math.hypot(medic.x - other.x, medic.y - other.y) > radius) continue;
+      if (missing <= worst) return;
+      const dx = medic.x - other.x, dy = medic.y - other.y;
+      if (dx * dx + dy * dy > radiusSq) return;
+      if (!isAlive(other) || !allied(state, medic, other)) return;
       worst = missing;
       patient = other;
-    }
+    });
     if (patient) {
       heal(patient, perSecond * TICK_SEC);
       medic.healingTarget = patient;
@@ -100,13 +110,15 @@ function updateFires(state) {
   for (const fire of state.fires) {
     fire.life -= TICK_SEC;
 
-    for (const unit of state.units) {
-      if (!isAlive(unit)) continue;
-      if (!isEnemy(state, { playerId: fire.playerId }, unit)) continue;   // العدو فقط
-      if (Math.hypot(unit.x - fire.x, unit.y - fire.y) > fire.radius) continue;
+    const radiusSq = fire.radius * fire.radius;
+    forEachNearby(state, fire.x, fire.y, fire.radius, (unit) => {
+      const dx = unit.x - fire.x, dy = unit.y - fire.y;
+      if (dx * dx + dy * dy > radiusSq) return;
+      if (!isAlive(unit)) return;
+      if (!isEnemy(state, { playerId: fire.playerId }, unit)) return;   // العدو فقط
       // درع المطارق "ضد كل أنواع الضرر"، فيسري على النار أيضاً
       applyDamage(state, { playerId: fire.playerId }, unit, fire.damagePerSecond * TICK_SEC);
-    }
+    });
 
     if (fire.life > 0) remaining.push(fire);
   }
