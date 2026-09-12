@@ -115,27 +115,36 @@ function buildSlots() {
     });
     row.appendChild(type);
 
+    // اللمس على أي خانة مغلقة يفتحها بوتاً، حتى لا تكون هناك لمسة بلا نتيجة
+    const openIfClosed = () => {
+      if (slot.type !== 'closed') return false;
+      slot.type = 'bot';
+      refresh();
+      return true;
+    };
+
     row.appendChild(cell('gang', '', () => {
-      if (slot.type === 'closed') return;
+      if (openIfClosed()) return;
       slot.gang = next(GANG_CHOICES, slot.gang);
       refresh();
     }));
 
     // اللمس على اللون ينتقل لأول لون غير مستخدم
     row.appendChild(cell('color', '', () => {
-      if (slot.type === 'closed') return;
+      if (openIfClosed()) return;
       slot.color = firstFreeColor(index);
       refresh();
     }));
 
     row.appendChild(cell('team', '', () => {
-      if (slot.type === 'closed') return;
+      if (openIfClosed()) return;
       slot.team = next(TEAM_CHOICES, slot.team);
       refresh();
     }));
 
     row.appendChild(cell('difficulty', '', () => {
-      if (slot.type !== 'bot') return;
+      if (openIfClosed()) return;
+      if (slot.type !== 'bot') return;      // خانة اللاعب: لا صعوبة
       slot.difficulty = next(BOT_LEVELS, slot.difficulty);
       refresh();
     }));

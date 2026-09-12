@@ -87,9 +87,14 @@
       </div>
       <div id="slots"></div>
 
-      <p id="setupError" class="error" hidden></p>
-      <button id="btnStart" class="wide">ابدأ</button>
-      <button id="btnBackToMain" class="wide ghost">رجوع</button>
+      <!-- شريط سفلي ثابت حتى يبقى زر "ابدأ" في متناول الإصبع دائماً -->
+      <div class="setup-footer">
+        <p id="setupError" class="error" hidden></p>
+        <div class="footer-row">
+          <button id="btnStart" class="wide">ابدأ</button>
+          <button id="btnBackToMain" class="wide ghost">رجوع</button>
+        </div>
+      </div>
     </div>
   </div>
 
