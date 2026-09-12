@@ -1,7 +1,7 @@
-// أزرار الشاشة وشريط معلومات المباراة
-import { WEATHER, WEATHER_KEYS } from '../config.js';
+// أزرار المباراة، شريط المعلومات، قائمة الإيقاف، وشاشة النهاية
+import { WEATHER } from '../config.js';
 import { clearSelection, selectAllUnitsOf, resetMatch, districtsOwnedBy } from '../state.js';
-import { resetParticles } from '../render/weather.js';
+import { showScreen } from './menus.js';
 
 const el = (id) => document.getElementById(id);
 
@@ -17,26 +17,49 @@ export function setupHud(state) {
   el('btnAll').addEventListener('click', () => selectAllUnitsOf(state, state.humanId));
   el('btnClear').addEventListener('click', () => clearSelection(state));
 
-  // أزرار تجريبية للمرحلة 1 (تُستبدل بقائمة الإعداد في المرحلة 6)
-  const btnWeather = el('btnWeather');
-  btnWeather.addEventListener('click', () => {
-    const next = (WEATHER_KEYS.indexOf(state.weather) + 1) % WEATHER_KEYS.length;
-    state.weather = WEATHER_KEYS[next];
-    resetParticles(state.weather, state.view);
-    btnWeather.textContent = 'الطقس: ' + WEATHER[state.weather].name;
+  // --- قائمة الإيقاف: اللعبة تتوقف بالكامل أثناء فتحها ---
+  el('btnPause').addEventListener('click', () => {
+    if (state.matchResult) return;
+    state.paused = true;
+    el('pauseMenu').hidden = false;
   });
 
-  el('btnNewMap').addEventListener('click', () => { resetMatch(state); hideEndScreen(); });
-  el('btnRestart').addEventListener('click', () => { resetMatch(state); hideEndScreen(); });
+  el('btnResume').addEventListener('click', () => {
+    state.paused = false;
+    el('pauseMenu').hidden = true;
+  });
+
+  el('btnRestartMatch').addEventListener('click', () => {
+    resetMatch(state);                 // نفس الإعدادات
+    closeOverlays();
+  });
+
+  el('btnQuitToMain').addEventListener('click', () => leaveToMain(state));
+
+  // --- شاشة النهاية ---
+  el('btnRestart').addEventListener('click', () => {
+    resetMatch(state);
+    closeOverlays();
+  });
+
+  el('btnEndToMain').addEventListener('click', () => leaveToMain(state));
 }
 
-function hideEndScreen() {
+function closeOverlays() {
+  el('pauseMenu').hidden = true;
   el('endScreen').hidden = true;
   last.result = null;
 }
 
+function leaveToMain(state) {
+  state.running = false;
+  state.paused = false;
+  closeOverlays();
+  showScreen('main');
+}
+
 // إشعار قصير عند الاستيلاء على حي
-function updateNotice(state) {
+function updateNoticeBox(state) {
   const notice = el('notice');
   const text = state.notice ? state.notice.text : '';
   if (text === last.notice) return;
@@ -96,6 +119,6 @@ export function updateHud(state) {
     el('infoWeather').textContent = WEATHER[state.weather].name;
   }
 
-  updateNotice(state);
+  updateNoticeBox(state);
   updateEndScreen(state);
 }

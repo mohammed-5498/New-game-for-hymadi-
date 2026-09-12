@@ -37,6 +37,8 @@ export function createMatch(settings) {
     camera: { x: 0, y: 0, z: CAMERA.startZoom },
     view: { w: 1, h: 1, dpr: 1 },
     inputMode: 'pan',          // pan | select
+    running: false,            // هل المباراة جارية (لا تعمل داخل القوائم)
+    paused: false,             // قائمة الإيقاف مفتوحة
     selectionBox: null,        // مربع التحديد أثناء السحب
     moveMarker: null,          // حلقة مكان أمر الحركة
     notice: null,              // إشعار قصير (استيلاء على حي)
@@ -105,9 +107,13 @@ export function selectAllUnitsOf(state, playerId) {
   for (const unit of state.units) unit.selected = unit.playerId === playerId;
 }
 
-// إعادة توليد المباراة بنفس الإعدادات داخل نفس كائن الحالة
-export function resetMatch(state) {
-  const fresh = createMatch(state.settings);
+// بدء مباراة جديدة داخل نفس كائن الحالة (حتى تبقى مراجع اللمس والواجهة صالحة)
+export function resetMatch(state, settings = state.settings) {
+  const fresh = createMatch(settings);
+  state.settings = settings;
+  state.weather = fresh.weather;
+  state.maxUnits = fresh.maxUnits;
+  state.paused = false;
   state.map = fresh.map;
   state.players = fresh.players;
   state.units = fresh.units;

@@ -9,40 +9,90 @@
 </head>
 <body>
 <div id="wrap">
-  <canvas id="game"></canvas>
 
-  <!-- شريط المعلومات (أعلى اليسار) -->
-  <div id="info">
-    <span id="infoSel">محدد: 0</span>
-    <span class="sep">|</span>
-    <span id="infoUnits">0/100</span>
-    <span class="sep">|</span>
-    <span id="infoDistricts">أحياء: 0</span>
-    <span class="sep">|</span>
-    <span id="infoWeather">نهار</span>
-  </div>
+  <!-- شاشة المباراة -->
+  <div id="screenGame" hidden>
+    <canvas id="game"></canvas>
 
-  <!-- زر تبديل وضع الإصبع الواحد -->
-  <button id="btnMode" class="btn" style="top:10px;right:10px">تحريك الخريطة</button>
+    <div id="info">
+      <span id="infoSel">محدد: 0</span>
+      <span class="sep">|</span>
+      <span id="infoUnits">0/100</span>
+      <span class="sep">|</span>
+      <span id="infoDistricts">أحياء: 0</span>
+      <span class="sep">|</span>
+      <span id="infoWeather">نهار</span>
+    </div>
 
-  <!-- أزرار تجريبية للمرحلة 1 فقط (تُستبدل بقوائم الإعداد في المرحلة 6) -->
-  <button id="btnWeather" class="btn tmp" style="top:62px;right:10px">الطقس: نهار</button>
-  <button id="btnNewMap" class="btn tmp" style="bottom:10px;left:10px">خريطة جديدة</button>
+    <button id="btnMode" class="btn" style="top:10px;right:10px">تحريك الخريطة</button>
+    <button id="btnPause" class="btn" style="top:10px;left:50%;transform:translateX(-50%)">إيقاف</button>
+    <button id="btnAll" class="btn" style="bottom:10px;right:10px">كل جنودي</button>
+    <button id="btnClear" class="btn" style="bottom:10px;right:120px">إلغاء التحديد</button>
 
-  <button id="btnAll" class="btn" style="bottom:10px;right:10px">كل جنودي</button>
-  <button id="btnClear" class="btn" style="bottom:10px;right:120px">إلغاء التحديد</button>
+    <div id="notice" hidden></div>
 
-  <!-- إشعار قصير عند الاستيلاء على حي -->
-  <div id="notice" hidden></div>
+    <!-- قائمة الإيقاف -->
+    <div id="pauseMenu" hidden>
+      <div class="panel">
+        <h1>إيقاف مؤقت</h1>
+        <button id="btnResume" class="wide">متابعة</button>
+        <button id="btnRestartMatch" class="wide ghost">إعادة المباراة</button>
+        <button id="btnQuitToMain" class="wide ghost">القائمة الرئيسية</button>
+      </div>
+    </div>
 
-  <!-- شاشة النهاية -->
-  <div id="endScreen" hidden>
-    <div class="panel">
-      <h1 id="endTitle"></h1>
-      <ul id="endStats"></ul>
-      <button id="btnRestart">مباراة جديدة</button>
+    <!-- شاشة النهاية -->
+    <div id="endScreen" hidden>
+      <div class="panel">
+        <h1 id="endTitle"></h1>
+        <ul id="endStats"></ul>
+        <button id="btnRestart" class="wide">مباراة جديدة</button>
+        <button id="btnEndToMain" class="wide ghost">القائمة الرئيسية</button>
+      </div>
     </div>
   </div>
+
+  <!-- القائمة الرئيسية -->
+  <div id="screenMain">
+    <div class="menu">
+      <h1 class="title">مدينة العصابات</h1>
+      <p class="subtitle">عصابات تتقاتل للسيطرة على أحياء المدينة</p>
+      <button id="btnPlay" class="wide">لعب</button>
+    </div>
+  </div>
+
+  <!-- قائمة الإعداد -->
+  <div id="screenSetup" hidden>
+    <div class="menu setup">
+      <h2>إعداد المباراة</h2>
+
+      <div class="row">
+        <span class="label">حجم الخريطة</span>
+        <div id="optMapSize" class="options"></div>
+      </div>
+
+      <div class="row">
+        <span class="label">الحد الأقصى للوحدات</span>
+        <div id="optMaxUnits" class="options"></div>
+      </div>
+
+      <div class="row">
+        <span class="label">الطقس</span>
+        <div id="optWeather" class="options"></div>
+      </div>
+
+      <div class="slots-head">
+        <span>اللاعبون</span>
+        <span id="slotsHint" class="hint"></span>
+      </div>
+      <div id="slots"></div>
+
+      <p id="setupError" class="error" hidden></p>
+      <button id="btnStart" class="wide">ابدأ</button>
+      <button id="btnBackToMain" class="wide ghost">رجوع</button>
+    </div>
+  </div>
+
 </div>
 <script type="module" src="js/main.js"></script>
 </body>
