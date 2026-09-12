@@ -166,6 +166,7 @@ export const COMBAT = {
   projectileMinTime: 0.3,    // زمن طيران المقذوف
   projectileMaxTime: 0.5,
   projectileArc: 6,          // ارتفاع قوس المقذوف أثناء الطيران
+  missSpread: 1.0,           // بُعد سقوط الرمية الخاطئة عن الهدف (مربعات)
   hitFlashTime: 0.15,        // ومضة الوحدة عند تلقي ضربة
   deathTime: 1.0             // زمن سقوط الوحدة الميتة واختفائها
 };

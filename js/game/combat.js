@@ -2,6 +2,7 @@
 import { TICK_SEC, COMBAT, UNITS } from '../config.js';
 import { findPath } from '../map/pathfinding.js';
 import { createFire } from './abilities.js';
+import { visionRange, rangedShotHits } from './weather.js';
 
 // لا ضرر على وحدات نفس اللاعب ولا على الحلفاء (فريق 0 يعني بدون فريق: عدو للجميع)
 export function isEnemy(state, a, b) {
@@ -83,9 +84,9 @@ function becomeIdle(unit) {
   unit.path = [];
 }
 
-// أقرب عدو داخل مدى الرصد
+// أقرب عدو داخل مدى الرصد (يتأثر بالطقس: ليلاً أقصر)
 function findNearestEnemy(state, unit) {
-  const vision = unit.stats.visionRange;
+  const vision = visionRange(state, unit);
   let best = null, bestDist = vision;
   for (const other of state.units) {
     if (!isAlive(other) || !isEnemy(state, unit, other)) continue;
@@ -101,7 +102,7 @@ function fightTarget(state, unit, budget) {
 
   // حد المطاردة (لا ينطبق على أمر الهجوم من اللاعب)
   if (!unit.commandedTarget) {
-    const visionLimit = unit.stats.visionRange * COMBAT.chaseVisionFactor;
+    const visionLimit = visionRange(state, unit) * COMBAT.chaseVisionFactor;
     const fromOrigin = Math.hypot(unit.x - unit.chaseOrigin.x, unit.y - unit.chaseOrigin.y);
     if (dist > visionLimit || fromOrigin > COMBAT.chaseMaxTiles) {
       returnToOrigin(state, unit);
@@ -192,11 +193,19 @@ function spawnProjectile(state, unit, target, damage) {
   const ratio = Math.min(1, dist / maxRange);
   const duration = COMBAT.projectileMinTime + (COMBAT.projectileMaxTime - COMBAT.projectileMinTime) * ratio;
 
+  // في المطر تخطئ بعض الرميات فتسقط قرب الهدف بلا ضرر
+  const hits = rangedShotHits(state);
+  const angle = Math.random() * 6.2832;
+  const spread = COMBAT.missSpread * (0.6 + Math.random() * 0.4);
+
   state.projectiles.push({
     kind: unit.stats.projectile,
     attacker: unit,
     target,
     damage,
+    hits,
+    missX: target.x + Math.cos(angle) * spread,
+    missY: target.y + Math.sin(angle) * spread,
     startX: unit.x, startY: unit.y,
     x: unit.x, y: unit.y,
     prevX: unit.x, prevY: unit.y,
@@ -213,16 +222,18 @@ function updateProjectiles(state) {
     shot.prevT = shot.t;
     shot.t += TICK_SEC;
 
-    // المقذوف يتتبع هدفه: يصيب عند الوصول
-    const endX = isAlive(shot.target) ? shot.target.x : shot.x;
-    const endY = isAlive(shot.target) ? shot.target.y : shot.y;
+    // المقذوف المصيب يتتبع هدفه، والخاطئ يسقط في نقطة قريبة منه
+    const following = shot.hits && isAlive(shot.target);
+    const endX = following ? shot.target.x : (shot.hits ? shot.x : shot.missX);
+    const endY = following ? shot.target.y : (shot.hits ? shot.y : shot.missY);
     const progress = Math.min(1, shot.t / shot.duration);
     shot.x = shot.startX + (endX - shot.startX) * progress;
     shot.y = shot.startY + (endY - shot.startY) * progress;
 
     if (shot.t >= shot.duration) {
+      // الزجاجة تشعل الأرض حيث سقطت (حتى لو أخطأت الهدف)
       if (shot.attacker.stats.fire) createFire(state, shot.attacker, shot.x, shot.y);
-      else if (isAlive(shot.target)) strike(state, shot.attacker, shot.target, shot.damage);
+      else if (shot.hits && isAlive(shot.target)) strike(state, shot.attacker, shot.target, shot.damage);
       continue;
     }
     remaining.push(shot);

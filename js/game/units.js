@@ -2,6 +2,7 @@
 import { UNIT_BASE, GANGS, HEROES, UNITS, TICK_SEC } from '../config.js';
 import { findPath, findFreeTiles, nearestWalkable } from '../map/pathfinding.js';
 import { clearCombatOrders } from './combat.js';
+import { moveSpeed } from './weather.js';
 
 // إحصائيات الوحدة: الأساس + ميزة العصابة، أو الأساس + قيم الشخصية المميزة
 export function unitStats(gangId, heroId) {
@@ -102,7 +103,7 @@ function moveAlongPath(state, unit) {
     return;
   }
 
-  const step = unit.stats.speed * TICK_SEC;
+  const step = moveSpeed(state, unit) * TICK_SEC;   // الثلج يبطئ الجميع
   let remaining = step;
 
   // قد تقطع الوحدة أكثر من نقطة مسار في التحديث الواحد إذا كانت سريعة
