@@ -19,6 +19,16 @@ export function reportFrame(frameMs) {
 }
 const fpsSamples = [];
 
+// تبديل وضع الإصبع الواحد مع تحديث شكل الزر
+// (يستعمله الزر نفسه، والرجوع التلقائي بعد التحديد في input.js)
+export function setInputMode(state, mode) {
+  state.inputMode = mode;
+  state.selectionBox = null;
+  const btnMode = el('btnMode');
+  btnMode.textContent = mode === 'pan' ? 'تحريك الخريطة' : 'تحديد الجنود';
+  btnMode.classList.toggle('on', mode === 'select');
+}
+
 export function setupHud(state) {
   // لمس شريط المعلومات 3 مرات يُظهر مؤشر الإطارات أو يخفيه
   el('info').addEventListener('click', () => {
@@ -29,12 +39,8 @@ export function setupHud(state) {
     el('fps').hidden = !fpsVisible;
   });
 
-  const btnMode = el('btnMode');
-  btnMode.addEventListener('click', () => {
-    state.inputMode = state.inputMode === 'pan' ? 'select' : 'pan';
-    state.selectionBox = null;
-    btnMode.textContent = state.inputMode === 'pan' ? 'تحريك الخريطة' : 'تحديد الجنود';
-    btnMode.classList.toggle('on', state.inputMode === 'select');
+  el('btnMode').addEventListener('click', () => {
+    setInputMode(state, state.inputMode === 'pan' ? 'select' : 'pan');
   });
 
   el('btnAll').addEventListener('click', () => selectAllUnitsOf(state, state.humanId));

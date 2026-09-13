@@ -108,6 +108,23 @@ export function selectAllUnitsOf(state, playerId) {
   for (const unit of state.units) unit.selected = unit.playerId === playerId;
 }
 
+// كل وحدات اللاعب داخل دائرة حول وحدة معينة، مهما كان نوعها
+// (تحديد المجموعة بالنقر المزدوج على جندي)
+export function selectUnitsAround(state, center, radius) {
+  const radiusSq = radius * radius;
+  let count = 0;
+
+  for (const unit of state.units) {
+    if (unit.playerId !== center.playerId || unit.state === 'dead') { unit.selected = false; continue; }
+    const dx = unit.x - center.x, dy = unit.y - center.y;
+    unit.selected = dx * dx + dy * dy <= radiusSq;
+    if (unit.selected) count++;
+  }
+
+  if (!center.selected && center.state !== 'dead') { center.selected = true; count++; }
+  return count;
+}
+
 // بدء مباراة جديدة داخل نفس كائن الحالة (حتى تبقى مراجع اللمس والواجهة صالحة)
 export function resetMatch(state, settings = state.settings) {
   const fresh = createMatch(settings);

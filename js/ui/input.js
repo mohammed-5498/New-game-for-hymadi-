@@ -4,7 +4,8 @@ import { screenToWorld, worldToTile, worldToScreen } from '../map/coords.js';
 import { clampCamera } from '../render/renderer.js';
 import { commandMove } from '../game/units.js';
 import { commandAttack, isEnemy } from '../game/combat.js';
-import { selectedUnits } from '../state.js';
+import { selectedUnits, selectUnitsAround } from '../state.js';
+import { setInputMode } from './hud.js';
 import { unitWorldPos } from '../render/units.js';
 
 export function setupInput(canvas, state) {
@@ -12,6 +13,7 @@ export function setupInput(canvas, state) {
   let dragStart = null;    // بداية سحب الإصبع الواحد
   let moved = false;       // هل تجاوز السحب حد اللمسة السريعة
   let pinch = null;        // حالة إصبعين
+  let lastUnitTap = null;  // آخر نقرة على جندي: للكشف عن النقرة المزدوجة
 
   const pointFromEvent = (e) => {
     const rect = canvas.getBoundingClientRect();
@@ -93,17 +95,42 @@ export function setupInput(canvas, state) {
     }
   }
 
+  // هل هذه النقرة هي الثانية على نفس الجندي؟
+  // نتسامح في المكان لأن الإصبع نادراً ما يصيب الجندي الصغير مرتين بدقة
+  function isSecondTapOn(unit, sx, sy) {
+    if (!lastUnitTap || lastUnitTap.unit !== unit) return false;
+    if (performance.now() - lastUnitTap.time > INPUT.doubleTapMs) return false;
+    const world = unitWorldPos(unit, 1);
+    const screen = worldToScreen(world.x, world.y, state.camera, state.view);
+    return Math.hypot(screen.x - sx, screen.y - sy) <= INPUT.doubleTapSlackPx;
+  }
+
   // لمسة سريعة: على وحدتك تحددها، وعلى عدو أمر هجوم، وعلى الأرض أمر حركة
   function handleTap(sx, sy) {
     const group = selectedUnits(state);
     const hit = findUnitAt(sx, sy);
 
-    if (hit && hit.playerId === state.humanId) {
-      for (const unit of state.units) unit.selected = false;
-      hit.selected = true;
+    // نقرة ثانية قرب الجندي نفسه حتى لو لم تصبه بدقة: تحديد المجموعة
+    const doubleTarget = lastUnitTap && isSecondTapOn(lastUnitTap.unit, sx, sy)
+      ? lastUnitTap.unit : null;
+
+    if (doubleTarget) {
+      selectUnitsAround(state, doubleTarget, INPUT.groupSelectRadiusTiles);
+      lastUnitTap = null;               // لا تُحسب نقرة ثالثة تحديداً جديداً
+      afterSuccessfulSelection();
       return;
     }
 
+    // اللمس على جندي من جنودك: تحديد فردي (ولا يصدر أي أمر حركة)
+    if (hit && hit.playerId === state.humanId) {
+      for (const unit of state.units) unit.selected = false;
+      hit.selected = true;
+      lastUnitTap = { unit: hit, time: performance.now() };
+      afterSuccessfulSelection();
+      return;
+    }
+
+    lastUnitTap = null;
     if (!group.length) return;
 
     if (hit && isEnemy(state, group[0], hit)) {
@@ -114,6 +141,11 @@ export function setupInput(canvas, state) {
     const world = screenToWorld(sx, sy, state.camera, state.view);
     const tile = worldToTile(world.x, world.y);
     commandMove(state, tile.i, tile.j, group);
+  }
+
+  // بعد أي تحديد ناجح نرجع تلقائياً لوضع تحريك الخريطة
+  function afterSuccessfulSelection() {
+    if (state.inputMode === 'select') setInputMode(state, 'pan');
   }
 
   function findUnitAt(sx, sy) {
@@ -133,12 +165,18 @@ export function setupInput(canvas, state) {
     const sel = state.selectionBox;
     const x0 = Math.min(sel.x0, sel.x1), x1 = Math.max(sel.x0, sel.x1);
     const y0 = Math.min(sel.y0, sel.y1), y1 = Math.max(sel.y0, sel.y1);
+    let selected = 0;
+
     for (const unit of state.units) {
       if (unit.playerId !== state.humanId || unit.state === 'dead') { unit.selected = false; continue; }
       const world = unitWorldPos(unit, 1);
       const screen = worldToScreen(world.x, world.y, state.camera, state.view);
       unit.selected = screen.x >= x0 && screen.x <= x1 && screen.y >= y0 && screen.y <= y1 + 5;
+      if (unit.selected) selected++;
     }
+
+    // مربع فارغ يبقيك في وضع التحديد لتعيد المحاولة
+    if (selected > 0) afterSuccessfulSelection();
   }
 
   // أحداث المؤشر (ومع المتصفحات القديمة أحداث اللمس)
