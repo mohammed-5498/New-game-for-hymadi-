@@ -1,6 +1,7 @@
 // الهجوم التلقائي، أمر الهجوم، المقذوفات، الضرر والموت
 import { TICK_SEC, COMBAT, UNITS } from '../config.js';
 import { findPath } from '../map/pathfinding.js';
+import { faceTowards } from './units.js';
 import { createFire } from './abilities.js';
 import { visionRange, rangedShotHits } from './weather.js';
 import { forEachNearby } from './spatialHash.js';
@@ -41,6 +42,8 @@ export function commandAttack(state, units, target) {
 export function clearCombatOrders(unit) {
   unit.target = null;
   unit.commandedTarget = false;
+  unit.pendingHit = null;      // ضربة كانت في منتصفها
+  unit.attackMove = null;      // وجهة الهجوم المتحرك
 }
 
 export function updateCombat(state) {
@@ -54,7 +57,10 @@ export function updateCombat(state) {
     if (unit.state === 'dead') { unit.deathTimer -= TICK_SEC; continue; }
     if (unit.attackCooldown > 0) unit.attackCooldown -= TICK_SEC;
 
-    // أثناء أمر الحركة تتجاهل الوحدة الأعداء حتى تصل
+    // الضربة تقع في منتصف حركة السلاح لا عند بدايتها
+    if (unit.pendingHit && state.time >= unit.pendingHit.at) resolveHit(state, unit);
+
+    // أثناء أمر الحركة العادي تتجاهل الوحدة الأعداء حتى تصل
     if (unit.state === 'moving') continue;
 
     if (unit.state === 'attacking' && !isAlive(unit.target)) {
@@ -62,10 +68,11 @@ export function updateCombat(state) {
       unit.commandedTarget = false;
       const next = findNearestEnemy(state, unit);
       if (next) startAttack(unit, next);
-      else becomeIdle(unit);
+      else finishFight(state, unit);
     }
 
-    if (unit.state === 'idle') {
+    // الانتظار والهجوم المتحرك كلاهما يرصد الأعداء
+    if (unit.state === 'idle' || unit.state === 'attackMove') {
       // بحث موزع على التحديثات: كل وحدة تبحث كل 0.25 ثانية
       if ((tick + unit.id) % scanTicks === 0) {
         const target = findNearestEnemy(state, unit);
@@ -77,6 +84,32 @@ export function updateCombat(state) {
   }
 
   updateProjectiles(state);
+}
+
+// لحظة الارتطام: هنا يقع الضرر أو يُطلق المقذوف
+function resolveHit(state, unit) {
+  const hit = unit.pendingHit;
+  unit.pendingHit = null;
+  if (!isAlive(hit.target) || !isAlive(unit)) return;
+
+  if (hit.ranged) spawnProjectile(state, unit, hit.target, hit.damage);
+  else strike(state, unit, hit.target, hit.damage);
+}
+
+// انتهى القتال: إما نعود للانتظار أو نواصل الهجوم المتحرك نحو وجهته
+function finishFight(state, unit) {
+  unit.target = null;
+  unit.commandedTarget = false;
+  unit.path = [];
+
+  if (unit.attackMove) {
+    unit.state = 'attackMove';
+    unit.orderSeq++;
+    unit.awaitingPath = true;
+    state.pathQueue.push({ unit, i: unit.attackMove.i, j: unit.attackMove.j, seq: unit.orderSeq });
+    return;
+  }
+  unit.state = 'idle';
 }
 
 function startAttack(unit, target) {
@@ -115,6 +148,7 @@ function findNearestEnemy(state, unit) {
 function fightTarget(state, unit, budget) {
   const target = unit.target;
   const dist = distance(unit, target);
+  faceTowards(unit, target.x, target.y);   // تنظر نحو خصمها
 
   // حد المطاردة (لا ينطبق على أمر الهجوم من اللاعب)
   if (!unit.commandedTarget) {
@@ -136,9 +170,15 @@ function fightTarget(state, unit, budget) {
     unit.path = [];                       // وصلت للمدى: تتوقف وتضرب
     if (unit.attackCooldown <= 0) {
       unit.attackCooldown = attackTime;
-      const total = damage * unit.damageMultiplier;   // مخزن السلاح + هالة الزعيم
-      if (!melee && unit.stats.projectile) spawnProjectile(state, unit, target, total);
-      else strike(state, unit, target, total);
+      // بداية حركة السلاح: الرسم يقرأ هذين الرقمين، والضرر يقع عند الارتطام
+      unit.attackStart = state.time;
+      unit.attackRate = attackTime;
+      unit.pendingHit = {
+        target,
+        damage: damage * unit.damageMultiplier,       // مخزن السلاح + هالة الزعيم
+        ranged: !melee && !!unit.stats.projectile,
+        at: state.time + attackTime * COMBAT.hitMoment
+      };
     }
     return;
   }
@@ -156,7 +196,10 @@ function fightTarget(state, unit, budget) {
 }
 
 // تتوقف وتعود لمكان بدء المطاردة (وأثناء العودة تتجاهل الأعداء حتى تصل)
+// أما في الهجوم المتحرك فتواصل تقدمها نحو وجهتها بدل العودة
 function returnToOrigin(state, unit) {
+  if (unit.attackMove) { finishFight(state, unit); return; }
+
   const origin = unit.chaseOrigin;
   unit.target = null;
   unit.commandedTarget = false;

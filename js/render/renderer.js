@@ -193,7 +193,7 @@ function drawBuildingsAndUnits(ctx, state, alpha, visible) {
     }
 
     const unitsHere = buckets.get(s);
-    if (unitsHere) for (const unit of unitsHere) drawUnit(ctx, unit, alpha, state.camera.z);
+    if (unitsHere) for (const unit of unitsHere) drawUnit(ctx, unit, alpha, state.camera.z, state.time);
   }
 }
 
@@ -237,8 +237,9 @@ function drawMoveMarker(ctx, state) {
   ctx.globalAlpha = Math.max(0, alpha);
   ctx.beginPath();
   ctx.ellipse(x, y, 6 + marker.t * 14, 3 + marker.t * 7, 0, 0, 6.2832);
-  ctx.strokeStyle = UI_LIGHT;
-  ctx.lineWidth = 1.2;
+  // حلقة حمراء لأمر الهجوم المتحرك، وبيضاء لأمر الحركة العادي
+  ctx.strokeStyle = marker.attack ? '#d9463b' : UI_LIGHT;
+  ctx.lineWidth = marker.attack ? 1.6 : 1.2;
   ctx.stroke();
   ctx.globalAlpha = 1;
 }

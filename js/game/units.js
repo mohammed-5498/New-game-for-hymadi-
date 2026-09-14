@@ -25,7 +25,8 @@ export function createUnit(state, player, i, j, heroId = null) {
     stats,
     hp: stats.hp,
     maxHp: stats.hp,
-    state: 'idle',        // idle | moving | attacking | dead
+    state: 'idle',        // idle | moving | attackMove | attacking | dead
+    facing: 1,            // اتجاه الرسم: 1 يمين و-1 يسار (اتجاه الشاشة)
     path: [],
     selected: false,
 
@@ -33,12 +34,16 @@ export function createUnit(state, player, i, j, heroId = null) {
     flow: null,             // حقل تدفق للمجموعات الكبيرة
     awaitingPath: false,    // طلب مسار في الطابور
     orderSeq: 0,            // رقم الأمر: يلغي الطلبات القديمة في الطابور
+    attackMove: null,       // وجهة أمر الهجوم المتحرك {i, j}
 
     // القتال
     target: null,           // الوحدة التي تهاجمها
     commandedTarget: false, // أمر هجوم من اللاعب: بدون حد مطاردة
     chaseOrigin: { x: i, y: j },
     attackCooldown: 0,
+    attackStart: null,      // زمن بداية آخر ضربة (يقرأه الرسم)
+    attackRate: 0,          // زمن الضربة الحالية
+    pendingHit: null,       // ضربة في منتصفها تنتظر لحظة الارتطام
     repathTimer: 0,
     hitFlash: 0,            // ومضة عند تلقي ضربة
     deathTimer: 0,          // زمن السقوط قبل الاختفاء
@@ -98,11 +103,32 @@ export function commandMove(state, targetI, targetJ, units) {
 
 // بداية أمر جديد: يلغي المسار والقتال والطلبات القديمة
 function beginOrder(unit) {
-  clearCombatOrders(unit);
+  clearCombatOrders(unit);      // يلغي الهدف والضربة المعلّقة ووجهة الهجوم المتحرك
   unit.path = [];
   unit.flow = null;
   unit.awaitingPath = false;
   unit.orderSeq++;
+}
+
+// أمر الهجوم المتحرك: تتقدم المجموعة نحو المكان، وتتوقف لقتال من يعترضها
+// ثم تواصل تقدمها (عكس أمر الحركة العادي الذي يتجاهل الأعداء)
+export function commandAttackMove(state, targetI, targetJ, units) {
+  const map = state.map;
+  const ordered = commandMove(state, targetI, targetJ, units);
+  if (!ordered) return 0;
+
+  const clampedI = Math.max(0, Math.min(map.n - 1, Math.round(targetI)));
+  const clampedJ = Math.max(0, Math.min(map.n - 1, Math.round(targetJ)));
+  const destination = nearestWalkable(map, clampedI, clampedJ);
+  if (!destination) return 0;
+
+  for (const unit of units) {
+    if (unit.state === 'dead') continue;
+    unit.attackMove = { i: destination[0], j: destination[1] };
+    if (unit.state === 'moving') unit.state = 'attackMove';
+  }
+  state.moveMarker = { i: clampedI, j: clampedJ, t: 0, attack: true };   // حلقة حمراء
+  return ordered;
 }
 
 // طابور طلبات المسار: عدد محدود من عمليات A* في كل تحديث
@@ -120,9 +146,10 @@ export function processPathQueue(state) {
     unit.awaitingPath = false;
     if (path && path.length) {
       unit.path = path;
-      unit.state = 'moving';
+      unit.state = unit.attackMove ? 'attackMove' : 'moving';
     } else {
       unit.state = 'idle';
+      unit.attackMove = null;
     }
   }
 }
@@ -153,7 +180,10 @@ function moveAlongPath(state, unit) {
 
   if (!unit.path.length) {
     // تنتظر مسارها من الطابور: تبقى في حالة الحركة حتى تتجاهل الأعداء
-    if (unit.state === 'moving' && !unit.awaitingPath) unit.state = 'idle';
+    if ((unit.state === 'moving' || unit.state === 'attackMove') && !unit.awaitingPath) {
+      unit.state = 'idle';
+      unit.attackMove = null;     // وصلت وجهة الهجوم المتحرك
+    }
     return;
   }
 
@@ -175,13 +205,23 @@ function moveAlongPath(state, unit) {
       unit.y += (dy / dist) * remaining;
       remaining = 0;
     }
+    faceTowards(unit, tx, ty);
   }
 
   // الوحدة المهاجمة تبقى في حالتها؛ وأمر الحركة ينتهي بالانتظار
   // (إلا إذا كانت تتبع حقل تدفق أو تنتظر مسارها)
-  if (!unit.path.length && unit.state === 'moving' && !unit.flow && !unit.awaitingPath) {
+  if (!unit.path.length && !unit.flow && !unit.awaitingPath &&
+      (unit.state === 'moving' || unit.state === 'attackMove')) {
     unit.state = 'idle';
+    unit.attackMove = null;
   }
+}
+
+// اتجاه النظر: موجب إذا كان الهدف إلى يمين الشاشة
+// (في الرسم المائل يكون يمين الشاشة باتجاه زيادة i ونقصان j)
+export function faceTowards(unit, targetI, targetJ) {
+  const screenDx = (targetI - unit.x) - (targetJ - unit.y);
+  if (Math.abs(screenDx) > 0.01) unit.facing = screenDx >= 0 ? 1 : -1;
 }
 
 // قوة تباعد خفيفة حتى لا تتداخل الوحدات، بشرط ألا تدفع أي وحدة داخل مبنى

@@ -2,7 +2,7 @@
 import { CAMERA, INPUT } from '../config.js';
 import { screenToWorld, worldToTile, worldToScreen } from '../map/coords.js';
 import { clampCamera } from '../render/renderer.js';
-import { commandMove } from '../game/units.js';
+import { commandMove, commandAttackMove } from '../game/units.js';
 import { commandAttack, isEnemy } from '../game/combat.js';
 import { selectedUnits, selectUnitsAround } from '../state.js';
 import { setInputMode } from './hud.js';
@@ -14,6 +14,8 @@ export function setupInput(canvas, state) {
   let moved = false;       // هل تجاوز السحب حد اللمسة السريعة
   let pinch = null;        // حالة إصبعين
   let lastUnitTap = null;  // آخر نقرة على جندي: للكشف عن النقرة المزدوجة
+  let longPressTimer = null;   // مؤقت الضغطة المطوّلة (أمر الهجوم المتحرك)
+  let longPressFired = false;  // نفّذنا الأمر فلا نكرره عند رفع الإصبع
 
   const pointFromEvent = (e) => {
     const rect = canvas.getBoundingClientRect();
@@ -26,7 +28,9 @@ export function setupInput(canvas, state) {
       dragStart = { x: p.x, y: p.y, camX: state.camera.x, camY: state.camera.y };
       moved = false;
       state.selectionBox = null;
+      startLongPress(p);
     } else if (pointers.size === 2) {
+      cancelLongPress();
       const v = [...pointers.values()];
       pinch = {
         d: Math.max(1, Math.hypot(v[0].x - v[1].x, v[0].y - v[1].y)),
@@ -61,7 +65,7 @@ export function setupInput(canvas, state) {
 
     if (!dragStart) return;
     const dx = p.x - dragStart.x, dy = p.y - dragStart.y;
-    if (Math.hypot(dx, dy) > INPUT.tapMovePx) moved = true;
+    if (Math.hypot(dx, dy) > INPUT.tapMovePx) { moved = true; cancelLongPress(); }
     if (!moved) return;
 
     if (state.inputMode === 'pan') {
@@ -77,6 +81,7 @@ export function setupInput(canvas, state) {
     if (!pointers.has(id)) return;
     const p = pointers.get(id);
     pointers.delete(id);
+    cancelLongPress();
 
     if (pinch) {
       if (pointers.size < 2) pinch = null;
@@ -85,7 +90,9 @@ export function setupInput(canvas, state) {
     }
 
     if (pointers.size === 0) {
-      if (dragStart && !moved) {
+      if (longPressFired) {
+        longPressFired = false;          // الأمر نُفّذ أثناء الضغط، فلا لمسة إضافية
+      } else if (dragStart && !moved) {
         handleTap(p.x, p.y);
       } else if (state.selectionBox) {
         applySelectionBox();
@@ -93,6 +100,28 @@ export function setupInput(canvas, state) {
       state.selectionBox = null;
       dragStart = null;
     }
+  }
+
+  // --- الضغطة المطوّلة على الأرض: أمر هجوم متحرك ---
+  function startLongPress(p) {
+    cancelLongPress();
+    longPressFired = false;
+    longPressTimer = setTimeout(() => {
+      longPressTimer = null;
+      if (moved || pointers.size !== 1) return;
+
+      const group = selectedUnits(state);
+      if (!group.length) return;
+      if (findUnitAt(p.x, p.y)) return;          // الضغط على وحدة ليس أمر أرض
+
+      const world = screenToWorld(p.x, p.y, state.camera, state.view);
+      const tile = worldToTile(world.x, world.y);
+      if (commandAttackMove(state, tile.i, tile.j, group)) longPressFired = true;
+    }, INPUT.longPressMs);
+  }
+
+  function cancelLongPress() {
+    if (longPressTimer !== null) { clearTimeout(longPressTimer); longPressTimer = null; }
   }
 
   // هل هذه النقرة هي الثانية على نفس الجندي؟

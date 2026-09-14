@@ -32,7 +32,8 @@ export const INPUT = {
   unitTapRadiusPx: 22,          // دقة اللمس على وحدة
   doubleTapMs: 300,             // أقصى مدة بين نقرتين لتُحسبا نقرة مزدوجة
   doubleTapSlackPx: 44,         // تسامح مكان النقرة الثانية حول الجندي (الإصبع لا يصيب بدقة)
-  groupSelectRadiusTiles: 5     // نصف قطر تحديد المجموعة حول الجندي بالنقر المزدوج
+  groupSelectRadiusTiles: 5,    // نصف قطر تحديد المجموعة حول الجندي بالنقر المزدوج
+  longPressMs: 500              // ضغطة مطوّلة على الأرض = أمر هجوم متحرك
 };
 
 // --- توليد الخريطة ---
@@ -171,7 +172,8 @@ export const COMBAT = {
   projectileArc: 6,          // ارتفاع قوس المقذوف أثناء الطيران
   missSpread: 1.0,           // بُعد سقوط الرمية الخاطئة عن الهدف (مربعات)
   hitFlashTime: 0.15,        // ومضة الوحدة عند تلقي ضربة
-  deathTime: 1.0             // زمن سقوط الوحدة الميتة واختفائها
+  deathTime: 1.0,            // زمن سقوط الوحدة الميتة واختفائها
+  hitMoment: 0.47            // لحظة الارتطام من زمن الضربة (تطابق أنميشن docs/units-art.js)
 };
 
 // --- الاستيلاء (تُستخدم في المرحلة 3) ---
@@ -247,6 +249,14 @@ export const BOT_LEVELS = ['easy', 'medium', 'hard'];
 
 // منع الاكتساح: من يملك هذه النسبة من الأحياء يصير هدف كل البوتات غير المتحالفة معه
 export const SNOWBALL = { districtShare: 0.40 };
+
+// --- رسم الوحدات (docs/units-art.js) ---
+export const UNIT_ART = {
+  scale: 0.5,          // حجم رسم الفرد العادي
+  heroScale: 1.15,     // الشخصيات المميزة أكبر بـ 15%
+  healthBarY: -16,     // ارتفاع شريط الدم فوق قدمي الوحدة
+  heroHealthBarY: -18
+};
 
 // --- الأداء ---
 export const PERFORMANCE = {
