@@ -57,6 +57,20 @@ export function createUnit(state, player, i, j, heroId = null, champion = false)
     comboTime: -99,         // زمن آخر ضربة في السلسلة
     comboTarget: null,
 
+    // الضربة المميزة (القسم 6.7): الأفراد العاديون بلا ضربة ولا شحن
+    ultCharge: 0,           // شريط الشحن من 0 إلى 100
+    ultStart: null,         // زمن بداية حركة الضربة المميزة (يقرأه الرسم)
+    ultRate: 0,
+    pendingUlt: null,       // تأثير ينتظر لحظة الارتطام
+    damageTaken: 0,         // الضرر المتراكم لحساب شحن الضربة
+    flurry: null,           // ضربات الوابل المتبقية
+    invulnUntil: 0,         // تصلّب: لا يتلقى ضرراً حتى هذا الزمن
+    buffUntil: 0,           // تحفيز: مكافأة ضرر وسرعة ضرب مؤقتة
+    buffDamage: 0,
+    buffAttackSpeed: 0,
+    slowUntil: 0,           // إبطاء من الضربة الأرضية
+    slowFactor: 0,
+
     // المكافآت المحسوبة كل تحديث (الهالات، مخزن السلاح)
     damageMultiplier: 1,
     aura: false,            // هل هو داخل هالة

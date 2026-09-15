@@ -1,7 +1,11 @@
 // رسم الوحدات: يستعمل docs/units-art.js (منسوخ في unitsArt.js) مربوطاً بحالة الوحدة
-import { TILE_HALF_W, TILE_HALF_H, COMBAT, PERFORMANCE, UNIT_ART } from '../config.js';
+import { TILE_HALF_W, TILE_HALF_H, COMBAT, PERFORMANCE, UNIT_ART, ULT } from '../config.js';
 import { UI_LIGHT, mix } from './colors.js';
 import { drawUnit as drawUnitArt } from './unitsArt.js';
+
+// الأفراد العاديون بلا ضربة مميزة، فلا نجمة ولا شريط شحن لهم
+const hasUlt = (unit) => !!unit.stats.ult;
+const ultReady = (unit) => hasUlt(unit) && unit.ultCharge >= ULT.max;
 
 // مفاتيح الرسم (القسم 13): عصابة الوحدة + نوعها
 // common فرد عادي، ثم شخصيتان مميزتان، ثم البطل champion
@@ -14,8 +18,12 @@ const ART_KEYS = {
   police:    { common: 'police_common', captain: 'police_captain' }
 };
 
-const artKey = (unit) =>
-  (ART_KEYS[unit.gang] || ART_KEYS.crows)[unit.champion ? 'champion' : (unit.hero || 'common')];
+// مفتاح غير معروف (عصابة لا تملك هذه الشخصية) يرجع لرسم الفرد العادي بدل ألا يُرسم شيء
+const artKey = (unit) => {
+  const gang = ART_KEYS[unit.gang] || ART_KEYS.crows;
+  const kind = unit.champion ? 'champion' : (unit.hero || 'common');
+  return gang[kind] || gang.common;
+};
 
 const artScale = (unit) => UNIT_ART.scale *
   (unit.champion ? UNIT_ART.championScale : unit.hero ? UNIT_ART.heroScale : 1);
@@ -54,7 +62,13 @@ export function drawUnit(ctx, unit, alpha, zoom = 99, time = 0) {
   if (dead) return;
 
   // شريط الدم للوحدة المتضررة أو المحددة، وللبطل دائماً (القسم 6.6)
-  if (unit.hp < unit.maxHp || unit.selected || unit.champion) drawHealthBar(ctx, unit, x, y);
+  const bar = unit.hp < unit.maxHp || unit.selected || unit.champion;
+  if (bar) drawHealthBar(ctx, unit, x, y);
+
+  // شريط الشحن الذهبي تحت شريط الدم للوحدة المحددة أو الجاهزة (القسم 6.7)
+  if (hasUlt(unit) && (unit.selected || ultReady(unit))) drawChargeBar(ctx, unit, x, y, bar);
+  // نجمة ذهبية صغيرة فوق الوحدة عند الجاهزية
+  if (ultReady(unit)) drawReadyStar(ctx, x, y, time);
 }
 
 // اختيار حالة الرسم وزمنها: الموت ثم الضربة ثم تلقي الضرر ثم الجري أو الوقوف
@@ -75,7 +89,11 @@ function artState(unit, time, dead) {
 
   // الضربة أولاً حتى تبقى لحظة الارتطام (47%) مطابقة للضرر الفعلي
   const swing = swingProgress(unit, time);
-  if (swing >= 0) return { ...common, state: 'attack', t: swing };
+  if (swing >= 0) {
+    // الضربة المميزة: نفس الحركة مع وهج ذهبي ومؤثر خاص (القسم 6.7)
+    const ult = unit.ultStart !== null && time - unit.ultStart < unit.ultRate;
+    return { ...common, state: ult ? 'ult' : 'attack', t: swing };
+  }
 
   if (unit.hurtTimer > 0) {
     return { ...common, state: 'hurt', t: UNIT_ART.hurtSeconds - unit.hurtTimer };
@@ -97,6 +115,41 @@ function drawHealthBar(ctx, unit, x, y) {
   ctx.fillRect(x - w / 2, top, w, h);
   ctx.fillStyle = ratio > 0.5 ? '#5fbf5f' : ratio > 0.25 ? '#e0b030' : '#d9463b';
   ctx.fillRect(x - w / 2, top, w * ratio, h);
+}
+
+// شريط الشحن الذهبي، تحت شريط الدم إن كان ظاهراً
+function drawChargeBar(ctx, unit, x, y, underHealthBar) {
+  const w = unit.champion ? 8 : unit.hero ? 6.5 : 5, h = 0.9;
+  const base = unit.champion ? UNIT_ART.championHealthBarY
+             : unit.hero ? UNIT_ART.heroHealthBarY : UNIT_ART.healthBarY;
+  const top = y + base + (underHealthBar ? UNIT_ART.chargeBarGap : 0);
+  const ratio = Math.max(0, Math.min(1, unit.ultCharge / ULT.max));
+
+  ctx.fillStyle = 'rgba(20,18,16,.75)';
+  ctx.fillRect(x - w / 2, top, w, h);
+  ctx.fillStyle = ratio >= 1 ? '#ffe08a' : '#c99a2e';
+  ctx.fillRect(x - w / 2, top, w * ratio, h);
+}
+
+// نجمة ذهبية تنبض فوق رأس الوحدة الجاهزة لضربتها المميزة
+function drawReadyStar(ctx, x, y, time) {
+  const pulse = 0.85 + 0.15 * Math.sin(time * 6);
+  const r = UNIT_ART.starSize * pulse, inner = r * 0.42;
+  const top = y + UNIT_ART.starY;
+
+  ctx.beginPath();
+  for (let k = 0; k < 10; k++) {
+    const angle = -Math.PI / 2 + k * Math.PI / 5;
+    const radius = k % 2 ? inner : r;
+    const px = x + Math.cos(angle) * radius, py = top + Math.sin(angle) * radius;
+    k ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+  }
+  ctx.closePath();
+  ctx.fillStyle = '#ffe08a';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(80,60,10,.7)';
+  ctx.lineWidth = 0.4;
+  ctx.stroke();
 }
 
 // دائرة التحديد عند القدمين (تُرسم فوق طبقة الليل حتى تبقى واضحة)

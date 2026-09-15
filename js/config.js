@@ -90,26 +90,40 @@ export const HEROES = {
   spear: {
     id: 'spear', name: 'حامل الرمح', gang: 'crows',
     // مدى 1.8 مربع: يطعن من الصف الثاني من خلف رفاقه
-    stats: { hp: 150, damage: 12, attackTime: 1.3, attackRange: 1.8, visionRange: 4.5, speed: 2.2 }
+    stats: {
+      hp: 150, damage: 12, attackTime: 1.3, attackRange: 1.8, visionRange: 4.5, speed: 2.2,
+      // طعنة قاضية: ضعف الضرر وتخترق أول عدوين في خط الطعنة
+      ult: { kind: 'pierce', needs: 'enemy', range: 1.8, damage: 24, targets: 2 }
+    }
   },
   dual: {
     id: 'dual', name: 'المزدوج', gang: 'crows',
     // يتسارع في الاشتباك: كل ضربة متتالية على نفس الهدف تقصّر زمن الضربة
     stats: {
       hp: 95, damage: 7, attackTime: 0.8, speed: 2.6,
-      combo: { step: 0.12, maxStacks: 4, minAttackTime: 0.5, resetSeconds: 2, sameTarget: true }
+      combo: { step: 0.12, maxStacks: 4, minAttackTime: 0.5, resetSeconds: 2, sameTarget: true },
+      // وابل: 4 ضربات متتالية خلال ثانية واحدة
+      ult: { kind: 'flurry', needs: 'enemy', range: 1.0, hits: 4, damage: 7, duration: 1 }
     }
   },
 
   // المطارق
   armored: {
     id: 'armored', name: 'المصفّح', gang: 'hammers',
-    stats: { hp: 320, armor: 0.50, damage: 8, attackTime: 1.2, speed: 1.6 }
+    // تصلّب: لا يتلقى أي ضرر لمدة 3 ثوانٍ
+    stats: {
+      hp: 320, armor: 0.50, damage: 8, attackTime: 1.2, speed: 1.6,
+      ult: { kind: 'harden', needs: 'enemy', duration: 3 }
+    }
   },
   smasher: {
     id: 'smasher', name: 'المحطِّم', gang: 'hammers',
     // ضربته تصيب كل الأعداء داخل دائرة نصف قطرها مربع واحد حول الهدف
-    stats: { hp: 200, armor: 0.20, damage: 28, attackTime: 2.2, attackRange: 1.2, speed: 1.8, splashRadius: 1 }
+    stats: {
+      hp: 200, armor: 0.20, damage: 28, attackTime: 2.2, attackRange: 1.2, speed: 1.8, splashRadius: 1,
+      // ضربة أرضية: 60 ضرراً لكل عدو داخل 2.5 مربع مع إبطائهم
+      ult: { kind: 'slam', needs: 'enemy', radius: 2.5, damage: 60, slow: 0.30, slowDuration: 2 }
+    }
   },
 
   // الأفاعي (زمن الضربة القريبة غير مذكور في الوصف، فيبقى على الأساس 1.0 ث)
@@ -117,7 +131,9 @@ export const HEROES = {
     id: 'sniper', name: 'القناص', gang: 'vipers',
     stats: {
       hp: 80, damage: 26, attackTime: 2.5, attackRange: 7, visionRange: 7.5, speed: 2.0,
-      projectile: 'arrow', meleeRange: 1.5, meleeDamage: 4, meleeAttackTime: 1.0
+      projectile: 'arrow', meleeRange: 1.5, meleeDamage: 4, meleeAttackTime: 1.0,
+      // طلقة بعيدة: مدى 10 مربعات وضرر 55
+      ult: { kind: 'shot', needs: 'enemy', range: 10, damage: 55 }
     }
   },
   firebomber: {
@@ -126,19 +142,43 @@ export const HEROES = {
     stats: {
       hp: 90, damage: 0, attackTime: 5, attackRange: 4, visionRange: 4.5, speed: 2.1,
       projectile: 'bottle', fire: { radius: 1.2, duration: 4, damagePerSecond: 6 },
-      meleeRange: 1.5, meleeDamage: 5, meleeAttackTime: 1.0
+      meleeRange: 1.5, meleeDamage: 5, meleeAttackTime: 1.0,
+      // حريق أكبر: دائرة 2.5 مربع لمدة 7 ثوانٍ بـ 12 دم/ث
+      ult: { kind: 'fire', needs: 'enemy', range: 4, fire: { radius: 2.5, duration: 7, damagePerSecond: 12 } }
     }
   },
 
   // العقارب
   boss: {
     id: 'boss', name: 'الزعيم', gang: 'scorpions',
-    stats: { hp: 160, armor: 0.10, damage: 12, speed: 2.0, aura: { radius: 3, damageBonus: 0.20 } }
+    stats: {
+      hp: 160, armor: 0.10, damage: 12, speed: 2.0, aura: { radius: 3, damageBonus: 0.20 },
+      // توحّش: الحلفاء داخل 3 مربعات +50% ضرر و+20% سرعة ضرب لمدة 5 ثوانٍ
+      ult: { kind: 'buff', needs: 'enemy', radius: 3, damageBonus: 0.50, attackSpeedBonus: 0.20, duration: 5 }
+    }
   },
   medic: {
     id: 'medic', name: 'الطبيب', gang: 'scorpions',
-    stats: { hp: 100, damage: 5, speed: 2.2, heal: { radius: 3, perSecond: 10 } }
+    stats: {
+      hp: 100, damage: 5, speed: 2.2, heal: { radius: 3, perSecond: 10 },
+      // علاج جماعي: 60 دماً دفعة واحدة لكل حليف داخل 2.5 مربع
+      ult: { kind: 'heal', needs: 'ally', radius: 2.5, heal: 60 }
+    }
   }
+};
+
+// --- الضربات المميزة: قواعد الشحن (القسم 6.7) ---
+// الأفراد العاديون لا يملكون ضربة مميزة، فلا شريط شحن لهم
+export const ULT = {
+  max: 100,                // شريط الشحن من 0 إلى 100
+  castSeconds: 1.0,        // زمن حركة الضربة المميزة، وتأثيرها عند 47% منها
+                           // (ثابت لكل الوحدات: زمن ضربة رامي النار 5 ث لا يصلح للضربة)
+  perSecond: 3,            // شحن تلقائي في الثانية
+  perHit: 8,               // عن كل ضربة تُصيب
+  championPerSecond: 2,    // الأبطال أبطأ
+  championPerHit: 6,
+  perDamageChunk: 5,       // عن كل 50 ضرراً تتلقاه
+  damageChunk: 50
 };
 
 // --- الأبطال: بطل واحد لكل عصابة (القسم 6.6) ---
@@ -149,19 +189,30 @@ export const CHAMPIONS = {
     // يتسارع مع طول الاشتباك: 8% لكل ضربة حتى نصف الزمن
     stats: {
       hp: 260, armor: 0.10, damage: 18, attackTime: 1.2, attackRange: 2.2, speed: 2.5,
-      combo: { step: 0.08, minFactor: 0.5, resetSeconds: 3, sameTarget: false }
+      combo: { step: 0.08, minFactor: 0.5, resetSeconds: 3, sameTarget: false },
+      // ضربات قاضية متعددة: كل الأعداء داخل قوس أمامه بنصف قطر 2.5
+      ult: { kind: 'arc', needs: 'enemy', radius: 2.5, damage: 36 }
     }
   },
   hammers: {
     id: 'hammer_hero', name: 'بطل المطارق', gang: 'hammers',
-    stats: { hp: 420, armor: 0.40, damage: 26, attackTime: 1.8, attackRange: 1.2, speed: 1.7 }
+    stats: {
+      hp: 420, armor: 0.40, damage: 26, attackTime: 1.8, attackRange: 1.2, speed: 1.7,
+      // تصلّب + ضربة أرضية معاً
+      ult: { kind: 'slam', needs: 'enemy', radius: 3, damage: 70, harden: 3 }
+    }
   },
   vipers: {
     id: 'viper_hero', name: 'بطل الأفاعي', gang: 'vipers',
     // ثلاثة سهام في الطلقة الواحدة، كل سهم 12 ضرراً
     stats: {
       hp: 240, armor: 0, damage: 12, attackTime: 2.2, attackRange: 6.5, visionRange: 7, speed: 2.0,
-      projectile: 'arrow', arrows: 3
+      projectile: 'arrow', arrows: 3,
+      // ثلاثة سهام نارية: كل سهم 20 ضرراً ويشعل بقعة صغيرة
+      ult: {
+        kind: 'arrows', needs: 'enemy', range: 6.5, arrows: 3, damage: 20,
+        fire: { radius: 1, duration: 4, damagePerSecond: 8 }
+      }
     }
   },
   scorpions: {
@@ -169,7 +220,9 @@ export const CHAMPIONS = {
     // قائد وطبيب معاً: هالة واحدة تعطي الحلفاء الضرر والعلاج
     stats: {
       hp: 280, armor: 0.15, damage: 16, attackTime: 1.3, attackRange: 1.0, speed: 2.1,
-      aura: { radius: 3.5, damageBonus: 0.25, healPerSecond: 4 }
+      aura: { radius: 3.5, damageBonus: 0.25, healPerSecond: 4 },
+      // تحفيز وعلاج معاً: +50% ضرر لمدة 5 ثوانٍ و60 دماً فورياً
+      ult: { kind: 'buff', needs: 'either', radius: 3.5, damageBonus: 0.50, duration: 5, heal: 60 }
     }
   }
 };
@@ -217,6 +270,8 @@ export const COMBAT = {
   missSpread: 1.0,           // بُعد سقوط الرمية الخاطئة عن الهدف (مربعات)
   multiShotSearch: 2.5,      // بحث بطل الأفاعي عن أهداف إضافية حول هدفه (مربعات)
   multiShotSpread: 0.45,     // تفرّق السهام الثلاثة عن بعضها (مربعات)
+  pierceReachBonus: 0.6,     // امتداد خط الطعنة خلف الهدف الأول (مربعات)
+  pierceWidth: 0.7,          // عرض خط الطعنة: من يبعد أكثر عنه لا يُصاب
   hitFlashTime: 0.15,        // ومضة الوحدة عند تلقي ضربة
   deathTime: 1.0,            // زمن سقوط الوحدة الميتة واختفائها
   hitMoment: 0.47            // لحظة الارتطام من زمن الضربة (تطابق أنميشن docs/units-art.js)
@@ -313,6 +368,9 @@ export const UNIT_ART = {
   heroHealthBarY: -18,
   championHealthBarY: -20,
   hurtSeconds: 0.35,    // مدة حالة hurt قبل الرجوع للحالة السابقة
+  chargeBarGap: 1.8,    // بُعد شريط الشحن الذهبي تحت شريط الدم
+  starY: -23,           // ارتفاع النجمة الذهبية فوق الوحدة عند الجاهزية
+  starSize: 2.2,
   policeColor: '#3a5a86' // الشرطة المحايدة تُرسم بهذا اللون دائماً (المرحلة 4ج)
 };
 

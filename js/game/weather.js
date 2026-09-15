@@ -6,9 +6,11 @@ export function visionRange(state, unit) {
   return unit.stats.visionRange * WEATHER[state.weather].visionMul;
 }
 
-// سرعة الوحدة بعد تأثير الطقس (ثلجاً × 0.85)
+// سرعة الوحدة بعد تأثير الطقس (ثلجاً × 0.85) وبعد الإبطاء من الضربة الأرضية
 export function moveSpeed(state, unit) {
-  return unit.stats.speed * WEATHER[state.weather].speedMul;
+  const speed = unit.stats.speed * WEATHER[state.weather].speedMul;
+  if (unit.slowUntil > state.time) return speed * (1 - unit.slowFactor);
+  return speed;
 }
 
 // هل تصيب الرمية؟ (مطراً 80%)، والضربة الخاطئة تسقط قرب الهدف بلا ضرر

@@ -48,7 +48,10 @@ function applyDamageBonuses(state) {
   }
 
   for (const unit of state.units) {
-    if (isAlive(unit) && unit.aura) unit.damageMultiplier += unit.auraBonus;
+    if (!isAlive(unit)) continue;
+    if (unit.aura) unit.damageMultiplier += unit.auraBonus;
+    // تحفيز الزعيم أو بطل العقارب: مكافأة مؤقتة تُجمع فوق الباقي
+    if (unit.buffUntil > state.time) unit.damageMultiplier += unit.buffDamage;
   }
 }
 
@@ -104,11 +107,10 @@ function heal(unit, amount) {
   unit.hp = Math.min(unit.maxHp, unit.hp + amount);
 }
 
-// --- النار على الأرض من زجاجات رامي النار ---
-export function createFire(state, thrower, i, j) {
-  const fire = thrower.stats.fire;
+// --- النار على الأرض: زجاجة رامي النار أو سهم بطل الأفاعي المشتعل ---
+export function createFire(state, playerId, i, j, fire) {
   state.fires.push({
-    playerId: thrower.playerId,
+    playerId,
     x: i, y: j,
     radius: fire.radius,
     damagePerSecond: fire.damagePerSecond,

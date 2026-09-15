@@ -3,6 +3,7 @@ import { TICK_SEC, COMBAT, UNITS, UNIT_ART } from '../config.js';
 import { findPath } from '../map/pathfinding.js';
 import { faceTowards } from './units.js';
 import { createFire } from './abilities.js';
+import { chargeOverTime, chargeOnHit, chargeOnDamageTaken, tryCastUlt, resolveUlt, updateFlurry } from './ults.js';
 import { visionRange, rangedShotHits } from './weather.js';
 import { forEachNearby } from './spatialHash.js';
 
@@ -58,8 +59,12 @@ export function updateCombat(state) {
     if (unit.state === 'dead') { unit.deathTimer -= TICK_SEC; continue; }
     if (unit.attackCooldown > 0) unit.attackCooldown -= TICK_SEC;
 
+    chargeOverTime(unit);                 // شريط الشحن يمتلئ مع الوقت (القسم 6.7)
+    updateFlurry(state, unit);            // ضربات الوابل المتتالية
+
     // الضربة تقع في منتصف حركة السلاح لا عند بدايتها
     if (unit.pendingHit && state.time >= unit.pendingHit.at) resolveHit(state, unit);
+    if (unit.pendingUlt && state.time >= unit.pendingUlt.at) resolveUlt(state, unit);
 
     // أثناء أمر الحركة العادي تتجاهل الوحدة الأعداء حتى تصل
     if (unit.state === 'moving') continue;
@@ -81,6 +86,9 @@ export function updateCombat(state) {
       }
     }
 
+    // الضربة المميزة تُطلق تلقائياً في أول لحظة يتحقق فيها شرطها
+    if (unit.stats.ult && tryCastUlt(state, unit)) continue;
+
     if (unit.state === 'attacking') fightTarget(state, unit, budget);
   }
 
@@ -94,7 +102,7 @@ function resolveHit(state, unit) {
   if (!isAlive(hit.target) || !isAlive(unit)) return;
 
   if (hit.ranged) spawnVolley(state, unit, hit.target, hit.damage);
-  else strike(state, unit, hit.target, hit.damage);
+  else { strike(state, unit, hit.target, hit.damage); chargeOnHit(unit); }
 }
 
 // طلقة واحدة، أو ثلاثة سهام متفرقة لبطل الأفاعي (القسم 6.6)
@@ -215,10 +223,15 @@ function fightTarget(state, unit, budget) {
     unit.path = [];                       // وصلت للمدى: تتوقف وتضرب
     if (unit.attackCooldown <= 0) {
       attackTime = comboAttackTime(state, unit, target, attackTime);
+      // توحّش الزعيم: +20% سرعة ضرب لمدة محدودة
+      if (unit.buffUntil > state.time && unit.buffAttackSpeed) {
+        attackTime /= 1 + unit.buffAttackSpeed;
+      }
       unit.attackCooldown = attackTime;
       // بداية حركة السلاح: الرسم يقرأ هذين الرقمين، والضرر يقع عند الارتطام
       unit.attackStart = state.time;
       unit.attackRate = attackTime;
+      unit.ultStart = null;              // ضربة عادية لا مميزة
       unit.pendingHit = {
         target,
         damage: damage * unit.damageMultiplier,       // مخزن السلاح + هالة الزعيم
@@ -276,8 +289,10 @@ function strike(state, attacker, target, amount) {
 
 export function applyDamage(state, attacker, target, amount) {
   if (!isAlive(target)) return;
+  if (target.invulnUntil > state.time) return;     // تصلّب: لا يتلقى أي ضرر
   const taken = amount * (1 - target.stats.armor);
   target.hp -= taken;
+  chargeOnDamageTaken(target, taken);              // شحن عن كل 50 ضرراً
   target.hitFlash = COMBAT.hitFlashTime;
   target.hurtTimer = UNIT_ART.hurtSeconds;   // أنميشن تلقي الضرر (القسم 13)
 
@@ -286,7 +301,10 @@ export function applyDamage(state, attacker, target, amount) {
     target.state = 'dead';
     target.hurtTimer = 0;                    // أنميشن الموت يحلّ محل أنميشن الضرر
     target.attackStart = null;
+    target.ultStart = null;
     target.pendingHit = null;
+    target.pendingUlt = null;
+    target.flurry = null;
     target.deathTimer = COMBAT.deathTime;
     target.path = [];
     target.target = null;
@@ -298,7 +316,8 @@ export function applyDamage(state, attacker, target, amount) {
 
 // --- المقذوفات ---
 // offset: إزاحة جانبية عند الانطلاق حتى تتفرق السهام الثلاثة بصرياً
-function spawnProjectile(state, unit, target, damage, offset = 0) {
+// fire: نار تشتعل حيث يسقط المقذوف (زجاجة رامي النار أو سهم بطل الأفاعي)
+export function spawnProjectile(state, unit, target, damage, offset = 0, fire = null) {
   const dist = distance(unit, target);
   const maxRange = Math.max(unit.stats.attackRange, 0.1);
   const ratio = Math.min(1, dist / maxRange);
@@ -314,6 +333,7 @@ function spawnProjectile(state, unit, target, damage, offset = 0) {
     attacker: unit,
     target,
     damage,
+    fire: fire || unit.stats.fire || null,
     hits,
     missX: target.x + Math.cos(angle) * spread,
     missY: target.y + Math.sin(angle) * spread,
@@ -342,9 +362,12 @@ function updateProjectiles(state) {
     shot.y = shot.startY + (endY - shot.startY) * progress;
 
     if (shot.t >= shot.duration) {
-      // الزجاجة تشعل الأرض حيث سقطت (حتى لو أخطأت الهدف)
-      if (shot.attacker.stats.fire) createFire(state, shot.attacker, shot.x, shot.y);
-      else if (shot.hits && isAlive(shot.target)) strike(state, shot.attacker, shot.target, shot.damage);
+      // الزجاجة والسهم المشتعل يشعلان الأرض حيث سقطا (حتى لو أخطآ الهدف)
+      if (shot.fire) createFire(state, shot.attacker.playerId, shot.x, shot.y, shot.fire);
+      if (shot.damage > 0 && shot.hits && isAlive(shot.target)) {
+        strike(state, shot.attacker, shot.target, shot.damage);
+        chargeOnHit(shot.attacker);
+      }
       continue;
     }
     remaining.push(shot);
