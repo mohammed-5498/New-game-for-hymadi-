@@ -48,7 +48,13 @@ export const MAP_GEN = {
   homeRingRadiusPct: 0.40,    // نصف قطر دائرة توزيع الأحياء المنزلية
   specialCenterRadiusPct: 0.38, // الأحياء المميزة قرب المركز
   captureRadius: 1.5,         // نصف قطر منطقة الاستيلاء بالمربعات
-  maxTries: 40                // محاولات التوليد قبل الاستسلام
+  maxTries: 40,               // محاولات التوليد قبل الاستسلام
+
+  // إصلاح الفراغات المعزولة (القسم 3.4.1)
+  pocketRepairRounds: 3,      // أقصى عدد مرات لإعادة الـ flood fill والإصلاح
+  pocketFillType: 'H',        // الفراغ الذي لا يمكن وصله يُردم بهذا المبنى
+  protectedBuildings: ['Q', 'S', 'G', 'C', 'O'],  // مبانٍ لا تُفتح لعمل ممر
+  devChecks: true             // وضع التطوير: يطبع تحذيراً إن بقي مربع معزول
 };
 
 // --- الوحدة الأساسية المرجعية (القسم 6.1 من الوصف) ---
@@ -65,7 +71,7 @@ export const UNIT_BASE = {
 
 // --- العصابات: الفرد العادي وشخصيتاها المميزتان ---
 export const GANGS = {
-  crows:     { id: 'crows',     name: 'الغربان',  heroes: ['runner', 'biker'],   unit: { speed: 2.5, capturePower: 1.25 } },
+  crows:     { id: 'crows',     name: 'الغربان',  heroes: ['spear', 'dual'],     unit: { speed: 2.5, capturePower: 1.5 } },
   hammers:   { id: 'hammers',   name: 'المطارق',  heroes: ['armored', 'smasher'], unit: { hp: 120, armor: 0.15 } },
   // الأفاعي يرمون حجارة من بعيد، ويقاتلون بالأيدي إذا اقترب العدو
   vipers:    { id: 'vipers',    name: 'الأفاعي',  heroes: ['sniper', 'firebomber'], unit: {
@@ -81,13 +87,18 @@ export const GANG_IDS = ['crows', 'hammers', 'vipers', 'scorpions'];
 // كل شخصية تبدأ من الوحدة الأساسية ثم تُطبق قيمها فوقها
 export const HEROES = {
   // الغربان
-  runner: {
-    id: 'runner', name: 'الراكض', gang: 'crows',
-    stats: { hp: 90, damage: 8, speed: 2.8, capturePower: 3 }
+  spear: {
+    id: 'spear', name: 'حامل الرمح', gang: 'crows',
+    // مدى 1.8 مربع: يطعن من الصف الثاني من خلف رفاقه
+    stats: { hp: 150, damage: 12, attackTime: 1.3, attackRange: 1.8, visionRange: 4.5, speed: 2.2 }
   },
-  biker: {
-    id: 'biker', name: 'راكب الدراجة', gang: 'crows',
-    stats: { hp: 110, damage: 14, attackTime: 1.2, speed: 4.2, visionRange: 6 }
+  dual: {
+    id: 'dual', name: 'المزدوج', gang: 'crows',
+    // يتسارع في الاشتباك: كل ضربة متتالية على نفس الهدف تقصّر زمن الضربة
+    stats: {
+      hp: 95, damage: 7, attackTime: 0.8, speed: 2.6,
+      combo: { step: 0.12, maxStacks: 4, minAttackTime: 0.5, resetSeconds: 2, sameTarget: true }
+    }
   },
 
   // المطارق
@@ -127,6 +138,39 @@ export const HEROES = {
   medic: {
     id: 'medic', name: 'الطبيب', gang: 'scorpions',
     stats: { hp: 100, damage: 5, speed: 2.2, heal: { radius: 3, perSecond: 10 } }
+  }
+};
+
+// --- الأبطال: بطل واحد لكل عصابة (القسم 6.6) ---
+// الرسم فقط في المرحلة 2؛ قواعد الظهور والقدرات في المرحلة 4
+export const CHAMPIONS = {
+  crows: {
+    id: 'crow_hero', name: 'بطل الغربان', gang: 'crows',
+    // يتسارع مع طول الاشتباك: 8% لكل ضربة حتى نصف الزمن
+    stats: {
+      hp: 260, armor: 0.10, damage: 18, attackTime: 1.2, attackRange: 2.2, speed: 2.5,
+      combo: { step: 0.08, minFactor: 0.5, resetSeconds: 3, sameTarget: false }
+    }
+  },
+  hammers: {
+    id: 'hammer_hero', name: 'بطل المطارق', gang: 'hammers',
+    stats: { hp: 420, armor: 0.40, damage: 26, attackTime: 1.8, attackRange: 1.2, speed: 1.7 }
+  },
+  vipers: {
+    id: 'viper_hero', name: 'بطل الأفاعي', gang: 'vipers',
+    // ثلاثة سهام في الطلقة الواحدة، كل سهم 12 ضرراً
+    stats: {
+      hp: 240, armor: 0, damage: 12, attackTime: 2.2, attackRange: 6.5, visionRange: 7, speed: 2.0,
+      projectile: 'arrow', arrows: 3
+    }
+  },
+  scorpions: {
+    id: 'scorp_hero', name: 'بطل العقارب', gang: 'scorpions',
+    // قائد وطبيب معاً: هالة تعطي الضرر وتعالج
+    stats: {
+      hp: 280, armor: 0.15, damage: 16, attackTime: 1.3, attackRange: 1.0, speed: 2.1,
+      aura: { radius: 3.5, damageBonus: 0.25 }, heal: { radius: 3.5, perSecond: 4 }
+    }
   }
 };
 
@@ -182,6 +226,10 @@ export const CAPTURE = {
   maxCapturePower: 6,
   decayPerSecond: 5,          // رجوع التقدم لحالة المالك عند خلو المنطقة
   groundTintAlpha: 0.30,      // نسبة صبغ أرض الحي بلون المالك
+  roofTintAlpha: 0.45,        // الأسطح والأجزاء العلوية للمباني
+  wallTintAlpha: 0.20,        // الجدران فقط، حتى تبقى قراءة المباني واضحة
+  tintSeconds: 0.5,           // زمن الانتقال اللوني عند تغيّر المالك
+  tintSteps: 10,              // درجات الانتقال (تقليل عدد الألوان المخلوطة)
   noticeSeconds: 2.5          // مدة ظهور إشعار الاستيلاء
 };
 
@@ -252,10 +300,14 @@ export const SNOWBALL = { districtShare: 0.40 };
 
 // --- رسم الوحدات (docs/units-art.js) ---
 export const UNIT_ART = {
-  scale: 0.5,          // حجم رسم الفرد العادي
-  heroScale: 1.15,     // الشخصيات المميزة أكبر بـ 15%
-  healthBarY: -16,     // ارتفاع شريط الدم فوق قدمي الوحدة
-  heroHealthBarY: -18
+  scale: 0.5,           // حجم رسم الفرد العادي
+  heroScale: 1.15,      // الشخصيات المميزة أكبر بـ 15% (القسم 13)
+  championScale: 1.3,   // الأبطال أكبر من الشخصيات المميزة (القسم 6.6)
+  healthBarY: -16,      // ارتفاع شريط الدم فوق قدمي الوحدة
+  heroHealthBarY: -18,
+  championHealthBarY: -20,
+  hurtSeconds: 0.35,    // مدة حالة hurt قبل الرجوع للحالة السابقة
+  policeColor: '#3a5a86' // الشرطة المحايدة تُرسم بهذا اللون دائماً (المرحلة 4ج)
 };
 
 // --- الأداء ---

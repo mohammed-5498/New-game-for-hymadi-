@@ -5,6 +5,7 @@ import { drawBuilding, setFrameContext } from './buildings.js';
 import { drawUnit, drawSelectionRing, drawProjectile, drawAura, drawFire } from './units.js';
 import { drawOverlay, drawLights, drawParticles } from './weather.js';
 import { worldToTile } from '../map/coords.js';
+import { tintAmount } from '../game/capture.js';
 
 export function resizeCanvas(canvas, state) {
   const view = state.view;
@@ -108,12 +109,11 @@ function drawGround(ctx, state, visible) {
       const isRoad = map.road[k] === 1;
       let color = isRoad ? ROAD_COLOR : (PALETTES[map.region[k]] || PALETTES.neutral).ground;
 
-      // أرض الحي المملوك تُصبغ بلون مالكه
+      // أرض الحي المملوك تُصبغ بلون مالكه (انتقال تدريجي خلال نصف ثانية)
       if (!isRoad) {
         const district = map.districtOf(i, j);
-        if (district && district.owner !== null) {
-          color = mix(color, state.players[district.owner].color, CAPTURE.groundTintAlpha);
-        }
+        const amount = tintAmount(district, CAPTURE.groundTintAlpha);
+        if (amount > 0) color = mix(color, district.tintColor, amount);
       }
 
       if (state.weather === 'snow') color = mix(color, '#eef2f5', isRoad ? 0.45 : 0.72);
@@ -187,9 +187,11 @@ function drawBuildingsAndUnits(ctx, state, alpha, visible) {
       const type = map.road[k] ? map.decor[k] : map.type[k];
       if (!type || type === '.') continue;
 
+      // مباني الحي تحمل لون مالكه: الأسطح 45% والجدران 20% (القسم 8)
       const district = map.districtOf(i, j);
       const ownerColor = district && district.owner !== null ? state.players[district.owner].color : null;
-      drawBuilding(type, x, y, map.region[k], i, j, ownerColor, detail);
+      drawBuilding(type, x, y, map.region[k], i, j, ownerColor || (district && district.tintColor),
+                   detail, tintAmount(district, 1));
     }
 
     const unitsHere = buckets.get(s);

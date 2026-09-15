@@ -1,4 +1,5 @@
 // رسم المباني بألوان مسطحة (منقول من prototype.html)
+import { CAPTURE } from '../config.js';
 import { mix, PALETTES, DARK, LIT_WINDOW, CRATE } from './colors.js';
 
 let ctx = null;
@@ -13,6 +14,18 @@ export function setFrameContext(context, weatherKey, lightsArray) {
 
 // يبيّض اللون في جو الثلج
 const snow = (color, amount) => weather === 'snow' ? mix(color, '#eef2f5', amount) : color;
+
+// --- صبغ مباني الحي بلون مالكه (القسم 8) ---
+// الأسطح والأجزاء العلوية بخلط 45%، والجدران بخلط 20% فقط.
+// الأطلال والأشجار والسيارات المحطمة والبراميل لا تُصبغ: ليست ملكاً لأحد.
+const NO_TINT = ['R', 'T', 'X', 'B', 'L', 'O'];
+let tintColor = null;   // لون المالك، أو null للحي المحايد
+let tintMix = 0;        // تقدم الانتقال اللوني من 0 إلى 1
+
+const roofTint = (color) =>
+  tintColor ? mix(color, tintColor, CAPTURE.roofTintAlpha * tintMix) : color;
+const wallTint = (color) =>
+  tintColor ? mix(color, tintColor, CAPTURE.wallTintAlpha * tintMix) : color;
 
 // --- أدوات رسم أساسية ---
 function poly(points, color) {
@@ -54,17 +67,18 @@ function ellipse(x, y, rx, ry, color) {
 
 // صندوق مجسم: واجهة يسار، واجهة يمين، وسطح اختياري
 function box(cx, cy, w, d, h, leftColor, rightColor, topColor) {
-  poly([[cx - w, cy], [cx, cy + d], [cx, cy + d - h], [cx - w, cy - h]], leftColor);
-  poly([[cx, cy + d], [cx + w, cy], [cx + w, cy - h], [cx, cy + d - h]], rightColor);
-  if (topColor) poly([[cx - w, cy - h], [cx, cy - d - h], [cx + w, cy - h], [cx, cy + d - h]], snow(topColor, 0.75));
+  poly([[cx - w, cy], [cx, cy + d], [cx, cy + d - h], [cx - w, cy - h]], wallTint(leftColor));
+  poly([[cx, cy + d], [cx + w, cy], [cx + w, cy - h], [cx, cy + d - h]], wallTint(rightColor));
+  if (topColor) poly([[cx - w, cy - h], [cx, cy - d - h], [cx + w, cy - h], [cx, cy + d - h]],
+                     roofTint(snow(topColor, 0.75)));
 }
 
 // سقف مائل
 function roof(cx, cy, w, d, h, rh, leftColor, rightColor) {
   const apex = [cx, cy - h - rh];
-  poly([[cx - w, cy - h], apex, [cx + w, cy - h]], '#4a3a30');
-  poly([[cx - w, cy - h], [cx, cy + d - h], apex], snow(leftColor, 0.55));
-  poly([[cx, cy + d - h], [cx + w, cy - h], apex], snow(rightColor, 0.65));
+  poly([[cx - w, cy - h], apex, [cx + w, cy - h]], roofTint('#4a3a30'));
+  poly([[cx - w, cy - h], [cx, cy + d - h], apex], roofTint(snow(leftColor, 0.55)));
+  poly([[cx, cy + d - h], [cx + w, cy - h], apex], roofTint(snow(rightColor, 0.65)));
 }
 
 // نافذة على الواجهة اليسرى
@@ -80,10 +94,14 @@ function windowR(cx, cy, w, d, u, v, du, dv, color) {
 }
 
 // يرسم مبنى واحداً في إحداثيات العالم (x, y)
-// ownerColor: لون اللاعب المالك للحي (للأعلام)، أو null
-export function drawBuilding(type, x, y, region, i, j, ownerColor, detail = true) {
+// ownerColor: لون اللاعب المالك للحي (للأعلام والصبغ)، أو null
+// mixAmount: تقدم الانتقال اللوني من 0 إلى 1 (القسم 8)
+export function drawBuilding(type, x, y, region, i, j, ownerColor, detail = true, mixAmount = 1) {
   const g = PALETTES[region] || PALETTES.neutral;
   const variant = (i * 7 + j * 3) % 3;
+
+  tintColor = ownerColor && !NO_TINT.includes(type) ? ownerColor : null;
+  tintMix = mixAmount;
 
   if (type === 'H') {                      // بيت بسقف مائل
     const walls = [['#b59a78', '#cdb391'], ['#a88f7a', '#c4ab95'], ['#9f9a86', '#bab5a0']][variant];
@@ -173,10 +191,10 @@ export function drawBuilding(type, x, y, region, i, j, ownerColor, detail = true
     line(x - 7, y + 2, x - 5, y - 20, '#5d4a3f', 1.5);
     line(x + 7, y + 2, x + 5, y - 20, '#5d4a3f', 1.5);
     line(x, y + 5, x, y - 20, '#5d4a3f', 1.5);
-    ellipse(x, y - 20, 8, 3, '#7a6552');
-    rect(x - 8, y - 32, 16, 12, '#8c7560');
-    ellipse(x, y - 32, 8, 3, '#a08a74');
-    poly([[x - 8, y - 32], [x, y - 41], [x + 8, y - 32]], '#6e584b');
+    ellipse(x, y - 20, 8, 3, wallTint('#7a6552'));
+    rect(x - 8, y - 32, 16, 12, wallTint('#8c7560'));
+    ellipse(x, y - 32, 8, 3, roofTint('#a08a74'));
+    poly([[x - 8, y - 32], [x, y - 41], [x + 8, y - 32]], roofTint('#6e584b'));
 
   } else if (type === 'Q') {               // مقر العصابة بعلم بلون اللاعب
     box(x, y, 16, 8, 26, g.left, g.right, '#3a3632');
@@ -214,7 +232,7 @@ export function drawBuilding(type, x, y, region, i, j, ownerColor, detail = true
     rect(x - 1.3, y - 27, 2.6, 8.6, '#c0392b');
 
   } else if (type === 'P') {               // ساحة العلم (نقطة الاستيلاء)
-    poly([[x - 12, y], [x, y - 6], [x + 12, y], [x, y + 6]], '#b3aa98');
+    poly([[x - 12, y], [x, y - 6], [x + 12, y], [x, y + 6]], wallTint('#b3aa98'));
     ctx.beginPath();
     ctx.ellipse(x, y, 15, 7.5, 0, 0, 6.2832);
     ctx.strokeStyle = 'rgba(255,255,255,.55)';

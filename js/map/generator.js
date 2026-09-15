@@ -1,6 +1,6 @@
 // توليد الخريطة العشوائية: شوارع، أحياء، نقاط استيلاء، مباني
 import { MAP_SIZES, MAP_GEN } from '../config.js';
-import { D4 } from './pathfinding.js';
+import { D4, D8 } from './pathfinding.js';
 
 const rnd = () => Math.random();
 const ri = (n) => Math.floor(Math.random() * n);
@@ -60,9 +60,9 @@ function buildMap(size, players) {
   if (!assignHomeDistricts(map, districts, players)) return null;
   assignSpecialDistricts(map, districts, size, players);
   fillDistricts(map, districts);
-  decorateRoads(map);
-
   map.districts = districts;
+  repairIsolatedPockets(map);     // القسم 3.4.1: لا يبقى فراغ محاصر بالمباني
+  decorateRoads(map);
   return map;
 }
 
@@ -78,6 +78,7 @@ function createEmptyMap(size) {
     decor: {},                        // زينة فوق الشوارع (برميل نار، عمود إنارة)
     districtAt: new Int32Array(n * n).fill(-1),
     districts: [],
+    connected: null,                  // يملؤه إصلاح الفراغات المعزولة (القسم 3.4.1)
 
     idx(i, j) { return j * this.n + i; },
     inBounds(i, j) { return i >= 0 && j >= 0 && i < this.n && j < this.n; },
@@ -86,6 +87,11 @@ function createEmptyMap(size) {
       if (!this.inBounds(i, j)) return false;
       const k = this.idx(i, j);
       return this.road[k] === 1 || this.type[k] === '.' || this.type[k] === 'P';
+    },
+    // مربع موصول بشبكة الشوارع: الظهور وأوامر الحركة لا تستهدف غيره
+    isConnected(i, j) {
+      if (!this.isWalkable(i, j)) return false;
+      return !this.connected || this.connected[this.idx(i, j)] === 1;
     },
     districtOf(i, j) {
       if (!this.inBounds(i, j)) return null;
@@ -194,7 +200,9 @@ function findDistricts(map) {
         special: null,      // hospital | armory | clock
         owner: null,        // رقم اللاعب المالك
         progress: 0,        // تقدم الاستيلاء (المرحلة 3)
-        progressOwner: null
+        progressOwner: null,
+        tintColor: null,    // لون الصبغ الحالي (القسم 8)
+        tintMix: 0          // تقدم الانتقال اللوني من 0 إلى 1
       };
       map.districtAt[k] = district.id;
       const stack = [[i, j]];
@@ -348,4 +356,187 @@ function decorateRoads(map) {
       else if (q < 0.05 && map.dash[k]) map.decor[k] = 'L';  // عمود إنارة
     }
   }
+}
+
+
+// --- 7) إصلاح الفراغات المعزولة (القسم 3.4.1، إلزامي) ---
+// المشكلة: مربع فارغ محاصر بالمباني تظهر فيه وحدة فلا تخرج ولا يصلها أحد.
+// الخطوات الخمس منفّذة بالترتيب: جمع، flood fill، فتح الحاجز أو الردم، إعادة، ساحات الأعلام.
+export function repairIsolatedPockets(map) {
+  // (4) نكرر الإصلاح ثلاث مرات كحد أقصى
+  for (let round = 0; round < MAP_GEN.pocketRepairRounds; round++) {
+    const reached = floodFromStreets(map);          // (1) و(2)
+    const pockets = collectPockets(map, reached);
+    if (!pockets.length) break;
+    for (const pocket of pockets) fixPocket(map, pocket, reached);   // (3)
+  }
+
+  // (5) ساحة علم كل حي يجب أن تصل إلى شبكة الشوارع
+  let reached = floodFromStreets(map);
+  for (const district of map.districts) {
+    if (!district.capture) continue;
+    const { i, j } = district.capture;
+    if (reached[map.idx(i, j)]) continue;
+    carveCorridor(map, i, j, reached);
+    reached = floodFromStreets(map);
+  }
+
+  map.connected = reached;
+  warnIfIsolated(map, reached);
+}
+
+// (1) + (2) كل المربعات القابلة للمشي، وflood fill بثمانية اتجاهات من شبكة الشوارع كلها
+// مع نفس قاعدة منع قطع الزوايا المستعملة في pathfinding
+function floodFromStreets(map) {
+  const n = map.n;
+  const reached = new Uint8Array(n * n);
+  const queue = new Int32Array(n * n);
+  let head = 0, tail = 0;
+
+  for (let k = 0; k < n * n; k++) {
+    if (map.road[k]) { reached[k] = 1; queue[tail++] = k; }
+  }
+
+  while (head < tail) {
+    const k = queue[head++];
+    const i = k % n, j = (k - i) / n;
+    for (const [dx, dy] of D8) {
+      const a = i + dx, b = j + dy;
+      if (!map.isWalkable(a, b)) continue;
+      if (dx && dy && (!map.isWalkable(i + dx, j) || !map.isWalkable(i, j + dy))) continue;
+      const nk = map.idx(a, b);
+      if (reached[nk]) continue;
+      reached[nk] = 1;
+      queue[tail++] = nk;
+    }
+  }
+  return reached;
+}
+
+// المربعات القابلة للمشي التي لم يصلها الـ flood fill، مجمّعة في فراغات متصلة
+function collectPockets(map, reached) {
+  const n = map.n;
+  const seen = new Uint8Array(n * n);
+  const pockets = [];
+
+  for (let j = 0; j < n; j++) {
+    for (let i = 0; i < n; i++) {
+      const k = map.idx(i, j);
+      if (reached[k] || seen[k] || !map.isWalkable(i, j)) continue;
+
+      const pocket = [];
+      const stack = [[i, j]];
+      seen[k] = 1;
+      while (stack.length) {
+        const [a, b] = stack.pop();
+        pocket.push([a, b]);
+        for (const [dx, dy] of D8) {
+          const x = a + dx, y = b + dy;
+          if (!map.isWalkable(x, y)) continue;
+          if (dx && dy && (!map.isWalkable(a + dx, b) || !map.isWalkable(a, b + dy))) continue;
+          const nk = map.idx(x, y);
+          if (seen[nk] || reached[nk]) continue;
+          seen[nk] = 1;
+          stack.push([x, y]);
+        }
+      }
+      pockets.push(pocket);
+    }
+  }
+  return pockets;
+}
+
+// (3) إما نفتح الحاجز بين الفراغ وأقرب مربع موصول، وإلا نردمه بمبنى
+function fixPocket(map, pocket, reached) {
+  if (openBarrier(map, pocket, reached)) return;
+
+  // ساحة العلم لا تُردم: نحفر لها ممراً بدل ذلك (يكملها التحقق الخامس)
+  const plaza = pocket.find(([i, j]) => map.type[map.idx(i, j)] === 'P');
+  if (plaza) { carveCorridor(map, plaza[0], plaza[1], reached); return; }
+
+  for (const [i, j] of pocket) {
+    if (map.road[map.idx(i, j)]) continue;      // لا نردم شارعاً أبداً
+    map.type[map.idx(i, j)] = MAP_GEN.pocketFillType;
+  }
+}
+
+// يحوّل المبنى الفاصل بين مربع الفراغ ومربع موصول إلى أرض فارغة
+function openBarrier(map, pocket, reached) {
+  for (const [i, j] of pocket) {
+    for (const [dx, dy] of D8) {
+      if (dx && dy) {
+        // جار قطري موصول يمنعه قطع الزوايا: نفتح أحد المربعين الجانبيين
+        const a = i + dx, b = j + dy;
+        if (!map.isWalkable(a, b) || !reached[map.idx(a, b)]) continue;
+        const side = [[i + dx, j], [i, j + dy]].find(([x, y]) => openable(map, x, y));
+        if (side) { map.type[map.idx(side[0], side[1])] = '.'; return true; }
+      } else {
+        // مبنى واحد يفصل الفراغ عن مربع موصول خلفه
+        const a = i + dx, b = j + dy;
+        if (!openable(map, a, b)) continue;
+        const x = i + dx * 2, y = j + dy * 2;
+        if (!map.isWalkable(x, y) || !reached[map.idx(x, y)]) continue;
+        map.type[map.idx(a, b)] = '.';
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+// مبنى عادي يمكن فتحه: لا شارع ولا مبنى مميز (مقر، مستشفى، مخزن، ساعة، نافورة)
+function openable(map, i, j) {
+  if (!map.inBounds(i, j)) return false;
+  const k = map.idx(i, j);
+  if (map.road[k]) return false;
+  const type = map.type[k];
+  return type !== '.' && type !== 'P' && !MAP_GEN.protectedBuildings.includes(type);
+}
+
+// (5) ممر بمربع واحد أو أكثر من نقطة معزولة إلى أقرب مربع موصول
+function carveCorridor(map, si, sj, reached) {
+  const n = map.n;
+  const from = new Int32Array(n * n).fill(-2);
+  const start = map.idx(si, sj);
+  const queue = [start];
+  from[start] = -1;
+
+  while (queue.length) {
+    const k = queue.shift();
+    const i = k % n, j = (k - i) / n;
+
+    if (k !== start && map.isWalkable(i, j) && reached[k]) {
+      // نرجع على الطريق ونفتح كل مبنى فيه
+      let node = from[k];
+      while (node >= 0) {
+        if (!map.road[node] && map.type[node] !== 'P') map.type[node] = '.';
+        node = from[node];
+      }
+      return true;
+    }
+
+    for (const [dx, dy] of D4) {
+      const a = i + dx, b = j + dy;
+      if (!map.inBounds(a, b)) continue;
+      const nk = map.idx(a, b);
+      if (from[nk] !== -2) continue;
+      if (openable(map, a, b) || map.isWalkable(a, b)) {
+        from[nk] = k;
+        queue.push(nk);
+      }
+    }
+  }
+  return false;
+}
+
+// فحص وضع التطوير: تحذير إن بقي مربع معزول بعد الإصلاح
+function warnIfIsolated(map, reached) {
+  if (!MAP_GEN.devChecks) return;
+  let count = 0;
+  for (let j = 0; j < map.n; j++) {
+    for (let i = 0; i < map.n; i++) {
+      if (map.isWalkable(i, j) && !reached[map.idx(i, j)]) count++;
+    }
+  }
+  if (count) console.warn('تحذير: بقي ' + count + ' مربعاً معزولاً بعد إصلاح الفراغات (القسم 3.4.1)');
 }

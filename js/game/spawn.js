@@ -74,6 +74,8 @@ function spawnUnit(state, player, districts, heroId) {
   const pool = safe.length ? safe : districts;
   const district = pool[Math.floor(Math.random() * pool.length)];
 
+  // findFreeTiles لا يعيد إلا مربعات موصولة بشبكة الشوارع (القسم 3.4.1)،
+  // فلا تظهر وحدة داخل فراغ محاصر بالمباني
   const spots = findFreeTiles(state.map, district.capture.i, district.capture.j, SPAWN.spotSearchTiles);
   if (!spots.length) return;
 

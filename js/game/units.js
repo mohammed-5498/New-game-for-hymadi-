@@ -1,25 +1,28 @@
 // إنشاء الوحدات وحركتها على المسار
-import { UNIT_BASE, GANGS, HEROES, UNITS, TICK_SEC, PERFORMANCE } from '../config.js';
+import { UNIT_BASE, GANGS, HEROES, CHAMPIONS, UNITS, TICK_SEC, PERFORMANCE } from '../config.js';
 import { findPath, findFreeTiles, nearestWalkable, buildFlowField, flowStep } from '../map/pathfinding.js';
 import { clearCombatOrders } from './combat.js';
 import { moveSpeed } from './weather.js';
 
-// إحصائيات الوحدة: الأساس + ميزة العصابة، أو الأساس + قيم الشخصية المميزة
-export function unitStats(gangId, heroId) {
+// إحصائيات الوحدة: الأساس + ميزة العصابة، أو الأساس + قيم الشخصية المميزة أو البطل
+export function unitStats(gangId, heroId, champion = false) {
+  if (champion) return { ...UNIT_BASE, ...CHAMPIONS[gangId].stats };
   if (heroId) return { ...UNIT_BASE, ...HEROES[heroId].stats };
   const gang = GANGS[gangId];
   return { ...UNIT_BASE, ...(gang && gang.unit ? gang.unit : {}) };
 }
 
-export function createUnit(state, player, i, j, heroId = null) {
-  const stats = unitStats(player.gang, heroId);
+// champion: بطل العصابة (القسم 6.6). رسمه جاهز، وقواعد ظهوره في المرحلة 4
+export function createUnit(state, player, i, j, heroId = null, champion = false) {
+  const stats = unitStats(player.gang, heroId, champion);
   return {
     id: state.nextUnitId++,
     playerId: player.id,
     gang: player.gang,
     color: player.color,
-    hero: heroId,                      // null للفرد العادي
-    name: heroId ? HEROES[heroId].name : 'فرد',
+    hero: champion ? null : heroId,    // null للفرد العادي
+    champion,                          // بطل اللاعب الوحيد
+    name: champion ? CHAMPIONS[player.gang].name : heroId ? HEROES[heroId].name : 'فرد',
     x: i, y: j,           // الموقع الحالي بالمربعات
     prevX: i, prevY: j,   // الموقع في التحديث السابق (لتنعيم الرسم)
     stats,
@@ -46,7 +49,13 @@ export function createUnit(state, player, i, j, heroId = null) {
     pendingHit: null,       // ضربة في منتصفها تنتظر لحظة الارتطام
     repathTimer: 0,
     hitFlash: 0,            // ومضة عند تلقي ضربة
+    hurtTimer: 0,           // مدة عرض أنميشن تلقي الضرر
     deathTimer: 0,          // زمن السقوط قبل الاختفاء
+
+    // تسارع الاشتباك (المزدوج وبطل الغربان): ضربات متتالية تقصّر زمن الضربة
+    comboStacks: 0,
+    comboTime: -99,         // زمن آخر ضربة في السلسلة
+    comboTarget: null,
 
     // المكافآت المحسوبة كل تحديث (هالة الزعيم، مخزن السلاح)
     damageMultiplier: 1,

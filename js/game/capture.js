@@ -140,3 +140,39 @@ export function updateNotice(state) {
   state.notice.t -= TICK_SEC;
   if (state.notice.t <= 0) state.notice = null;
 }
+
+
+// --- تلوين الحي بلون مالكه (القسم 8) ---
+// الانتقال اللوني يتم خلال نصف ثانية لا دفعة واحدة: أرض الحي ومبانيه معاً
+export function updateDistrictTints(state) {
+  const step = TICK_SEC / CAPTURE.tintSeconds;
+
+  for (const district of state.map.districts) {
+    const target = district.owner !== null ? state.players[district.owner].color : null;
+
+    if (target) {
+      if (district.tintColor !== target) { district.tintColor = target; district.tintMix = 0; }
+      district.tintMix = Math.min(1, district.tintMix + step);
+    } else if (district.tintColor) {
+      // خسر الحي: ترجع الألوان تدريجياً إلى الحياد
+      district.tintMix = Math.max(0, district.tintMix - step);
+      if (district.tintMix <= 0) district.tintColor = null;
+    }
+  }
+}
+
+// الأحياء المنزلية تبدأ ملوّنة بلا انتقال
+export function snapDistrictTints(state) {
+  for (const district of state.map.districts) {
+    if (district.owner === null) continue;
+    district.tintColor = state.players[district.owner].color;
+    district.tintMix = 1;
+  }
+}
+
+// نسبة الصبغ الحالية، مدرّجة حتى لا نولّد لوناً مخلوطاً جديداً في كل إطار
+export function tintAmount(district, alpha) {
+  if (!district || !district.tintColor) return 0;
+  const steps = CAPTURE.tintSteps;
+  return alpha * Math.round(district.tintMix * steps) / steps;
+}

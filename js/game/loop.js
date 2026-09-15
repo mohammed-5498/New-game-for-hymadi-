@@ -5,7 +5,7 @@ import { buildUnitHash } from './spatialHash.js';
 import { updateAbilities } from './abilities.js';
 import { updateCombat, removeDeadUnits } from './combat.js';
 import { updateUnits, processPathQueue } from './units.js';
-import { updateCapture, updateNotice } from './capture.js';
+import { updateCapture, updateDistrictTints, updateNotice } from './capture.js';
 import { updateSpawn } from './spawn.js';
 import { updateVictory } from './victory.js';
 import { updateBots } from '../ai/bot.js';
@@ -20,6 +20,7 @@ export function updateMatch(state) {
   updateUnits(state);
   removeDeadUnits(state);
   updateCapture(state);
+  updateDistrictTints(state);   // الانتقال اللوني لأرض الحي ومبانيه
   updateSpawn(state);
   updateBots(state);
   updateVictory(state);

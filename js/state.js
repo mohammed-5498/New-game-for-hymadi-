@@ -3,7 +3,7 @@ import { CAMERA, PLAYER_COLORS, GANGS, UNITS, WEATHER } from './config.js';
 import { createMap } from './map/generator.js';
 import { findFreeTiles } from './map/pathfinding.js';
 import { createUnit } from './game/units.js';
-import { buildCaptureZones } from './game/capture.js';
+import { buildCaptureZones, snapDistrictTints } from './game/capture.js';
 import { initSpawnTimers } from './game/spawn.js';
 import { initBots } from './ai/bot.js';
 import { tileToWorld } from './map/coords.js';
@@ -58,6 +58,7 @@ export function createMatch(settings) {
   };
 
   buildCaptureZones(state);
+  snapDistrictTints(state);      // الأحياء المنزلية ملوّنة من البداية
   spawnStartingUnits(state);
   initSpawnTimers(state);
   initBots(state);

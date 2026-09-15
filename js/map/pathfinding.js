@@ -70,6 +70,8 @@ function rebuildPath(cameFrom, endNode, n) {
 }
 
 // يبحث عن عدد من المربعات الفارغة القريبة من نقطة (للتوزيع على المجموعة)
+// لا يعيد إلا المربعات الموصولة بشبكة الشوارع (القسم 3.4.1): الظهور والحركة
+// لا يستهدفان فراغاً معزولاً حتى لو كان قابلاً للمشي
 export function findFreeTiles(map, si, sj, count, maxRadius = 10) {
   const out = [];
   const seen = new Set([map.idx(si, sj)]);
@@ -77,7 +79,7 @@ export function findFreeTiles(map, si, sj, count, maxRadius = 10) {
 
   while (queue.length && out.length < count) {
     const [i, j] = queue.shift();
-    if (map.isWalkable(i, j)) out.push([i, j]);
+    if (map.isConnected(i, j)) out.push([i, j]);
     for (const [dx, dy] of D8) {
       const a = i + dx, b = j + dy;
       if (!map.inBounds(a, b)) continue;
@@ -143,7 +145,7 @@ export function flowStep(map, field, i, j) {
 
 // أقرب مربع يمكن المشي عليه من نقطة معينة
 export function nearestWalkable(map, i, j, maxRadius = 8) {
-  if (map.isWalkable(i, j)) return [i, j];
+  if (map.isConnected(i, j)) return [i, j];
   const found = findFreeTiles(map, i, j, 1, maxRadius);
   return found.length ? found[0] : null;
 }

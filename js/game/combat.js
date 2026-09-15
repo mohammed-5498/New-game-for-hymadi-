@@ -1,5 +1,5 @@
 // الهجوم التلقائي، أمر الهجوم، المقذوفات، الضرر والموت
-import { TICK_SEC, COMBAT, UNITS } from '../config.js';
+import { TICK_SEC, COMBAT, UNITS, UNIT_ART } from '../config.js';
 import { findPath } from '../map/pathfinding.js';
 import { faceTowards } from './units.js';
 import { createFire } from './abilities.js';
@@ -53,6 +53,7 @@ export function updateCombat(state) {
 
   for (const unit of state.units) {
     if (unit.hitFlash > 0) unit.hitFlash -= TICK_SEC;
+    if (unit.hurtTimer > 0) unit.hurtTimer -= TICK_SEC;   // أنميشن تلقي الضرر
 
     if (unit.state === 'dead') { unit.deathTimer -= TICK_SEC; continue; }
     if (unit.attackCooldown > 0) unit.attackCooldown -= TICK_SEC;
@@ -145,6 +146,28 @@ function findNearestEnemy(state, unit) {
   return best;
 }
 
+// تسارع الاشتباك (القسمان 6.2 و6.6): كل ضربة متتالية تقصّر زمن الضربة
+// المزدوج 12% حتى 4 ضربات وبحد أدنى 0.5 ث، وبطل الغربان 8% حتى نصف الزمن
+function comboAttackTime(state, unit, target, baseTime) {
+  const combo = unit.stats.combo;
+  if (!combo) return baseTime;
+
+  // تنقطع السلسلة إذا توقف عن الضرب، أو غيّر هدفه لمن يشترط نفس الهدف
+  const stopped = state.time - unit.comboTime > combo.resetSeconds;
+  const switched = combo.sameTarget && unit.comboTarget !== target;
+  if (stopped || switched) unit.comboStacks = 0;
+
+  const floor = combo.minAttackTime !== undefined
+    ? combo.minAttackTime
+    : baseTime * combo.minFactor;
+  const time = Math.max(floor, baseTime * Math.pow(1 - combo.step, unit.comboStacks));
+
+  if (combo.maxStacks === undefined || unit.comboStacks < combo.maxStacks) unit.comboStacks++;
+  unit.comboTime = state.time;
+  unit.comboTarget = target;
+  return time;
+}
+
 function fightTarget(state, unit, budget) {
   const target = unit.target;
   const dist = distance(unit, target);
@@ -164,11 +187,12 @@ function fightTarget(state, unit, budget) {
   const melee = unit.stats.meleeRange !== undefined && dist <= unit.stats.meleeRange;
   const range = melee ? unit.stats.meleeRange : unit.stats.attackRange;
   const damage = melee ? unit.stats.meleeDamage : unit.stats.damage;
-  const attackTime = melee ? unit.stats.meleeAttackTime : unit.stats.attackTime;
+  let attackTime = melee ? unit.stats.meleeAttackTime : unit.stats.attackTime;
 
   if (dist <= range + COMBAT.rangeTolerance) {
     unit.path = [];                       // وصلت للمدى: تتوقف وتضرب
     if (unit.attackCooldown <= 0) {
+      attackTime = comboAttackTime(state, unit, target, attackTime);
       unit.attackCooldown = attackTime;
       // بداية حركة السلاح: الرسم يقرأ هذين الرقمين، والضرر يقع عند الارتطام
       unit.attackStart = state.time;
@@ -233,10 +257,14 @@ export function applyDamage(state, attacker, target, amount) {
   const taken = amount * (1 - target.stats.armor);
   target.hp -= taken;
   target.hitFlash = COMBAT.hitFlashTime;
+  target.hurtTimer = UNIT_ART.hurtSeconds;   // أنميشن تلقي الضرر (القسم 13)
 
   if (target.hp <= 0) {
     target.hp = 0;
     target.state = 'dead';
+    target.hurtTimer = 0;                    // أنميشن الموت يحلّ محل أنميشن الضرر
+    target.attackStart = null;
+    target.pendingHit = null;
     target.deathTimer = COMBAT.deathTime;
     target.path = [];
     target.target = null;

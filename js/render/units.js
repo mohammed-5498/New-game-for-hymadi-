@@ -3,16 +3,25 @@ import { TILE_HALF_W, TILE_HALF_H, COMBAT, PERFORMANCE, UNIT_ART } from '../conf
 import { UI_LIGHT, mix } from './colors.js';
 import { drawUnit as drawUnitArt } from './unitsArt.js';
 
-// مفاتيح الرسم: عصابة الوحدة + نوعها (عادي أو شخصية مميزة)
+// مفاتيح الرسم (القسم 13): عصابة الوحدة + نوعها
+// common فرد عادي، ثم شخصيتان مميزتان، ثم البطل champion
 const ART_KEYS = {
-  crows:     { common: 'crow_common',   runner: 'crow_sprinter', biker: 'crow_biker' },
-  hammers:   { common: 'hammer_common', armored: 'hammer_shield', smasher: 'hammer_breaker' },
-  vipers:    { common: 'viper_common',  sniper: 'viper_sniper',  firebomber: 'viper_firebomber' },
-  scorpions: { common: 'scorp_common',  boss: 'scorp_boss',      medic: 'scorp_medic' }
+  crows:     { common: 'crow_common',   spear: 'crow_spear',     dual: 'crow_dual',        champion: 'crow_hero' },
+  hammers:   { common: 'hammer_common', armored: 'hammer_shield', smasher: 'hammer_breaker', champion: 'hammer_hero' },
+  vipers:    { common: 'viper_common',  sniper: 'viper_sniper',  firebomber: 'viper_firebomber', champion: 'viper_hero' },
+  scorpions: { common: 'scorp_common',  boss: 'scorp_boss',      medic: 'scorp_medic',     champion: 'scorp_hero' },
+  // الشرطة المحايدة (المرحلة 4ج): منطقها لاحقاً، ورسمها جاهز
+  police:    { common: 'police_common', captain: 'police_captain' }
 };
 
-const artKey = (unit) => (ART_KEYS[unit.gang] || ART_KEYS.crows)[unit.hero || 'common'];
-const artScale = (unit) => UNIT_ART.scale * (unit.hero ? UNIT_ART.heroScale : 1);
+const artKey = (unit) =>
+  (ART_KEYS[unit.gang] || ART_KEYS.crows)[unit.champion ? 'champion' : (unit.hero || 'common')];
+
+const artScale = (unit) => UNIT_ART.scale *
+  (unit.champion ? UNIT_ART.championScale : unit.hero ? UNIT_ART.heroScale : 1);
+
+// الشرطة تُرسم بلونها الثابت مهما كان اللاعب
+const artColor = (unit) => unit.gang === 'police' ? UNIT_ART.policeColor : unit.color;
 
 // موقع الوحدة في العالم مع تنعيم بين تحديثين (alpha من 0 إلى 1)
 export function unitWorldPos(unit, alpha) {
@@ -30,59 +39,58 @@ function swingProgress(unit, time) {
 
 export function drawUnit(ctx, unit, alpha, zoom = 99, time = 0) {
   const { x, y } = unitWorldPos(unit, alpha);
-
-  if (unit.state === 'dead') {
-    drawDeadUnit(ctx, unit, x, y, time);
-    return;
-  }
+  const dead = unit.state === 'dead';
 
   // عند الإبعاد الشديد تكون الوحدة بضعة بكسلات: نرسمها نقطة واحدة
-  if (zoom < PERFORMANCE.unitDetailZoom) {
+  if (!dead && zoom < PERFORMANCE.unitDetailZoom) {
     // بلون اللاعب دائماً: عند الإبعاد المهم معرفة جيش من أين لا من ضُرب
-    ctx.fillStyle = unit.color;
-    const size = unit.hero ? 5 : 4;
+    ctx.fillStyle = artColor(unit);
+    const size = unit.champion ? 6 : unit.hero ? 5 : 4;
     ctx.fillRect(x - size / 2, y - size, size, size);
     return;
   }
 
-  const swing = swingProgress(unit, time);
-  const walking = unit.state === 'moving' || unit.state === 'attackMove' ||
-                  (unit.state === 'attacking' && unit.path.length > 0);
+  drawUnitArt(ctx, artKey(unit), { x, y, ...artState(unit, time, dead) });
+  if (dead) return;
 
-  drawUnitArt(ctx, artKey(unit), {
-    x, y,
-    // زمن الضربة يبدأ من صفر حتى تتطابق لحظة الارتطام مع الضرر الفعلي
-    t: swing >= 0 ? swing : time + (unit.id % 17) * 0.13,
-    state: swing >= 0 ? 'attack' : (walking ? 'walk' : 'idle'),
-    color: unit.hitFlash > 0 ? mix(unit.color, '#ffffff', 0.5) : unit.color,
-    dir: unit.facing || 1,
-    scale: artScale(unit),
-    rate: unit.attackRate || unit.stats.attackTime
-  });
-
-  // شريط الدم يظهر للوحدة المتضررة أو المحددة فقط
-  if (unit.hp < unit.maxHp || unit.selected) drawHealthBar(ctx, unit, x, y);
+  // شريط الدم للوحدة المتضررة أو المحددة، وللبطل دائماً (القسم 6.6)
+  if (unit.hp < unit.maxHp || unit.selected || unit.champion) drawHealthBar(ctx, unit, x, y);
 }
 
-// الوحدة الميتة تسقط على جنبها وتختفي خلال ثانية، بلا أثر على الأرض
-function drawDeadUnit(ctx, unit, x, y, time) {
-  const progress = Math.max(0, Math.min(1, 1 - unit.deathTimer / COMBAT.deathTime));
-  ctx.save();
-  ctx.globalAlpha = 1 - progress;
-  ctx.translate(x, y + progress * 1.5);
-  ctx.rotate(progress * 1.35 * (unit.facing || 1));
-  drawUnitArt(ctx, artKey(unit), {
-    x: 0, y: 0, t: time, state: 'idle',
-    color: unit.color, dir: unit.facing || 1, scale: artScale(unit),
-    rate: unit.stats.attackTime
-  });
-  ctx.restore();
-  ctx.globalAlpha = 1;
+// اختيار حالة الرسم وزمنها: الموت ثم الضربة ثم تلقي الضرر ثم الجري أو الوقوف
+function artState(unit, time, dead) {
+  const common = {
+    color: unit.hitFlash > 0 ? mix(artColor(unit), '#ffffff', 0.5) : artColor(unit),
+    dir: unit.facing || 1,
+    scale: artScale(unit),
+    rate: unit.attackRate || unit.stats.attackTime,
+    hurtDur: UNIT_ART.hurtSeconds,
+    deathDur: COMBAT.deathTime
+  };
+
+  // الموت: سقوط واختفاء خلال ثانية (الأنميشن نفسه يدير الدوران والشفافية)
+  if (dead) {
+    return { ...common, state: 'death', t: COMBAT.deathTime - unit.deathTimer };
+  }
+
+  // الضربة أولاً حتى تبقى لحظة الارتطام (47%) مطابقة للضرر الفعلي
+  const swing = swingProgress(unit, time);
+  if (swing >= 0) return { ...common, state: 'attack', t: swing };
+
+  if (unit.hurtTimer > 0) {
+    return { ...common, state: 'hurt', t: UNIT_ART.hurtSeconds - unit.hurtTimer };
+  }
+
+  const walking = unit.state === 'moving' || unit.state === 'attackMove' ||
+                  (unit.state === 'attacking' && unit.path.length > 0);
+  // إزاحة صغيرة لكل وحدة حتى لا تتنفس كل الوحدات معاً
+  return { ...common, state: walking ? 'walk' : 'idle', t: time + (unit.id % 17) * 0.13 };
 }
 
 function drawHealthBar(ctx, unit, x, y) {
-  const w = unit.hero ? 6.5 : 5, h = 1.1;
-  const top = y + (unit.hero ? UNIT_ART.heroHealthBarY : UNIT_ART.healthBarY);
+  const w = unit.champion ? 8 : unit.hero ? 6.5 : 5, h = 1.1;
+  const top = y + (unit.champion ? UNIT_ART.championHealthBarY
+                 : unit.hero ? UNIT_ART.heroHealthBarY : UNIT_ART.healthBarY);
   const ratio = Math.max(0, unit.hp / unit.maxHp);
 
   ctx.fillStyle = 'rgba(20,18,16,.75)';
