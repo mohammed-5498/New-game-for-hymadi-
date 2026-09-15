@@ -8,6 +8,8 @@ export function initSpawnTimers(state) {
   state.spawnTimers = state.players.map(player => normalInterval(state, player));
   state.heroTimers = state.players.map(player => heroInterval(state, player));
   state.heroTurn = state.players.map(() => 0);   // التناوب بين شخصيتي العصابة
+  // مؤقت عودة البطل: null يعني لا مؤقت (بطله حي أو لم يمت بعد)
+  state.championTimers = state.players.map(() => null);
 }
 
 // هل يملك اللاعب حياً مميزاً من نوع معين؟ (نفس النوع لا يتكرر تأثيره)
@@ -46,7 +48,10 @@ export function updateSpawn(state) {
     const districts = ownedDistricts(state, player.id);
     if (!districts.length) continue;    // بلا أحياء: لا ظهور
 
+    updateChampion(state, player, districts);
+
     // عند الوصول للحد الأقصى تتوقف المؤقتات، وتستأنف عندما يقل العدد
+    // (البطل يُحسب ضمن الحد الأقصى، القسم 6.6)
     if (countUnits(state, player.id) >= state.maxUnits) continue;
 
     state.spawnTimers[player.id] -= TICK_SEC;
@@ -101,4 +106,49 @@ export function countUnits(state, playerId) {
   let n = 0;
   for (const unit of state.units) if (unit.playerId === playerId && unit.state !== 'dead') n++;
   return n;
+}
+
+
+// --- البطل (القسم 6.6): وحدة واحدة لكل لاعب، خارج دورة الظهور تماماً ---
+
+export function championOf(state, playerId) {
+  return state.units.find(u => u.playerId === playerId && u.champion && u.state !== 'dead') || null;
+}
+
+// بطل اللاعب عند ساحة علم حيه المنزلي مع أفراده الثلاثة
+export function spawnChampion(state, player, district) {
+  if (!district || !district.capture) return null;
+  if (championOf(state, player.id)) return null;      // لا أكثر من بطل حي واحد
+
+  const spots = findFreeTiles(state.map, district.capture.i, district.capture.j, SPAWN.spotSearchTiles);
+  if (!spots.length) return null;
+
+  const [i, j] = spots[Math.floor(Math.random() * spots.length)];
+  const champion = createUnit(state, player, i, j, null, true);
+  state.units.push(champion);
+  return champion;
+}
+
+// مات البطل: يعود بعد 60 ثانية، والمؤقت لا يجري إلا وصاحبه يملك 5 أحياء فأكثر
+function updateChampion(state, player, districts) {
+  if (championOf(state, player.id)) { state.championTimers[player.id] = null; return; }
+
+  // أول تحديث بعد موته: نبدأ المؤقت
+  if (state.championTimers[player.id] === null) {
+    state.championTimers[player.id] = SPAWN.championRespawnSeconds;
+    return;
+  }
+
+  // أقل من الحد: المؤقت متوقف حتى ترجع أحياؤه إلى 5
+  if (districts.length < SPAWN.championMinDistricts) return;
+
+  state.championTimers[player.id] -= TICK_SEC;
+  if (state.championTimers[player.id] > 0) return;
+  if (countUnits(state, player.id) >= state.maxUnits) return;   // يُحسب ضمن الحد الأقصى
+
+  // يظهر في ساحة علم حي مملوك، مع تفضيل الأحياء التي ليس فيها أعداء
+  const safe = districts.filter(d => !hasEnemyNearFlag(state, d, player.id));
+  const pool = safe.length ? safe : districts;
+  const district = pool[Math.floor(Math.random() * pool.length)];
+  if (spawnChampion(state, player, district)) state.championTimers[player.id] = null;
 }

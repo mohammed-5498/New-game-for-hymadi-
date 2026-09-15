@@ -4,7 +4,7 @@ import { createMap } from './map/generator.js';
 import { findFreeTiles } from './map/pathfinding.js';
 import { createUnit } from './game/units.js';
 import { buildCaptureZones, snapDistrictTints } from './game/capture.js';
-import { initSpawnTimers } from './game/spawn.js';
+import { initSpawnTimers, spawnChampion } from './game/spawn.js';
 import { initBots } from './ai/bot.js';
 import { tileToWorld } from './map/coords.js';
 
@@ -66,7 +66,7 @@ export function createMatch(settings) {
   return state;
 }
 
-// كل لاعب يبدأ بعدد من الأفراد عند ساحة علم حيه المنزلي
+// كل لاعب يبدأ بثلاثة أفراد عاديين + بطله عند ساحة علم حيه المنزلي (القسم 7)
 function spawnStartingUnits(state) {
   for (const player of state.players) {
     const home = state.map.districts[player.homeDistrictId];
@@ -75,6 +75,7 @@ function spawnStartingUnits(state) {
     for (const [i, j] of spots) {
       state.units.push(createUnit(state, player, i, j));
     }
+    spawnChampion(state, player, home);
   }
 }
 
@@ -143,6 +144,7 @@ export function resetMatch(state, settings = state.settings) {
   state.botTimers = fresh.botTimers;
   state.heroTimers = fresh.heroTimers;
   state.heroTurn = fresh.heroTurn;
+  state.championTimers = fresh.championTimers;
   state.fires = [];
   state.nextUnitId = fresh.nextUnitId;
   state.humanId = fresh.humanId;

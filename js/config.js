@@ -166,10 +166,10 @@ export const CHAMPIONS = {
   },
   scorpions: {
     id: 'scorp_hero', name: 'بطل العقارب', gang: 'scorpions',
-    // قائد وطبيب معاً: هالة تعطي الضرر وتعالج
+    // قائد وطبيب معاً: هالة واحدة تعطي الحلفاء الضرر والعلاج
     stats: {
       hp: 280, armor: 0.15, damage: 16, attackTime: 1.3, attackRange: 1.0, speed: 2.1,
-      aura: { radius: 3.5, damageBonus: 0.25 }, heal: { radius: 3.5, perSecond: 4 }
+      aura: { radius: 3.5, damageBonus: 0.25, healPerSecond: 4 }
     }
   }
 };
@@ -215,6 +215,8 @@ export const COMBAT = {
   projectileMaxTime: 0.5,
   projectileArc: 6,          // ارتفاع قوس المقذوف أثناء الطيران
   missSpread: 1.0,           // بُعد سقوط الرمية الخاطئة عن الهدف (مربعات)
+  multiShotSearch: 2.5,      // بحث بطل الأفاعي عن أهداف إضافية حول هدفه (مربعات)
+  multiShotSpread: 0.45,     // تفرّق السهام الثلاثة عن بعضها (مربعات)
   hitFlashTime: 0.15,        // ومضة الوحدة عند تلقي ضربة
   deathTime: 1.0,            // زمن سقوط الوحدة الميتة واختفائها
   hitMoment: 0.47            // لحظة الارتطام من زمن الضربة (تطابق أنميشن docs/units-art.js)
@@ -238,10 +240,14 @@ export const SPAWN = {
   normalBase: 14,             // max(4, 14 - (D-1)*1) ثانية
   normalPerDistrict: 1,
   normalMin: 4,
-  heroBase: 75,               // max(30, 75 - (D-1)*3) ثانية (المرحلة 4)
+  heroBase: 75,               // max(30, 75 - (D-1)*3) ثانية
   heroPerDistrict: 3,
   heroMin: 30,
-  spotSearchTiles: 6          // عدد المربعات المفحوصة حول العلم لمكان الظهور
+  spotSearchTiles: 6,         // عدد المربعات المفحوصة حول العلم لمكان الظهور
+
+  // البطل خارج دورة الظهور تماماً (القسم 6.6)
+  championRespawnSeconds: 60, // زمن عودة البطل بعد موته
+  championMinDistricts: 5     // لا يعود إلا إذا ملك اللاعب هذا العدد من الأحياء
 };
 
 // --- الطقس: الشكل الآن، والتأثير على اللعب في المرحلة 7 ---

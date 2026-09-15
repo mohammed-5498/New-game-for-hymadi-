@@ -93,8 +93,30 @@ function resolveHit(state, unit) {
   unit.pendingHit = null;
   if (!isAlive(hit.target) || !isAlive(unit)) return;
 
-  if (hit.ranged) spawnProjectile(state, unit, hit.target, hit.damage);
+  if (hit.ranged) spawnVolley(state, unit, hit.target, hit.damage);
   else strike(state, unit, hit.target, hit.damage);
+}
+
+// طلقة واحدة، أو ثلاثة سهام متفرقة لبطل الأفاعي (القسم 6.6)
+// السهام الإضافية تبحث عن أعداء آخرين حول الهدف، فقد تصيب ثلاثة أعداء مختلفين
+function spawnVolley(state, unit, target, damage) {
+  const arrows = unit.stats.arrows || 1;
+  if (arrows <= 1) { spawnProjectile(state, unit, target, damage, 0); return; }
+
+  const targets = [target];
+  const searchSq = COMBAT.multiShotSearch * COMBAT.multiShotSearch;
+  forEachNearby(state, target.x, target.y, COMBAT.multiShotSearch, (other) => {
+    if (targets.length >= arrows || targets.includes(other)) return;
+    if (distanceSq(other, target) > searchSq) return;
+    if (!isAlive(other) || !isEnemy(state, unit, other)) return;
+    targets.push(other);
+  });
+
+  // ما زاد عن الأعداء الموجودين يذهب إلى الهدف نفسه، متفرقاً عنه قليلاً
+  for (let k = 0; k < arrows; k++) {
+    const offset = (k - (arrows - 1) / 2) * COMBAT.multiShotSpread;
+    spawnProjectile(state, unit, targets[k] || target, damage, offset);
+  }
 }
 
 // انتهى القتال: إما نعود للانتظار أو نواصل الهجوم المتحرك نحو وجهته
@@ -275,7 +297,8 @@ export function applyDamage(state, attacker, target, amount) {
 }
 
 // --- المقذوفات ---
-function spawnProjectile(state, unit, target, damage) {
+// offset: إزاحة جانبية عند الانطلاق حتى تتفرق السهام الثلاثة بصرياً
+function spawnProjectile(state, unit, target, damage, offset = 0) {
   const dist = distance(unit, target);
   const maxRange = Math.max(unit.stats.attackRange, 0.1);
   const ratio = Math.min(1, dist / maxRange);
@@ -294,9 +317,9 @@ function spawnProjectile(state, unit, target, damage) {
     hits,
     missX: target.x + Math.cos(angle) * spread,
     missY: target.y + Math.sin(angle) * spread,
-    startX: unit.x, startY: unit.y,
-    x: unit.x, y: unit.y,
-    prevX: unit.x, prevY: unit.y,
+    startX: unit.x + offset, startY: unit.y - offset,
+    x: unit.x + offset, y: unit.y - offset,
+    prevX: unit.x + offset, prevY: unit.y - offset,
     t: 0, prevT: 0,
     duration
   });

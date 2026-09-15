@@ -14,7 +14,8 @@ export function updateAbilities(state) {
   updateFires(state);
 }
 
-// --- مضاعف الضرر: مخزن السلاح + هالة الزعيم (الهالتان لا تتجمعان) ---
+// --- مضاعف الضرر: مخزن السلاح + الهالات ---
+// هالة الزعيم وهالة بطل العقارب لا تتجمعان: يؤخذ الأقوى فقط (القسم 6.6)
 function applyDamageBonuses(state) {
   const armoryBonus = state.players.map(p =>
     ownsSpecial(state, p.id, 'armory') ? SPECIAL_BONUS.armory.damageBonus : 0);
@@ -23,23 +24,31 @@ function applyDamageBonuses(state) {
   for (const unit of state.units) {
     if (!isAlive(unit)) continue;
     unit.aura = false;
+    unit.auraBonus = 0;
+    unit.auraHeal = 0;
     unit.damageMultiplier = 1 + armoryBonus[unit.playerId];
   }
 
-  // ثم نمر على الزعماء فقط ونعلّم من حولهم (الهالتان لا تتجمعان)
+  // ثم نمر على أصحاب الهالات ونأخذ الأقوى لكل وحدة
   for (const boss of state.units) {
     if (!isAlive(boss) || !boss.stats.aura) continue;
     const aura = boss.stats.aura;
 
     const radiusSq = aura.radius * aura.radius;
     forEachNearby(state, boss.x, boss.y, aura.radius, (unit) => {
-      if (unit.aura) return;
       const dx = unit.x - boss.x, dy = unit.y - boss.y;
       if (dx * dx + dy * dy > radiusSq) return;
       if (!isAlive(unit) || !allied(state, unit, boss)) return;
       unit.aura = true;
-      unit.damageMultiplier += aura.damageBonus;
+      if (aura.damageBonus > unit.auraBonus) unit.auraBonus = aura.damageBonus;
+      // هالة بطل العقارب تعالج الحلفاء أيضاً، وتؤخذ الأقوى كذلك
+      const healing = aura.healPerSecond || 0;
+      if (healing > unit.auraHeal) unit.auraHeal = healing;
     });
+  }
+
+  for (const unit of state.units) {
+    if (isAlive(unit) && unit.aura) unit.damageMultiplier += unit.auraBonus;
   }
 }
 
@@ -58,6 +67,11 @@ function applyHealing(state) {
       const inside = dx * dx + dy * dy <= MAP_GEN.captureRadius * MAP_GEN.captureRadius;
       if (inside) heal(unit, SPECIAL_BONUS.hospital.zoneHealPerSecond * TICK_SEC);
     }
+  }
+
+  // هالة بطل العقارب: تعالج كل حليف داخلها (الطبيب أسرع لكنه يعالج هدفاً واحداً)
+  for (const unit of state.units) {
+    if (isAlive(unit) && unit.auraHeal > 0) heal(unit, unit.auraHeal * TICK_SEC);
   }
 
   // الطبيب: يعالج أكثر حليف متضرر داخل مداه، ولا يعالج نفسه

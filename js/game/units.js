@@ -57,9 +57,11 @@ export function createUnit(state, player, i, j, heroId = null, champion = false)
     comboTime: -99,         // زمن آخر ضربة في السلسلة
     comboTarget: null,
 
-    // المكافآت المحسوبة كل تحديث (هالة الزعيم، مخزن السلاح)
+    // المكافآت المحسوبة كل تحديث (الهالات، مخزن السلاح)
     damageMultiplier: 1,
-    aura: false             // هل هو داخل هالة زعيم
+    aura: false,            // هل هو داخل هالة
+    auraBonus: 0,           // أقوى مكافأة ضرر من الهالات المحيطة
+    auraHeal: 0             // علاج هالة بطل العقارب
   };
 }
 
