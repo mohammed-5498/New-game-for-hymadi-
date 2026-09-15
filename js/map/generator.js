@@ -1,5 +1,5 @@
 // توليد الخريطة العشوائية: شوارع، أحياء، نقاط استيلاء، مباني
-import { MAP_SIZES, MAP_GEN } from '../config.js';
+import { MAP_SIZES, MAP_GEN, POLICE } from '../config.js';
 import { D4, D8 } from './pathfinding.js';
 
 const rnd = () => Math.random();
@@ -14,7 +14,8 @@ const THEMES = {
   vipers:    [['T', 38], ['H', 28], ['R', 12], ['.', 22]],
   scorpions: [['H', 50], ['M', 10], ['B', 10], ['R', 12], ['.', 18]],
   neutral:   [['H', 30], ['A', 14], ['R', 20], ['W', 10], ['T', 10], ['X', 5], ['.', 11]],
-  special:   [['T', 30], ['H', 25], ['.', 45]]
+  special:   [['T', 30], ['H', 25], ['.', 45]],
+  police:    [['H', 26], ['W', 16], ['X', 10], ['R', 10], ['T', 8], ['.', 30]]
 };
 
 // المباني الخاصة بكل حي مميز
@@ -59,6 +60,7 @@ function buildMap(size, players) {
   const districts = findDistricts(map);
   if (!assignHomeDistricts(map, districts, players)) return null;
   assignSpecialDistricts(map, districts, size, players);
+  assignPoliceDistricts(map, districts, size);
   fillDistricts(map, districts);
   map.districts = districts;
   repairIsolatedPockets(map);     // القسم 3.4.1: لا يبقى فراغ محاصر بالمباني
@@ -198,6 +200,8 @@ function findDistricts(map) {
         capture: null,      // نقطة الاستيلاء {i, j}
         isHome: false,
         special: null,      // hospital | armory | clock
+        police: false,      // حي فيه مركز شرطة (القسم 3.8)
+        policeDisabled: false,  // توقف إنتاج الشرطة نهائياً بعد أول استيلاء
         owner: null,        // رقم اللاعب المالك
         progress: 0,        // تقدم الاستيلاء (المرحلة 3)
         progressOwner: null,
@@ -286,6 +290,37 @@ function assignSpecialDistricts(map, districts, size) {
   }
 }
 
+// --- 4ب) مراكز الشرطة: أحياء محايدة موزعة وبعيدة عن الأحياء المنزلية ---
+function assignPoliceDistricts(map, districts, size) {
+  const homes = districts.filter(d => d.isHome);
+  const farFromHomes = (d) => homes.every(h =>
+    Math.hypot(d.cx - h.cx, d.cy - h.cy) >= POLICE.minHomeDistance);
+
+  const candidates = districts.filter(d =>
+    !d.isHome && !d.special && d.capturable && farFromHomes(d));
+  if (!candidates.length) return;
+
+  // موزعة: بعد الأول نختار في كل مرة الأبعد عن المراكز المختارة
+  const chosen = [candidates[ri(candidates.length)]];
+  const count = Math.min(size.policeStations, candidates.length);
+
+  while (chosen.length < count) {
+    let best = null, bestDist = -1;
+    for (const d of candidates) {
+      if (chosen.includes(d)) continue;
+      const nearest = Math.min(...chosen.map(c => Math.hypot(d.cx - c.cx, d.cy - c.cy)));
+      if (nearest > bestDist) { bestDist = nearest; best = d; }
+    }
+    if (!best) break;
+    chosen.push(best);
+  }
+
+  for (const d of chosen) {
+    d.police = true;
+    d.region = 'police';      // أرض رمادية مزرقّة قبل الاستيلاء
+  }
+}
+
 // --- 5) ملء الأحياء بالمباني ونقاط الاستيلاء ---
 function fillDistricts(map, districts) {
   for (const district of districts) {
@@ -328,6 +363,8 @@ function fillDistricts(map, districts) {
 
     if (district.isHome && inner[0]) {
       map.type[map.idx(inner[0][0], inner[0][1])] = 'Q';   // مبنى المقر
+    } else if (district.police && inner[0]) {
+      map.type[map.idx(inner[0][0], inner[0][1])] = 'N';   // مركز الشرطة
     } else if (district.special) {
       SPECIAL_BUILDINGS[district.special].forEach((letter, index) => {
         const tile = inner[index];

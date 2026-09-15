@@ -1,5 +1,5 @@
 // الهجوم التلقائي، أمر الهجوم، المقذوفات، الضرر والموت
-import { TICK_SEC, COMBAT, UNITS, UNIT_ART } from '../config.js';
+import { TICK_SEC, COMBAT, UNITS, UNIT_ART, POLICE } from '../config.js';
 import { findPath } from '../map/pathfinding.js';
 import { faceTowards } from './units.js';
 import { createFire } from './abilities.js';
@@ -66,8 +66,12 @@ export function updateCombat(state) {
     if (unit.pendingHit && state.time >= unit.pendingHit.at) resolveHit(state, unit);
     if (unit.pendingUlt && state.time >= unit.pendingUlt.at) resolveUlt(state, unit);
 
-    // أثناء أمر الحركة العادي تتجاهل الوحدة الأعداء حتى تصل
-    if (unit.state === 'moving') continue;
+    // أثناء أمر الحركة العادي تتجاهل الوحدة الأعداء حتى تصل،
+    // والشرطة الراجعة إلى مركزها لا تهاجم إلا من يعترضها مباشرة (القسم 3.8)
+    if (unit.state === 'moving') {
+      if (unit.homePost) blockedPolice(state, unit);
+      continue;
+    }
 
     if (unit.state === 'attacking' && !isAlive(unit.target)) {
       // مات الهدف: تبحث فوراً عن عدو آخر في المدى
@@ -143,10 +147,23 @@ function finishFight(state, unit) {
   unit.state = 'idle';
 }
 
+// عدو ملاصق يعترض طريق شرطي راجع إلى مركزه: يقاتله بدل أن يمر
+function blockedPolice(state, unit) {
+  const reach = unit.stats.attackRange + COMBAT.rangeTolerance;
+  let blocker = null;
+  forEachNearby(state, unit.x, unit.y, reach, (other) => {
+    if (blocker || other === unit) return;
+    if (distance(unit, other) > reach) return;
+    if (!isAlive(other) || !isEnemy(state, unit, other)) return;
+    blocker = other;
+  });
+  if (blocker) startAttack(unit, blocker);
+}
+
 function startAttack(unit, target) {
   unit.target = target;
   unit.state = 'attacking';
-  unit.chaseOrigin = { x: unit.x, y: unit.y };
+  if (!unit.homePost) unit.chaseOrigin = { x: unit.x, y: unit.y };
   unit.repathTimer = 0;
 }
 
@@ -204,7 +221,10 @@ function fightTarget(state, unit, budget) {
   faceTowards(unit, target.x, target.y);   // تنظر نحو خصمها
 
   // حد المطاردة (لا ينطبق على أمر الهجوم من اللاعب)
-  if (!unit.commandedTarget) {
+  // الشرطة تقيسه من مركزها: لا تبتعد عنه أكثر من 6 مربعات (القسم 3.8)
+  if (unit.homePost) {
+    if (distance(unit, unit.homePost) > POLICE.chaseTiles) { returnToOrigin(state, unit); return; }
+  } else if (!unit.commandedTarget) {
     const visionLimit = visionRange(state, unit) * COMBAT.chaseVisionFactor;
     const fromOrigin = distance(unit, unit.chaseOrigin);
     if (dist > visionLimit || fromOrigin > COMBAT.chaseMaxTiles) {
@@ -259,7 +279,7 @@ function fightTarget(state, unit, budget) {
 function returnToOrigin(state, unit) {
   if (unit.attackMove) { finishFight(state, unit); return; }
 
-  const origin = unit.chaseOrigin;
+  const origin = unit.homePost || unit.chaseOrigin;
   unit.target = null;
   unit.commandedTarget = false;
   const path = findPath(state.map,
@@ -290,7 +310,9 @@ function strike(state, attacker, target, amount) {
 export function applyDamage(state, attacker, target, amount) {
   if (!isAlive(target)) return;
   if (target.invulnUntil > state.time) return;     // تصلّب: لا يتلقى أي ضرر
-  const taken = amount * (1 - target.stats.armor);
+  // درع الوحدة + مكافأة مراكز الشرطة المملوكة (القسم 3.8)
+  const armor = Math.min(COMBAT.maxArmor, target.stats.armor + target.armorBonus);
+  const taken = amount * (1 - armor);
   target.hp -= taken;
   chargeOnDamageTaken(target, taken);              // شحن عن كل 50 ضرراً
   target.hitFlash = COMBAT.hitFlashTime;

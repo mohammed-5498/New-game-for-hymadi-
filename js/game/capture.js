@@ -44,6 +44,8 @@ export function updateCapture(state) {
   const zones = new Map();   // districtId -> Map(sideKey -> {power, playerId})
   for (const unit of state.units) {
     if (unit.state === 'dead') continue;
+    // الشرطة لا تستولي على أي حي ولا تُحسب جانباً يجمّد التقدم (القسم 3.8)
+    if (state.players[unit.playerId].neutral) continue;
     const key = map.idx(Math.round(unit.x), Math.round(unit.y));
     const districtIds = map.zoneAt.get(key);
     if (!districtIds) continue;

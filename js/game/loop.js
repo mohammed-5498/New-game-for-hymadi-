@@ -7,6 +7,7 @@ import { updateCombat, removeDeadUnits } from './combat.js';
 import { updateUnits, processPathQueue } from './units.js';
 import { updateCapture, updateDistrictTints, updateNotice } from './capture.js';
 import { updateSpawn } from './spawn.js';
+import { updatePolice } from './police.js';
 import { updateVictory } from './victory.js';
 import { updateBots } from '../ai/bot.js';
 
@@ -22,6 +23,7 @@ export function updateMatch(state) {
   updateCapture(state);
   updateDistrictTints(state);   // الانتقال اللوني لأرض الحي ومبانيه
   updateSpawn(state);
+  updatePolice(state);      // إنتاج الشرطة واختفاؤها بعد الاستيلاء
   updateBots(state);
   updateVictory(state);
   updateNotice(state);

@@ -8,12 +8,12 @@ import { forEachNearby } from '../game/spatialHash.js';
 export function initBots(state) {
   // نوزّع أوقات القرار حتى لا تفكر كل البوتات في نفس اللحظة
   state.botTimers = state.players.map(p =>
-    p.isHuman ? 0 : Math.random() * BOT[p.difficulty || 'medium'].decisionInterval);
+    p.isHuman || p.neutral ? 0 : Math.random() * BOT[p.difficulty || 'medium'].decisionInterval);
 }
 
 export function updateBots(state) {
   for (const player of state.players) {
-    if (player.isHuman) continue;
+    if (player.isHuman || player.neutral) continue;   // الشرطة لا تُقاد ببوت
     const config = BOT[player.difficulty || 'medium'];
 
     state.botTimers[player.id] -= TICK_SEC;

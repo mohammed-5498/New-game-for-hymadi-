@@ -45,6 +45,7 @@ export function heroInterval(state, player) {
 
 export function updateSpawn(state) {
   for (const player of state.players) {
+    if (player.neutral) continue;       // الشرطة لها إنتاجها الخاص (القسم 3.8)
     const districts = ownedDistricts(state, player.id);
     if (!districts.length) continue;    // بلا أحياء: لا ظهور
 

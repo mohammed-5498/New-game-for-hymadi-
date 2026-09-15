@@ -3,6 +3,7 @@
 import { TICK_SEC, SPECIAL_BONUS, MAP_GEN } from '../config.js';
 import { isEnemy, applyDamage } from './combat.js';
 import { ownsSpecial } from './spawn.js';
+import { policeArmorBonus } from './police.js';
 import { forEachNearby } from './spatialHash.js';
 
 const isAlive = (unit) => unit.state !== 'dead' && unit.hp > 0;
@@ -19,10 +20,13 @@ export function updateAbilities(state) {
 function applyDamageBonuses(state) {
   const armoryBonus = state.players.map(p =>
     ownsSpecial(state, p.id, 'armory') ? SPECIAL_BONUS.armory.damageBonus : 0);
+  // +10% درع لكل مركز شرطة مملوك، بحد أقصى +20% (القسم 3.8)
+  const armorBonus = state.players.map(p => policeArmorBonus(state, p.id));
 
   // نبدأ من مكافأة مخزن السلاح فقط
   for (const unit of state.units) {
     if (!isAlive(unit)) continue;
+    unit.armorBonus = armorBonus[unit.playerId];
     unit.aura = false;
     unit.auraBonus = 0;
     unit.auraHeal = 0;

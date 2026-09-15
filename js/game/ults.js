@@ -124,6 +124,7 @@ export function resolveUlt(state, unit) {
     case 'shot':    if (target) spawnProjectile(state, unit, target, ultDamage(unit, ult.damage)); break;
     case 'fire':    createFire(state, unit.playerId, (target || unit).x, (target || unit).y, ult.fire); break;
     case 'arrows':  fireArrows(state, unit, ult, target); break;
+    case 'bash':    bash(state, unit, ult, target); break;
   }
 }
 
@@ -241,6 +242,27 @@ function forEachAlly(state, unit, radius, action) {
 }
 
 const heal = (unit, amount) => { unit.hp = Math.min(unit.maxHp, unit.hp + amount); };
+
+// صدّة بالدرع: ضرر ودفع العدو مربعاً للخلف مع إبطائه (الشرطي، القسم 3.8)
+function bash(state, unit, ult, target) {
+  if (!target) return;
+  applyDamage(state, unit, target, ultDamage(unit, ult.damage));
+  if (!isAlive(target)) return;
+
+  target.slowFactor = ult.slow;
+  target.slowUntil = state.time + ult.slowDuration;
+
+  // الدفع لا يمر عبر المباني: نتوقف عند آخر مربع موصول في طريق الدفع
+  const dx = target.x - unit.x, dy = target.y - unit.y;
+  const length = Math.hypot(dx, dy) || 1;
+  const toX = target.x + (dx / length) * ult.push;
+  const toY = target.y + (dy / length) * ult.push;
+  if (!state.map.isConnected(Math.round(toX), Math.round(toY))) return;
+
+  target.x = toX;
+  target.y = toY;
+  target.path = [];          // مساره القديم لم يعد يبدأ من مكانه
+}
 
 // ثلاثة سهام نارية: كل سهم يضر ويشعل بقعة صغيرة حيث يسقط (بطل الأفاعي)
 function fireArrows(state, unit, ult, target) {

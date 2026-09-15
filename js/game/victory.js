@@ -14,7 +14,8 @@ export function updateVictory(state) {
   const owned = ownedDistricts(state, state.humanId).length;
   if (owned > state.stats.maxDistricts) state.stats.maxDistricts = owned;
 
-  const alivePlayers = state.players.filter(p => isPlayerAlive(state, p.id));
+  // الشرطة المحايدة خارج حساب الفوز والخسارة
+  const alivePlayers = state.players.filter(p => !p.neutral && isPlayerAlive(state, p.id));
   const sides = new Set(alivePlayers.map(sideKey));
 
   // مباراة بلا لاعب بشري (اختبارات أو عرض): تنتهي ببقاء جانب واحد فقط

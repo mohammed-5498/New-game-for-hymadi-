@@ -6,10 +6,13 @@ let ctx = null;
 let weather = 'day';
 let lights = [];   // مصادر الإضاءة تُجمع أثناء الرسم وتُستخدم ليلاً
 
-export function setFrameContext(context, weatherKey, lightsArray) {
+let frameTime = 0;   // زمن المباراة: يُستعمل في الوميض
+
+export function setFrameContext(context, weatherKey, lightsArray, time = 0) {
   ctx = context;
   weather = weatherKey;
   lights = lightsArray;
+  frameTime = time;
 }
 
 // يبيّض اللون في جو الثلج
@@ -221,6 +224,21 @@ export function drawBuilding(type, x, y, region, i, j, ownerColor, detail = true
     ellipse(x, y + 1, 9, 4.3, '#5f8fb0');
     rect(x - 1.2, y - 8, 2.4, 9, '#9a917f');
     ellipse(x, y - 8, 3.5, 1.6, '#7fb0cf');
+
+  } else if (type === 'N') {               // مركز الشرطة بمصباح أزرق وامض
+    box(x, y, 16, 8, 20, '#8e9099', '#a8aab3', '#74767e');
+    [[0.15, 6], [0.55, 6], [0.15, 13], [0.55, 13]].forEach(p => {
+      windowL(x, y, 16, 8, p[0], p[1], 0.22, 5, DARK);
+      windowR(x, y, 16, 8, p[0], p[1], 0.22, 5, DARK);
+    });
+    rect(x - 5, y - 24, 10, 2.2, '#2f4a6e');          // لافتة المركز
+    // المصباح الأزرق يومض مرتين في الثانية
+    const blink = 0.35 + 0.65 * Math.max(0, Math.sin(frameTime * 6));
+    ctx.globalAlpha = blink;
+    circ(x, y - 27, 2.4, '#5b9bd5');
+    ctx.globalAlpha = 1;
+    circ(x, y - 27, 1.2, '#dbeaf7');
+    lights.push({ x, y: y - 26, r: 26, c: '90,155,215', a: 0.35 + 0.35 * blink });
 
   } else if (type === 'S') {               // مستشفى مهجور
     box(x, y, 16, 8, 22, '#cfc8ba', '#e4ddcf', '#b3ab9c');

@@ -32,7 +32,7 @@ export function clampCamera(state) {
 export function render(ctx, state, alpha) {
   const { map, camera, view } = state;
   const lights = [];
-  setFrameContext(ctx, state.weather, lights);
+  setFrameContext(ctx, state.weather, lights, state.time);
 
   // خلفية
   ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);

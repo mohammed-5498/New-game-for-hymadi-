@@ -13,9 +13,9 @@ export const TILE_HALF_H = 9;   // نصف ارتفاع المربع
 
 // --- أحجام الخريطة ---
 export const MAP_SIZES = {
-  small:  { key: 'small',  name: 'صغيرة',  n: 26, maxPlayers: 4, specialDistricts: 2 },
-  medium: { key: 'medium', name: 'متوسطة', n: 34, maxPlayers: 6, specialDistricts: 3 },
-  large:  { key: 'large',  name: 'كبيرة',  n: 42, maxPlayers: 8, specialDistricts: 4 }
+  small:  { key: 'small',  name: 'صغيرة',  n: 26, maxPlayers: 4, specialDistricts: 2, policeStations: 2 },
+  medium: { key: 'medium', name: 'متوسطة', n: 34, maxPlayers: 6, specialDistricts: 3, policeStations: 3 },
+  large:  { key: 'large',  name: 'كبيرة',  n: 42, maxPlayers: 8, specialDistricts: 4, policeStations: 4 }
 };
 
 // --- الكاميرا ---
@@ -53,7 +53,7 @@ export const MAP_GEN = {
   // إصلاح الفراغات المعزولة (القسم 3.4.1)
   pocketRepairRounds: 3,      // أقصى عدد مرات لإعادة الـ flood fill والإصلاح
   pocketFillType: 'H',        // الفراغ الذي لا يمكن وصله يُردم بهذا المبنى
-  protectedBuildings: ['Q', 'S', 'G', 'C', 'O'],  // مبانٍ لا تُفتح لعمل ممر
+  protectedBuildings: ['Q', 'S', 'G', 'C', 'O', 'N'],  // مبانٍ لا تُفتح لعمل ممر (مقر، مستشفى، مخزن، ساعة، نافورة، مركز شرطة)
   devChecks: true             // وضع التطوير: يطبع تحذيراً إن بقي مربع معزول
 };
 
@@ -227,6 +227,34 @@ export const CHAMPIONS = {
   }
 };
 
+// --- مراكز الشرطة: طرف محايد معادٍ للجميع (القسم 3.8) ---
+// لا تنتمي لأي لاعب ولا تستولي على حي، ولونها ثابت لا يتبع لاعباً
+export const POLICE = {
+  minHomeDistance: 6,         // لا مركز أقرب من هذا لحي منزلي
+  produceSeconds: 10,         // شرطي كل 10 ثوانٍ
+  maxPerStation: 6,           // أقصى عدد شرطة أحياء لكل مركز (عدا الضابط)
+  captainRespawnSeconds: 40,  // الضابط لا يتكرر إلا بعد موته بـ 40 ثانية
+  chaseTiles: 6,              // أقصى ابتعاد عن المركز قبل الرجوع
+  vanishSeconds: 5,           // بعد الاستيلاء تختفي شرطة المركز خلال هذه المدة
+  armorBonus: 0.10,           // +10% درع لوحدات المستولي ما دام يملك الحي
+  armorBonusMax: 0.20,        // لا تتجمع أكثر من هذا مهما تعددت المراكز
+
+  common: {
+    name: 'شرطي',
+    hp: 130, armor: 0.10, damage: 12, attackTime: 1.0, attackRange: 1.0, visionRange: 4.5, speed: 2.3,
+    capturePower: 0,
+    // صدّة بالدرع: ضرر ودفع مربعاً للخلف مع إبطاء
+    ult: { kind: 'bash', needs: 'enemy', range: 1.0, damage: 18, push: 1, slow: 0.40, slowDuration: 1.5 }
+  },
+  captain: {
+    name: 'ضابط',
+    hp: 210, armor: 0.20, damage: 16, attackTime: 1.1, attackRange: 1.0, visionRange: 5, speed: 2.1,
+    capturePower: 0,
+    // نداء تعزيز: الشرطة داخل 3 مربعات +30% ضرر لمدة 5 ثوانٍ
+    ult: { kind: 'buff', needs: 'enemy', radius: 3, damageBonus: 0.30, duration: 5 }
+  }
+};
+
 // مكافآت الأحياء المميزة لمالكها (أنواع مختلفة تتجمع، ونفس النوع لا يتكرر)
 export const SPECIAL_BONUS = {
   hospital: { zoneHealPerSecond: 5, globalHealPerSecond: 0.5 },
@@ -272,6 +300,7 @@ export const COMBAT = {
   multiShotSpread: 0.45,     // تفرّق السهام الثلاثة عن بعضها (مربعات)
   pierceReachBonus: 0.6,     // امتداد خط الطعنة خلف الهدف الأول (مربعات)
   pierceWidth: 0.7,          // عرض خط الطعنة: من يبعد أكثر عنه لا يُصاب
+  maxArmor: 0.90,            // سقف الدرع بعد جمع المكافآت حتى لا تصير الوحدة حصينة
   hitFlashTime: 0.15,        // ومضة الوحدة عند تلقي ضربة
   deathTime: 1.0,            // زمن سقوط الوحدة الميتة واختفائها
   hitMoment: 0.47            // لحظة الارتطام من زمن الضربة (تطابق أنميشن docs/units-art.js)

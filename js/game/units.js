@@ -1,15 +1,24 @@
 // إنشاء الوحدات وحركتها على المسار
-import { UNIT_BASE, GANGS, HEROES, CHAMPIONS, UNITS, TICK_SEC, PERFORMANCE } from '../config.js';
+import { UNIT_BASE, GANGS, HEROES, CHAMPIONS, POLICE, UNITS, TICK_SEC, PERFORMANCE } from '../config.js';
 import { findPath, findFreeTiles, nearestWalkable, buildFlowField, flowStep } from '../map/pathfinding.js';
 import { clearCombatOrders } from './combat.js';
 import { moveSpeed } from './weather.js';
 
 // إحصائيات الوحدة: الأساس + ميزة العصابة، أو الأساس + قيم الشخصية المميزة أو البطل
+// والشرطة المحايدة لها جدولها الخاص (القسم 3.8)
 export function unitStats(gangId, heroId, champion = false) {
+  if (gangId === 'police') return { ...UNIT_BASE, ...POLICE[heroId === 'captain' ? 'captain' : 'common'] };
   if (champion) return { ...UNIT_BASE, ...CHAMPIONS[gangId].stats };
   if (heroId) return { ...UNIT_BASE, ...HEROES[heroId].stats };
   const gang = GANGS[gangId];
   return { ...UNIT_BASE, ...(gang && gang.unit ? gang.unit : {}) };
+}
+
+// اسم الوحدة كما يظهر للاعب
+function unitName(gangId, heroId, champion) {
+  if (gangId === 'police') return POLICE[heroId === 'captain' ? 'captain' : 'common'].name;
+  if (champion) return CHAMPIONS[gangId].name;
+  return heroId ? HEROES[heroId].name : 'فرد';
 }
 
 // champion: بطل العصابة (القسم 6.6). رسمه جاهز، وقواعد ظهوره في المرحلة 4
@@ -22,7 +31,7 @@ export function createUnit(state, player, i, j, heroId = null, champion = false)
     color: player.color,
     hero: champion ? null : heroId,    // null للفرد العادي
     champion,                          // بطل اللاعب الوحيد
-    name: champion ? CHAMPIONS[player.gang].name : heroId ? HEROES[heroId].name : 'فرد',
+    name: unitName(player.gang, heroId, champion),
     x: i, y: j,           // الموقع الحالي بالمربعات
     prevX: i, prevY: j,   // الموقع في التحديث السابق (لتنعيم الرسم)
     stats,
@@ -70,6 +79,13 @@ export function createUnit(state, player, i, j, heroId = null, champion = false)
     buffAttackSpeed: 0,
     slowUntil: 0,           // إبطاء من الضربة الأرضية
     slowFactor: 0,
+
+    // الشرطة المحايدة (القسم 3.8)
+    stationId: -1,          // رقم حي المركز الذي تتبعه
+    homePost: null,         // مركزها: لا تبتعد عنه أكثر من 6 مربعات
+    vanishAt: -1,           // بعد الاستيلاء على مركزها تختفي عند هذا الزمن
+
+    armorBonus: 0,          // درع إضافي من مكافأة مراكز الشرطة المملوكة
 
     // المكافآت المحسوبة كل تحديث (الهالات، مخزن السلاح)
     damageMultiplier: 1,

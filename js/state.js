@@ -6,6 +6,7 @@ import { createUnit } from './game/units.js';
 import { buildCaptureZones, snapDistrictTints } from './game/capture.js';
 import { initSpawnTimers, spawnChampion } from './game/spawn.js';
 import { initBots } from './ai/bot.js';
+import { createPolicePlayer, initPolice } from './game/police.js';
 import { tileToWorld } from './map/coords.js';
 
 export function createMatch(settings) {
@@ -23,6 +24,9 @@ export function createMatch(settings) {
 
   const map = createMap(settings.mapSize, players);
   if (!map) throw new Error('تعذر توليد خريطة صالحة');
+
+  // الشرطة طرف محايد يُضاف بعد توزيع الأحياء المنزلية فلا يأخذ حياً ولا مقراً
+  players.push(createPolicePlayer(players));
 
   const state = {
     settings,
@@ -61,6 +65,7 @@ export function createMatch(settings) {
   snapDistrictTints(state);      // الأحياء المنزلية ملوّنة من البداية
   spawnStartingUnits(state);
   initSpawnTimers(state);
+  initPolice(state);
   initBots(state);
   centerCameraOnHome(state);
   return state;
@@ -145,6 +150,7 @@ export function resetMatch(state, settings = state.settings) {
   state.heroTimers = fresh.heroTimers;
   state.heroTurn = fresh.heroTurn;
   state.championTimers = fresh.championTimers;
+  state.policeTimers = fresh.policeTimers;
   state.fires = [];
   state.nextUnitId = fresh.nextUnitId;
   state.humanId = fresh.humanId;
