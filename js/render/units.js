@@ -1,5 +1,5 @@
 // رسم الوحدات: يستعمل docs/units-art.js (منسوخ في unitsArt.js) مربوطاً بحالة الوحدة
-import { TILE_HALF_W, TILE_HALF_H, COMBAT, PERFORMANCE, UNIT_ART, ULT, combatRealism as CR } from '../config.js';
+import { TILE_HALF_W, TILE_HALF_H, COMBAT, PERFORMANCE, UNIT_ART, ULT } from '../config.js';
 import { UI_LIGHT, mix } from './colors.js';
 import { drawUnit as drawUnitArt } from './unitsArt.js';
 
@@ -25,7 +25,7 @@ const artKey = (unit) => {
   return gang[kind] || gang.common;
 };
 
-const artScale = (unit) => UNIT_ART.scale * (unit.sizeScale || 1) *
+const artScale = (unit) => UNIT_ART.scale *
   (unit.champion ? UNIT_ART.championScale : unit.hero ? UNIT_ART.heroScale : 1);
 
 // الشرطة تُرسم بلونها الثابت مهما كان اللاعب
@@ -79,13 +79,7 @@ function artState(unit, time, dead) {
     scale: artScale(unit),
     rate: unit.attackRate || unit.stats.attackTime,
     hurtDur: UNIT_ART.hurtSeconds,
-    deathDur: COMBAT.deathTime,
-    // القتال الواقعي: لحظة الضرر وقوس الضربة يتغيران بنوع الحركة (القسم 5.4)
-    hit: unit.moveWindup || COMBAT.hitMoment,
-    arc: unit.moveArc || 1,
-    dodgeDur: CR.reaction.dodgeSeconds,
-    blockDur: CR.reaction.blockSeconds,
-    staggerDur: CR.moves.heavy.stagger
+    deathDur: COMBAT.deathTime
   };
 
   // الموت: سقوط واختفاء خلال ثانية (الأنميشن نفسه يدير الدوران والشفافية)
@@ -93,19 +87,7 @@ function artState(unit, time, dead) {
     return { ...common, state: 'death', t: COMBAT.deathTime - unit.deathTimer };
   }
 
-  // ردود الأفعال تسبق الضربة: من يتفادى أو يصدّ أو يترنّح لا يُرسم ضارباً
-  if (unit.dodgeUntil > time) {
-    return { ...common, state: 'dodge', t: time - unit.dodgeStart };
-  }
-  if (unit.blockUntil > time) {
-    return { ...common, state: 'block', t: time - (unit.blockUntil - CR.reaction.blockSeconds) };
-  }
-  if (unit.staggerUntil > time) {
-    return { ...common, state: 'stagger',
-             t: CR.moves.heavy.stagger - (unit.staggerUntil - time) };
-  }
-
-  // الضربة أولاً حتى تبقى لحظة الارتطام مطابقة للضرر الفعلي
+  // الضربة أولاً حتى تبقى لحظة الارتطام (47%) مطابقة للضرر الفعلي
   const swing = swingProgress(unit, time);
   if (swing >= 0) {
     // الضربة المميزة: نفس الحركة مع وهج ذهبي ومؤثر خاص (القسم 6.7)

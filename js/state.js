@@ -55,8 +55,6 @@ export function createMatch(settings) {
     fires: [],                 // مناطق نار رامي النار
     time: 0,                   // زمن المباراة بالثواني
     shakeAt: -99,              // زمن آخر ارتجاجة كاميرا (القسم 5.2)
-    rolling: [],               // الأجساد المتدحرجة (القسم 5.4.4)
-    detailTimer: 0,            // مؤقت إعادة حساب مستويات التفصيل
     alerts: [],                // أسهم الحافة الظاهرة الآن (القسم 12.3)
     alertSeen: [],             // مناطق نُبّه عنها قريباً {kind, i, j, t}
     stats: {
@@ -167,7 +165,5 @@ export function resetMatch(state, settings = state.settings) {
   state.alerts = [];
   state.alertSeen = [];
   state.shakeAt = -99;
-  state.rolling = [];
-  state.detailTimer = 0;
   centerCameraOnHome(state);
 }

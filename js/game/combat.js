@@ -1,5 +1,5 @@
 // الهجوم التلقائي، أمر الهجوم، المقذوفات، الضرر والموت
-import { TICK_SEC, COMBAT, UNITS, UNIT_ART, POLICE, AUDIO, combatRealism as CR } from '../config.js';
+import { TICK_SEC, COMBAT, UNITS, UNIT_ART, POLICE, AUDIO } from '../config.js';
 import { findPath } from '../map/pathfinding.js';
 import { faceTowards } from './units.js';
 import { createFire } from './abilities.js';
@@ -8,11 +8,6 @@ import { visionRange, rangedShotHits } from './weather.js';
 import { forEachNearby } from './spatialHash.js';
 import { soundAt, soundAlert } from '../audio/sound.js';
 import { raiseAlert } from './alerts.js';
-import {
-  isStaggered, isRecovering, isDodging, isBlocking, canAct, updateStamina,
-  attackAngle, chooseMove, noticeAttack, tryReact, shove, bumpAllies,
-  rollCorpse, updateRolling, updateDetailLevels
-} from './realism.js';
 
 // لا ضرر على وحدات نفس اللاعب ولا على الحلفاء (فريق 0 يعني بدون فريق: عدو للجميع)
 export function isEnemy(state, a, b) {
@@ -24,8 +19,6 @@ export function isEnemy(state, a, b) {
 }
 
 const isAlive = (unit) => unit && unit.state !== 'dead' && unit.hp > 0;
-// realism.js يحتاج هذين وهما هنا، فنمرّرهما بدل استيرادٍ دائري
-const helpers = { isEnemy, forEachNearby };
 // نتجنب Math.hypot في الحلقات الساخنة: أبطأ بأربعة أضعاف من sqrt
 const distance = (a, b) => {
   const dx = a.x - b.x, dy = a.y - b.y;
@@ -61,9 +54,6 @@ export function updateCombat(state) {
   const tick = Math.round(state.time / TICK_SEC);
   const scanTicks = Math.max(1, Math.round(COMBAT.scanInterval / TICK_SEC));
 
-  updateDetailLevels(state);        // كامل / مبسّط / إحصائي (القسم 5.4.5)
-  updateRolling(state, helpers);    // الأجساد المتدحرجة
-
   for (const unit of state.units) {
     if (unit.hitFlash > 0) unit.hitFlash -= TICK_SEC;
     if (unit.hurtTimer > 0) unit.hurtTimer -= TICK_SEC;   // أنميشن تلقي الضرر
@@ -73,8 +63,6 @@ export function updateCombat(state) {
 
     chargeOverTime(state, unit);          // شريط الشحن يمتلئ مع الوقت (القسم 6.7)
     updateFlurry(state, unit);            // ضربات الوابل المتتالية
-    updateStamina(unit);                  // تحمّل التفادي يتجدد
-    if (unit.detail === 'full') tryReact(state, unit);   // تفادٍ أو صدّ
 
     // الضربة تقع في منتصف حركة السلاح لا عند بدايتها
     if (unit.pendingHit && state.time >= unit.pendingHit.at) resolveHit(state, unit);
@@ -107,7 +95,7 @@ export function updateCombat(state) {
     // الضربة المميزة تُطلق تلقائياً في أول لحظة يتحقق فيها شرطها
     if (unit.stats.ult && tryCastUlt(state, unit)) continue;
 
-    if (unit.state === 'attacking' && canAct(state, unit)) fightTarget(state, unit, budget);
+    if (unit.state === 'attacking') fightTarget(state, unit, budget);
   }
 
   updateProjectiles(state);
@@ -119,79 +107,8 @@ function resolveHit(state, unit) {
   unit.pendingHit = null;
   if (!isAlive(hit.target) || !isAlive(unit)) return;
 
-  if (hit.ranged) { spawnVolley(state, unit, hit.target, hit.damage); return; }
-
-  // القتال الواقعي: التفادي والصدّ وقاعدة الزاوية (القسم 5.4.3)
-  if (CR.enabled && hit.move && unit.detail !== 'stat') {
-    if (!landMelee(state, unit, hit)) return;
-  } else {
-    // اشتباك إحصائي خارج الشاشة: بلا ردود أفعال، فنخفض الضرر × 0.85
-    // تعويضاً عن التفادي المتوسط حتى لا تختلف النتائج عن القتال المرئي
-    const offScreen = CR.enabled && unit.detail === 'stat' ? CR.detail.offScreenDamage : 1;
-    strike(state, unit, hit.target, hit.damage * offScreen);
-  }
-  chargeOnHit(state, unit);
-}
-
-// يعيد false إذا لم تصل الضربة (تفادٍ أو صدّ)
-function landMelee(state, unit, hit) {
-  const target = hit.target;
-  const move = CR.moves[hit.move];
-
-  // مناعة كاملة أثناء التفادي
-  if (isDodging(state, target)) return false;
-
-  // الصدّ يمتص الضرر كاملاً ويرتد المهاجم ويترنّحه
-  if (isBlocking(state, target)) {
-    const R = CR.reaction;
-    const dx = unit.x - target.x, dy = unit.y - target.y;
-    const length = Math.hypot(dx, dy) || 1;
-    shove(state, unit, dx / length, dy / length, R.blockKnockback);
-    unit.staggerUntil = Math.max(unit.staggerUntil, state.time + R.blockStagger);
-    soundAt(state, 'hit_shield', target.x, target.y);
-    bumpAllies(state, unit, helpers);          // الارتداد قد يدفعه على حليفه
-    return false;
-  }
-
-  // قاعدة الزاوية: من الجانب +10% ومن الخلف +25%
-  const angle = attackAngle(target, unit);
-  const damage = hit.damage * angle.damage;
-
-  if (move.splash) {                            // الدائرية تصيب كل من حوله
-    spinStrike(state, unit, move, damage, hit.move);
-  } else {
-    applyDamage(state, unit, target, damage, hit.move);
-  }
-
-  // الضربة القوية تُرنّح الهدف وتدفعه مربعاً
-  if (move.stagger && isAlive(target)) {
-    target.staggerUntil = Math.max(target.staggerUntil, state.time + move.stagger);
-    const dx = target.x - unit.x, dy = target.y - unit.y;
-    const length = Math.hypot(dx, dy) || 1;
-    shove(state, target, dx / length, dy / length, move.push);
-    bumpAllies(state, target, helpers);
-  }
-  return true;
-}
-
-// الضربة الدائرية: ضرر لكل عدو حولها، ودفع للحلفاء بلا ضرر
-function spinStrike(state, unit, move, damage, moveKey) {
-  const radius = move.splash, radiusSq = radius * radius;
-  forEachNearby(state, unit.x, unit.y, radius, (other) => {
-    if (other === unit || !isAlive(other)) return;
-    const dx = other.x - unit.x, dy = other.y - unit.y;
-    const d2 = dx * dx + dy * dy;
-    if (d2 > radiusSq) return;
-
-    if (isEnemy(state, unit, other)) {
-      if (isDodging(state, other)) return;
-      applyDamage(state, unit, other, damage * attackAngle(other, unit).damage, moveKey);
-      return;
-    }
-    // الحلفاء يُدفعون بلا ضرر أبداً
-    const d = Math.sqrt(d2) || 1;
-    shove(state, other, dx / d, dy / d, move.pushAllies);
-  });
+  if (hit.ranged) spawnVolley(state, unit, hit.target, hit.damage);
+  else { strike(state, unit, hit.target, hit.damage); chargeOnHit(state, unit); }
 }
 
 // طلقة واحدة، أو ثلاثة سهام متفرقة لبطل الأفاعي (القسم 6.6)
@@ -326,16 +243,9 @@ function fightTarget(state, unit, budget) {
 
   // الرماة يتحولون للقتال القريب إذا اقترب العدو
   const melee = unit.stats.meleeRange !== undefined && dist <= unit.stats.meleeRange;
-  const baseRange = melee ? unit.stats.meleeRange : unit.stats.attackRange;
+  const range = melee ? unit.stats.meleeRange : unit.stats.attackRange;
   const damage = melee ? unit.stats.meleeDamage : unit.stats.damage;
   let attackTime = melee ? unit.stats.meleeAttackTime : unit.stats.attackTime;
-
-  // نوع الحركة يزيد المدى قليلاً (الطعنة)، ويُختار قبل قياس المدى
-  const ranged = !melee && !!unit.stats.projectile;
-  const useMoves = CR.enabled && !ranged && unit.detail !== 'stat';
-  const moveKey = useMoves ? chooseMove(state, unit, target, dist, baseRange, helpers) : null;
-  const move = moveKey ? CR.moves[moveKey] : null;
-  const range = baseRange + (move ? move.range : 0);
 
   if (dist <= range + COMBAT.rangeTolerance) {
     unit.path = [];                       // وصلت للمدى: تتوقف وتضرب
@@ -345,32 +255,18 @@ function fightTarget(state, unit, budget) {
       if (unit.buffUntil > state.time && unit.buffAttackSpeed) {
         attackTime /= 1 + unit.buffAttackSpeed;
       }
-      // زمن الحركة لا ينزل عن زمن ضربة الوحدة، فتبقى أرقام القسم 6 سقفاً للسرعة
-      const cycle = move ? Math.max(attackTime, move.windup + move.recovery) : attackTime;
-      const hitAt = move ? move.windup : attackTime * COMBAT.hitMoment;
-
-      unit.attackCooldown = cycle;
-      // بداية حركة السلاح: الرسم يقرأ هذه الأرقام، والضرر يقع عند الارتطام
+      unit.attackCooldown = attackTime;
+      // بداية حركة السلاح: الرسم يقرأ هذين الرقمين، والضرر يقع عند الارتطام
       unit.attackStart = state.time;
-      unit.attackRate = cycle;
+      unit.attackRate = attackTime;
       unit.ultStart = null;              // ضربة عادية لا مميزة
-      unit.move = moveKey || 'quick';
-      unit.moveWindup = hitAt / cycle;
-      unit.moveArc = move ? move.arc : 1;
-      unit.recoverFrom = state.time + hitAt;
-      unit.recoverUntil = unit.recoverFrom + (move ? move.recovery : 0);
-      soundAt(state, move === CR.moves.heavy ? 'swing' : 'swing', unit.x, unit.y);
-
+      soundAt(state, 'swing', unit.x, unit.y);
       unit.pendingHit = {
         target,
-        damage: damage * unit.damageMultiplier * (move ? move.damage : 1),
-        ranged,
-        move: moveKey,
-        at: state.time + hitAt
+        damage: damage * unit.damageMultiplier,       // مخزن السلاح + هالة الزعيم
+        ranged: !melee && !!unit.stats.projectile,
+        at: state.time + attackTime * COMBAT.hitMoment
       };
-
-      // المدافع يرى الاستعداد فيجهّز رد فعله (القسم 5.4.3)
-      noticeAttack(state, target, unit);
     }
     return;
   }
@@ -421,9 +317,8 @@ function retaliateIfCloser(state, attacker, target) {
 }
 
 // صوت الارتطام حسب قوة الضربة ودرع المُصاب (القسم 13.5)
-function hitSound(state, target, amount, move) {
-  const name = move === 'heavy' ? 'hit_heavy'
-             : target.stats.armor >= AUDIO.shieldArmor ? 'hit_shield'
+function hitSound(state, target, amount) {
+  const name = target.stats.armor >= AUDIO.shieldArmor ? 'hit_shield'
              : amount >= AUDIO.heavyDamage ? 'hit_heavy' : 'hit_melee';
   const heard = soundAt(state, name, target.x, target.y);
 
@@ -448,11 +343,11 @@ function strike(state, attacker, target, amount) {
   });
 }
 
-export function applyDamage(state, attacker, target, amount, move) {
+export function applyDamage(state, attacker, target, amount) {
   if (!isAlive(target)) return;
   if (target.invulnUntil > state.time) return;     // تصلّب: لا يتلقى أي ضرر
   retaliateIfCloser(state, attacker, target);
-  hitSound(state, target, amount, move);
+  hitSound(state, target, amount);
   // درع الوحدة + مكافأة مراكز الشرطة المملوكة (القسم 3.8)
   const armor = Math.min(COMBAT.maxArmor, target.stats.armor + target.armorBonus);
   const taken = amount * (1 - armor);
@@ -475,7 +370,6 @@ export function applyDamage(state, attacker, target, amount, move) {
     target.target = null;
     target.selected = false;
     soundAt(state, 'death', target.x, target.y);
-    if (CR.enabled && attacker && attacker.stats) rollCorpse(state, target, attacker, taken, helpers);
     state.stats.kills[attacker.playerId]++;
     state.stats.losses[target.playerId]++;
   }

@@ -28,36 +28,16 @@ function rig(o){
     R.bounce=-Math.cos(p*2)*1.5-0.6;R.lean=0.30;R.air=Math.max(0,Math.sin(p*2))*0.55;
     R.thigh=q=>0.95*Math.sin(p+q);R.flex=q=>1.55*Math.pow(0.5+0.5*Math.cos(p+q-4.12),2.2)+0.18;R.armPh=p;}
   else if(st==='attack'){const a=(t/rate)%1;R.a=a;R.p=t*1.1*TAU;let s,lunge;
-    /* مراحل الضربة تُقاس من لحظة الضرر hit (0.47 افتراضاً)، فيتغير زمن
-       الاستعداد مع نوع الحركة من نفس الهيكل: سريعة تستعد أسرع وقوية أبطأ */
-    const h=Math.max(0.12,Math.min(0.88,o.hit||0.47)),k1=h*0.7234,k2=h*0.9362,k3=Math.min(0.97,h*1.1277);
-    if(a<k1){const k=easeOut(a/k1);s=-k;lunge=-1.1*k;}
-    else if(a<k2){const k=ease((a-k1)/(k2-k1));s=-1+2*k;lunge=-1.1+4.4*k;}
-    else if(a<k3){s=1;lunge=3.3;}
-    else{const k=ease((a-k3)/(1-k3));s=1-1.28*k;lunge=3.3-3.3*k;}
-    R.k1=k1;R.k3=k3;
-    R.s=s;R.lunge=lunge;R.hit=a>=k2&&a<k3;R.fx=a>=k2-0.02&&a<k3+0.07?1-(a-(k2-0.02))/0.18:0;
+    if(a<0.34){const k=easeOut(a/0.34);s=-k;lunge=-1.1*k;}
+    else if(a<0.44){const k=ease((a-0.34)/0.10);s=-1+2*k;lunge=-1.1+4.4*k;}
+    else if(a<0.53){s=1;lunge=3.3;}
+    else{const k=ease((a-0.53)/0.47);s=1-1.28*k;lunge=3.3-3.3*k;}
+    R.s=s;R.lunge=lunge;R.hit=a>=0.44&&a<0.53;R.fx=a>=0.42&&a<0.60?1-(a-0.42)/0.18:0;
     R.bounce=-Math.abs(s)*0.5+(R.hit?0.7:0);R.lean=0.14+s*0.30;
     R.thigh=q=>(q<1?0.62:-0.70)+s*(q<1?0.42:-0.30);R.flex=q=>(q<1?0.42:0.78)-s*0.12;R.air=0;R.armPh=0;}
   else if(st==='hurt'){const a=Math.min(1,t/(o.hurtDur||0.35));R.a=a;R.p=0;const f=Math.sin(a*3.1416);
     R.flinch=f;R.bounce=-f*0.5;R.lean=0.05-f*0.55;R.thigh=q=>(q<1?0.2:-0.3)-f*0.25;R.flex=()=>0.3+f*0.25;
     R.air=0;R.armPh=0;R.s=-f*0.4;R.lunge=-f*1.8;R.hit=false;R.fx=0;}
-  else if(st==='dodge'){const a=Math.min(1,t/(o.dodgeDur||0.25));R.a=a;R.p=0;
-    /* قفزة سريعة: الجسم يميل بعيداً والرجلان تنثنيان في الهواء */
-    const f=Math.sin(a*3.1416);R.dodge=a;R.air=f*0.9;
-    R.bounce=-f*2.6;R.lean=-0.42*f;R.thigh=q=>(q<1?0.9:0.45)+f*0.5;R.flex=()=>1.25*f+0.3;
-    R.armPh=0;R.s=-0.3-f*0.4;R.lunge=-f*2.2;R.hit=false;R.fx=0;}
-  else if(st==='block'){const a=Math.min(1,t/(o.blockDur||0.3));R.a=a;R.p=0;
-    /* يتكوّر خلف درعه: الجسم ينخفض ويميل للأمام والذراع مرفوعة */
-    const f=Math.sin(Math.min(1,a*2)*1.5708);R.block=f;
-    R.bounce=f*0.9;R.lean=0.22+f*0.18;R.thigh=q=>(q<1?0.55:-0.5);R.flex=()=>0.75+f*0.2;
-    R.air=0;R.armPh=0;R.s=-0.85-f*0.15;R.lunge=-0.5-f*0.6;R.hit=false;R.fx=0;}
-  else if(st==='stagger'){const a=Math.min(1,t/(o.staggerDur||0.4));R.a=a;R.p=0;
-    /* ترنّح: يفقد توازنه ويتمايل قبل أن يستعيده */
-    const f=(1-a)*Math.sin(a*9.4);R.stagger=1-a;
-    R.bounce=-Math.abs(f)*1.1;R.lean=-0.5*(1-a)+f*0.25;
-    R.thigh=q=>(q<1?0.35:-0.55)+f*0.6;R.flex=()=>0.45+Math.abs(f)*0.5;
-    R.air=0;R.armPh=f*2;R.s=-0.6+f*0.5;R.lunge=-2.4*(1-a);R.hit=false;R.fx=0;}
   else if(st==='death'){const a=Math.min(1,t/(o.deathDur||1));R.a=a;R.p=0;R.death=a;
     R.bounce=-Math.sin(Math.min(1,a*1.6)*3.1416)*1.2;R.lean=0.1;
     R.thigh=q=>(q<1?0.5:-0.55)+a*0.5;R.flex=()=>0.55+a*0.5;R.air=0;R.armPh=0;R.s=-0.5+a*0.3;R.lunge=0;R.hit=false;R.fx=0;}
@@ -68,10 +48,10 @@ function rig(o){
 function body(c,r,fn){c.save();c.translate(r.hipX,r.hipY);c.rotate(-r.lean);fn();c.restore();}
 function shadow(c,r,w){const s=1-(r.air||0)*0.35;ell(c,0,0.6,(w||3.8)*s,1.6*s,'rgba(0,0,0,'+(0.3*s)+')');}
 function dust(c,r){
-  if(r.st==='attack'&&r.a>(r.k1||0.34)&&r.a<(r.k1||0.34)+0.28){const g=(r.a-(r.k1||0.34))/0.28;c.globalAlpha=(1-g)*0.45;
+  if(r.st==='attack'&&r.a>0.34&&r.a<0.62){const g=(r.a-0.34)/0.28;c.globalAlpha=(1-g)*0.45;
     ell(c,-4-g*5,0.2,2.2+g*3,1+g*0.7,'#b9b0a2');c.globalAlpha=1;}
   if(r.st==='walk'&&Math.sin(r.p*2)<-0.85){c.globalAlpha=0.3;ell(c,-5,0.4,2.4,0.9,'#b9b0a2');c.globalAlpha=1;}}
-function trail(c,r,cb){if(!(r.st==='attack'&&r.a>=(r.k1||0.34)&&r.a<(r.k3||0.53)))return;
+function trail(c,r,cb){if(!(r.st==='attack'&&r.a>=0.34&&r.a<0.53))return;
   for(let i=1;i<=3;i++){const b=r.s-i*0.32;if(b<-1.05)continue;c.globalAlpha=0.2*(4-i)/3;cb(b);c.globalAlpha=1;}}
 function spark(c,x,y,r){if(!r.fx)return;const g=r.fx;c.globalAlpha=g*0.9;
   for(let i=0;i<5;i++){const a=i*1.256+0.4;limb(c,x,y,x+Math.cos(a)*(2+g*3.6),y+Math.sin(a)*(2+g*3.6),0.9,'#ffe08a');}
@@ -111,7 +91,7 @@ function stick(c,r,col,o){
   });
   dust(c,r);}
 /* مساعد السلاح: زاوية من قيمة الضربة الرئيسية */
-function wAng(r,base,range){return base+(r.s||0)*range*(r.arc||1);}
+function wAng(r,base,range){return base+(r.s||0)*range;}
 function hand(base,range,r,reach,off){const A=wAng(r,base,range);
   return {A,x:0.8+Math.sin(A+(off||1.2))*reach,y:-8.2+Math.cos(A+(off||1.2))*(reach*0.86)};}
 
@@ -505,9 +485,7 @@ U.scorp_hero.ult=function(c,r,col){auraBurst(c,r,14,'#e0553f');
 function drawUnit(c,key,o){
   const u=U[key];if(!u)return;
   const sc=o.scale||1,dir=o.dir||1,state=o.state||'idle',color=o.color||'#8a5cc7';
-  const r=rig({t:o.t||0,state,spd:u.spd||1,rate:o.rate||1,hurtDur:o.hurtDur,deathDur:o.deathDur,
-               hit:o.hit,dodgeDur:o.dodgeDur,blockDur:o.blockDur,staggerDur:o.staggerDur});
-  r.arc=o.arc||1;
+  const r=rig({t:o.t||0,state,spd:u.spd||1,rate:o.rate||1,hurtDur:o.hurtDur,deathDur:o.deathDur});
   c.save();c.translate(o.x||0,o.y||0);c.scale(sc*dir*(u.sx||1),sc*(u.sy||1));
   if(r.ult)ultGlow(c,r);
   if(r.death!==undefined){const k=ease(Math.min(1,r.death*1.25));
@@ -516,12 +494,6 @@ function drawUnit(c,key,o){
   else shadow(c,r,u.shadowW);
   u.draw(c,r,color);
   if(r.ult&&u.ult)u.ult(c,r,color);
-  if(r.dodge!==undefined){const g=Math.sin(r.dodge*3.1416);c.globalAlpha=g*0.35;
-    for(let i=0;i<3;i++)limb(c,6+i*3,-6-i*3,12+i*3,-6-i*3,0.9,'#e6e2d6');c.globalAlpha=1;}
-  if(r.block){c.globalAlpha=r.block*0.8;
-    ell(c,5,-9,3.2,4.6,'rgba(220,235,255,0.45)');
-    for(let i=0;i<4;i++){const a=i*1.57+0.5;limb(c,6,-9,6+Math.cos(a)*4,-9+Math.sin(a)*4,0.9,'#dbeaf7');}
-    c.globalAlpha=1;}
   if(r.flinch){c.globalAlpha=r.flinch*0.6;
     for(let i=0;i<4;i++){const a=i*1.57+0.6;limb(c,2,-12,2+Math.cos(a)*(3+r.flinch*4),-12+Math.sin(a)*(3+r.flinch*4),1,'#e05a4a');}}
   c.globalAlpha=1;c.restore();}

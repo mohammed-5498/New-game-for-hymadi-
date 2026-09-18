@@ -1,6 +1,5 @@
 // إنشاء الوحدات وحركتها على المسار
-import { UNIT_BASE, GANGS, HEROES, CHAMPIONS, POLICE, UNITS, TICK_SEC, PERFORMANCE, combatRealism } from '../config.js';
-import { personality } from './realism.js';
+import { UNIT_BASE, GANGS, HEROES, CHAMPIONS, POLICE, UNITS, TICK_SEC, PERFORMANCE } from '../config.js';
 import { findPath, findFreeTiles, nearestWalkable, buildFlowField, flowStep } from '../map/pathfinding.js';
 import { clearCombatOrders } from './combat.js';
 import { moveSpeed } from './weather.js';
@@ -25,13 +24,6 @@ function unitName(gangId, heroId, champion) {
 // champion: بطل العصابة (القسم 6.6). رسمه جاهز، وقواعد ظهوره في المرحلة 4
 export function createUnit(state, player, i, j, heroId = null, champion = false) {
   const stats = unitStats(player.gang, heroId, champion);
-  // بذرة الشخصية (القسم 5.4.1): أرقام ثابتة لكل فرد تُشتق منها صفاته
-  const seed = Math.random() * 100000;
-  const traits = personality(seed);
-  const tuned = combatRealism.enabled
-    ? { ...stats, speed: stats.speed * traits.speedScale }
-    : stats;
-
   return {
     id: state.nextUnitId++,
     playerId: player.id,
@@ -42,12 +34,11 @@ export function createUnit(state, player, i, j, heroId = null, champion = false)
     name: unitName(player.gang, heroId, champion),
     x: i, y: j,           // الموقع الحالي بالمربعات
     prevX: i, prevY: j,   // الموقع في التحديث السابق (لتنعيم الرسم)
-    stats: tuned,
+    stats,
     hp: stats.hp,
     maxHp: stats.hp,
     state: 'idle',        // idle | moving | attackMove | attacking | dead
     facing: 1,            // اتجاه الرسم: 1 يمين و-1 يسار (اتجاه الشاشة)
-    faceAngle: 0,         // اتجاهها في عالم المربعات (لقاعدة الزاوية، القسم 5.4)
     path: [],
     selected: false,
 
@@ -90,28 +81,6 @@ export function createUnit(state, player, i, j, heroId = null, champion = false)
     buffAttackSpeed: 0,
     slowUntil: 0,           // إبطاء من الضربة الأرضية
     slowFactor: 0,
-
-    // القتال الواقعي (القسم 5.4)
-    seed,
-    boldness: traits.boldness,
-    dodgeSkill: traits.dodgeSkill,
-    reaction: traits.reaction,
-    sizeScale: traits.sizeScale,
-    detail: 'full',         // كامل | مبسّط | إحصائي، يُعاد حسابه كل نصف ثانية
-    move: 'quick',          // نوع الحركة الحالية
-    moveWindup: 0,          // نسبة لحظة الضرر من زمن الحركة (يقرأها الرسم)
-    moveArc: 1,             // اتساع قوس الضربة (يقرأه الرسم)
-    recoverFrom: 0,         // التعافي يبدأ بعد وقوع الضربة
-    recoverUntil: 0,        // وينتهي بانتهاء زمن التعافي
-    staggerUntil: 0,        // ترنّح: لا يهاجم ولا يتفادى
-    dodgeUntil: 0,          // مناعة كاملة أثناء التفادي
-    dodgeStart: -99,
-    dodgeAt: -99,           // زمن آخر تفادٍ (للتبريد)
-    blockUntil: 0,
-    blockStart: -99,
-    stamina: combatRealism.reaction.stamina,
-    reactAt: -1,            // موعد رد الفعل على ضربة قادمة
-    reactTo: null,
 
     // الشرطة المحايدة (القسم 3.8)
     stationId: -1,          // رقم حي المركز الذي تتبعه
@@ -294,7 +263,6 @@ function moveAlongPath(state, unit) {
 // اتجاه النظر: موجب إذا كان الهدف إلى يمين الشاشة
 // (في الرسم المائل يكون يمين الشاشة باتجاه زيادة i ونقصان j)
 export function faceTowards(unit, targetI, targetJ) {
-  unit.faceAngle = Math.atan2(targetJ - unit.y, targetI - unit.x);
   const screenDx = (targetI - unit.x) - (targetJ - unit.y);
   if (Math.abs(screenDx) > 0.01) unit.facing = screenDx >= 0 ? 1 : -1;
 }
