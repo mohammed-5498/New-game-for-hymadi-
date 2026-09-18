@@ -3,6 +3,7 @@ import { TICK_SEC, CAPTURE, MAP_GEN } from '../config.js';
 import { isEnemy } from './combat.js';
 import { AUDIO } from '../config.js';
 import { sound, soundAt } from '../audio/sound.js';
+import { raiseAlert } from './alerts.js';
 
 // منطقة الاستيلاء: دائرة نصف قطرها 1.5 مربع حول نقطة الاستيلاء
 // (تشمل مربعات الشارع المجاورة، وقد تتداخل منطقتان فيُحسب المربع للاثنتين)
@@ -103,6 +104,8 @@ function advanceProgress(state, district, playerId, power) {
   } else {
     // عدو: يُنزل التقدم أولاً إلى 0 فيصبح الحي محايداً
     const wasMine = district.owner === state.humanId;
+    // سهم برتقالي: عدو بدأ يستولي على حي تملكه وأنت تنظر إلى مكان آخر
+    if (wasMine) raiseAlert(state, 'capture', district.capture.i, district.capture.j);
     captureTick(state, district, playerId);
     district.progress = Math.max(0, district.progress - step);
     if (district.progress <= 0) {

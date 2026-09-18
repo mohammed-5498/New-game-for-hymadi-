@@ -403,6 +403,26 @@ export const UNIT_ART = {
   policeColor: '#3a5a86' // الشرطة المحايدة تُرسم بهذا اللون دائماً (المرحلة 4ج)
 };
 
+// --- لوحة اللاعبين وتنبيهات الحافة (القسم 12.3) ---
+export const POWER_PANEL = {
+  storageKey: 'gangcity.power',  // يتذكر آخر وضع طي اختاره اللاعب
+  updateSeconds: 1,              // تتحدث كل ثانية لا كل إطار
+  defeatedOpacity: 0.4,          // وضوح سطر اللاعب المهزوم
+  maxHeightPct: 0.33             // لا تغطي أكثر من ثلث ارتفاع الشاشة
+};
+
+export const ALERTS = {
+  maxArrows: 2,          // لا يظهر أكثر من سهمين في وقت واحد
+  repeatSeconds: 5,      // لا يتكرر التنبيه لنفس المنطقة قبل هذه المدة
+  regionTiles: 6,        // حجم "المنطقة" الواحدة بالمربعات
+  lifeSeconds: 4,        // مدة بقاء السهم على الحافة
+  edgeMargin: 30,        // بُعد السهم عن حافة الشاشة بالبكسل
+  size: 13,              // نصف قطر السهم
+  tapRadiusPx: 30,       // دقة اللمس على السهم
+  attackColor: '#d9463b',   // وحداتك تتعرض للهجوم
+  captureColor: '#e07b2e'   // عدو يستولي على حي تملكه
+};
+
 // --- الصوت (القسم 13.5): كل المؤثرات مولّدة بالكود في docs/audio.js ---
 export const AUDIO = {
   storageKey: 'gangcity.audio',   // حفظ الإعدادات في localStorage

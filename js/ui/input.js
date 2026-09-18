@@ -1,6 +1,6 @@
 // اللمس والتحديد والأوامر (إصبع واحد، إصبعان، وعجلة الماوس)
-import { CAMERA, INPUT } from '../config.js';
-import { screenToWorld, worldToTile, worldToScreen } from '../map/coords.js';
+import { CAMERA, INPUT, ALERTS } from '../config.js';
+import { screenToWorld, worldToTile, worldToScreen, tileToWorld } from '../map/coords.js';
 import { clampCamera } from '../render/renderer.js';
 import { commandMove, commandAttackMove } from '../game/units.js';
 import { commandAttack, isEnemy } from '../game/combat.js';
@@ -137,6 +137,9 @@ export function setupInput(canvas, state) {
 
   // لمسة سريعة: على وحدتك تحددها، وعلى عدو أمر هجوم، وعلى الأرض أمر حركة
   function handleTap(sx, sy) {
+    // سهم التنبيه أولاً: لمسته تنقل الكاميرا إلى مكان الاشتباك (القسم 12.3)
+    if (tapAlertArrow(sx, sy)) return;
+
     const group = selectedUnits(state);
     const hit = findUnitAt(sx, sy);
 
@@ -172,6 +175,23 @@ export function setupInput(canvas, state) {
     const world = screenToWorld(sx, sy, state.camera, state.view);
     const tile = worldToTile(world.x, world.y);
     if (commandMove(state, tile.i, tile.j, group)) sound('command');
+  }
+
+  // لمسة على سهم الحافة: تنقل الكاميرا إلى مكان الحدث ويختفي السهم
+  function tapAlertArrow(sx, sy) {
+    for (const alert of state.alerts) {
+      if (!alert.screen) continue;
+      if (Math.hypot(alert.screen.x - sx, alert.screen.y - sy) > ALERTS.tapRadiusPx) continue;
+
+      const world = tileToWorld(alert.i, alert.j);
+      state.camera.x = world.x;
+      state.camera.y = world.y;
+      clampCamera(state);
+      state.alerts = state.alerts.filter(a => a !== alert);
+      sound('ui_tap');
+      return true;
+    }
+    return false;
   }
 
   // بعد أي تحديد ناجح نرجع تلقائياً لوضع تحريك الخريطة

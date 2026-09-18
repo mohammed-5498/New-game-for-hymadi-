@@ -263,3 +263,66 @@ button.wide.ghost:active { background: #e2dccf; }
   font-family: ui-monospace, monospace;
   pointer-events: none;
 }
+
+
+/* --- شريط القوة: لوحة اللاعبين (القسم 12.3) --- */
+#power {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  width: 150px;
+  max-height: 33vh;              /* لا تغطي أكثر من ثلث ارتفاع الشاشة */
+  display: flex;
+  flex-direction: column;
+  background: rgba(255, 255, 255, .92);
+  border: 1px solid #cfc9bd;
+  border-radius: 8px;
+  overflow: hidden;
+  font-size: 11px;
+  color: #3d3a36;
+}
+
+#powerHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  width: 100%;
+  padding: 3px 7px;
+  background: #efeae1;
+  border: 0;
+  border-bottom: 1px solid #ddd7ca;
+  font: inherit;
+  font-weight: 700;
+  color: #3d3a36;
+  cursor: pointer;
+}
+
+#powerRows { overflow-y: auto; -webkit-overflow-scrolling: touch; }
+#power.folded #powerRows { display: none; }
+
+.power-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 18px;                  /* سطر صغير: ثمانية لاعبين تسع الشاشة */
+  padding: 0 6px;
+  border-top: 1px solid #f0ece3;
+  white-space: nowrap;
+}
+.power-row:first-child { border-top: 0; }
+
+.power-dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
+.power-name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; }
+.power-team { color: #8a8378; font-size: 10px; }
+.power-num { font-variant-numeric: tabular-nums; }
+.power-num.districts { font-weight: 700; }
+.power-num.units { color: #8a8378; }
+
+/* سطر اللاعب نفسه مميز بإطار خفيف */
+.power-row.me { border: 1px solid #3b7dd8; border-radius: 5px; }
+/* حلفاؤه تحتهم خط سفلي خفيف */
+.power-row.ally .power-name { border-bottom: 1px solid #9ab7e0; }
+/* المهزوم: اسمه مشطوب ووضوحه منخفض */
+.power-row.out { opacity: .4; }
+.power-row.out .power-name { text-decoration: line-through; }

@@ -7,6 +7,7 @@ import { chargeOverTime, chargeOnHit, chargeOnDamageTaken, tryCastUlt, resolveUl
 import { visionRange, rangedShotHits } from './weather.js';
 import { forEachNearby } from './spatialHash.js';
 import { soundAt, soundAlert } from '../audio/sound.js';
+import { raiseAlert } from './alerts.js';
 
 // لا ضرر على وحدات نفس اللاعب ولا على الحلفاء (فريق 0 يعني بدون فريق: عدو للجميع)
 export function isEnemy(state, a, b) {
@@ -321,11 +322,11 @@ function hitSound(state, target, amount) {
              : amount >= AUDIO.heavyDamage ? 'hit_heavy' : 'hit_melee';
   const heard = soundAt(state, name, target.x, target.y);
 
-  // تنبيه: وحدة للاعب تتعرض للهجوم خارج الشاشة (التنبيهات تُسمع دائماً)
+  // تنبيه: وحدة للاعب تتعرض للهجوم خارج الشاشة (سهم أحمر + صوت يُسمع دائماً)
   if (heard || target.playerId !== state.humanId) return;
-  if (state.time - state.alertAt < AUDIO.alertSeconds) return;
-  state.alertAt = state.time;
-  soundAlert(state, 'alert', target.x, target.y);
+  if (raiseAlert(state, 'attack', target.x, target.y)) {
+    soundAlert(state, 'alert', target.x, target.y);
+  }
 }
 
 // ضربة مباشرة: قد تكون دائرية (المحطِّم) فتصيب كل الأعداء حول الهدف

@@ -11,6 +11,7 @@ import { updatePolice } from './police.js';
 import { updateVictory } from './victory.js';
 import { updateBots } from '../ai/bot.js';
 import { updateMusicIntensity } from '../audio/sound.js';
+import { updateAlerts } from './alerts.js';
 
 export function updateMatch(state) {
   state.time += TICK_SEC;
@@ -28,6 +29,7 @@ export function updateMatch(state) {
   updateBots(state);
   updateVictory(state);
   updateNotice(state);
+  updateAlerts(state);           // أسهم الحافة تختفي بانتهاء عمرها أو بدخولها الشاشة
   updateMusicIntensity(state);   // الطبول تشتد مع اشتباك وحدات اللاعب
 
   if (state.moveMarker) {

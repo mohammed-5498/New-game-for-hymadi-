@@ -1,5 +1,5 @@
 // الكاميرا وترتيب الرسم الكامل لإطار واحد
-import { TILE_HALF_W, TILE_HALF_H, CAMERA, CAPTURE, PERFORMANCE } from '../config.js';
+import { TILE_HALF_W, TILE_HALF_H, CAMERA, CAPTURE, PERFORMANCE, ALERTS } from '../config.js';
 import { mix, PALETTES, ROAD_COLOR, BACKGROUND, UI_LIGHT } from './colors.js';
 import { drawBuilding, setFrameContext } from './buildings.js';
 import { drawUnit, drawSelectionRing, drawProjectile, drawAura, drawFire } from './units.js';
@@ -77,10 +77,59 @@ export function render(ctx, state, alpha) {
   }
   drawMoveMarker(ctx, state);
 
-  // جزيئات الطقس ومربع التحديد في إحداثيات الشاشة
+  // جزيئات الطقس ومربع التحديد وأسهم التنبيه في إحداثيات الشاشة
   ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
   drawParticles(ctx, state.weather);
   drawSelectionBox(ctx, state);
+  drawEdgeAlerts(ctx, state);
+}
+
+// --- أسهم التنبيه على حافة الشاشة (القسم 12.3) ---
+// السهم يقف عند حافة الشاشة في اتجاه الحدث، ويخزّن موقعه ليُلمس في input.js
+function drawEdgeAlerts(ctx, state) {
+  if (!state.alerts.length) return;
+  const { camera, view } = state;
+  const m = ALERTS.edgeMargin;
+
+  for (const alert of state.alerts) {
+    const wx = (alert.i - alert.j) * TILE_HALF_W, wy = (alert.i + alert.j) * TILE_HALF_H;
+    const dx = (wx - camera.x) * camera.z, dy = (wy - camera.y) * camera.z;
+    const angle = Math.atan2(dy, dx);
+
+    // نحصر النقطة داخل مستطيل الشاشة بعد طرح الهامش
+    const halfW = Math.max(1, view.w / 2 - m), halfH = Math.max(1, view.h / 2 - m);
+    const scale = Math.min(halfW / Math.max(1e-3, Math.abs(dx)), halfH / Math.max(1e-3, Math.abs(dy)));
+    const x = view.w / 2 + dx * scale, y = view.h / 2 + dy * scale;
+    alert.screen = { x, y };
+
+    const fade = Math.min(1, alert.life);          // يخفت في آخر ثانية
+    const pulse = 0.85 + 0.15 * Math.sin(state.time * 7);
+    const r = ALERTS.size * pulse;
+    const color = alert.kind === 'capture' ? ALERTS.captureColor : ALERTS.attackColor;
+
+    ctx.save();
+    ctx.globalAlpha = fade;
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    // قرص خلفي ليبقى السهم واضحاً فوق أي مشهد
+    ctx.beginPath();
+    ctx.arc(0, 0, r + 3, 0, 6.2832);
+    ctx.fillStyle = 'rgba(20,18,16,.55)';
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(r, 0);
+    ctx.lineTo(-r * 0.6, r * 0.7);
+    ctx.lineTo(-r * 0.2, 0);
+    ctx.lineTo(-r * 0.6, -r * 0.7);
+    ctx.closePath();
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.strokeStyle = UI_LIGHT;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  }
 }
 
 function worldTransform(ctx, state) {

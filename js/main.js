@@ -7,6 +7,7 @@ import { render, resizeCanvas, clampCamera } from './render/renderer.js';
 import { updateParticles, resetParticles } from './render/weather.js';
 import { setupInput } from './ui/input.js';
 import { setupHud, updateHud, reportFrame } from './ui/hud.js';
+import { setupPower, updatePower } from './ui/power.js';
 import { setupMenus, showScreen } from './ui/menus.js';
 import { initSound } from './audio/sound.js';
 
@@ -21,6 +22,7 @@ const state = createMatch(MATCH_DEFAULTS);
 
 setupInput(canvas, state);
 setupHud(state);
+setupPower(state);
 setupMenus({
   // "ابدأ" من قائمة الإعداد
   startMatch(settings) {
@@ -76,6 +78,7 @@ function loop(now) {
   updateParticles(state.weather, state.view, frameMs / 1000);
   render(ctx, state, accumulator / TICK_MS);
   updateHud(state);
+  updatePower(state);          // شريط القوة يتحدث كل ثانية لا كل إطار
   reportFrame(frameMs);
 
   requestAnimationFrame(loop);
