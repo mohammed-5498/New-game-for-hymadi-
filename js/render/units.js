@@ -113,7 +113,8 @@ function drawHealthBar(ctx, unit, x, y) {
 
   ctx.fillStyle = 'rgba(20,18,16,.75)';
   ctx.fillRect(x - w / 2, top, w, h);
-  ctx.fillStyle = ratio > 0.5 ? '#5fbf5f' : ratio > 0.25 ? '#e0b030' : '#d9463b';
+  // لون الشريط لون مالك الوحدة، والدم الناقص يُقرأ من طول الشريط
+  ctx.fillStyle = artColor(unit);
   ctx.fillRect(x - w / 2, top, w * ratio, h);
 }
 

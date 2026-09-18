@@ -293,6 +293,20 @@ function returnToOrigin(state, unit) {
   }
 }
 
+// ثبات الهدف (القسم 5.2): الوحدة تلتزم بهدفها ولا تبدّله لمجرد أن عدواً صار أقرب.
+// الاستثناء الوحيد: إن ضربها عدو آخر وهي تقاتل هدفاً أبعد منه، تتحول للأقرب.
+function retaliateIfCloser(state, attacker, target) {
+  if (!attacker || !attacker.stats) return;        // نار الأرض ليست وحدة
+  if (target.state !== 'attacking') return;        // في moving لا ترد على من يضربها
+  if (target.commandedTarget) return;              // أمر هجوم من اللاعب: لا يُلغى
+  if (attacker === target.target || !isAlive(attacker)) return;
+  if (distanceSq(target, attacker) >= distanceSq(target, target.target)) return;
+
+  target.target = attacker;
+  target.repathTimer = 0;
+  target.path = [];
+}
+
 // ضربة مباشرة: قد تكون دائرية (المحطِّم) فتصيب كل الأعداء حول الهدف
 function strike(state, attacker, target, amount) {
   const splash = attacker.stats.splashRadius;
@@ -310,6 +324,7 @@ function strike(state, attacker, target, amount) {
 export function applyDamage(state, attacker, target, amount) {
   if (!isAlive(target)) return;
   if (target.invulnUntil > state.time) return;     // تصلّب: لا يتلقى أي ضرر
+  retaliateIfCloser(state, attacker, target);
   // درع الوحدة + مكافأة مراكز الشرطة المملوكة (القسم 3.8)
   const armor = Math.min(COMBAT.maxArmor, target.stats.armor + target.armorBonus);
   const taken = amount * (1 - armor);
