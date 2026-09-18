@@ -54,6 +54,7 @@ export function createMatch(settings) {
     heroTurn: [],
     fires: [],                 // مناطق نار رامي النار
     time: 0,                   // زمن المباراة بالثواني
+    alertAt: -99,              // زمن آخر تنبيه "وحداتك تتعرض للهجوم"
     stats: {
       kills: players.map(() => 0),
       losses: players.map(() => 0),
@@ -159,5 +160,6 @@ export function resetMatch(state, settings = state.settings) {
   state.notice = null;
   state.matchResult = null;
   state.time = 0;
+  state.alertAt = -99;
   centerCameraOnHome(state);
 }

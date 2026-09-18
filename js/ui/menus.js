@@ -1,8 +1,9 @@
 // القائمة الرئيسية وقائمة الإعداد وقائمة الإيقاف وتبديل الشاشات
 import {
   MAP_SIZES, PLAYER_COLORS, GANGS, GANG_IDS, BOT, BOT_LEVELS,
-  WEATHER, WEATHER_KEYS, UNITS, MATCH_DEFAULTS
+  WEATHER, WEATHER_KEYS, UNITS, MATCH_DEFAULTS, AUDIO
 } from '../config.js';
+import { sound, audioSettings, setAudioSettings, startMusic } from '../audio/sound.js';
 
 const el = (id) => document.getElementById(id);
 
@@ -44,8 +45,8 @@ export function setupMenus(handlers) {
   onOpenGame = handlers.openGame;
   setup.slots = defaultSlots();
 
-  el('btnPlay').addEventListener('click', () => showScreen('setup'));
-  el('btnBackToMain').addEventListener('click', () => showScreen('main'));
+  el('btnPlay').addEventListener('click', () => { sound('ui_tap'); showScreen('setup'); });
+  el('btnBackToMain').addEventListener('click', () => { sound('ui_tap'); showScreen('main'); });
   el('btnStart').addEventListener('click', startPressed);
 
   buildOptions('optMapSize', MAP_SIZE_KEYS,
@@ -59,8 +60,27 @@ export function setupMenus(handlers) {
     key => key === 'random' ? 'عشوائي' : WEATHER[key].name,
     () => setup.weather, key => { setup.weather = key; refresh(); });
 
+  buildAudioOptions();
   buildSlots();
   refresh();
+}
+
+// --- إعدادات الصوت (القسم 13.5): تُحفظ في localStorage ---
+// تنسيق الأزرار مشترك مع بقية الصفوف (.opt)، فتلتف الدرجات الخمس في سطرين مثل صف الطقس
+const percent = (v) => Math.round(v * 100) + '%';
+
+function buildAudioOptions() {
+  buildOptions('optSfx', AUDIO.volumeSteps, percent,
+    () => audioSettings().sfx,
+    value => { setAudioSettings({ sfx: value }); sound('ui_tap'); refresh(); });
+
+  buildOptions('optMusic', AUDIO.volumeSteps, percent,
+    () => audioSettings().music,
+    value => { setAudioSettings({ music: value }); refresh(); });
+
+  buildOptions('optMute', [false, true], v => v ? 'مكتوم' : 'يعمل',
+    () => audioSettings().muted,
+    value => { setAudioSettings({ muted: value }); sound('ui_tap'); refresh(); });
 }
 
 // --- تبديل الشاشات ---
@@ -183,6 +203,9 @@ function refresh() {
   refreshOptions('optMapSize');
   refreshOptions('optMaxUnits');
   refreshOptions('optWeather');
+  refreshOptions('optSfx');
+  refreshOptions('optMusic');
+  refreshOptions('optMute');
 
   const limit = MAP_SIZES[setup.mapSize].maxPlayers;
   el('slotsHint').textContent = 'الخانة الأولى أنت • الحد على هذه الخريطة ' + limit + ' لاعبين';
@@ -228,6 +251,7 @@ function validate() {
 }
 
 function startPressed() {
+  sound('ui_tap');
   const error = validate();
   const errorNode = el('setupError');
   if (error) {
@@ -237,6 +261,7 @@ function startPressed() {
   }
   errorNode.hidden = true;
   onStartMatch(buildMatchSettings());
+  startMusic();                       // الموسيقى تبدأ مع المباراة لا في القوائم
 }
 
 // يحول خيارات القائمة إلى إعدادات مباراة

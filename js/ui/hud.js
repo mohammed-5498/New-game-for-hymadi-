@@ -1,6 +1,7 @@
 // أزرار المباراة، شريط المعلومات، قائمة الإيقاف، وشاشة النهاية
 import { WEATHER, PERFORMANCE } from '../config.js';
 import { clearSelection, selectAllUnitsOf, resetMatch, districtsOwnedBy } from '../state.js';
+import { sound, startMusic, stopMusic } from '../audio/sound.js';
 import { showScreen } from './menus.js';
 
 const el = (id) => document.getElementById(id);
@@ -40,26 +41,33 @@ export function setupHud(state) {
   });
 
   el('btnMode').addEventListener('click', () => {
+    sound('ui_tap');
     setInputMode(state, state.inputMode === 'pan' ? 'select' : 'pan');
   });
 
-  el('btnAll').addEventListener('click', () => selectAllUnitsOf(state, state.humanId));
-  el('btnClear').addEventListener('click', () => clearSelection(state));
+  el('btnAll').addEventListener('click', () => { sound('select'); selectAllUnitsOf(state, state.humanId); });
+  el('btnClear').addEventListener('click', () => { sound('ui_tap'); clearSelection(state); });
 
   // --- قائمة الإيقاف: اللعبة تتوقف بالكامل أثناء فتحها ---
   el('btnPause').addEventListener('click', () => {
     if (state.matchResult) return;
+    sound('ui_tap');
+    stopMusic();                       // الموسيقى تصمت أثناء الإيقاف
     state.paused = true;
     el('pauseMenu').hidden = false;
   });
 
   el('btnResume').addEventListener('click', () => {
+    sound('ui_tap');
+    startMusic();
     state.paused = false;
     el('pauseMenu').hidden = true;
   });
 
   el('btnRestartMatch').addEventListener('click', () => {
+    sound('ui_tap');
     resetMatch(state);                 // نفس الإعدادات
+    startMusic();
     closeOverlays();
   });
 
@@ -67,7 +75,9 @@ export function setupHud(state) {
 
   // --- شاشة النهاية ---
   el('btnRestart').addEventListener('click', () => {
+    sound('ui_tap');
     resetMatch(state);
+    startMusic();
     closeOverlays();
   });
 
@@ -81,6 +91,8 @@ function closeOverlays() {
 }
 
 function leaveToMain(state) {
+  sound('ui_tap');
+  stopMusic();                        // لا موسيقى داخل القوائم
   state.running = false;
   state.paused = false;
   closeOverlays();

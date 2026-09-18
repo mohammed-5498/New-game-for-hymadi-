@@ -206,7 +206,8 @@ function findDistricts(map) {
         progress: 0,        // تقدم الاستيلاء (المرحلة 3)
         progressOwner: null,
         tintColor: null,    // لون الصبغ الحالي (القسم 8)
-        tintMix: 0          // تقدم الانتقال اللوني من 0 إلى 1
+        tintMix: 0,         // تقدم الانتقال اللوني من 0 إلى 1
+        tickAt: -99         // زمن آخر نبضة استيلاء مسموعة
       };
       map.districtAt[k] = district.id;
       const stack = [[i, j]];

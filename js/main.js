@@ -8,9 +8,13 @@ import { updateParticles, resetParticles } from './render/weather.js';
 import { setupInput } from './ui/input.js';
 import { setupHud, updateHud, reportFrame } from './ui/hud.js';
 import { setupMenus, showScreen } from './ui/menus.js';
+import { initSound } from './audio/sound.js';
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
+
+// الصوت: يُهيّأ الآن ويُفتح عند أول لمسة (القسم 13.5)
+initSound();
 
 // مباراة مبدئية حتى تكون هناك حالة صالحة قبل اختيار الإعدادات
 const state = createMatch(MATCH_DEFAULTS);

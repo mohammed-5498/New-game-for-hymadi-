@@ -3,6 +3,7 @@ import { TICK_SEC, SPAWN, GANGS, MAP_GEN, SPECIAL_BONUS } from '../config.js';
 import { createUnit } from './units.js';
 import { findFreeTiles } from '../map/pathfinding.js';
 import { isEnemy } from './combat.js';
+import { soundAt } from '../audio/sound.js';
 
 export function initSpawnTimers(state) {
   state.spawnTimers = state.players.map(player => normalInterval(state, player));
@@ -87,6 +88,7 @@ function spawnUnit(state, player, districts, heroId) {
 
   const [i, j] = spots[Math.floor(Math.random() * spots.length)];
   state.units.push(createUnit(state, player, i, j, heroId));
+  soundAt(state, 'spawn', i, j);
 }
 
 function hasEnemyNearFlag(state, district, playerId) {
@@ -127,6 +129,7 @@ export function spawnChampion(state, player, district) {
   const [i, j] = spots[Math.floor(Math.random() * spots.length)];
   const champion = createUnit(state, player, i, j, null, true);
   state.units.push(champion);
+  soundAt(state, 'spawn', i, j);
   return champion;
 }
 

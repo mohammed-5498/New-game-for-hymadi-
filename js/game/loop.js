@@ -10,6 +10,7 @@ import { updateSpawn } from './spawn.js';
 import { updatePolice } from './police.js';
 import { updateVictory } from './victory.js';
 import { updateBots } from '../ai/bot.js';
+import { updateMusicIntensity } from '../audio/sound.js';
 
 export function updateMatch(state) {
   state.time += TICK_SEC;
@@ -27,6 +28,7 @@ export function updateMatch(state) {
   updateBots(state);
   updateVictory(state);
   updateNotice(state);
+  updateMusicIntensity(state);   // الطبول تشتد مع اشتباك وحدات اللاعب
 
   if (state.moveMarker) {
     state.moveMarker.t += TICK_SEC;

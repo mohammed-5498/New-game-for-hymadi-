@@ -1,5 +1,6 @@
 // شروط الخسارة والفوز ونتيجة المباراة
 import { ownedDistricts, countUnits } from './spawn.js';
+import { sound, stopMusic } from '../audio/sound.js';
 
 // يخسر اللاعب عندما يموت كل أفراده وتُحتل كل أحيائه
 export function isPlayerAlive(state, playerId) {
@@ -31,6 +32,8 @@ export function updateVictory(state) {
 }
 
 function finish(state, won) {
+  stopMusic();
+  sound(won ? 'victory' : 'defeat');
   state.matchResult = {
     won,
     duration: state.time,

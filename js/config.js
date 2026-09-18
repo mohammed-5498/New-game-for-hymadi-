@@ -403,6 +403,25 @@ export const UNIT_ART = {
   policeColor: '#3a5a86' // الشرطة المحايدة تُرسم بهذا اللون دائماً (المرحلة 4ج)
 };
 
+// --- الصوت (القسم 13.5): كل المؤثرات مولّدة بالكود في docs/audio.js ---
+export const AUDIO = {
+  storageKey: 'gangcity.audio',   // حفظ الإعدادات في localStorage
+  sfxVolume: 0.7,                 // القيم الافتراضية قبل أي اختيار
+  musicVolume: 0.35,
+  muted: false,
+  volumeSteps: [0, 0.25, 0.5, 0.75, 1],   // درجات مؤشري الصوت في القائمة
+
+  screenMargin: 40,               // هامش حول الشاشة: ما خرج عنه لا يُسمع
+  heavyDamage: 20,                // ضربة بهذا الضرر فأكثر تُسمع ضربة ثقيلة
+  shieldArmor: 0.35,              // هدف بهذا الدرع فأكثر يُسمع ارتطاماً بدرع
+
+  musicPerEngaged: 0.1,           // حرارة الموسيقى = المشتبكون × هذا الرقم (بحد 1)
+  musicInterval: 0.5,             // ثانية بين كل تحديث لحرارة الموسيقى
+  captureTickSeconds: 1.0,        // نبضة الاستيلاء لحي اللاعب
+  alertSeconds: 5.0,              // تنبيه "وحداتك تتعرض للهجوم" خارج الشاشة
+  whistleSeconds: 6.0             // صافرة الشرطة عند بدء مطاردتها
+};
+
 // --- الأداء ---
 export const PERFORMANCE = {
   hashCellTiles: 2,       // حجم خلية الشبكة المكانية (مربعان × مربعان)

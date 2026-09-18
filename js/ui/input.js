@@ -5,6 +5,7 @@ import { clampCamera } from '../render/renderer.js';
 import { commandMove, commandAttackMove } from '../game/units.js';
 import { commandAttack, isEnemy } from '../game/combat.js';
 import { selectedUnits, selectUnitsAround } from '../state.js';
+import { sound } from '../audio/sound.js';
 import { setInputMode } from './hud.js';
 import { unitWorldPos } from '../render/units.js';
 
@@ -116,7 +117,7 @@ export function setupInput(canvas, state) {
 
       const world = screenToWorld(p.x, p.y, state.camera, state.view);
       const tile = worldToTile(world.x, world.y);
-      if (commandAttackMove(state, tile.i, tile.j, group)) longPressFired = true;
+      if (commandAttackMove(state, tile.i, tile.j, group)) { longPressFired = true; sound('command'); }
     }, INPUT.longPressMs);
   }
 
@@ -164,16 +165,18 @@ export function setupInput(canvas, state) {
 
     if (hit && isEnemy(state, group[0], hit)) {
       commandAttack(state, group, hit);
+      sound('command');
       return;
     }
 
     const world = screenToWorld(sx, sy, state.camera, state.view);
     const tile = worldToTile(world.x, world.y);
-    commandMove(state, tile.i, tile.j, group);
+    if (commandMove(state, tile.i, tile.j, group)) sound('command');
   }
 
   // بعد أي تحديد ناجح نرجع تلقائياً لوضع تحريك الخريطة
   function afterSuccessfulSelection() {
+    sound('select');
     if (state.inputMode === 'select') setInputMode(state, 'pan');
   }
 

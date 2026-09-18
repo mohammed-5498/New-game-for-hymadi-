@@ -68,6 +68,8 @@ export function createUnit(state, player, i, j, heroId = null, champion = false)
 
     // الضربة المميزة (القسم 6.7): الأفراد العاديون بلا ضربة ولا شحن
     ultCharge: 0,           // شريط الشحن من 0 إلى 100
+    ultAnnounced: false,    // أُسمعت نغمة الجاهزية لهذا الشحن
+    whistleAt: -99,         // آخر صافرة أطلقتها الشرطة
     ultStart: null,         // زمن بداية حركة الضربة المميزة (يقرأه الرسم)
     ultRate: 0,
     pendingUlt: null,       // تأثير ينتظر لحظة الارتطام

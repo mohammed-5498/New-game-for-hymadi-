@@ -5,6 +5,7 @@ import { isEnemy, applyDamage, spawnProjectile } from './combat.js';
 import { createFire } from './abilities.js';
 import { faceTowards } from './units.js';
 import { forEachNearby } from './spatialHash.js';
+import { soundAt } from '../audio/sound.js';
 
 const isAlive = (unit) => unit && unit.state !== 'dead' && unit.hp > 0;
 const allied = (state, a, b) => a.playerId === b.playerId || !isEnemy(state, a, b);
@@ -16,27 +17,37 @@ const distanceSq = (a, b) => {
 export const hasUlt = (unit) => !!unit.stats.ult;
 export const ultReady = (unit) => hasUlt(unit) && unit.ultCharge >= ULT.max;
 // --- الشحن ---
-export function chargeOverTime(unit) {
+// نغمة اكتمال الشحن تُسمع مرة واحدة عند امتلاء الشريط لا في كل تحديث
+function announceReady(state, unit) {
+  if (unit.ultCharge < ULT.max || unit.ultAnnounced) return;
+  unit.ultAnnounced = true;
+  soundAt(state, 'ult_ready', unit.x, unit.y);
+}
+
+export function chargeOverTime(state, unit) {
   if (!hasUlt(unit) || unit.ultCharge >= ULT.max) return;
   const rate = unit.champion ? ULT.championPerSecond : ULT.perSecond;
   unit.ultCharge = Math.min(ULT.max, unit.ultCharge + rate * TICK_SEC);
+  announceReady(state, unit);
 }
 
 // عن كل ضربة تُصيب
-export function chargeOnHit(unit) {
+export function chargeOnHit(state, unit) {
   if (!unit || !unit.stats || !hasUlt(unit)) return;
   const amount = unit.champion ? ULT.championPerHit : ULT.perHit;
   unit.ultCharge = Math.min(ULT.max, unit.ultCharge + amount);
+  announceReady(state, unit);
 }
 
 // عن كل 50 ضرراً تتلقاه
-export function chargeOnDamageTaken(unit, taken) {
+export function chargeOnDamageTaken(state, unit, taken) {
   if (!hasUlt(unit)) return;
   unit.damageTaken += taken;
   while (unit.damageTaken >= ULT.damageChunk) {
     unit.damageTaken -= ULT.damageChunk;
     unit.ultCharge = Math.min(ULT.max, unit.ultCharge + ULT.perDamageChunk);
   }
+  announceReady(state, unit);
 }
 
 // --- الإطلاق التلقائي عند اكتمال الشحن وتحقق الشرط ---
@@ -91,6 +102,8 @@ export function tryCastUlt(state, unit) {
 
   const rate = ULT.castSeconds;
   unit.ultCharge = 0;
+  unit.ultAnnounced = false;
+  soundAt(state, 'ult_cast', unit.x, unit.y);
   unit.pendingHit = null;          // تلغي ضربة عادية كانت في منتصفها
   unit.attackStart = state.time;
   unit.attackRate = rate;
@@ -225,11 +238,13 @@ function buffAllies(state, unit, ult) {
     ally.buffAttackSpeed = ult.attackSpeedBonus || 0;
     if (ult.heal) heal(ally, ult.heal);
   });
+  if (ult.heal) soundAt(state, 'heal', unit.x, unit.y);
 }
 
 // علاج جماعي دفعة واحدة (الطبيب)
 function healAllies(state, unit, ult) {
   forEachAlly(state, unit, ult.radius, (ally) => heal(ally, ult.heal));
+  soundAt(state, 'heal', unit.x, unit.y);
 }
 
 function forEachAlly(state, unit, radius, action) {

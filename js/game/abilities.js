@@ -5,6 +5,7 @@ import { isEnemy, applyDamage } from './combat.js';
 import { ownsSpecial } from './spawn.js';
 import { policeArmorBonus } from './police.js';
 import { forEachNearby } from './spatialHash.js';
+import { soundAt } from '../audio/sound.js';
 
 const isAlive = (unit) => unit.state !== 'dead' && unit.hp > 0;
 const allied = (state, a, b) => a.playerId === b.playerId || !isEnemy(state, a, b);
@@ -113,6 +114,7 @@ function heal(unit, amount) {
 
 // --- النار على الأرض: زجاجة رامي النار أو سهم بطل الأفاعي المشتعل ---
 export function createFire(state, playerId, i, j, fire) {
+  soundAt(state, 'fire', i, j);
   state.fires.push({
     playerId,
     x: i, y: j,

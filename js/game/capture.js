@@ -1,6 +1,8 @@
 // الاستيلاء على الأحياء: مناطق الاستيلاء، التقدم، تغيّر الملكية
 import { TICK_SEC, CAPTURE, MAP_GEN } from '../config.js';
 import { isEnemy } from './combat.js';
+import { AUDIO } from '../config.js';
+import { sound, soundAt } from '../audio/sound.js';
 
 // منطقة الاستيلاء: دائرة نصف قطرها 1.5 مربع حول نقطة الاستيلاء
 // (تشمل مربعات الشارع المجاورة، وقد تتداخل منطقتان فيُحسب المربع للاثنتين)
@@ -85,6 +87,7 @@ function advanceProgress(state, district, playerId, power) {
 
   if (allied(state, playerId, district.progressOwner)) {
     // يملأ لصالحه (أو يعيد ملء حي حليف تعرض لهجوم)
+    captureTick(state, district, playerId);
     district.progress = Math.min(100, district.progress + step);
     if (district.progress >= 100 && district.owner !== district.progressOwner) {
       const ownerBefore = district.owner;
@@ -99,12 +102,23 @@ function advanceProgress(state, district, playerId, power) {
     }
   } else {
     // عدو: يُنزل التقدم أولاً إلى 0 فيصبح الحي محايداً
+    const wasMine = district.owner === state.humanId;
+    captureTick(state, district, playerId);
     district.progress = Math.max(0, district.progress - step);
     if (district.progress <= 0) {
       district.owner = null;
       district.progressOwner = playerId;
+      if (wasMine) sound('district_lost');
     }
   }
+}
+
+// نبضة خفيفة ما دام اللاعب يستولي على حي أو يُنتزع منه حيه
+function captureTick(state, district, playerId) {
+  if (playerId !== state.humanId && district.owner !== state.humanId) return;
+  if (state.time - district.tickAt < AUDIO.captureTickSeconds) return;
+  district.tickAt = state.time;
+  soundAt(state, 'capture_tick', district.capture.i, district.capture.j);
 }
 
 // خلو المنطقة: يرجع التقدم تدريجياً لحالة المالك
@@ -123,6 +137,7 @@ function decayProgress(state, district) {
 function announceCapture(state, district) {
   const player = state.players[district.owner];
   const mine = district.owner === state.humanId;
+  if (mine) sound('capture_done');
   const name = district.special ? specialName(district.special) : 'حي';
   state.notice = {
     text: mine ? 'استوليت على ' + name : player.name + ' استولى على ' + name,

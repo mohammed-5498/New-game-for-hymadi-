@@ -1,11 +1,12 @@
 // الهجوم التلقائي، أمر الهجوم، المقذوفات، الضرر والموت
-import { TICK_SEC, COMBAT, UNITS, UNIT_ART, POLICE } from '../config.js';
+import { TICK_SEC, COMBAT, UNITS, UNIT_ART, POLICE, AUDIO } from '../config.js';
 import { findPath } from '../map/pathfinding.js';
 import { faceTowards } from './units.js';
 import { createFire } from './abilities.js';
 import { chargeOverTime, chargeOnHit, chargeOnDamageTaken, tryCastUlt, resolveUlt, updateFlurry } from './ults.js';
 import { visionRange, rangedShotHits } from './weather.js';
 import { forEachNearby } from './spatialHash.js';
+import { soundAt, soundAlert } from '../audio/sound.js';
 
 // لا ضرر على وحدات نفس اللاعب ولا على الحلفاء (فريق 0 يعني بدون فريق: عدو للجميع)
 export function isEnemy(state, a, b) {
@@ -59,7 +60,7 @@ export function updateCombat(state) {
     if (unit.state === 'dead') { unit.deathTimer -= TICK_SEC; continue; }
     if (unit.attackCooldown > 0) unit.attackCooldown -= TICK_SEC;
 
-    chargeOverTime(unit);                 // شريط الشحن يمتلئ مع الوقت (القسم 6.7)
+    chargeOverTime(state, unit);          // شريط الشحن يمتلئ مع الوقت (القسم 6.7)
     updateFlurry(state, unit);            // ضربات الوابل المتتالية
 
     // الضربة تقع في منتصف حركة السلاح لا عند بدايتها
@@ -77,7 +78,7 @@ export function updateCombat(state) {
       // مات الهدف: تبحث فوراً عن عدو آخر في المدى
       unit.commandedTarget = false;
       const next = findNearestEnemy(state, unit);
-      if (next) startAttack(unit, next);
+      if (next) startAttack(unit, next, state);
       else finishFight(state, unit);
     }
 
@@ -86,7 +87,7 @@ export function updateCombat(state) {
       // بحث موزع على التحديثات: كل وحدة تبحث كل 0.25 ثانية
       if ((tick + unit.id) % scanTicks === 0) {
         const target = findNearestEnemy(state, unit);
-        if (target) startAttack(unit, target);
+        if (target) startAttack(unit, target, state);
       }
     }
 
@@ -106,7 +107,7 @@ function resolveHit(state, unit) {
   if (!isAlive(hit.target) || !isAlive(unit)) return;
 
   if (hit.ranged) spawnVolley(state, unit, hit.target, hit.damage);
-  else { strike(state, unit, hit.target, hit.damage); chargeOnHit(unit); }
+  else { strike(state, unit, hit.target, hit.damage); chargeOnHit(state, unit); }
 }
 
 // طلقة واحدة، أو ثلاثة سهام متفرقة لبطل الأفاعي (القسم 6.6)
@@ -157,14 +158,20 @@ function blockedPolice(state, unit) {
     if (!isAlive(other) || !isEnemy(state, unit, other)) return;
     blocker = other;
   });
-  if (blocker) startAttack(unit, blocker);
+  if (blocker) startAttack(unit, blocker, state);
 }
 
-function startAttack(unit, target) {
+function startAttack(unit, target, state) {
   unit.target = target;
   unit.state = 'attacking';
   if (!unit.homePost) unit.chaseOrigin = { x: unit.x, y: unit.y };
   unit.repathTimer = 0;
+
+  // صافرة الشرطة عند بدء مطاردتها، متباعدة حتى لا تتحول إلى ضجيج
+  if (state && unit.homePost && state.time - unit.whistleAt > AUDIO.whistleSeconds) {
+    unit.whistleAt = state.time;
+    soundAt(state, 'whistle', unit.x, unit.y);
+  }
 }
 
 function becomeIdle(unit) {
@@ -252,6 +259,7 @@ function fightTarget(state, unit, budget) {
       unit.attackStart = state.time;
       unit.attackRate = attackTime;
       unit.ultStart = null;              // ضربة عادية لا مميزة
+      soundAt(state, 'swing', unit.x, unit.y);
       unit.pendingHit = {
         target,
         damage: damage * unit.damageMultiplier,       // مخزن السلاح + هالة الزعيم
@@ -307,6 +315,19 @@ function retaliateIfCloser(state, attacker, target) {
   target.path = [];
 }
 
+// صوت الارتطام حسب قوة الضربة ودرع المُصاب (القسم 13.5)
+function hitSound(state, target, amount) {
+  const name = target.stats.armor >= AUDIO.shieldArmor ? 'hit_shield'
+             : amount >= AUDIO.heavyDamage ? 'hit_heavy' : 'hit_melee';
+  const heard = soundAt(state, name, target.x, target.y);
+
+  // تنبيه: وحدة للاعب تتعرض للهجوم خارج الشاشة (التنبيهات تُسمع دائماً)
+  if (heard || target.playerId !== state.humanId) return;
+  if (state.time - state.alertAt < AUDIO.alertSeconds) return;
+  state.alertAt = state.time;
+  soundAlert(state, 'alert', target.x, target.y);
+}
+
 // ضربة مباشرة: قد تكون دائرية (المحطِّم) فتصيب كل الأعداء حول الهدف
 function strike(state, attacker, target, amount) {
   const splash = attacker.stats.splashRadius;
@@ -325,11 +346,12 @@ export function applyDamage(state, attacker, target, amount) {
   if (!isAlive(target)) return;
   if (target.invulnUntil > state.time) return;     // تصلّب: لا يتلقى أي ضرر
   retaliateIfCloser(state, attacker, target);
+  hitSound(state, target, amount);
   // درع الوحدة + مكافأة مراكز الشرطة المملوكة (القسم 3.8)
   const armor = Math.min(COMBAT.maxArmor, target.stats.armor + target.armorBonus);
   const taken = amount * (1 - armor);
   target.hp -= taken;
-  chargeOnDamageTaken(target, taken);              // شحن عن كل 50 ضرراً
+  chargeOnDamageTaken(state, target, taken);       // شحن عن كل 50 ضرراً
   target.hitFlash = COMBAT.hitFlashTime;
   target.hurtTimer = UNIT_ART.hurtSeconds;   // أنميشن تلقي الضرر (القسم 13)
 
@@ -346,6 +368,7 @@ export function applyDamage(state, attacker, target, amount) {
     target.path = [];
     target.target = null;
     target.selected = false;
+    soundAt(state, 'death', target.x, target.y);
     state.stats.kills[attacker.playerId]++;
     state.stats.losses[target.playerId]++;
   }
@@ -364,6 +387,8 @@ export function spawnProjectile(state, unit, target, damage, offset = 0, fire = 
   const hits = rangedShotHits(state);
   const angle = Math.random() * 6.2832;
   const spread = COMBAT.missSpread * (0.6 + Math.random() * 0.4);
+
+  soundAt(state, unit.stats.projectile === 'stone' ? 'stone' : 'arrow', unit.x, unit.y);
 
   state.projectiles.push({
     kind: unit.stats.projectile,
@@ -403,7 +428,7 @@ function updateProjectiles(state) {
       if (shot.fire) createFire(state, shot.attacker.playerId, shot.x, shot.y, shot.fire);
       if (shot.damage > 0 && shot.hits && isAlive(shot.target)) {
         strike(state, shot.attacker, shot.target, shot.damage);
-        chargeOnHit(shot.attacker);
+        chargeOnHit(state, shot.attacker);
       }
       continue;
     }
