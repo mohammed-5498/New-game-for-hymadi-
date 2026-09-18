@@ -1,11 +1,12 @@
 // الضربات المميزة (القسم 6.7): الشحن، شرط الإطلاق، والتأثير الفعلي
 // الأفراد العاديون لا يملكون ضربة مميزة، فلا شحن لهم.
-import { TICK_SEC, COMBAT, ULT } from '../config.js';
+import { TICK_SEC, COMBAT, ULT, CAMERA } from '../config.js';
 import { isEnemy, applyDamage, spawnProjectile } from './combat.js';
 import { createFire } from './abilities.js';
 import { faceTowards } from './units.js';
 import { forEachNearby } from './spatialHash.js';
 import { soundAt } from '../audio/sound.js';
+import { onScreen } from './alerts.js';
 
 const isAlive = (unit) => unit && unit.state !== 'dead' && unit.hp > 0;
 const allied = (state, a, b) => a.playerId === b.playerId || !isEnemy(state, a, b);
@@ -123,6 +124,8 @@ export function resolveUlt(state, unit) {
   unit.pendingUlt = null;
   if (!isAlive(unit)) return;
 
+  shakeCamera(state, unit);
+
   const ult = unit.stats.ult;
   const target = isAlive(pending.target) ? pending.target : null;
 
@@ -139,6 +142,14 @@ export function resolveUlt(state, unit) {
     case 'arrows':  fireArrows(state, unit, ult, target); break;
     case 'bash':    bash(state, unit, ult, target); break;
   }
+}
+
+// ارتجاجة خفيفة عند لحظة تأثير الضربة، لضربة يراها اللاعب فقط،
+// ومرة واحدة كل ثانية مهما تعددت الضربات حتى لا تصبح الشاشة مزعجة
+function shakeCamera(state, unit) {
+  if (state.time - state.shakeAt < CAMERA.shake.minGapSeconds) return;
+  if (!onScreen(state, unit.x, unit.y)) return;
+  state.shakeAt = state.time;
 }
 
 // ضرر الضربة يتأثر بمكافآت الضرر مثل الضربة العادية (مخزن السلاح، الهالات)

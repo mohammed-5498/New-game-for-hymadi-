@@ -1,5 +1,5 @@
 // الكاميرا وترتيب الرسم الكامل لإطار واحد
-import { TILE_HALF_W, TILE_HALF_H, CAMERA, CAPTURE, PERFORMANCE, ALERTS } from '../config.js';
+import { TILE_HALF_W, TILE_HALF_H, TICK_SEC, CAMERA, CAPTURE, PERFORMANCE, ALERTS } from '../config.js';
 import { mix, PALETTES, ROAD_COLOR, BACKGROUND, UI_LIGHT } from './colors.js';
 import { drawBuilding, setFrameContext } from './buildings.js';
 import { drawUnit, drawSelectionRing, drawProjectile, drawAura, drawFire } from './units.js';
@@ -32,6 +32,7 @@ export function clampCamera(state) {
 export function render(ctx, state, alpha) {
   const { map, camera, view } = state;
   const lights = [];
+  shake = shakeOffset(state, alpha);   // إزاحة الارتجاجة لهذا الإطار
   setFrameContext(ctx, state.weather, lights, state.time);
 
   // خلفية
@@ -132,10 +133,29 @@ function drawEdgeAlerts(ctx, state) {
   }
 }
 
+// إزاحة الارتجاجة بالبكسل، تُطبَّق على طبقات العالم دون طبقات الشاشة
+let shake = null;
+
+function shakeOffset(state, alpha) {
+  const { pixels, seconds } = CAMERA.shake;
+  // زمن الرسم المنعّم حتى تكون الارتجاجة سلسة لا بخطوة التحديث
+  const now = state.time + alpha * TICK_SEC;
+  const elapsed = now - state.shakeAt;
+  if (elapsed < 0 || elapsed >= seconds) return null;
+
+  const amount = pixels * (1 - elapsed / seconds);   // تخفت حتى تنتهي
+  // اتجاه يدور بسرعة فتبدو ارتجاجاً، ومقدار الإزاحة لا يتجاوز pixels
+  const angle = now * 61;
+  return { x: Math.cos(angle) * amount, y: Math.sin(angle) * amount };
+}
+
 function worldTransform(ctx, state) {
   const { camera: cam, view } = state;
   const s = view.dpr * cam.z;
-  ctx.setTransform(s, 0, 0, s, view.dpr * (view.w / 2 - cam.x * cam.z), view.dpr * (view.h / 2 - cam.y * cam.z));
+  const dx = shake ? shake.x : 0, dy = shake ? shake.y : 0;
+  ctx.setTransform(s, 0, 0, s,
+    view.dpr * (view.w / 2 - cam.x * cam.z + dx),
+    view.dpr * (view.h / 2 - cam.y * cam.z + dy));
 }
 
 // الأرض: نجمع المربعات حسب اللون ونرسم مساراً واحداً لكل لون
