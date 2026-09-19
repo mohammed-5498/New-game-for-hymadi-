@@ -1,0 +1,5 @@
+# ملفات Godot المؤقتة
+.godot/
+build/
+android/
+*.tmp

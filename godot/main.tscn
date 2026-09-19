@@ -15,11 +15,22 @@ anchors_preset = 1
 anchor_left = 1.0
 anchor_right = 1.0
 offset_left = -190.0
-offset_top = 16.0
+offset_top = 56.0
 offset_right = -16.0
-offset_bottom = 72.0
+offset_bottom = 112.0
 grow_horizontal = 0
 text = "تحريك الخريطة"
+
+[node name="SizeBtn" type="Button" parent="UI"]
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -190.0
+offset_top = 120.0
+offset_right = -16.0
+offset_bottom = 176.0
+grow_horizontal = 0
+text = "الحجم: صغيرة"
 
 [node name="SelAllBtn" type="Button" parent="UI"]
 anchors_preset = 3
@@ -47,8 +58,12 @@ grow_vertical = 0
 text = "خريطة جديدة"
 
 [node name="Info" type="Label" parent="UI"]
+anchors_preset = 10
+anchor_right = 1.0
 offset_left = 16.0
-offset_top = 16.0
-offset_right = 320.0
-offset_bottom = 48.0
+offset_top = 12.0
+offset_right = -16.0
+offset_bottom = 44.0
+grow_horizontal = 2
+horizontal_alignment = 2
 text = "محدد: 0"
