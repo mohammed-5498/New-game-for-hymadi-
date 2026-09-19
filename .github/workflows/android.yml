@@ -1,16 +1,21 @@
-# ضعه في المستودع بهذا المسار: .github/workflows/android.yml
-# مسودة تحتاج تجربة: شغّلها، واقرأ سجل الخطأ، وعدّلها حتى ينجح البناء.
-name: Build Android APK
+# يبني ملف APK للأندرويد على خوادم GitHub.
+# بعد نجاح التشغيل ينزل الملف من صفحة Actions ← آخر تشغيل ← Artifacts.
+name: بناء تطبيق أندرويد
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'claude/**']
+    paths:
+      - 'godot/**'
+      - '.github/workflows/android.yml'
   workflow_dispatch:
 
 env:
-  GODOT_VERSION: 4.3
+  GODOT_VERSION: "4.3"
   EXPORT_NAME: GangCity
-  PROJECT_PATH: godot      # المجلد الذي فيه project.godot
+  PROJECT_PATH: godot
+  ANDROID_BUILD_TOOLS: "34.0.0"
+  ANDROID_PLATFORM: "android-34"
 
 jobs:
   build-apk:
@@ -18,60 +23,101 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up JDK 17
+      - name: تثبيت JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
+      - name: تجهيز Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Download Godot and export templates
+      - name: تثبيت أدوات البناء المطلوبة
+        run: |
+          set -e
+          sdkmanager "platform-tools" "build-tools;${ANDROID_BUILD_TOOLS}" "platforms;${ANDROID_PLATFORM}"
+          ls "$ANDROID_HOME/build-tools/${ANDROID_BUILD_TOOLS}/apksigner"
+          ls "$ANDROID_HOME/platform-tools/adb"
+
+      - name: تنزيل Godot وقوالب التصدير
         run: |
           set -e
           BASE="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable"
-          wget -q "$BASE/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip" -O godot.zip
-          wget -q "$BASE/Godot_v${GODOT_VERSION}-stable_export_templates.tpz" -O templates.tpz
+          curl -fsSL "$BASE/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip" -o godot.zip
+          curl -fsSL "$BASE/Godot_v${GODOT_VERSION}-stable_export_templates.tpz" -o templates.tpz
           unzip -q godot.zip
-          mv Godot_v${GODOT_VERSION}-stable_linux.x86_64 /usr/local/bin/godot
-          chmod +x /usr/local/bin/godot
-          mkdir -p ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
+          sudo mv "Godot_v${GODOT_VERSION}-stable_linux.x86_64" /usr/local/bin/godot
+          sudo chmod +x /usr/local/bin/godot
+          godot --headless --version
+          mkdir -p /tmp/templates
           unzip -q templates.tpz -d /tmp/templates
-          mv /tmp/templates/templates/* ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable/
+          mkdir -p "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
+          mv /tmp/templates/templates/* "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable/"
+          ls "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable/android_debug.apk"
 
-      - name: Create debug keystore
+      - name: إنشاء مفتاح توقيع تجريبي
         run: |
+          set -e
           keytool -keyalg RSA -genkeypair -alias androiddebugkey \
-            -keypass android -keystore debug.keystore -storepass android \
+            -keypass android -keystore "$PWD/debug.keystore" -storepass android \
             -dname "CN=Android Debug,O=Android,C=US" -validity 9999 -deststoretype pkcs12
           echo "KEYSTORE=$PWD/debug.keystore" >> $GITHUB_ENV
 
-      - name: Point Godot at the Android SDK
+      - name: توجيه Godot إلى Android SDK و Java
+        # ملاحظة: فحص Godot لتصدير أندرويد يشترط java_sdk_path أيضاً، وليس android_sdk_path فقط.
         run: |
-          mkdir -p ~/.config/godot
-          cat > ~/.config/godot/editor_settings-4.3.tres <<EOF
+          set -e
+          mkdir -p "$HOME/.config/godot"
+          cat > "$HOME/.config/godot/editor_settings-${GODOT_VERSION}.tres" <<TRES
           [gd_resource type="EditorSettings" format=3]
+
           [resource]
           export/android/android_sdk_path = "$ANDROID_HOME"
+          export/android/java_sdk_path = "$JAVA_HOME"
           export/android/debug_keystore = "$KEYSTORE"
           export/android/debug_keystore_user = "androiddebugkey"
           export/android/debug_keystore_pass = "android"
-          EOF
+          TRES
+          cat "$HOME/.config/godot/editor_settings-${GODOT_VERSION}.tres"
 
-      - name: Import project once
+      - name: استيراد المشروع
+        # أول استيراد يستورد الموارد، والثاني يضمن أن الخط والأيقونات صارت متاحة للمحرك.
         run: |
-          cd $PROJECT_PATH
-          godot --headless --import || true
+          godot --headless --path "$PROJECT_PATH" --import || true
+          godot --headless --path "$PROJECT_PATH" --import
 
-      - name: Export APK
+      - name: فحص الأخطاء النحوية
         run: |
-          cd $PROJECT_PATH
-          mkdir -p build
-          godot --headless --export-debug "Android" build/${EXPORT_NAME}.apk
+          set -e
+          for f in scripts/config.gd scripts/map_gen.gd scripts/game.gd scripts/units_art.gd; do
+            out=$(godot --headless --path "$PROJECT_PATH" --check-only --script "$f" 2>&1 | grep -v "^Godot Engine" || true)
+            if [ -n "$(echo $out)" ]; then echo "خطأ في $f:"; echo "$out"; exit 1; fi
+            echo "سليم: $f"
+          done
 
-      - name: Upload APK
+      - name: فحص توليد الخريطة
+        run: |
+          set -e
+          godot --headless --path "$PROJECT_PATH" --script tests/test_map_gen.gd
+
+      - name: تصدير APK
+        run: |
+          set -e
+          mkdir -p "$PROJECT_PATH/build"
+          godot --headless --path "$PROJECT_PATH" --export-debug "Android" "build/${EXPORT_NAME}.apk"
+          test -f "$PROJECT_PATH/build/${EXPORT_NAME}.apk"
+          ls -lh "$PROJECT_PATH/build/"
+
+      - name: التحقق من توقيع الملف
+        run: |
+          set -e
+          "$ANDROID_HOME/build-tools/${ANDROID_BUILD_TOOLS}/apksigner" verify \
+            --print-certs "$PROJECT_PATH/build/${EXPORT_NAME}.apk"
+
+      - name: رفع الملف
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.EXPORT_NAME }}-apk
           path: ${{ env.PROJECT_PATH }}/build/*.apk
+          retention-days: 30
+          if-no-files-found: error

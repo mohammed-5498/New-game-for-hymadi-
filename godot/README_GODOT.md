@@ -52,6 +52,17 @@ godot --headless --path godot --script tests/test_map_gen.gd
 godot --headless --path godot --check-only --script scripts/game.gd
 ```
 
+## بناء APK
+الـ workflow في `.github/workflows/android.yml` يبني APK على خوادم GitHub عند كل دفعة تمس `godot/`.
+إعداد التصدير اسمه **"Android"** في `export_presets.cfg` (الحزمة `com.hymadi.gangcity`، معماريتا arm64-v8a و armeabi-v7a).
+طريقة تنزيل آخر نسخة على الجوال مشروحة في `README.md` في جذر المستودع.
+
+**مطبّات واجهتها وحُلّت — لا تكررها:**
+- فحص Godot لتصدير أندرويد يفشل **بلا أي رسالة خطأ** إذا كان
+  `rendering/textures/vram_compression/import_etc2_astc` مطفأً في `project.godot`. هذا السبب الأول للحيرة.
+- الفحص يشترط أيضاً `export/android/java_sdk_path` في إعدادات المحرر، وليس `android_sdk_path` وحده.
+- أول `--import` بعد استنساخ نظيف يشتكي من ملف الخط، والثاني ينجح. لهذا يُستدعى مرتين في الـ workflow.
+
 ## ملاحظات تقنية
 - **المسارات:** `AStarGrid2D` المدمج بدل A* اليدوي. راجع `_build_astar()`.
 - **الرسم:** `_draw()` قريب جداً من Canvas 2D، فنُقل أسلوب الرسم من `docs/prototype.html` كما هو.
