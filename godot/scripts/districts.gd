@@ -69,8 +69,8 @@ func _capture_step(dt: float, units: Array) -> void:
 	# قوة كل لاعب داخل كل منطقة استيلاء
 	var power := {}    # dist_id -> {player -> power}
 	for u in units:
-		if u["state"] == "dead":
-			continue
+		if u["state"] == "dead" or int(u["player"]) < 0:
+			continue      # الشرطة لا تستولي على أي حي ولا تجمّد التقدم (3.8)
 		var p: Vector2 = u["pos"]
 		for c in caps:
 			if p.distance_to(Vector2(c["pos"])) > GC.CAPTURE_RADIUS:

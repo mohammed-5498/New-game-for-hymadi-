@@ -47,6 +47,8 @@ func spawn(key: String, player: int, team: int, tile: Vector2) -> Dictionary:
 		"buff_dmg": 0.0, "buff_rate": 0.0, "buff_t": 0.0,
 		"invuln_t": 0.0, "slow": 0.0, "slow_t": 0.0,
 		"aura_dmg": 0.0, "volley": 0, "volley_t": 0.0, "volley_tgt": -1,
+		# الشرطة (3.8): مرساة حد المطاردة، والمركز التابع له، وحالة الرجوع
+		"anchor": Vector2.INF, "station": -1, "returning": false,
 	}
 	next_id += 1
 	units.append(u)
@@ -138,8 +140,18 @@ func _step_unit(u: Dictionary, delta: float) -> void:
 		var found = _nearest_enemy(u, float(GC.stat(u["key"], "detect")))
 		if found != null:
 			u["target"] = int(found["id"])
-			u["chase_from"] = u["pos"]
+			u["chase_from"] = _fresh_origin(u)
+			u["returning"] = false
 			tgt = found
+
+	# أثناء رجوع الشرطة إلى مركزها لا تهاجم إلا من يعترضها مباشرة (3.8).
+	# هذه قاعدة خاصة بالشرطة وحدها: وحدات اللاعبين ترجع لمكانها بلا قتال (5.2).
+	if tgt == null and bool(u["returning"]) and is_guard(u):
+		var blocker = _nearest_enemy(u, float(GC.stat(u["key"], "range")))
+		if blocker != null:
+			u["target"] = int(blocker["id"])
+			u["chase_from"] = _fresh_origin(u)
+			tgt = blocker
 
 	# ثبات الهدف (5.2): لا تبدّل الهدف إلا إذا هاجمك عدو أقرب من هدفك الحالي
 	if tgt != null and int(u["cmd_target"]) < 0:
@@ -248,19 +260,22 @@ func _fight(u: Dictionary, tgt: Dictionary, delta: float) -> void:
 	var key := String(u["key"])
 	var d := _dist(u, tgt)
 
-	# حد المطاردة (5.2) — لا يُطبَّق على أمر هجوم صريح من اللاعب
-	if int(u["cmd_target"]) < 0:
-		var detect: float = GC.stat(key, "detect")
-		if d > detect * GC.CHASE_DETECT_FACTOR or u["pos"].distance_to(u["chase_from"]) > GC.CHASE_MAX_TILES:
-			u["target"] = -1
-			u["state"] = "moving"
-			u["swing"] = 0.0
-			_path_to(u, u["chase_from"])
-			return
-
 	# الرامي يقاتل بالأيدي عند الاقتراب (5.3)
 	var melee_now: bool = bool(GC.stat(key, "ranged")) and d <= GC.MELEE_SWITCH_RANGE
 	var reach: float = GC.MELEE_SWITCH_RANGE if melee_now else float(GC.stat(key, "range"))
+
+	# حد المطاردة (5.2) — لا يُطبَّق على أمر هجوم صريح من اللاعب،
+	# ولا على وحدة راجعة يعترضها عدو داخل مدى ضربتها مباشرة (3.8)
+	var blocked_on_way: bool = bool(u["returning"]) and is_guard(u) and d <= reach
+	if int(u["cmd_target"]) < 0 and not blocked_on_way:
+		var detect: float = GC.stat(key, "detect")
+		if d > detect * GC.CHASE_DETECT_FACTOR or Vector2(u["pos"]).distance_to(Vector2(u["chase_from"])) > GC.CHASE_MAX_TILES:
+			u["target"] = -1
+			u["state"] = "moving"
+			u["returning"] = true
+			u["swing"] = 0.0
+			_path_to(u, Vector2(u["chase_from"]))
+			return
 	var rate: float = float(GC.stat(key, "melee_rate")) if melee_now else float(GC.stat(key, "rate"))
 	if rate <= 0.0:
 		rate = 1.0
@@ -442,6 +457,16 @@ func _advance(u: Dictionary, delta: float) -> void:
 			left = 0.0
 	if path.is_empty() and (u["state"] == "moving" or u["state"] == "attackMove"):
 		u["state"] = "idle"
+		u["returning"] = false
+
+# وحدة حارسة لها مرساة ثابتة (الشرطة)، بخلاف وحدات اللاعبين
+func is_guard(u: Dictionary) -> bool:
+	return Vector2(u["anchor"]).x != INF
+
+# نقطة بدء المطاردة عند رصد هدف جديد:
+# الشرطة تقيس دائماً من مركزها، وبقية الوحدات من مكانها لحظة الرصد (5.2 و 3.8)
+func _fresh_origin(u: Dictionary) -> Vector2:
+	return Vector2(u["anchor"]) if is_guard(u) else Vector2(u["pos"])
 
 func _face(u: Dictionary, to: Vector2) -> void:
 	# الاتجاه على الشاشة: محور x المائل هو (i - j)
@@ -462,6 +487,7 @@ func order_move(sel: Array, goal: Vector2, attack_move: bool) -> void:
 		u["cmd_target"] = -1
 		u["swing"] = 0.0
 		u["state"] = "attackMove" if attack_move else "moving"
+		u["returning"] = false
 		u["chase_from"] = goal
 		_path_to(u, goal)
 

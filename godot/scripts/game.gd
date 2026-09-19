@@ -18,6 +18,7 @@ var art := UnitsArt.new()
 var combat: Combat
 var districts_state := Districts.new()
 var spawner := Spawner.new()
+var police := Police.new()
 var gang_of := {}          # رقم اللاعب -> عصابته
 var team_of := {}          # رقم اللاعب -> فريقه (بلا تحالفات بعد: الفريق = اللاعب)
 var alerts: Array = []     # تنبيهات الحافة (12.3)
@@ -71,6 +72,7 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	combat.step(delta)
 	districts_state.step(delta, combat.units)
+	police.step(delta, districts)
 	_handle_district_events()
 	if match_over < 0:
 		for spawn in spawner.step(delta, player_count, districts_state, combat.units):
@@ -234,6 +236,8 @@ func _setup_match() -> void:
 	for p in homes.size():
 		districts_state.claim_home(int(homes[p]["id"]), p)
 	spawner.setup(player_count, gang_of, GC.UNIT_LIMIT_DEFAULT)
+	police.setup(districts, combat, self)
+	police.spawn_initial()
 	_refresh_clock_bonus()
 
 	# البداية: 3 أفراد عاديين + البطل عند ساحة علم الحي المنزلي (7)
@@ -401,8 +405,13 @@ func _draw() -> void:
 		var mcol: Color = Color(0.95, 0.5, 0.35, 1.0 - g) if marker.get("attack", false) else Color(0.95, 0.93, 0.89, 1.0 - g)
 		draw_arc(tile_to_world(marker["pos"]), 6.0 + g * 14.0, 0, TAU, 24, mcol, 1.2, true)
 
+func _owner_color(player: int) -> Color:
+	if player < 0:
+		return GC.POLICE_COLOR
+	return GC.PLAYER_COLORS[player % GC.PLAYER_COLORS.size()]
+
 func _draw_unit(u: Dictionary) -> void:
-	var col: Color = GC.PLAYER_COLORS[int(u["player"]) % GC.PLAYER_COLORS.size()]
+	var col: Color = _owner_color(int(u["player"]))
 	if float(u["flash"]) > 0.0:
 		# وميض أبيض خفيف عند الإصابة (5.2)
 		col = col.lerp(Color(1, 1, 1), 0.55 * float(u["flash"]) / GC.HIT_FLASH)
@@ -436,8 +445,7 @@ func _draw_hp_bar(u: Dictionary, p: Vector2) -> void:
 	var x := p.x - w * 0.5
 	var y := p.y + GC.HP_BAR_Y
 	draw_rect(Rect2(x - 0.5, y - 0.5, w + 1.0, GC.HP_BAR_H + 1.0), Color(0, 0, 0, 0.55))
-	draw_rect(Rect2(x, y, w * frac, GC.HP_BAR_H),
-		GC.PLAYER_COLORS[int(u["player"]) % GC.PLAYER_COLORS.size()])
+	draw_rect(Rect2(x, y, w * frac, GC.HP_BAR_H), _owner_color(int(u["player"])))
 	_draw_charge(u, x, y, w)
 
 # شريط الشحن الذهبي تحت شريط الدم، ونجمة فوق الرأس عند الجاهزية (6.7)
@@ -803,20 +811,20 @@ func _refresh_info() -> void:
 			sel += 1
 		if int(u["player"]) == me:
 			mine += 1
-		else:
+		elif int(u["player"]) >= 0:
 			foes += 1
 	var specials := 0
-	var police := 0
+	var police_places := 0
 	var homes := 0
 	var capturable := 0
 	for d in districts:
 		match String(d["type"]):
 			"special": specials += 1
-			"police": police += 1
+			"police": police_places += 1
 			"home": homes += 1
 		if Vector2i(d["cap"]).x >= 0:
 			capturable += 1
 	var label: String = String(GC.MAP_SIZES[size_key]["label"])
 	size_btn.text = "الحجم: %s" % label
-	info.text = "%s %d×%d | أحياء %d | مميزة %d | شرطة %d | جنودي %d | أعداء %d | محدد %d" % [
-		label, n, n, capturable, specials, police, mine, foes, sel]
+	info.text = "%s %d×%d | أحياء %d | مميزة %d | مراكز شرطة %d | شرطة حية %d | جنودي %d | أعداء %d | محدد %d" % [
+		label, n, n, capturable, specials, police_places, police.alive_count(), mine, foes, sel]
