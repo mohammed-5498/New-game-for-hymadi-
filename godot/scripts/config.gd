@@ -71,6 +71,12 @@ const GANG_COLORS := {
 }
 const POLICE_COLOR := Color("3a5a86")
 
+# ألوان اللاعبين الثمانية (12.2) — منفصلة عن العصابة، والوحدات والأعلام تأخذها
+const PLAYER_COLORS := [
+	Color("8a5cc7"), Color("d9463b"), Color("3fa34d"), Color("e0b030"),
+	Color("2f8fc7"), Color("d96fa8"), Color("c96a2a"), Color("7f8c8d"),
+]
+
 # ---------- رسم الوحدات (13.1) ----------
 const UNIT_SCALE := 0.62           # حجم رسم الوحدة العادية داخل مربع 36×18
 const UNIT_SCALE_SPECIAL := 0.713  # الشخصيات المميزة أكبر بـ 15%
@@ -107,6 +113,71 @@ const UNIT_GANG := {
 	"police_common": "police", "police_captain": "police",
 }
 
+# ---------- القتال (5.1 – 5.3) ----------
+const SCAN_EVERY := 0.25         # كل وحدة idle تبحث عن عدو كل ربع ثانية
+const REPATH_EVERY := 0.5        # إعادة حساب المسار أثناء المطاردة
+const CHASE_DETECT_FACTOR := 1.5 # يفلت الهدف إذا تجاوز مدى الرصد × 1.5
+const CHASE_MAX_TILES := 6.0     # أو إذا ابتعدت الوحدة 6 مربعات عن مكان بدء المطاردة
+const HIT_FLASH := 0.1           # وميض أبيض على المُصاب
+const SHAKE_PIXELS := 3.0        # ارتجاج الكاميرا عند الضربات المميزة فقط
+const SHAKE_DUR := 0.15
+const SHAKE_COOLDOWN := 1.0      # لا يتكرر أكثر من مرة في الثانية
+const MELEE_SWITCH_RANGE := 1.5  # الرامي يقاتل بالأيدي إذا اقترب العدو لهذا الحد (5.3)
+const PROJ_MIN_TIME := 0.3       # زمن طيران المقذوف
+const PROJ_MAX_TIME := 0.5
+const PROJ_SPEED := 9.0          # مربع/ث، ويُقصّ بين الحدين أعلاه
+const ARRIVE_EPS := 0.05         # اعتبار الوحدة وصلت نقطة المسار
+const HP_BAR_W := 11.0           # عرض شريط الدم فوق الرأس
+const HP_BAR_H := 1.6
+const HP_BAR_Y := -20.0
+
+# ---------- أرقام الوحدات (6.1 – 6.6 و 3.8) ----------
+# الوحدة المرجعية (6.1): دم 100، درع 0، ضرر 10، زمن 1.0، مدى 1.0، رصد 4، سرعة 2.2، استيلاء 1
+# الحقول الاختيارية: ranged/proj/melee_dmg/melee_rate تُستعمل في 5.3،
+# و splash/aura/heal/fire مذكورة للمرحلة 6 ولا يقرأها القتال الأساسي.
+const UNIT_BASE := {
+	"hp": 100.0, "armor": 0.0, "dmg": 10.0, "rate": 1.0,
+	"range": 1.0, "detect": 4.0, "speed": 2.2, "capture": 1.0,
+}
+const UNIT_STATS := {
+	# الغربان (6.2)
+	"crow_common":      {"speed": 2.5, "capture": 1.5},
+	"crow_spear":       {"hp": 150.0, "dmg": 12.0, "rate": 1.3, "range": 1.8, "detect": 4.5, "speed": 2.2},
+	"crow_dual":        {"hp": 95.0, "dmg": 7.0, "rate": 0.8, "speed": 2.6},
+	"crow_hero":        {"hp": 260.0, "armor": 0.10, "dmg": 18.0, "rate": 1.2, "range": 2.2, "speed": 2.5, "hero": true},
+	# المطارق (6.3)
+	"hammer_common":    {"hp": 120.0, "armor": 0.15},
+	"hammer_shield":    {"hp": 320.0, "armor": 0.50, "dmg": 8.0, "rate": 1.2, "speed": 1.6},
+	"hammer_breaker":   {"hp": 200.0, "armor": 0.20, "dmg": 28.0, "rate": 2.2, "range": 1.2, "speed": 1.8, "splash": 1.0},
+	"hammer_hero":      {"hp": 420.0, "armor": 0.40, "dmg": 26.0, "rate": 1.8, "range": 1.2, "speed": 1.7, "hero": true},
+	# الأفاعي (6.4)
+	"viper_common":     {"dmg": 7.0, "rate": 1.4, "range": 3.5, "detect": 4.5,
+						 "ranged": true, "proj": "stone", "melee_dmg": 8.0, "melee_rate": 1.0},
+	"viper_sniper":     {"hp": 80.0, "dmg": 26.0, "rate": 2.5, "range": 7.0, "detect": 7.5, "speed": 2.0,
+						 "ranged": true, "proj": "arrow", "melee_dmg": 4.0, "melee_rate": 1.0},
+	"viper_firebomber": {"hp": 90.0, "dmg": 0.0, "rate": 5.0, "range": 4.0, "detect": 4.5, "speed": 2.1,
+						 "ranged": true, "proj": "bottle", "melee_dmg": 5.0, "melee_rate": 1.0,
+						 "fire_radius": 1.2, "fire_dur": 4.0, "fire_dps": 6.0},
+	"viper_hero":       {"hp": 240.0, "dmg": 12.0, "shots": 3, "rate": 2.2, "range": 6.5, "speed": 2.0,
+						 "ranged": true, "proj": "arrow", "melee_dmg": 6.0, "melee_rate": 1.0, "hero": true},
+	# العقارب (6.5)
+	"scorp_common":     {"spawn_factor": 0.8},
+	"scorp_boss":       {"hp": 160.0, "armor": 0.10, "dmg": 12.0, "speed": 2.0, "aura": 3.0, "aura_dmg": 0.20},
+	"scorp_medic":      {"hp": 100.0, "dmg": 5.0, "speed": 2.2, "heal_range": 3.0, "heal_rate": 10.0},
+	"scorp_hero":       {"hp": 280.0, "armor": 0.15, "dmg": 16.0, "rate": 1.3, "speed": 2.1,
+						 "aura": 3.5, "aura_dmg": 0.25, "heal_range": 3.5, "heal_rate": 4.0, "hero": true},
+	# الشرطة (3.8)
+	"police_common":    {"hp": 130.0, "armor": 0.10, "dmg": 12.0, "rate": 1.0, "detect": 4.5, "speed": 2.3},
+	"police_captain":   {"hp": 210.0, "armor": 0.20, "dmg": 16.0, "rate": 1.1, "detect": 5.0, "speed": 2.1},
+}
+
+# قيمة صفة لوحدة: من جدولها وإلا من الوحدة المرجعية
+static func stat(key: String, field: String) -> Variant:
+	var s: Dictionary = UNIT_STATS.get(key, {})
+	if s.has(field):
+		return s[field]
+	return UNIT_BASE.get(field, 0.0)
+
 # ---------- ألوان الأرض ----------
 const GROUND := {
 	"crow": Color("7a7090"), "hammer": Color("8d6a60"), "viper": Color("6d7d5a"),
@@ -121,6 +192,7 @@ const ZOOM_MAX := 5.0
 const ZOOM_START := 2.2
 const TAP_SLOP := 8.0        # بكسل قبل اعتبار اللمسة سحباً
 const TAP_RADIUS := 26.0     # نصف قطر اختيار الوحدة باللمس
+const LONG_PRESS := 0.45     # ضغطة مطوّلة = أمر هجوم متحرك (4.3)
 
 # ---------- النموذج فقط (يُستبدل في المراحل التالية) ----------
 const PROTO_UNITS_PER_HOME := 3

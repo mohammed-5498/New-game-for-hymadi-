@@ -43,6 +43,17 @@ offset_bottom = 240.0
 grow_horizontal = 0
 text = "معرض الوحدات"
 
+[node name="FightBtn" type="Button" parent="UI"]
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -190.0
+offset_top = 248.0
+offset_right = -16.0
+offset_bottom = 304.0
+grow_horizontal = 0
+text = "معركة تجريبية"
+
 [node name="SelAllBtn" type="Button" parent="UI"]
 anchors_preset = 3
 anchor_left = 1.0

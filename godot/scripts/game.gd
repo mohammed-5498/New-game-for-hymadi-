@@ -1,5 +1,5 @@
 extends Node2D
-# نموذج "مدينة العصابات" على Godot 4.x — المرحلة 1 (الأساس)
+# نموذج "مدينة العصابات" على Godot 4.x — المراحل 1 و 3 و 4
 # الخريطة والتحكم منقولان من docs/prototype.html، والتوليد في scripts/map_gen.gd.
 # الأرقام كلها في scripts/config.gd (GC).
 
@@ -13,9 +13,13 @@ var region: Array = []
 var owner_dist: Array = []
 var districts: Array = []
 var caps: Array = []       # {tile, gang, type, special, district}
-var units: Array = []      # {pos, gang, own, sel, path}
 
 var art := UnitsArt.new()
+var combat: Combat
+var me := 0                # رقم اللاعب البشري
+var shake_t := 0.0
+var shake_cool := 0.0
+var cam_home := Vector2.ZERO
 var astar := AStarGrid2D.new()
 var cam: Camera2D
 var mode_btn: Button
@@ -34,8 +38,12 @@ var pinch_zoom := 1.0
 var sel_box_a := Vector2.ZERO
 var sel_box_b := Vector2.ZERO
 var box_active := false
+var press_t := 0.0         # لقياس الضغطة المطوّلة (4.3)
+var long_fired := false
 
 func _ready() -> void:
+	combat = Combat.new(self)
+	combat.on_hit = _on_hit
 	cam = $Cam
 	mode_btn = $UI/ModeBtn
 	size_btn = $UI/SizeBtn
@@ -46,21 +54,31 @@ func _ready() -> void:
 	$UI/SelAllBtn.pressed.connect(_select_all)
 	$UI/NewMapBtn.pressed.connect(generate_map)
 	$UI/DemoBtn.pressed.connect(func(): get_tree().change_scene_to_file("res://units_demo.tscn"))
+	$UI/FightBtn.pressed.connect(_test_battle)
 	generate_map()
 
 func _process(delta: float) -> void:
-	for u in units:
-		if u["path"].size() > 0:
-			var target: Vector2 = u["path"][0]
-			var sp: float = GC.PROTO_WALK_SPEED * delta
-			var d: Vector2 = target - u["pos"]
-			if d.length() <= sp:
-				u["pos"] = target
-				u["path"].remove_at(0)
-			else:
-				u["pos"] += d.normalized() * sp
+	combat.step(delta)
 	marker["t"] += delta
+	if dragging and not moved and not long_fired:
+		press_t += delta
+		if press_t >= GC.LONG_PRESS:
+			long_fired = true
+			_command(_tile_at(drag_start), true)
+	# ارتجاج الكاميرا عند الضربات المميزة فقط (5.2)
+	shake_cool = maxf(0.0, shake_cool - delta)
+	if shake_t > 0.0:
+		shake_t = maxf(0.0, shake_t - delta)
+		var k: float = shake_t / GC.SHAKE_DUR
+		cam.offset = Vector2(randf_range(-1, 1), randf_range(-1, 1)) * GC.SHAKE_PIXELS * k
+	elif cam.offset != Vector2.ZERO:
+		cam.offset = Vector2.ZERO
 	queue_redraw()
+
+func _on_hit(_victim: Dictionary, _dealt: float, is_ult: bool) -> void:
+	if is_ult and shake_cool <= 0.0:
+		shake_t = GC.SHAKE_DUR
+		shake_cool = GC.SHAKE_COOLDOWN
 
 # ============ توليد الخريطة ============
 func generate_map() -> void:
@@ -95,6 +113,25 @@ func walkable(i: int, j: int) -> bool:
 	var t := j * n + i
 	return road[t] or kind[t] == "." or kind[t] == "P"
 
+# يسأله محرك القتال عن مسار بين نقطتين بإحداثيات المربعات العشرية
+func find_path(from: Vector2, to: Vector2) -> Array:
+	var a := Vector2i(clampi(int(round(from.x)), 0, n - 1), clampi(int(round(from.y)), 0, n - 1))
+	var b := Vector2i(clampi(int(round(to.x)), 0, n - 1), clampi(int(round(to.y)), 0, n - 1))
+	if not walkable(a.x, a.y):
+		return []
+	if not walkable(b.x, b.y):
+		var near := _free_near(b, 1)
+		if near.is_empty():
+			return []
+		b = near[0]
+	var ids := astar.get_id_path(a, b)
+	var out := []
+	for i in ids.size():
+		if i == 0 and ids.size() > 1:
+			continue   # نتجاهل المربع الذي نقف فيه حتى لا ترجع الوحدة للخلف
+		out.append(Vector2(float(ids[i].x), float(ids[i].y)))
+	return out
+
 func _build_astar() -> void:
 	astar = AStarGrid2D.new()
 	astar.region = Rect2i(0, 0, n, n)
@@ -106,19 +143,35 @@ func _build_astar() -> void:
 			astar.set_point_solid(Vector2i(i, j), not walkable(i, j))
 
 func _spawn_units() -> void:
-	units = []
+	combat.clear()
+	var p := 0
 	for c in caps:
 		if String(c["type"]) != "home":
 			continue
 		var gang := String(c["gang"])
-		for s in _free_near(c["tile"], GC.PROTO_UNITS_PER_HOME):
-			units.append({
-				"pos": Vector2(float(s.x), float(s.y)),
-				"gang": gang, "own": gang == "crow",
-				"sel": false, "path": [],
-			})
-		if gang == "crow":
+		for spot in _free_near(c["tile"], GC.PROTO_UNITS_PER_HOME):
+			combat.spawn(gang + "_common", p, p, Vector2(float(spot.x), float(spot.y)))
+		if p == me:
 			cam.position = tile_to_world(Vector2(float(c["tile"].x), float(c["tile"].y)))
+			cam_home = cam.position
+		p += 1
+
+# معركة تجريبية: فريقان متقابلان قرب مركز الشاشة لتجربة القتال فوراً
+func _test_battle() -> void:
+	var center := world_to_tile(cam.position)
+	var mid := Vector2i(clampi(int(round(center.x)), 2, n - 3), clampi(int(round(center.y)), 2, n - 3))
+	var spots := _free_near(mid, 16)
+	if spots.size() < 4:
+		return
+	var keys_a := ["crow_common", "crow_spear", "crow_dual", "crow_common"]
+	var keys_b := ["viper_common", "hammer_shield", "viper_sniper", "hammer_common"]
+	for i in spots.size():
+		var t := Vector2(float(spots[i].x), float(spots[i].y))
+		if i % 2 == 0:
+			combat.spawn(keys_a[(i / 2) % keys_a.size()], me, me, t)
+		else:
+			combat.spawn(keys_b[(i / 2) % keys_b.size()], 1, 1, t)
+	_refresh_info()
 
 func _free_near(start: Vector2i, count: int) -> Array:
 	var out := []
@@ -190,21 +243,68 @@ func _draw() -> void:
 			if not view.has_point(c):
 				continue
 			_draw_object(kind[j * n + i], c, region[j * n + i], i, j, t)
-		for u in units:
+		for u in combat.units:
 			if int(round(u["pos"].x + u["pos"].y)) == s:
-				var state: String = "walk" if u["path"].size() > 0 else "idle"
-				var col: Color = GC.GANG_COLORS[u["gang"]]
-				art.draw_unit(self, String(u["gang"]) + "_common", tile_to_world(u["pos"]), t, state, col, 1, GC.UNIT_SCALE)
+				_draw_unit(u)
 
-	# دوائر التحديد فوق كل شيء
-	for u in units:
+	# المقذوفات (5.3)
+	for pr in combat.projectiles:
+		_draw_projectile(pr)
+
+	# فوق كل شيء: دوائر التحديد وأشرطة الدم
+	for u in combat.units:
+		if u["state"] == "dead":
+			continue
+		var p := tile_to_world(u["pos"])
 		if u["sel"]:
-			draw_arc(tile_to_world(u["pos"]), 5.5, 0, TAU, 20, Color(0.95, 0.93, 0.89), 1.0, true)
+			draw_arc(p, 5.5, 0, TAU, 20, Color(0.95, 0.93, 0.89), 1.0, true)
+		_draw_hp_bar(u, p)
 
 	# علامة نقطة الهدف
 	if marker["t"] < 0.8:
 		var g: float = marker["t"] / 0.8
-		draw_arc(tile_to_world(marker["pos"]), 6.0 + g * 14.0, 0, TAU, 24, Color(0.95, 0.93, 0.89, 1.0 - g), 1.2, true)
+		var mcol: Color = Color(0.95, 0.5, 0.35, 1.0 - g) if marker.get("attack", false) else Color(0.95, 0.93, 0.89, 1.0 - g)
+		draw_arc(tile_to_world(marker["pos"]), 6.0 + g * 14.0, 0, TAU, 24, mcol, 1.2, true)
+
+func _draw_unit(u: Dictionary) -> void:
+	var col: Color = GC.PLAYER_COLORS[int(u["player"]) % GC.PLAYER_COLORS.size()]
+	if float(u["flash"]) > 0.0:
+		# وميض أبيض خفيف عند الإصابة (5.2)
+		col = col.lerp(Color(1, 1, 1), 0.55 * float(u["flash"]) / GC.HIT_FLASH)
+	var sc: float = GC.UNIT_SCALE_SPECIAL if not String(u["key"]).ends_with("_common") else GC.UNIT_SCALE
+	art.draw_unit(self, String(u["key"]), tile_to_world(u["pos"]),
+		combat.draw_time(u), combat.draw_state(u), col, int(u["dir"]), sc, combat.draw_rate(u))
+
+# شريط الدم: فوق المحدد أو ناقص الدم فقط، بلون مالك الوحدة (5.2)
+func _draw_hp_bar(u: Dictionary, p: Vector2) -> void:
+	var frac: float = clampf(float(u["hp"]) / maxf(1.0, float(u["max_hp"])), 0.0, 1.0)
+	var always: bool = bool(GC.stat(u["key"], "hero"))
+	if not u["sel"] and not always and frac >= 0.999:
+		return
+	var w := GC.HP_BAR_W
+	var x := p.x - w * 0.5
+	var y := p.y + GC.HP_BAR_Y
+	draw_rect(Rect2(x - 0.5, y - 0.5, w + 1.0, GC.HP_BAR_H + 1.0), Color(0, 0, 0, 0.55))
+	draw_rect(Rect2(x, y, w * frac, GC.HP_BAR_H),
+		GC.PLAYER_COLORS[int(u["player"]) % GC.PLAYER_COLORS.size()])
+
+func _draw_projectile(pr: Dictionary) -> void:
+	var p := tile_to_world(pr["pos"])
+	# قوس بسيط يرتفع في منتصف الطيران
+	var k: float = clampf(float(pr["t"]) / float(pr["dur"]), 0.0, 1.0)
+	p.y -= sin(k * PI) * 5.0
+	match String(pr["kind"]):
+		"arrow":
+			var d: Vector2 = (tile_to_world(pr["pos"]) - tile_to_world(pr["from"])).normalized()
+			if d == Vector2.ZERO:
+				d = Vector2.RIGHT
+			draw_line(p - d * 3.0, p + d * 3.0, Color("d9d3c6"), 1.0)
+		"bottle":
+			var ang: float = float(pr["spin"]) + k * 12.0
+			draw_circle(p, 2.0, Color("5a8a6a"))
+			draw_circle(p + Vector2(cos(ang), sin(ang)) * 2.2, 1.3, Color("e8893a"))
+		_:
+			draw_circle(p, 1.8, Color("9a948c"))
 
 func _draw_object(k: String, c: Vector2, reg: String, i: int, j: int, t: float) -> void:
 	match k:
@@ -338,6 +438,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				dragging = true
 				moved = false
 				box_active = false
+				press_t = 0.0
+				long_fired = false
 			elif touches.size() == 2:
 				var v: Array = touches.values()
 				pinch_dist = maxf(1.0, (Vector2(v[0]) - Vector2(v[1])).length())
@@ -348,7 +450,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			var was: Vector2 = touches.get(event.index, event.position)
 			touches.erase(event.index)
 			if touches.size() == 0:
-				if dragging and not moved:
+				if dragging and not moved and not long_fired:
 					_tap(was)
 				elif box_active:
 					_apply_box()
@@ -374,50 +476,74 @@ func _unhandled_input(event: InputEvent) -> void:
 		else:
 			cam.position = drag_cam - (event.position - drag_start) / cam.zoom.x
 
-func _tap(screen_pos: Vector2) -> void:
-	for u in units:
-		if not u["own"]:
-			continue
-		var sp := world_to_screen(tile_to_world(u["pos"]) + Vector2(0, -5))
-		if (sp - screen_pos).length() < GC.TAP_RADIUS:
-			for v in units:
-				v["sel"] = false
-			u["sel"] = true
-			_refresh_info()
-			return
+func _tile_at(screen_pos: Vector2) -> Vector2i:
 	var t := world_to_tile(screen_to_world(screen_pos))
-	_command(Vector2i(int(round(t.x)), int(round(t.y))))
+	return Vector2i(int(round(t.x)), int(round(t.y)))
 
-func _command(target: Vector2i) -> void:
+func _unit_at(screen_pos: Vector2, mine: bool):
+	var best = null
+	var bd := GC.TAP_RADIUS
+	for u in combat.units:
+		if u["state"] == "dead":
+			continue
+		if mine and int(u["player"]) != me:
+			continue
+		if not mine and int(u["player"]) == me:
+			continue
+		var d: float = (world_to_screen(tile_to_world(u["pos"]) + Vector2(0, -5)) - screen_pos).length()
+		if d < bd:
+			bd = d
+			best = u
+	return best
+
+func _selected() -> Array:
 	var sel := []
-	for u in units:
-		if u["sel"]:
+	for u in combat.units:
+		if u["sel"] and u["state"] != "dead":
 			sel.append(u)
-	if sel.size() == 0:
+	return sel
+
+func _tap(screen_pos: Vector2) -> void:
+	# لمسة على وحدة من وحداتي = تحديدها
+	var mine = _unit_at(screen_pos, true)
+	if mine != null:
+		for v in combat.units:
+			v["sel"] = false
+		mine["sel"] = true
+		_refresh_info()
 		return
-	var spots := _free_near(Vector2i(clampi(target.x, 0, n - 1), clampi(target.y, 0, n - 1)), sel.size() * 2)
+	# لمسة على عدو ومعي وحدات محددة = أمر هجوم (بلا حد مطاردة، 5.2)
+	var sel := _selected()
+	var foe = _unit_at(screen_pos, false)
+	if foe != null and not sel.is_empty():
+		combat.order_attack(sel, foe)
+		marker["pos"] = Vector2(foe["pos"])
+		marker["t"] = 0.0
+		marker["attack"] = true
+		return
+	_command(_tile_at(screen_pos), false)
+
+func _command(target: Vector2i, attack_move: bool) -> void:
+	var sel := _selected()
+	if sel.is_empty():
+		return
+	var goal := Vector2i(clampi(target.x, 0, n - 1), clampi(target.y, 0, n - 1))
+	var spots := _free_near(goal, sel.size() * 2)
 	var k := 0
 	for u in sel:
-		while k < spots.size():
-			var dest: Vector2i = spots[k]
-			k += 1
-			var from := Vector2i(int(round(u["pos"].x)), int(round(u["pos"].y)))
-			if not walkable(from.x, from.y) or not walkable(dest.x, dest.y):
-				continue
-			var path := astar.get_id_path(from, dest)
-			if path.size() > 0:
-				var arr := []
-				for p in path:
-					arr.append(Vector2(float(p.x), float(p.y)))
-				u["path"] = arr
-				break
-	marker["pos"] = Vector2(float(target.x), float(target.y))
+		var dest := goal
+		if k < spots.size():
+			dest = spots[k]
+		k += 1
+		combat.order_move([u], Vector2(float(dest.x), float(dest.y)), attack_move)
+	marker["pos"] = Vector2(float(goal.x), float(goal.y))
 	marker["t"] = 0.0
+	marker["attack"] = attack_move
 
 func _apply_box() -> void:
 	var r := Rect2(sel_box_a, sel_box_b - sel_box_a).abs()
-	for u in units:
-		if not u["own"]:
+	for u in combat.units:
+		if int(u["player"]) != me or u["state"] == "dead":
 			continue
 		u["sel"] = r.has_point(world_to_screen(tile_to_world(u["pos"])))
 	box_active = false
@@ -437,15 +563,23 @@ func _cycle_size() -> void:
 	generate_map()
 
 func _select_all() -> void:
-	for u in units:
-		u["sel"] = u["own"]
+	for u in combat.units:
+		u["sel"] = int(u["player"]) == me and u["state"] != "dead"
 	_refresh_info()
 
 func _refresh_info() -> void:
 	var sel := 0
-	for u in units:
+	var mine := 0
+	var foes := 0
+	for u in combat.units:
+		if u["state"] == "dead":
+			continue
 		if u["sel"]:
 			sel += 1
+		if int(u["player"]) == me:
+			mine += 1
+		else:
+			foes += 1
 	var specials := 0
 	var police := 0
 	var homes := 0
@@ -459,5 +593,5 @@ func _refresh_info() -> void:
 			capturable += 1
 	var label: String = String(GC.MAP_SIZES[size_key]["label"])
 	size_btn.text = "الحجم: %s" % label
-	info.text = "%s %d×%d | أحياء %d | منزلية %d | مميزة %d | شرطة %d | محدد %d" % [
-		label, n, n, capturable, homes, specials, police, sel]
+	info.text = "%s %d×%d | أحياء %d | مميزة %d | شرطة %d | جنودي %d | أعداء %d | محدد %d" % [
+		label, n, n, capturable, specials, police, mine, foes, sel]
