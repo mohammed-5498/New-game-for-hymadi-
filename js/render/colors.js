@@ -18,7 +18,9 @@ export const PALETTES = {
   vipers:    { ground: '#6d7d5a', left: '#3e5530', right: '#557043', flag: '#9fd07c' },
   scorpions: { ground: '#a08a66', left: '#8a6224', right: '#a87a32', flag: '#f5c25a' },
   neutral:   { ground: '#948d7f', left: '#7d4f3c', right: '#9c6349', flag: '#e8e2d6' },
-  special:   { ground: '#bba565', left: '#7d4f3c', right: '#9c6349', flag: '#e0bd4f' }
+  special:   { ground: '#bba565', left: '#7d4f3c', right: '#9c6349', flag: '#e0bd4f' },
+  // حي مركز الشرطة: أرض رمادية مزرقّة قبل الاستيلاء عليه (القسم 3.8)
+  police:    { ground: '#6f7b8a', left: '#3c4a5e', right: '#51617a', flag: '#8fa6c4' }
 };
 
 export const ROAD_COLOR = '#5a554e';

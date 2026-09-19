@@ -1,5 +1,5 @@
 // الطقس: طبقات لونية، ندف ثلج، خطوط مطر، وإضاءة الليل
-import { WEATHER } from '../config.js';
+import { WEATHER, PERFORMANCE } from '../config.js';
 
 let particles = [];
 let currentKey = null;
@@ -35,21 +35,43 @@ export function drawOverlay(ctx, weatherKey, view) {
   ctx.fillRect(0, 0, view.w, view.h);
 }
 
+// التدرجات مكلفة، فنبنيها مرة واحدة لكل (لون، شفافية، نصف قطر) ونحركها بالإزاحة
+const gradientCache = new Map();
+
+function cachedGradient(ctx, color, alpha, radius) {
+  const key = color + '|' + alpha + '|' + radius;
+  let gradient = gradientCache.get(key);
+  if (!gradient) {
+    gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, radius);
+    gradient.addColorStop(0, 'rgba(' + color + ',' + alpha + ')');
+    gradient.addColorStop(1, 'rgba(' + color + ',0)');
+    gradientCache.set(key, gradient);
+    if (gradientCache.size > 200) gradientCache.clear();
+  }
+  return gradient;
+}
+
 // إضاءة دافئة من النار والنوافذ والأعلام (ليلاً فقط)
 export function drawLights(ctx, lights, camera, view) {
   ctx.globalCompositeOperation = 'lighter';
+  let drawn = 0;
+
   for (const light of lights) {
+    if (drawn >= PERFORMANCE.maxLights) break;
     const sx = (light.x - camera.x) * camera.z + view.w / 2;
     const sy = (light.y - camera.y) * camera.z + view.h / 2;
-    const r = light.r * camera.z;
+    const r = Math.round(light.r * camera.z);
+    if (r < 1) continue;
     if (sx < -r || sy < -r || sx > view.w + r || sy > view.h + r) continue;
-    const gradient = ctx.createRadialGradient(sx, sy, 0, sx, sy, r);
-    gradient.addColorStop(0, 'rgba(' + light.c + ',' + light.a + ')');
-    gradient.addColorStop(1, 'rgba(' + light.c + ',0)');
-    ctx.fillStyle = gradient;
+
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.fillStyle = cachedGradient(ctx, light.c, light.a, r);
     ctx.beginPath();
-    ctx.arc(sx, sy, r, 0, 6.2832);
+    ctx.arc(0, 0, r, 0, 6.2832);
     ctx.fill();
+    ctx.restore();
+    drawn++;
   }
   ctx.globalCompositeOperation = 'source-over';
 }

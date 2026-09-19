@@ -1,36 +1,138 @@
-// أزرار الشاشة وشريط معلومات المباراة
-import { WEATHER, WEATHER_KEYS } from '../config.js';
+// أزرار المباراة، شريط المعلومات، قائمة الإيقاف، وشاشة النهاية
+import { WEATHER, PERFORMANCE } from '../config.js';
 import { clearSelection, selectAllUnitsOf, resetMatch, districtsOwnedBy } from '../state.js';
-import { resetParticles } from '../render/weather.js';
+import { sound, startMusic, stopMusic } from '../audio/sound.js';
+import { showScreen } from './menus.js';
 
 const el = (id) => document.getElementById(id);
 
-export function setupHud(state) {
+let fpsVisible = false;
+let infoTaps = 0;
+
+// مؤشر الإطارات: يُحدَّث من حلقة اللعبة
+export function reportFrame(frameMs) {
+  if (!fpsVisible) return;
+  fpsSamples.push(frameMs);
+  if (fpsSamples.length < 20) return;
+  const average = fpsSamples.reduce((sum, ms) => sum + ms, 0) / fpsSamples.length;
+  fpsSamples.length = 0;
+  el('fps').textContent = Math.round(1000 / average) + ' إطار/ث';
+}
+const fpsSamples = [];
+
+// تبديل وضع الإصبع الواحد مع تحديث شكل الزر
+// (يستعمله الزر نفسه، والرجوع التلقائي بعد التحديد في input.js)
+export function setInputMode(state, mode) {
+  state.inputMode = mode;
+  state.selectionBox = null;
   const btnMode = el('btnMode');
-  btnMode.addEventListener('click', () => {
-    state.inputMode = state.inputMode === 'pan' ? 'select' : 'pan';
-    state.selectionBox = null;
-    btnMode.textContent = state.inputMode === 'pan' ? 'تحريك الخريطة' : 'تحديد الجنود';
-    btnMode.classList.toggle('on', state.inputMode === 'select');
+  btnMode.textContent = mode === 'pan' ? 'تحريك الخريطة' : 'تحديد الجنود';
+  btnMode.classList.toggle('on', mode === 'select');
+}
+
+export function setupHud(state) {
+  // لمس شريط المعلومات 3 مرات يُظهر مؤشر الإطارات أو يخفيه
+  el('info').addEventListener('click', () => {
+    infoTaps++;
+    if (infoTaps < PERFORMANCE.fpsTaps) return;
+    infoTaps = 0;
+    fpsVisible = !fpsVisible;
+    el('fps').hidden = !fpsVisible;
   });
 
-  el('btnAll').addEventListener('click', () => selectAllUnitsOf(state, state.humanId));
-  el('btnClear').addEventListener('click', () => clearSelection(state));
-
-  // أزرار تجريبية للمرحلة 1 (تُستبدل بقائمة الإعداد في المرحلة 6)
-  const btnWeather = el('btnWeather');
-  btnWeather.addEventListener('click', () => {
-    const next = (WEATHER_KEYS.indexOf(state.weather) + 1) % WEATHER_KEYS.length;
-    state.weather = WEATHER_KEYS[next];
-    resetParticles(state.weather, state.view);
-    btnWeather.textContent = 'الطقس: ' + WEATHER[state.weather].name;
+  el('btnMode').addEventListener('click', () => {
+    sound('ui_tap');
+    setInputMode(state, state.inputMode === 'pan' ? 'select' : 'pan');
   });
 
-  el('btnNewMap').addEventListener('click', () => resetMatch(state));
+  el('btnAll').addEventListener('click', () => { sound('select'); selectAllUnitsOf(state, state.humanId); });
+  el('btnClear').addEventListener('click', () => { sound('ui_tap'); clearSelection(state); });
+
+  // --- قائمة الإيقاف: اللعبة تتوقف بالكامل أثناء فتحها ---
+  el('btnPause').addEventListener('click', () => {
+    if (state.matchResult) return;
+    sound('ui_tap');
+    stopMusic();                       // الموسيقى تصمت أثناء الإيقاف
+    state.paused = true;
+    el('pauseMenu').hidden = false;
+  });
+
+  el('btnResume').addEventListener('click', () => {
+    sound('ui_tap');
+    startMusic();
+    state.paused = false;
+    el('pauseMenu').hidden = true;
+  });
+
+  el('btnRestartMatch').addEventListener('click', () => {
+    sound('ui_tap');
+    resetMatch(state);                 // نفس الإعدادات
+    startMusic();
+    closeOverlays();
+  });
+
+  el('btnQuitToMain').addEventListener('click', () => leaveToMain(state));
+
+  // --- شاشة النهاية ---
+  el('btnRestart').addEventListener('click', () => {
+    sound('ui_tap');
+    resetMatch(state);
+    startMusic();
+    closeOverlays();
+  });
+
+  el('btnEndToMain').addEventListener('click', () => leaveToMain(state));
+}
+
+function closeOverlays() {
+  el('pauseMenu').hidden = true;
+  el('endScreen').hidden = true;
+  last.result = null;
+}
+
+function leaveToMain(state) {
+  sound('ui_tap');
+  stopMusic();                        // لا موسيقى داخل القوائم
+  state.running = false;
+  state.paused = false;
+  closeOverlays();
+  showScreen('main');
+}
+
+// إشعار قصير عند الاستيلاء على حي
+function updateNoticeBox(state) {
+  const notice = el('notice');
+  const text = state.notice ? state.notice.text : '';
+  if (text === last.notice) return;
+  last.notice = text;
+  notice.hidden = !text;
+  notice.textContent = text;
+  notice.classList.toggle('mine', !!(state.notice && state.notice.mine));
+}
+
+// شاشة النهاية: فزت أو خسرت مع الإحصائيات
+function updateEndScreen(state) {
+  const result = state.matchResult;
+  if (result === last.result) return;
+  last.result = result;
+
+  const screen = el('endScreen');
+  if (!result) { screen.hidden = true; return; }
+
+  const minutes = Math.floor(result.duration / 60);
+  const seconds = Math.floor(result.duration % 60);
+  el('endTitle').textContent = result.won ? 'فزت' : 'خسرت';
+  el('endStats').innerHTML = [
+    'مدة المباراة: ' + minutes + ':' + String(seconds).padStart(2, '0'),
+    'أكبر عدد أحياء: ' + result.maxDistricts,
+    'أعداء قتلتهم: ' + result.kills,
+    'وحداتك التي ماتت: ' + result.losses
+  ].map(line => '<li>' + line + '</li>').join('');
+  screen.hidden = false;
 }
 
 // تحديث شريط المعلومات (بدون لمس DOM إلا عند تغير القيم)
-const last = { sel: -1, units: -1, districts: -1, weather: '' };
+const last = { sel: -1, units: -1, districts: -1, weather: '', notice: '', result: null };
 
 export function updateHud(state) {
   let selected = 0, playerUnitCount = 0;
@@ -57,4 +159,7 @@ export function updateHud(state) {
     last.weather = state.weather;
     el('infoWeather').textContent = WEATHER[state.weather].name;
   }
+
+  updateNoticeBox(state);
+  updateEndScreen(state);
 }

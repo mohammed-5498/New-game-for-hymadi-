@@ -1,9 +1,12 @@
 // اللمس والتحديد والأوامر (إصبع واحد، إصبعان، وعجلة الماوس)
-import { CAMERA, INPUT } from '../config.js';
-import { screenToWorld, worldToTile, worldToScreen } from '../map/coords.js';
+import { CAMERA, INPUT, ALERTS } from '../config.js';
+import { screenToWorld, worldToTile, worldToScreen, tileToWorld } from '../map/coords.js';
 import { clampCamera } from '../render/renderer.js';
-import { commandMove } from '../game/units.js';
-import { selectedUnits } from '../state.js';
+import { commandMove, commandAttackMove } from '../game/units.js';
+import { commandAttack, isEnemy } from '../game/combat.js';
+import { selectedUnits, selectUnitsAround } from '../state.js';
+import { sound } from '../audio/sound.js';
+import { setInputMode } from './hud.js';
 import { unitWorldPos } from '../render/units.js';
 
 export function setupInput(canvas, state) {
@@ -11,6 +14,9 @@ export function setupInput(canvas, state) {
   let dragStart = null;    // بداية سحب الإصبع الواحد
   let moved = false;       // هل تجاوز السحب حد اللمسة السريعة
   let pinch = null;        // حالة إصبعين
+  let lastUnitTap = null;  // آخر نقرة على جندي: للكشف عن النقرة المزدوجة
+  let longPressTimer = null;   // مؤقت الضغطة المطوّلة (أمر الهجوم المتحرك)
+  let longPressFired = false;  // نفّذنا الأمر فلا نكرره عند رفع الإصبع
 
   const pointFromEvent = (e) => {
     const rect = canvas.getBoundingClientRect();
@@ -23,7 +29,9 @@ export function setupInput(canvas, state) {
       dragStart = { x: p.x, y: p.y, camX: state.camera.x, camY: state.camera.y };
       moved = false;
       state.selectionBox = null;
+      startLongPress(p);
     } else if (pointers.size === 2) {
+      cancelLongPress();
       const v = [...pointers.values()];
       pinch = {
         d: Math.max(1, Math.hypot(v[0].x - v[1].x, v[0].y - v[1].y)),
@@ -58,7 +66,7 @@ export function setupInput(canvas, state) {
 
     if (!dragStart) return;
     const dx = p.x - dragStart.x, dy = p.y - dragStart.y;
-    if (Math.hypot(dx, dy) > INPUT.tapMovePx) moved = true;
+    if (Math.hypot(dx, dy) > INPUT.tapMovePx) { moved = true; cancelLongPress(); }
     if (!moved) return;
 
     if (state.inputMode === 'pan') {
@@ -74,6 +82,7 @@ export function setupInput(canvas, state) {
     if (!pointers.has(id)) return;
     const p = pointers.get(id);
     pointers.delete(id);
+    cancelLongPress();
 
     if (pinch) {
       if (pointers.size < 2) pinch = null;
@@ -82,7 +91,9 @@ export function setupInput(canvas, state) {
     }
 
     if (pointers.size === 0) {
-      if (dragStart && !moved) {
+      if (longPressFired) {
+        longPressFired = false;          // الأمر نُفّذ أثناء الضغط، فلا لمسة إضافية
+      } else if (dragStart && !moved) {
         handleTap(p.x, p.y);
       } else if (state.selectionBox) {
         applySelectionBox();
@@ -92,25 +103,107 @@ export function setupInput(canvas, state) {
     }
   }
 
-  // لمسة سريعة: على وحدتك تحددها، وعلى الأرض أمر حركة للمحدد
-  function handleTap(sx, sy) {
-    const hit = findOwnUnitAt(sx, sy);
-    if (hit) {
-      for (const unit of state.units) unit.selected = false;
-      hit.selected = true;
-      return;
-    }
-    const group = selectedUnits(state);
-    if (!group.length) return;
-    const world = screenToWorld(sx, sy, state.camera, state.view);
-    const tile = worldToTile(world.x, world.y);
-    commandMove(state, tile.i, tile.j, group);
+  // --- الضغطة المطوّلة على الأرض: أمر هجوم متحرك ---
+  function startLongPress(p) {
+    cancelLongPress();
+    longPressFired = false;
+    longPressTimer = setTimeout(() => {
+      longPressTimer = null;
+      if (moved || pointers.size !== 1) return;
+
+      const group = selectedUnits(state);
+      if (!group.length) return;
+      if (findUnitAt(p.x, p.y)) return;          // الضغط على وحدة ليس أمر أرض
+
+      const world = screenToWorld(p.x, p.y, state.camera, state.view);
+      const tile = worldToTile(world.x, world.y);
+      if (commandAttackMove(state, tile.i, tile.j, group)) { longPressFired = true; sound('command'); }
+    }, INPUT.longPressMs);
   }
 
-  function findOwnUnitAt(sx, sy) {
+  function cancelLongPress() {
+    if (longPressTimer !== null) { clearTimeout(longPressTimer); longPressTimer = null; }
+  }
+
+  // هل هذه النقرة هي الثانية على نفس الجندي؟
+  // نتسامح في المكان لأن الإصبع نادراً ما يصيب الجندي الصغير مرتين بدقة
+  function isSecondTapOn(unit, sx, sy) {
+    if (!lastUnitTap || lastUnitTap.unit !== unit) return false;
+    if (performance.now() - lastUnitTap.time > INPUT.doubleTapMs) return false;
+    const world = unitWorldPos(unit, 1);
+    const screen = worldToScreen(world.x, world.y, state.camera, state.view);
+    return Math.hypot(screen.x - sx, screen.y - sy) <= INPUT.doubleTapSlackPx;
+  }
+
+  // لمسة سريعة: على وحدتك تحددها، وعلى عدو أمر هجوم، وعلى الأرض أمر حركة
+  function handleTap(sx, sy) {
+    // سهم التنبيه أولاً: لمسته تنقل الكاميرا إلى مكان الاشتباك (القسم 12.3)
+    if (tapAlertArrow(sx, sy)) return;
+
+    const group = selectedUnits(state);
+    const hit = findUnitAt(sx, sy);
+
+    // نقرة ثانية قرب الجندي نفسه حتى لو لم تصبه بدقة: تحديد المجموعة
+    const doubleTarget = lastUnitTap && isSecondTapOn(lastUnitTap.unit, sx, sy)
+      ? lastUnitTap.unit : null;
+
+    if (doubleTarget) {
+      selectUnitsAround(state, doubleTarget, INPUT.groupSelectRadiusTiles);
+      lastUnitTap = null;               // لا تُحسب نقرة ثالثة تحديداً جديداً
+      afterSuccessfulSelection();
+      return;
+    }
+
+    // اللمس على جندي من جنودك: تحديد فردي (ولا يصدر أي أمر حركة)
+    if (hit && hit.playerId === state.humanId) {
+      for (const unit of state.units) unit.selected = false;
+      hit.selected = true;
+      lastUnitTap = { unit: hit, time: performance.now() };
+      afterSuccessfulSelection();
+      return;
+    }
+
+    lastUnitTap = null;
+    if (!group.length) return;
+
+    if (hit && isEnemy(state, group[0], hit)) {
+      commandAttack(state, group, hit);
+      sound('command');
+      return;
+    }
+
+    const world = screenToWorld(sx, sy, state.camera, state.view);
+    const tile = worldToTile(world.x, world.y);
+    if (commandMove(state, tile.i, tile.j, group)) sound('command');
+  }
+
+  // لمسة على سهم الحافة: تنقل الكاميرا إلى مكان الحدث ويختفي السهم
+  function tapAlertArrow(sx, sy) {
+    for (const alert of state.alerts) {
+      if (!alert.screen) continue;
+      if (Math.hypot(alert.screen.x - sx, alert.screen.y - sy) > ALERTS.tapRadiusPx) continue;
+
+      const world = tileToWorld(alert.i, alert.j);
+      state.camera.x = world.x;
+      state.camera.y = world.y;
+      clampCamera(state);
+      state.alerts = state.alerts.filter(a => a !== alert);
+      sound('ui_tap');
+      return true;
+    }
+    return false;
+  }
+
+  // بعد أي تحديد ناجح نرجع تلقائياً لوضع تحريك الخريطة
+  function afterSuccessfulSelection() {
+    sound('select');
+    if (state.inputMode === 'select') setInputMode(state, 'pan');
+  }
+
+  function findUnitAt(sx, sy) {
     let best = null, bestDist = INPUT.unitTapRadiusPx;
     for (const unit of state.units) {
-      if (unit.playerId !== state.humanId || unit.state === 'dead') continue;
+      if (unit.state === 'dead') continue;
       const world = unitWorldPos(unit, 1);
       const screen = worldToScreen(world.x, world.y, state.camera, state.view);
       // نصوّب على جسم الوحدة لا على قدميها
@@ -124,12 +217,18 @@ export function setupInput(canvas, state) {
     const sel = state.selectionBox;
     const x0 = Math.min(sel.x0, sel.x1), x1 = Math.max(sel.x0, sel.x1);
     const y0 = Math.min(sel.y0, sel.y1), y1 = Math.max(sel.y0, sel.y1);
+    let selected = 0;
+
     for (const unit of state.units) {
       if (unit.playerId !== state.humanId || unit.state === 'dead') { unit.selected = false; continue; }
       const world = unitWorldPos(unit, 1);
       const screen = worldToScreen(world.x, world.y, state.camera, state.view);
       unit.selected = screen.x >= x0 && screen.x <= x1 && screen.y >= y0 && screen.y <= y1 + 5;
+      if (unit.selected) selected++;
     }
+
+    // مربع فارغ يبقيك في وضع التحديد لتعيد المحاولة
+    if (selected > 0) afterSuccessfulSelection();
   }
 
   // أحداث المؤشر (ومع المتصفحات القديمة أحداث اللمس)

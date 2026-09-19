@@ -9,17 +9,23 @@ html, body {
   -webkit-user-select: none;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
+  color: #2b2825;
 }
 
 #wrap { position: fixed; inset: 0; }
+
+/* ملاحظة: لكل عنصر يُخفى بخاصية hidden نستخدم :not([hidden])
+   وإلا تغلّبت قاعدة display على الإخفاء وظل العنصر ظاهراً */
+#screenGame:not([hidden]) { position: absolute; inset: 0; }
 
 #game {
   width: 100%;
   height: 100%;
   display: block;
-  touch-action: none; /* نتحكم باللمس بأنفسنا */
+  touch-action: none;   /* نتحكم باللمس بأنفسنا */
 }
 
+/* --- أزرار المباراة --- */
 .btn {
   position: absolute;
   background: #ffffff;
@@ -36,10 +42,6 @@ html, body {
 }
 
 .btn:active { background: #efeae1; }
-
-/* الأزرار المؤقتة للتجربة فقط */
-.btn.tmp { opacity: .85; font-size: 13px; min-height: 36px; }
-
 .btn.on { background: #dbe8fb; color: #1b4f9c; }
 
 #info {
@@ -50,11 +52,277 @@ html, body {
   color: #5f5a52;
   border: 1px solid #cfc9bd;
   border-radius: 8px;
-  padding: 6px 10px;
-  font-size: 13px;
+  padding: 5px 8px;
+  font-size: 12px;
   display: flex;
-  gap: 6px;
+  gap: 5px;
   align-items: center;
 }
 
+/* زر الإيقاف في الوسط */
+#btnPause { min-height: 36px; padding: 0 10px; font-size: 13px; }
+
+/* على شاشات الجوال الضيقة يلتف شريط المعلومات في سطرين
+   حتى يبقى زر الإيقاف في الوسط بلا تداخل */
+@media (max-width: 560px) {
+  #info {
+    flex-wrap: wrap;
+    box-sizing: border-box;   /* حتى يشمل max-width الحشو والإطار */
+    max-width: 34vw;
+    gap: 2px 8px;
+    font-size: 11px;
+  }
+  #info .sep { display: none; }
+}
+
 #info .sep { color: #cfc9bd; }
+
+/* إشعار قصير أعلى الشاشة */
+#notice {
+  position: absolute;
+  top: 62px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(43, 40, 37, .88);
+  color: #f2ede4;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 14px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+#notice.mine { background: rgba(27, 79, 156, .92); }
+
+/* --- الشاشات والقوائم --- */
+#screenMain:not([hidden]),
+#screenSetup:not([hidden]),
+#pauseMenu:not([hidden]),
+#endScreen:not([hidden]) {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  /* flex-start مع margin:auto على اللوحة = توسيط رأسي بدون قص أعلى المحتوى الطويل */
+  align-items: flex-start;
+  justify-content: center;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;          /* التمرير بالإصبع داخل القائمة */
+  padding: 12px;
+  box-sizing: border-box;
+}
+
+#screenMain { background: #34302b; }
+#screenSetup { background: #34302b; }
+#pauseMenu, #endScreen { background: rgba(26, 24, 21, .72); }
+
+.menu, .panel {
+  background: #fffdf8;
+  border: 1px solid #cfc9bd;
+  border-radius: 14px;
+  padding: 18px 16px;
+  width: 100%;
+  max-width: 460px;
+  box-sizing: border-box;
+  text-align: center;
+  margin: auto 0;               /* يوسّط رأسياً عند وجود مساحة، وبلا قص عند الطول */
+}
+
+.menu.setup { text-align: right; padding-bottom: 14px; }
+
+.title { margin: 6px 0 4px; font-size: 30px; }
+.subtitle { margin: 0 0 22px; color: #6b665c; font-size: 14px; }
+h1 { margin: 0 0 14px; font-size: 26px; }
+h2 { margin: 0 0 12px; font-size: 19px; text-align: center; }
+
+button.wide {
+  background: #3b7dd8;
+  color: #ffffff;
+  border: 0;
+  border-radius: 8px;
+  min-height: 44px;
+  width: 100%;
+  font-size: 16px;
+  font-family: inherit;
+  margin-top: 8px;
+}
+
+button.wide:active { background: #2f66b0; }
+button.wide.ghost { background: #efeae1; color: #2b2825; }
+button.wide.ghost:active { background: #e2dccf; }
+
+/* صفوف الخيارات */
+.row { margin-bottom: 10px; }
+.label { display: block; font-size: 13px; color: #5f5a52; margin-bottom: 4px; }
+
+.options { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.opt {
+  background: #efeae1;
+  border: 1px solid #d8d2c6;
+  border-radius: 8px;
+  min-height: 34px;
+  padding: 0 8px;
+  font-size: 13px;
+  font-family: inherit;
+  color: #2b2825;
+  flex: 1 1 28%;
+}
+
+.opt.selected { background: #3b7dd8; border-color: #3b7dd8; color: #ffffff; }
+
+/* خانات اللاعبين */
+.slots-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 13px;
+  color: #5f5a52;
+  margin: 12px 0 6px;
+}
+
+.hint { font-size: 12px; color: #8c857a; }
+
+.slot {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.slot > * { flex: 1 1 0; min-width: 0; }
+
+.slot .cell {
+  background: #efeae1;
+  border: 1px solid #d8d2c6;
+  border-radius: 7px;
+  min-height: 36px;
+  font-size: 12px;
+  font-family: inherit;
+  color: #2b2825;
+  padding: 0 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* الأعمدة: الاسم واللون بعرض ثابت، والباقي يتقاسم ما تبقى */
+.slot .cell.name { background: transparent; border: 0; text-align: right; font-size: 12px; flex: 0 0 42px; }
+.slot .cell.color { flex: 0 0 32px; border: 2px solid #d8d2c6; }
+.slot .cell.gang { flex: 1.3 1 0; }
+.slot.closed .cell:not(.type) { opacity: .35; }
+
+/* شريط أزرار سفلي ثابت داخل قائمة الإعداد */
+.setup-footer {
+  position: sticky;
+  bottom: 0;
+  background: #fffdf8;
+  padding-top: 8px;
+  margin-top: 6px;
+  box-shadow: 0 -8px 10px -6px rgba(43, 40, 37, .15);
+}
+
+/* "ابدأ" و"رجوع" في صف واحد حتى لا يأكل الشريط السفلي مساحة الخانات */
+.footer-row { display: flex; gap: 8px; }
+.footer-row .wide { margin-top: 0; }
+.footer-row #btnStart { flex: 2 1 0; }
+.footer-row #btnBackToMain { flex: 1 1 0; }
+
+/* أزرار الحد الأقصى قصيرة: كلها في صف واحد */
+#optMaxUnits .opt { flex: 1 1 12%; padding: 0 4px; }
+
+.error {
+  color: #c0392b;
+  font-size: 14px;
+  margin: 10px 0 0;
+  text-align: center;
+}
+
+#endScreen ul {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  font-size: 15px;
+  line-height: 1.9;
+  color: #5f5a52;
+}
+
+/* مؤشر الإطارات (للاختبار): يظهر عند لمس شريط المعلومات 3 مرات */
+#fps {
+  position: absolute;
+  top: 10px;
+  right: 140px;
+  background: rgba(43, 40, 37, .85);
+  color: #9fd07c;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-family: ui-monospace, monospace;
+  pointer-events: none;
+}
+
+
+/* --- شريط القوة: لوحة اللاعبين (القسم 12.3) --- */
+#power {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  width: 150px;
+  max-height: 33vh;              /* لا تغطي أكثر من ثلث ارتفاع الشاشة */
+  display: flex;
+  flex-direction: column;
+  background: rgba(255, 255, 255, .92);
+  border: 1px solid #cfc9bd;
+  border-radius: 8px;
+  overflow: hidden;
+  font-size: 11px;
+  color: #3d3a36;
+}
+
+#powerHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  width: 100%;
+  padding: 3px 7px;
+  background: #efeae1;
+  border: 0;
+  border-bottom: 1px solid #ddd7ca;
+  font: inherit;
+  font-weight: 700;
+  color: #3d3a36;
+  cursor: pointer;
+}
+
+#powerRows { overflow-y: auto; -webkit-overflow-scrolling: touch; }
+#power.folded #powerRows { display: none; }
+
+.power-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 18px;                  /* سطر صغير: ثمانية لاعبين تسع الشاشة */
+  padding: 0 6px;
+  border-top: 1px solid #f0ece3;
+  white-space: nowrap;
+}
+.power-row:first-child { border-top: 0; }
+
+.power-dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
+.power-name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; }
+.power-team { color: #8a8378; font-size: 10px; }
+.power-num { font-variant-numeric: tabular-nums; }
+.power-num.districts { font-weight: 700; }
+.power-num.units { color: #8a8378; }
+
+/* سطر اللاعب نفسه مميز بإطار خفيف */
+.power-row.me { border: 1px solid #3b7dd8; border-radius: 5px; }
+/* حلفاؤه تحتهم خط سفلي خفيف */
+.power-row.ally .power-name { border-bottom: 1px solid #9ab7e0; }
+/* المهزوم: اسمه مشطوب ووضوحه منخفض */
+.power-row.out { opacity: .4; }
+.power-row.out .power-name { text-decoration: line-through; }

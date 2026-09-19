@@ -3,6 +3,10 @@ import { CAMERA, PLAYER_COLORS, GANGS, UNITS, WEATHER } from './config.js';
 import { createMap } from './map/generator.js';
 import { findFreeTiles } from './map/pathfinding.js';
 import { createUnit } from './game/units.js';
+import { buildCaptureZones, snapDistrictTints } from './game/capture.js';
+import { initSpawnTimers, spawnChampion } from './game/spawn.js';
+import { initBots } from './ai/bot.js';
+import { createPolicePlayer, initPolice } from './game/police.js';
 import { tileToWorld } from './map/coords.js';
 
 export function createMatch(settings) {
@@ -14,17 +18,23 @@ export function createMatch(settings) {
     color: (PLAYER_COLORS.find(c => c.id === p.color) || PLAYER_COLORS[index]).hex,
     isHuman: !!p.isHuman,
     team: p.team || 0,
+    difficulty: p.difficulty || 'medium',
     homeDistrictId: -1
   }));
 
   const map = createMap(settings.mapSize, players);
   if (!map) throw new Error('تعذر توليد خريطة صالحة');
 
+  // الشرطة طرف محايد يُضاف بعد توزيع الأحياء المنزلية فلا يأخذ حياً ولا مقراً
+  players.push(createPolicePlayer(players));
+
   const state = {
     settings,
     map,
     players,
     units: [],
+    projectiles: [],
+    pathQueue: [],             // طلبات المسار المنتظرة
     nextUnitId: 1,
     humanId: players.findIndex(p => p.isHuman),
     weather: WEATHER[settings.weather] ? settings.weather : 'day',
@@ -32,17 +42,39 @@ export function createMatch(settings) {
     camera: { x: 0, y: 0, z: CAMERA.startZoom },
     view: { w: 1, h: 1, dpr: 1 },
     inputMode: 'pan',          // pan | select
+    running: false,            // هل المباراة جارية (لا تعمل داخل القوائم)
+    paused: false,             // قائمة الإيقاف مفتوحة
     selectionBox: null,        // مربع التحديد أثناء السحب
     moveMarker: null,          // حلقة مكان أمر الحركة
-    time: 0                    // زمن المباراة بالثواني
+    notice: null,              // إشعار قصير (استيلاء على حي)
+    matchResult: null,         // نتيجة المباراة عند انتهائها
+    spawnTimers: [],
+    botTimers: [],
+    heroTimers: [],
+    heroTurn: [],
+    fires: [],                 // مناطق نار رامي النار
+    time: 0,                   // زمن المباراة بالثواني
+    shakeAt: -99,              // زمن آخر ارتجاجة كاميرا (القسم 5.2)
+    alerts: [],                // أسهم الحافة الظاهرة الآن (القسم 12.3)
+    alertSeen: [],             // مناطق نُبّه عنها قريباً {kind, i, j, t}
+    stats: {
+      kills: players.map(() => 0),
+      losses: players.map(() => 0),
+      maxDistricts: 1          // أكبر عدد أحياء امتلكها اللاعب
+    }
   };
 
+  buildCaptureZones(state);
+  snapDistrictTints(state);      // الأحياء المنزلية ملوّنة من البداية
   spawnStartingUnits(state);
+  initSpawnTimers(state);
+  initPolice(state);
+  initBots(state);
   centerCameraOnHome(state);
   return state;
 }
 
-// كل لاعب يبدأ بعدد من الأفراد عند ساحة علم حيه المنزلي
+// كل لاعب يبدأ بثلاثة أفراد عاديين + بطله عند ساحة علم حيه المنزلي (القسم 7)
 function spawnStartingUnits(state) {
   for (const player of state.players) {
     const home = state.map.districts[player.homeDistrictId];
@@ -51,6 +83,7 @@ function spawnStartingUnits(state) {
     for (const [i, j] of spots) {
       state.units.push(createUnit(state, player, i, j));
     }
+    spawnChampion(state, player, home);
   }
 }
 
@@ -85,16 +118,52 @@ export function selectAllUnitsOf(state, playerId) {
   for (const unit of state.units) unit.selected = unit.playerId === playerId;
 }
 
-// إعادة توليد المباراة بنفس الإعدادات داخل نفس كائن الحالة
-export function resetMatch(state) {
-  const fresh = createMatch(state.settings);
+// كل وحدات اللاعب داخل دائرة حول وحدة معينة، مهما كان نوعها
+// (تحديد المجموعة بالنقر المزدوج على جندي)
+export function selectUnitsAround(state, center, radius) {
+  const radiusSq = radius * radius;
+  let count = 0;
+
+  for (const unit of state.units) {
+    if (unit.playerId !== center.playerId || unit.state === 'dead') { unit.selected = false; continue; }
+    const dx = unit.x - center.x, dy = unit.y - center.y;
+    unit.selected = dx * dx + dy * dy <= radiusSq;
+    if (unit.selected) count++;
+  }
+
+  if (!center.selected && center.state !== 'dead') { center.selected = true; count++; }
+  return count;
+}
+
+// بدء مباراة جديدة داخل نفس كائن الحالة (حتى تبقى مراجع اللمس والواجهة صالحة)
+export function resetMatch(state, settings = state.settings) {
+  const fresh = createMatch(settings);
+  state.settings = settings;
+  state.weather = fresh.weather;
+  state.maxUnits = fresh.maxUnits;
+  state.paused = false;
   state.map = fresh.map;
   state.players = fresh.players;
   state.units = fresh.units;
+  state.projectiles = [];
+  state.pathQueue = [];
+  state.stats = fresh.stats;
+  state.spawnTimers = fresh.spawnTimers;
+  state.botTimers = fresh.botTimers;
+  state.heroTimers = fresh.heroTimers;
+  state.heroTurn = fresh.heroTurn;
+  state.championTimers = fresh.championTimers;
+  state.policeTimers = fresh.policeTimers;
+  state.fires = [];
   state.nextUnitId = fresh.nextUnitId;
   state.humanId = fresh.humanId;
   state.moveMarker = null;
   state.selectionBox = null;
+  state.notice = null;
+  state.matchResult = null;
   state.time = 0;
+  state.alerts = [];
+  state.alertSeen = [];
+  state.shakeAt = -99;
   centerCameraOnHome(state);
 }

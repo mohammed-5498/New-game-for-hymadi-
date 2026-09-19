@@ -1,18 +1,34 @@
 // رسم المباني بألوان مسطحة (منقول من prototype.html)
+import { CAPTURE } from '../config.js';
 import { mix, PALETTES, DARK, LIT_WINDOW, CRATE } from './colors.js';
 
 let ctx = null;
 let weather = 'day';
 let lights = [];   // مصادر الإضاءة تُجمع أثناء الرسم وتُستخدم ليلاً
 
-export function setFrameContext(context, weatherKey, lightsArray) {
+let frameTime = 0;   // زمن المباراة: يُستعمل في الوميض
+
+export function setFrameContext(context, weatherKey, lightsArray, time = 0) {
   ctx = context;
   weather = weatherKey;
   lights = lightsArray;
+  frameTime = time;
 }
 
 // يبيّض اللون في جو الثلج
 const snow = (color, amount) => weather === 'snow' ? mix(color, '#eef2f5', amount) : color;
+
+// --- صبغ مباني الحي بلون مالكه (القسم 8) ---
+// الأسطح والأجزاء العلوية بخلط 45%، والجدران بخلط 20% فقط.
+// الأطلال والأشجار والسيارات المحطمة والبراميل لا تُصبغ: ليست ملكاً لأحد.
+const NO_TINT = ['R', 'T', 'X', 'B', 'L', 'O'];
+let tintColor = null;   // لون المالك، أو null للحي المحايد
+let tintMix = 0;        // تقدم الانتقال اللوني من 0 إلى 1
+
+const roofTint = (color) =>
+  tintColor ? mix(color, tintColor, CAPTURE.roofTintAlpha * tintMix) : color;
+const wallTint = (color) =>
+  tintColor ? mix(color, tintColor, CAPTURE.wallTintAlpha * tintMix) : color;
 
 // --- أدوات رسم أساسية ---
 function poly(points, color) {
@@ -54,17 +70,18 @@ function ellipse(x, y, rx, ry, color) {
 
 // صندوق مجسم: واجهة يسار، واجهة يمين، وسطح اختياري
 function box(cx, cy, w, d, h, leftColor, rightColor, topColor) {
-  poly([[cx - w, cy], [cx, cy + d], [cx, cy + d - h], [cx - w, cy - h]], leftColor);
-  poly([[cx, cy + d], [cx + w, cy], [cx + w, cy - h], [cx, cy + d - h]], rightColor);
-  if (topColor) poly([[cx - w, cy - h], [cx, cy - d - h], [cx + w, cy - h], [cx, cy + d - h]], snow(topColor, 0.75));
+  poly([[cx - w, cy], [cx, cy + d], [cx, cy + d - h], [cx - w, cy - h]], wallTint(leftColor));
+  poly([[cx, cy + d], [cx + w, cy], [cx + w, cy - h], [cx, cy + d - h]], wallTint(rightColor));
+  if (topColor) poly([[cx - w, cy - h], [cx, cy - d - h], [cx + w, cy - h], [cx, cy + d - h]],
+                     roofTint(snow(topColor, 0.75)));
 }
 
 // سقف مائل
 function roof(cx, cy, w, d, h, rh, leftColor, rightColor) {
   const apex = [cx, cy - h - rh];
-  poly([[cx - w, cy - h], apex, [cx + w, cy - h]], '#4a3a30');
-  poly([[cx - w, cy - h], [cx, cy + d - h], apex], snow(leftColor, 0.55));
-  poly([[cx, cy + d - h], [cx + w, cy - h], apex], snow(rightColor, 0.65));
+  poly([[cx - w, cy - h], apex, [cx + w, cy - h]], roofTint('#4a3a30'));
+  poly([[cx - w, cy - h], [cx, cy + d - h], apex], roofTint(snow(leftColor, 0.55)));
+  poly([[cx, cy + d - h], [cx + w, cy - h], apex], roofTint(snow(rightColor, 0.65)));
 }
 
 // نافذة على الواجهة اليسرى
@@ -80,23 +97,29 @@ function windowR(cx, cy, w, d, u, v, du, dv, color) {
 }
 
 // يرسم مبنى واحداً في إحداثيات العالم (x, y)
-// ownerColor: لون اللاعب المالك للحي (للأعلام)، أو null
-export function drawBuilding(type, x, y, region, i, j, ownerColor) {
+// ownerColor: لون اللاعب المالك للحي (للأعلام والصبغ)، أو null
+// mixAmount: تقدم الانتقال اللوني من 0 إلى 1 (القسم 8)
+export function drawBuilding(type, x, y, region, i, j, ownerColor, detail = true, mixAmount = 1) {
   const g = PALETTES[region] || PALETTES.neutral;
   const variant = (i * 7 + j * 3) % 3;
+
+  tintColor = ownerColor && !NO_TINT.includes(type) ? ownerColor : null;
+  tintMix = mixAmount;
 
   if (type === 'H') {                      // بيت بسقف مائل
     const walls = [['#b59a78', '#cdb391'], ['#a88f7a', '#c4ab95'], ['#9f9a86', '#bab5a0']][variant];
     box(x, y + 1, 14, 7, 14, walls[0], walls[1]);
     roof(x, y + 1, 14, 7, 14, 12, g.left, g.right);
-    windowL(x, y + 1, 14, 7, 0.2, 5, 0.25, 4, DARK);
-    windowR(x, y + 1, 14, 7, 0.6, 5, 0.22, 4, DARK);
-    windowR(x, y + 1, 14, 7, 0.15, 0, 0.2, 8, '#5b4636');
+    if (detail) {
+      windowL(x, y + 1, 14, 7, 0.2, 5, 0.25, 4, DARK);
+      windowR(x, y + 1, 14, 7, 0.6, 5, 0.22, 4, DARK);
+      windowR(x, y + 1, 14, 7, 0.15, 0, 0.2, 8, '#5b4636');
+    }
 
   } else if (type === 'A') {               // عمارة سكنية بنوافذ بعضها مضاء
     const h = 32 + ((i + j) % 2) * 8;
     box(x, y, 15, 7.5, h, '#8f8c85', '#aaa69e', '#77736c');
-    for (let v = 6; v < h - 4; v += 7) {
+    for (let v = 6; detail && v < h - 4; v += 7) {
       [0.15, 0.55].forEach((u, n) => {
         windowL(x, y, 15, 7.5, u, v, 0.25, 4, (i + j + v + n) % 4 === 0 ? LIT_WINDOW : DARK);
         windowR(x, y, 15, 7.5, u, v, 0.25, 4, (i + 2 * j + v + n) % 5 === 0 ? LIT_WINDOW : DARK);
@@ -116,8 +139,10 @@ export function drawBuilding(type, x, y, region, i, j, ownerColor) {
 
   } else if (type === 'F') {               // مصنع بمدخنة ودخان
     box(x, y, 16, 8, 18, '#7a5040', '#945f4b', '#5e4035');
-    [0.1, 0.4, 0.7].forEach(u => windowL(x, y, 16, 8, u, 7, 0.18, 6, DARK));
-    windowR(x, y, 16, 8, 0.35, 0, 0.3, 10, '#4a3b32');
+    if (detail) {
+      [0.1, 0.4, 0.7].forEach(u => windowL(x, y, 16, 8, u, 7, 0.18, 6, DARK));
+      windowR(x, y, 16, 8, 0.35, 0, 0.3, 10, '#4a3b32');
+    }
     box(x + 6, y - 19, 3, 1.5, 22, '#5d4a3f', '#6e584b', '#4a3b32');
     circ(x + 7, y - 46, 4, '#a39d95', 0.7);
     circ(x + 11, y - 52, 5, '#a39d95', 0.55);
@@ -169,10 +194,10 @@ export function drawBuilding(type, x, y, region, i, j, ownerColor) {
     line(x - 7, y + 2, x - 5, y - 20, '#5d4a3f', 1.5);
     line(x + 7, y + 2, x + 5, y - 20, '#5d4a3f', 1.5);
     line(x, y + 5, x, y - 20, '#5d4a3f', 1.5);
-    ellipse(x, y - 20, 8, 3, '#7a6552');
-    rect(x - 8, y - 32, 16, 12, '#8c7560');
-    ellipse(x, y - 32, 8, 3, '#a08a74');
-    poly([[x - 8, y - 32], [x, y - 41], [x + 8, y - 32]], '#6e584b');
+    ellipse(x, y - 20, 8, 3, wallTint('#7a6552'));
+    rect(x - 8, y - 32, 16, 12, wallTint('#8c7560'));
+    ellipse(x, y - 32, 8, 3, roofTint('#a08a74'));
+    poly([[x - 8, y - 32], [x, y - 41], [x + 8, y - 32]], roofTint('#6e584b'));
 
   } else if (type === 'Q') {               // مقر العصابة بعلم بلون اللاعب
     box(x, y, 16, 8, 26, g.left, g.right, '#3a3632');
@@ -200,6 +225,21 @@ export function drawBuilding(type, x, y, region, i, j, ownerColor) {
     rect(x - 1.2, y - 8, 2.4, 9, '#9a917f');
     ellipse(x, y - 8, 3.5, 1.6, '#7fb0cf');
 
+  } else if (type === 'N') {               // مركز الشرطة بمصباح أزرق وامض
+    box(x, y, 16, 8, 20, '#8e9099', '#a8aab3', '#74767e');
+    [[0.15, 6], [0.55, 6], [0.15, 13], [0.55, 13]].forEach(p => {
+      windowL(x, y, 16, 8, p[0], p[1], 0.22, 5, DARK);
+      windowR(x, y, 16, 8, p[0], p[1], 0.22, 5, DARK);
+    });
+    rect(x - 5, y - 24, 10, 2.2, '#2f4a6e');          // لافتة المركز
+    // المصباح الأزرق يومض مرتين في الثانية
+    const blink = 0.35 + 0.65 * Math.max(0, Math.sin(frameTime * 6));
+    ctx.globalAlpha = blink;
+    circ(x, y - 27, 2.4, '#5b9bd5');
+    ctx.globalAlpha = 1;
+    circ(x, y - 27, 1.2, '#dbeaf7');
+    lights.push({ x, y: y - 26, r: 26, c: '90,155,215', a: 0.35 + 0.35 * blink });
+
   } else if (type === 'S') {               // مستشفى مهجور
     box(x, y, 16, 8, 22, '#cfc8ba', '#e4ddcf', '#b3ab9c');
     [[0.15, 6], [0.55, 6], [0.15, 14], [0.55, 14]].forEach((p, n) => {
@@ -210,7 +250,7 @@ export function drawBuilding(type, x, y, region, i, j, ownerColor) {
     rect(x - 1.3, y - 27, 2.6, 8.6, '#c0392b');
 
   } else if (type === 'P') {               // ساحة العلم (نقطة الاستيلاء)
-    poly([[x - 12, y], [x, y - 6], [x + 12, y], [x, y + 6]], '#b3aa98');
+    poly([[x - 12, y], [x, y - 6], [x + 12, y], [x, y + 6]], wallTint('#b3aa98'));
     ctx.beginPath();
     ctx.ellipse(x, y, 15, 7.5, 0, 0, 6.2832);
     ctx.strokeStyle = 'rgba(255,255,255,.55)';

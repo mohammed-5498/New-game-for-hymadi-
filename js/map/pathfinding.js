@@ -70,6 +70,8 @@ function rebuildPath(cameFrom, endNode, n) {
 }
 
 // يبحث عن عدد من المربعات الفارغة القريبة من نقطة (للتوزيع على المجموعة)
+// لا يعيد إلا المربعات الموصولة بشبكة الشوارع (القسم 3.4.1): الظهور والحركة
+// لا يستهدفان فراغاً معزولاً حتى لو كان قابلاً للمشي
 export function findFreeTiles(map, si, sj, count, maxRadius = 10) {
   const out = [];
   const seen = new Set([map.idx(si, sj)]);
@@ -77,7 +79,7 @@ export function findFreeTiles(map, si, sj, count, maxRadius = 10) {
 
   while (queue.length && out.length < count) {
     const [i, j] = queue.shift();
-    if (map.isWalkable(i, j)) out.push([i, j]);
+    if (map.isConnected(i, j)) out.push([i, j]);
     for (const [dx, dy] of D8) {
       const a = i + dx, b = j + dy;
       if (!map.inBounds(a, b)) continue;
@@ -91,9 +93,59 @@ export function findFreeTiles(map, si, sj, count, maxRadius = 10) {
   return out;
 }
 
+// حقل تدفق: مسافة كل مربع عن الهدف (بحث عرضي واحد من الهدف)
+// يُبنى مرة واحدة للمجموعة الكبيرة بدل A* لكل وحدة
+export function buildFlowField(map, ti, tj) {
+  if (!map.isWalkable(ti, tj)) return null;
+
+  const n = map.n;
+  const distance = new Int32Array(n * n).fill(-1);
+  const start = map.idx(ti, tj);
+  distance[start] = 0;
+
+  const queue = new Int32Array(n * n);
+  let head = 0, tail = 0;
+  queue[tail++] = start;
+
+  while (head < tail) {
+    const current = queue[head++];
+    const i = current % n, j = (current - i) / n;
+    const step = distance[current] + 1;
+
+    for (const [dx, dy] of D8) {
+      const a = i + dx, b = j + dy;
+      if (!map.isWalkable(a, b)) continue;
+      // منع قطع الزوايا مثل A*
+      if (dx && dy && (!map.isWalkable(i + dx, j) || !map.isWalkable(i, j + dy))) continue;
+      const next = map.idx(a, b);
+      if (distance[next] >= 0) continue;
+      distance[next] = step;
+      queue[tail++] = next;
+    }
+  }
+  return { target: [ti, tj], distance };
+}
+
+// المربع التالي في اتجاه الهدف حسب حقل التدفق
+export function flowStep(map, field, i, j) {
+  if (!map.inBounds(i, j)) return null;
+  const here = field.distance[map.idx(i, j)];
+  if (here <= 0) return null;             // وصلنا الهدف أو مربع غير موصول
+
+  let best = null, bestValue = here;
+  for (const [dx, dy] of D8) {
+    const a = i + dx, b = j + dy;
+    if (!map.isWalkable(a, b)) continue;
+    if (dx && dy && (!map.isWalkable(i + dx, j) || !map.isWalkable(i, j + dy))) continue;
+    const value = field.distance[map.idx(a, b)];
+    if (value >= 0 && value < bestValue) { bestValue = value; best = [a, b]; }
+  }
+  return best;
+}
+
 // أقرب مربع يمكن المشي عليه من نقطة معينة
 export function nearestWalkable(map, i, j, maxRadius = 8) {
-  if (map.isWalkable(i, j)) return [i, j];
+  if (map.isConnected(i, j)) return [i, j];
   const found = findFreeTiles(map, i, j, 1, maxRadius);
   return found.length ? found[0] : null;
 }
