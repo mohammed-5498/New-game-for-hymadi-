@@ -15,6 +15,7 @@ var districts: Array = []
 var caps: Array = []       # {tile, gang, type, special, district}
 var units: Array = []      # {pos, gang, own, sel, path}
 
+var art := UnitsArt.new()
 var astar := AStarGrid2D.new()
 var cam: Camera2D
 var mode_btn: Button
@@ -44,6 +45,7 @@ func _ready() -> void:
 	size_btn.pressed.connect(_cycle_size)
 	$UI/SelAllBtn.pressed.connect(_select_all)
 	$UI/NewMapBtn.pressed.connect(generate_map)
+	$UI/DemoBtn.pressed.connect(func(): get_tree().change_scene_to_file("res://units_demo.tscn"))
 	generate_map()
 
 func _process(delta: float) -> void:
@@ -192,7 +194,7 @@ func _draw() -> void:
 			if int(round(u["pos"].x + u["pos"].y)) == s:
 				var state: String = "walk" if u["path"].size() > 0 else "idle"
 				var col: Color = GC.GANG_COLORS[u["gang"]]
-				UnitsArt.draw_unit(self, String(u["gang"]) + "_common", tile_to_world(u["pos"]), t, state, col, 1, 1.0)
+				art.draw_unit(self, String(u["gang"]) + "_common", tile_to_world(u["pos"]), t, state, col, 1, GC.UNIT_SCALE)
 
 	# دوائر التحديد فوق كل شيء
 	for u in units:
@@ -223,12 +225,12 @@ func _draw_object(k: String, c: Vector2, reg: String, i: int, j: int, t: float) 
 		"Q":
 			_box(c, 16, 8, 26, _gang_dark(reg), _gang_light(reg), Color("3a3632"))
 			draw_line(c + Vector2(0, -26), c + Vector2(0, -46), Color("2b2825"), 1.2)
-			UnitsArt.tri(self, c + Vector2(0, -46), c + Vector2(12, -42), c + Vector2(0, -38), _flag_color(reg))
+			_tri(c + Vector2(0, -46), c + Vector2(12, -42), c + Vector2(0, -38), _flag_color(reg))
 		"P":
 			draw_colored_polygon(PackedVector2Array([
 				c + Vector2(-12, 0), c + Vector2(0, -6), c + Vector2(12, 0), c + Vector2(0, 6)]), Color("b3aa98"))
 			draw_line(c, c + Vector2(0, -22), Color("2b2825"), 1.2)
-			UnitsArt.tri(self, c + Vector2(0, -22), c + Vector2(10, -19), c + Vector2(0, -16), _flag_color(reg))
+			_tri(c + Vector2(0, -22), c + Vector2(10, -19), c + Vector2(0, -16), _flag_color(reg))
 		"M":
 			_hospital(c)
 		"K":
@@ -268,13 +270,13 @@ func _clock_tower(c: Vector2, t: float) -> void:
 	draw_line(face, face + Vector2(sin(mins), -cos(mins)) * 4.6, Color("32302b"), 1.0)
 	draw_line(face, face + Vector2(sin(mins * 0.08), -cos(mins * 0.08)) * 3.0, Color("32302b"), 1.3)
 	# سقف هرمي
-	UnitsArt.tri(self, c + Vector2(-9, -44), c + Vector2(0, -56), c + Vector2(9, -44), Color("6b5a44"))
+	_tri(c + Vector2(-9, -44), c + Vector2(0, -56), c + Vector2(9, -44), Color("6b5a44"))
 
 func _fountain(c: Vector2) -> void:
-	UnitsArt.ellipse(self, c, 11.0, 5.5, Color("8f8a80"))
-	UnitsArt.ellipse(self, c, 8.5, 4.2, Color("4d6f82"))
+	_ellipse(c, 11.0, 5.5, Color("8f8a80"))
+	_ellipse(c, 8.5, 4.2, Color("4d6f82"))
 	draw_rect(Rect2(c.x - 1.0, c.y - 9.0, 2.0, 9.0), Color("9c9488"))
-	UnitsArt.ellipse(self, c + Vector2(0, -10), 3.0, 1.5, Color("b7b0a4"))
+	_ellipse(c + Vector2(0, -10), 3.0, 1.5, Color("b7b0a4"))
 
 func _police_station(c: Vector2, t: float) -> void:
 	_box(c, 16, 8, 22, Color("6f7a86"), Color("8794a1"), Color("5b646e"))
@@ -299,6 +301,16 @@ func _flag_color(reg: String) -> Color:
 	if GC.GANG_COLORS.has(reg):
 		return UnitsArt.lt(GC.GANG_COLORS[reg], 0.35)
 	return Color("e8e2d6")
+
+func _tri(a: Vector2, b: Vector2, c: Vector2, col: Color) -> void:
+	draw_colored_polygon(PackedVector2Array([a, b, c]), col)
+
+func _ellipse(center: Vector2, rx: float, ry: float, col: Color) -> void:
+	var pts := PackedVector2Array()
+	for i in 20:
+		var ang := TAU * float(i) / 20.0
+		pts.push_back(center + Vector2(cos(ang) * rx, sin(ang) * ry))
+	draw_colored_polygon(pts, col)
 
 func _box(c: Vector2, w: float, d: float, h: float, left: Color, right: Color, top: Color) -> void:
 	draw_colored_polygon(PackedVector2Array([

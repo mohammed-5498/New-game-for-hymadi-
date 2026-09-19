@@ -71,6 +71,42 @@ const GANG_COLORS := {
 }
 const POLICE_COLOR := Color("3a5a86")
 
+# ---------- رسم الوحدات (13.1) ----------
+const UNIT_SCALE := 0.62           # حجم رسم الوحدة العادية داخل مربع 36×18
+const UNIT_SCALE_SPECIAL := 0.713  # الشخصيات المميزة أكبر بـ 15%
+const UNIT_HURT_DUR := 0.35        # زمن عرض حالة hurt
+const UNIT_DEATH_DUR := 1.0        # زمن عرض حالة death قبل حذف الوحدة
+const UNIT_HIT_AT := 0.47          # لحظة الارتطام كنسبة من زمن الضربة
+
+# كل مفاتيح الرسم بالترتيب (16 وحدة + وحدتا شرطة)
+const UNIT_KEYS := [
+	"crow_common", "crow_spear", "crow_dual", "crow_hero",
+	"hammer_common", "hammer_shield", "hammer_breaker", "hammer_hero",
+	"viper_common", "viper_sniper", "viper_firebomber", "viper_hero",
+	"scorp_common", "scorp_boss", "scorp_medic", "scorp_hero",
+	"police_common", "police_captain",
+]
+const UNIT_NAMES := {
+	"crow_common": "غراب", "crow_spear": "حامل الرمح", "crow_dual": "المزدوج", "crow_hero": "بطل الغربان",
+	"hammer_common": "مطرقة", "hammer_shield": "المصفّح", "hammer_breaker": "المحطّم", "hammer_hero": "بطل المطارق",
+	"viper_common": "أفعى", "viper_sniper": "القنّاص", "viper_firebomber": "رامي النار", "viper_hero": "بطل الأفاعي",
+	"scorp_common": "عقرب", "scorp_boss": "الزعيم", "scorp_medic": "الطبيب", "scorp_hero": "بطل العقارب",
+	"police_common": "شرطي", "police_captain": "ضابط",
+}
+const UNIT_STATES := ["idle", "walk", "attack", "ult", "hurt", "death"]
+const UNIT_STATE_NAMES := {
+	"idle": "وقوف", "walk": "جري", "attack": "قتال",
+	"ult": "ضربة مميزة", "hurt": "إصابة", "death": "موت",
+}
+# عصابة كل مفتاح، لاختيار اللون
+const UNIT_GANG := {
+	"crow_common": "crow", "crow_spear": "crow", "crow_dual": "crow", "crow_hero": "crow",
+	"hammer_common": "hammer", "hammer_shield": "hammer", "hammer_breaker": "hammer", "hammer_hero": "hammer",
+	"viper_common": "viper", "viper_sniper": "viper", "viper_firebomber": "viper", "viper_hero": "viper",
+	"scorp_common": "scorp", "scorp_boss": "scorp", "scorp_medic": "scorp", "scorp_hero": "scorp",
+	"police_common": "police", "police_captain": "police",
+}
+
 # ---------- ألوان الأرض ----------
 const GROUND := {
 	"crow": Color("7a7090"), "hammer": Color("8d6a60"), "viper": Color("6d7d5a"),

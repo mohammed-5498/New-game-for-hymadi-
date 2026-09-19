@@ -1,0 +1,58 @@
+[gd_scene load_steps=2 format=3 uid="uid://bgangcity0002"]
+
+[ext_resource type="Script" path="res://scripts/units_demo.gd" id="1_demo"]
+
+[node name="UnitsDemo" type="Node2D"]
+script = ExtResource("1_demo")
+
+[node name="Cam" type="Camera2D" parent="."]
+zoom = Vector2(2, 2)
+
+[node name="UI" type="CanvasLayer" parent="."]
+
+[node name="BackBtn" type="Button" parent="UI"]
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = -72.0
+offset_right = 190.0
+offset_bottom = -16.0
+grow_vertical = 0
+text = "رجوع للخريطة"
+
+[node name="PauseBtn" type="Button" parent="UI"]
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -190.0
+offset_top = -72.0
+offset_right = -16.0
+offset_bottom = -16.0
+grow_horizontal = 0
+grow_vertical = 0
+text = "إيقاف"
+
+[node name="StepBtn" type="Button" parent="UI"]
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -190.0
+offset_top = 16.0
+offset_right = -16.0
+offset_bottom = 72.0
+grow_horizontal = 0
+text = "خطوة للأمام"
+
+[node name="Title" type="Label" parent="UI"]
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 16.0
+offset_top = 12.0
+offset_right = -206.0
+offset_bottom = 44.0
+grow_horizontal = 2
+horizontal_alignment = 1
+text = "معرض الوحدات — 18 وحدة × 6 حالات"
