@@ -268,6 +268,23 @@ const ALERT_ATTACK_COLOR := Color("d94a3a")   # سهم أحمر: وحداتك ت
 const ALERT_CAPTURE_COLOR := Color("e08a2a")  # سهم برتقالي: عدو يستولي على حيك
 const TOAST_LIFE := 2.5
 
+# ---------- البوتات والتحالفات (11) ----------
+const DIFFICULTIES := ["easy", "medium", "hard"]
+const DIFFICULTY_NAMES := {"easy": "سهل", "medium": "متوسط", "hard": "صعب"}
+const BOT_DIFFICULTY_DEFAULT := "medium"
+# تتخذ قراراتها كل: سهل 4 ث، متوسط 2 ث، صعب 1 ث
+const BOT_THINK := {"easy": 4.0, "medium": 2.0, "hard": 1.0}
+# حجم المجموعة المرسلة: سهل مجموعات صغيرة، وصعب يركز
+const BOT_GROUP := {"easy": 3, "medium": 4, "hard": 6}
+# جيش كافٍ لبدء الهجوم: سهل يهاجم متأخراً
+const BOT_ATTACK_MIN := {"easy": 12, "medium": 7, "hard": 5}
+# مع الشرطة: السهل يتجنبها، والمتوسط من 8 وحدات، والصعب يستهدفها مبكراً
+const BOT_POLICE_MIN_ARMY := {"easy": 9999, "medium": 8, "hard": 0}
+const BOT_DEFEND_RADIUS := 5.0     # عدو داخل هذا المدى من حي مملوك = هجوم يستدعي الدفاع
+const BOT_RETREAT_HP := 0.4        # الصعب يسحب المصاب دون هذه النسبة إلى المستشفى
+const BOT_REORDER_DIST := 1.5      # لا يُعاد إصدار الأمر إلا إذا تغيّر الهدف بهذا القدر
+const BOT_BACKLINE := 1.6          # الصعب يضع الرماة خلف المقاتلين بهذه المسافة
+
 # ---------- ألوان الأرض ----------
 const GROUND := {
 	"crow": Color("7a7090"), "hammer": Color("8d6a60"), "viper": Color("6d7d5a"),

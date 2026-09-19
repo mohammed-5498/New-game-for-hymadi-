@@ -53,6 +53,17 @@ offset_bottom = 240.0
 grow_horizontal = 0
 text = "معرض الوحدات"
 
+[node name="DiffBtn" type="Button" parent="UI"]
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -190.0
+offset_top = 312.0
+offset_right = -16.0
+offset_bottom = 368.0
+grow_horizontal = 0
+text = "الصعوبة: متوسط"
+
 [node name="FightBtn" type="Button" parent="UI"]
 anchors_preset = 1
 anchor_left = 1.0

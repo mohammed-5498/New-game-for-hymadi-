@@ -20,6 +20,7 @@ var player_dmg_mult := {}      # مخزن السلاح: +10% ضرر لكل وح�
 var player_heal := {}          # المستشفى: علاج مستمر لكل وحدات المالك (3.7)
 var heal_zones: Array = []     # منطقة استيلاء المستشفى: {pos, player, dps}
 var player_armor_bonus := {}   # مراكز الشرطة: درع إضافي للمالك (3.8)
+var teams := {}                # رقم اللاعب -> فريقه (التحالفات، 11)
 
 # استدعاءات للخارج: (وحدة مصابة، ضرر، هل من ضربة مميزة)
 var on_hit := Callable()
@@ -54,6 +55,9 @@ func spawn(key: String, player: int, team: int, tile: Vector2) -> Dictionary:
 	units.append(u)
 	_by_id[u["id"]] = u
 	return u
+
+func team_of_player(p: int) -> int:
+	return int(teams.get(p, p))
 
 func get_unit(id: int) -> Variant:
 	return _by_id.get(id, null)

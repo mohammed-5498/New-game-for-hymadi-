@@ -19,6 +19,9 @@ var combat: Combat
 var districts_state := Districts.new()
 var spawner := Spawner.new()
 var police := Police.new()
+var bots: Array = []           # بوت لكل لاعب غير بشري (11)
+var difficulty := GC.BOT_DIFFICULTY_DEFAULT
+var teams_setting: Array = []  # يملؤها قائمة الإعداد في المرحلة 9
 var gang_of := {}          # رقم اللاعب -> عصابته
 var team_of := {}          # رقم اللاعب -> فريقه (بلا تحالفات بعد: الفريق = اللاعب)
 var alerts: Array = []     # تنبيهات الحافة (12.3)
@@ -64,6 +67,7 @@ func _ready() -> void:
 	$UI/NewMapBtn.pressed.connect(generate_map)
 	$UI/DemoBtn.pressed.connect(func(): get_tree().change_scene_to_file("res://units_demo.tscn"))
 	$UI/FightBtn.pressed.connect(_test_battle)
+	$UI/DiffBtn.pressed.connect(_cycle_difficulty)
 	hud = $UI/Hud
 	hud.game = self
 	hud.load_pref()
@@ -73,6 +77,9 @@ func _process(delta: float) -> void:
 	combat.step(delta)
 	districts_state.step(delta, combat.units)
 	police.step(delta, districts)
+	if match_over < 0:
+		for b in bots:
+			b.step(delta, combat, districts_state, districts)
 	_handle_district_events()
 	if match_over < 0:
 		for spawn in spawner.step(delta, player_count, districts_state, combat.units):
@@ -230,9 +237,18 @@ func _setup_match() -> void:
 	player_count = maxi(1, homes.size())
 	for p in homes.size():
 		gang_of[p] = String(homes[p]["gang"])
-		team_of[p] = p        # بلا تحالفات حتى المرحلة 8
+		team_of[p] = p
+	_apply_teams()            # التحالفات (11) — تُختار في قائمة الإعداد (المرحلة 9)
 
 	districts_state.setup(districts, player_count, team_of)
+	combat.teams = team_of
+	bots = []
+	for p in player_count:
+		if p == me:
+			continue
+		var b := Bot.new()
+		b.setup(p, difficulty)
+		bots.append(b)
 	for p in homes.size():
 		districts_state.claim_home(int(homes[p]["id"]), p)
 	spawner.setup(player_count, gang_of, GC.UNIT_LIMIT_DEFAULT)
@@ -256,6 +272,12 @@ func _setup_match() -> void:
 		if p == me:
 			cam.position = tile_to_world(Vector2(cap))
 			cam_home = cam.position
+
+# التحالفات: قائمة أرقام فرق بطول عدد اللاعبين، وإلا كل لاعب في فريقه (11)
+func _apply_teams() -> void:
+	if teams_setting.size() == player_count:
+		for p in player_count:
+			team_of[p] = int(teams_setting[p])
 
 # مكافآت الأحياء المميزة ومراكز الشرطة (3.7 و 3.8) تنتقل مع الملكية
 func _refresh_clock_bonus() -> void:
@@ -787,6 +809,14 @@ func _apply_box() -> void:
 func _toggle_mode() -> void:
 	select_mode = not select_mode
 	mode_btn.text = "تحديد الجنود" if select_mode else "تحريك الخريطة"
+
+# تبديل صعوبة البوتات وإعادة بدء المباراة (قائمة الإعداد في المرحلة 9)
+func _cycle_difficulty() -> void:
+	var idx: int = GC.DIFFICULTIES.find(difficulty)
+	difficulty = GC.DIFFICULTIES[(idx + 1) % GC.DIFFICULTIES.size()]
+	$UI/DiffBtn.text = "الصعوبة: %s" % String(GC.DIFFICULTY_NAMES[difficulty])
+	_setup_match()
+	_refresh_info()
 
 func _cycle_size() -> void:
 	var idx: int = GC.SIZE_ORDER.find(size_key)
