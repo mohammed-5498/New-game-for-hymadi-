@@ -253,12 +253,34 @@ func _setup_match() -> void:
 			cam.position = tile_to_world(Vector2(cap))
 			cam_home = cam.position
 
-# برج الساعة (3.7): أزمنة الظهور لمالكه × 0.85
+# مكافآت الأحياء المميزة ومراكز الشرطة (3.7 و 3.8) تنتقل مع الملكية
 func _refresh_clock_bonus() -> void:
 	spawner.clock_bonus = {}
+	combat.player_dmg_mult = {}
+	combat.player_heal = {}
+	combat.player_armor_bonus = {}
+	combat.heal_zones = []
+	var police_count := {}
 	for d in districts:
-		if String(d["special"]) == "clock" and int(d["owner"]) >= 0:
-			spawner.clock_bonus[int(d["owner"])] = true
+		var o: int = int(d["owner"])
+		if o < 0:
+			continue
+		match String(d["special"]):
+			"clock":
+				spawner.clock_bonus[o] = true
+			"armory":
+				combat.player_dmg_mult[o] = float(combat.player_dmg_mult.get(o, 1.0)) + GC.ARMORY_DAMAGE_BONUS
+			"hospital":
+				combat.player_heal[o] = float(combat.player_heal.get(o, 0.0)) + GC.HOSPITAL_HEAL_GLOBAL
+				if Vector2i(d["cap"]).x >= 0:
+					combat.heal_zones.append({"pos": Vector2(d["cap"]), "player": o,
+						"dps": GC.HOSPITAL_HEAL_IN_ZONE - GC.HOSPITAL_HEAL_GLOBAL})
+		if String(d["type"]) == "police":
+			police_count[o] = int(police_count.get(o, 0)) + 1
+	# درع مراكز الشرطة يتجمع بحد أقصى +20% (3.8)
+	for o in police_count.keys():
+		combat.player_armor_bonus[o] = minf(GC.POLICE_ARMOR_BONUS_MAX,
+			float(police_count[o]) * GC.POLICE_ARMOR_BONUS)
 
 # معركة تجريبية: فريقان متقابلان قرب مركز الشاشة لتجربة القتال فوراً
 func _test_battle() -> void:
@@ -339,6 +361,10 @@ func _draw() -> void:
 				c + Vector2(-GC.TW, 0), c + Vector2(0, -GC.TH),
 				c + Vector2(GC.TW, 0), c + Vector2(0, GC.TH)]), col)
 
+	# بقع النار على الأرض (6.4 و 6.7)
+	for f in combat.fires:
+		_draw_fire(f)
+
 	# المباني والوحدات بترتيب العمق (painter's algorithm)
 	var t := float(Time.get_ticks_msec()) / 1000.0
 	for s in range(0, 2 * n - 1):
@@ -364,6 +390,10 @@ func _draw() -> void:
 		if u["sel"]:
 			draw_arc(p, 5.5, 0, TAU, 20, Color(0.95, 0.93, 0.89), 1.0, true)
 		_draw_hp_bar(u, p)
+		# نجمة ذهبية فوق الوحدة الجاهزة لضربتها المميزة (6.7)
+		if Combat.has_ult(String(u["key"])) and float(u["charge"]) >= GC.CHARGE_FULL and not bool(u["ulting"]):
+			var sc: float = GC.UNIT_SCALE_SPECIAL if not String(u["key"]).ends_with("_common") else GC.UNIT_SCALE
+			art.draw_ready_mark(self, p, sc)
 
 	# علامة نقطة الهدف
 	if marker["t"] < 0.8:
@@ -381,6 +411,22 @@ func _draw_unit(u: Dictionary) -> void:
 		combat.draw_time(u), combat.draw_state(u), col, int(u["dir"]), sc, combat.draw_rate(u))
 
 # شريط الدم: فوق المحدد أو ناقص الدم فقط، بلون مالك الوحدة (5.2)
+# بقعة نار مشتعلة: دائرة برتقالية نابضة مع ألسنة
+func _draw_fire(f: Dictionary) -> void:
+	var c := tile_to_world(Vector2(f["pos"]))
+	var left: float = 1.0 - clampf(float(f["t"]) / float(f["dur"]), 0.0, 1.0)
+	var r: float = float(f["radius"])
+	var t := float(Time.get_ticks_msec()) / 1000.0
+	var pulse: float = 0.9 + sin(t * 6.0) * 0.1
+	_ellipse(c, GC.TW * r * pulse, GC.TH * r * pulse, Color(0.91, 0.45, 0.16, 0.30 * left))
+	_ellipse(c, GC.TW * r * 0.6, GC.TH * r * 0.6, Color(0.97, 0.75, 0.25, 0.30 * left))
+	for i in 5:
+		var ang: float = t * 1.6 + float(i) * 1.257
+		var p := c + Vector2(cos(ang) * GC.TW * r * 0.65, sin(ang) * GC.TH * r * 0.65)
+		var h: float = 4.0 + sin(t * 7.0 + float(i)) * 2.0
+		_tri(p + Vector2(-2, 0), p + Vector2(0, -h), p + Vector2(2, 0),
+			Color(0.97, 0.83, 0.33, 0.75 * left))
+
 func _draw_hp_bar(u: Dictionary, p: Vector2) -> void:
 	var frac: float = clampf(float(u["hp"]) / maxf(1.0, float(u["max_hp"])), 0.0, 1.0)
 	var always: bool = bool(GC.stat(u["key"], "hero"))
@@ -392,6 +438,19 @@ func _draw_hp_bar(u: Dictionary, p: Vector2) -> void:
 	draw_rect(Rect2(x - 0.5, y - 0.5, w + 1.0, GC.HP_BAR_H + 1.0), Color(0, 0, 0, 0.55))
 	draw_rect(Rect2(x, y, w * frac, GC.HP_BAR_H),
 		GC.PLAYER_COLORS[int(u["player"]) % GC.PLAYER_COLORS.size()])
+	_draw_charge(u, x, y, w)
+
+# شريط الشحن الذهبي تحت شريط الدم، ونجمة فوق الرأس عند الجاهزية (6.7)
+func _draw_charge(u: Dictionary, x: float, y: float, w: float) -> void:
+	if not Combat.has_ult(String(u["key"])):
+		return
+	var ch: float = float(u["charge"]) / GC.CHARGE_FULL
+	var ready: bool = ch >= 1.0
+	if not u["sel"] and not ready:
+		return
+	var cy: float = y + GC.HP_BAR_H + 1.0
+	draw_rect(Rect2(x - 0.5, cy - 0.5, w + 1.0, 2.2), Color(0, 0, 0, 0.5))
+	draw_rect(Rect2(x, cy, w * ch, 1.2), Color("ffd66e"))
 
 func _draw_projectile(pr: Dictionary) -> void:
 	var p := tile_to_world(pr["pos"])

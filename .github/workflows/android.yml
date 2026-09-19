@@ -129,6 +129,11 @@ jobs:
           set -e
           godot --headless --path "$PROJECT_PATH" --script tests/test_match.gd
 
+      - name: فحص القدرات والضربات المميزة
+        run: |
+          set -e
+          godot --headless --path "$PROJECT_PATH" --script tests/test_abilities.gd
+
       - name: تصدير APK
         run: |
           set -e

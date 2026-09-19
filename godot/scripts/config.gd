@@ -143,8 +143,10 @@ const UNIT_STATS := {
 	# الغربان (6.2)
 	"crow_common":      {"speed": 2.5, "capture": 1.25},
 	"crow_spear":       {"hp": 150.0, "dmg": 12.0, "rate": 1.3, "range": 1.8, "detect": 4.5, "speed": 2.2},
-	"crow_dual":        {"hp": 95.0, "dmg": 7.0, "rate": 0.8, "speed": 2.6},
-	"crow_hero":        {"hp": 260.0, "armor": 0.10, "dmg": 18.0, "rate": 1.2, "range": 2.2, "speed": 2.5, "hero": true},
+	"crow_dual":        {"hp": 95.0, "dmg": 7.0, "rate": 0.8, "speed": 2.6,
+						 "combo_step": 0.12, "combo_max": 4, "combo_min_rate": 0.5, "combo_reset": 2.0},
+	"crow_hero":        {"hp": 260.0, "armor": 0.10, "dmg": 18.0, "rate": 1.2, "range": 2.2, "speed": 2.5, "hero": true,
+						 "combo_step": 0.08, "combo_cap": 0.50, "combo_reset": 3.0},
 	# المطارق (6.3)
 	"hammer_common":    {"hp": 120.0, "armor": 0.15},
 	"hammer_shield":    {"hp": 320.0, "armor": 0.50, "dmg": 8.0, "rate": 1.2, "speed": 1.6},
@@ -177,6 +179,44 @@ static func stat(key: String, field: String) -> Variant:
 	if s.has(field):
 		return s[field]
 	return UNIT_BASE.get(field, 0.0)
+
+# ---------- الضربات المميزة والشحن (6.7) ----------
+const CHARGE_FULL := 100.0
+const CHARGE_PER_SEC := 3.0        # شحن تلقائي
+const CHARGE_PER_HIT := 8.0        # عن كل ضربة تُصيب
+const CHARGE_PER_DAMAGE := 5.0     # عن كل 50 ضرراً تتلقاه
+const CHARGE_DAMAGE_STEP := 50.0
+const HERO_CHARGE_PER_SEC := 2.0   # الأبطال أبطأ
+const HERO_CHARGE_PER_HIT := 6.0
+
+# نوع الضربة وشرط إطلاقها:
+#   enemy = عدو داخل المدى | foe_near = عدو داخل مدى الرصد | ally = حليف متضرر قريب
+const ULTS := {
+	"hammer_shield":    {"kind": "invuln", "need": "foe_near", "dur": 3.0},
+	"hammer_breaker":   {"kind": "aoe", "need": "enemy", "radius": 2.5, "dmg": 60.0,
+						 "slow": 0.30, "slow_dur": 2.0},
+	"viper_sniper":     {"kind": "shot", "need": "enemy", "range": 10.0, "dmg": 55.0},
+	"viper_firebomber": {"kind": "fire", "need": "enemy", "radius": 2.5, "dur": 7.0, "dps": 12.0},
+	"scorp_boss":       {"kind": "buff", "need": "foe_near", "radius": 3.0,
+						 "dmg": 0.50, "rate": 0.20, "dur": 5.0},
+	"scorp_medic":      {"kind": "heal_burst", "need": "ally", "radius": 2.5, "hp": 60.0},
+	"crow_spear":       {"kind": "pierce", "need": "enemy", "dmg": 24.0, "targets": 2},
+	"crow_dual":        {"kind": "volley", "need": "enemy", "hits": 4, "dmg": 7.0, "gap": 0.25},
+	"hammer_hero":      {"kind": "invuln_aoe", "need": "enemy", "dur": 3.0, "radius": 3.0, "dmg": 70.0},
+	"viper_hero":       {"kind": "fire_arrows", "need": "enemy", "arrows": 3, "dmg": 20.0,
+						 "fire_radius": 1.0, "fire_dur": 4.0, "fire_dps": 8.0},
+	"scorp_hero":       {"kind": "buff_heal", "need": "foe_near", "radius": 3.5,
+						 "dmg": 0.50, "dur": 5.0, "hp": 60.0},
+	"crow_hero":        {"kind": "arc", "need": "enemy", "radius": 2.5, "dmg": 36.0},
+	"police_common":    {"kind": "bash", "need": "enemy", "dmg": 18.0, "push": 1.0,
+						 "slow": 0.40, "slow_dur": 1.5},
+	"police_captain":   {"kind": "rally", "need": "foe_near", "radius": 3.0, "dmg": 0.30, "dur": 5.0},
+}
+const ULT_HEAL_SELF := true        # العلاج الجماعي يشمل صاحبه، بخلاف علاج الطبيب المستمر
+
+# ---------- الأبطال (6.6) ----------
+const HERO_RESPAWN := 60.0         # بعد الموت، ولا يبدأ إلا بامتلاك 5 أحياء
+const HERO_RESPAWN_MIN_DISTRICTS := 5
 
 # ---------- الظهور (7) ----------
 const START_COMMONS := 3            # كل لاعب يبدأ بـ 3 أفراد عاديين + بطله
