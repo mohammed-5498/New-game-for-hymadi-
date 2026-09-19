@@ -16,6 +16,14 @@ var caps: Array = []       # {tile, gang, type, special, district}
 
 var art := UnitsArt.new()
 var combat: Combat
+var districts_state := Districts.new()
+var spawner := Spawner.new()
+var gang_of := {}          # رقم اللاعب -> عصابته
+var team_of := {}          # رقم اللاعب -> فريقه (بلا تحالفات بعد: الفريق = اللاعب)
+var alerts: Array = []     # تنبيهات الحافة (12.3)
+var toasts: Array = []     # إشعارات قصيرة
+var match_over := -1       # رقم الفريق الفائز، أو -1 إذا لم تنتهِ
+var hud = null
 var me := 0                # رقم اللاعب البشري
 var shake_t := 0.0
 var shake_cool := 0.0
@@ -55,10 +63,22 @@ func _ready() -> void:
 	$UI/NewMapBtn.pressed.connect(generate_map)
 	$UI/DemoBtn.pressed.connect(func(): get_tree().change_scene_to_file("res://units_demo.tscn"))
 	$UI/FightBtn.pressed.connect(_test_battle)
+	hud = $UI/Hud
+	hud.game = self
+	hud.load_pref()
 	generate_map()
 
 func _process(delta: float) -> void:
 	combat.step(delta)
+	districts_state.step(delta, combat.units)
+	_handle_district_events()
+	if match_over < 0:
+		for spawn in spawner.step(delta, player_count, districts_state, combat.units):
+			combat.spawn(String(spawn["key"]), int(spawn["player"]), int(team_of.get(int(spawn["player"]), int(spawn["player"]))), Vector2(spawn["pos"]))
+		match_over = districts_state.winner_team(combat.units)
+		if match_over >= 0:
+			_toast("انتهت المباراة — فاز الفريق %d" % (match_over + 1))
+	_age_alerts(delta)
 	marker["t"] += delta
 	if dragging and not moved and not long_fired:
 		press_t += delta
@@ -75,10 +95,60 @@ func _process(delta: float) -> void:
 		cam.offset = Vector2.ZERO
 	queue_redraw()
 
-func _on_hit(_victim: Dictionary, _dealt: float, is_ult: bool) -> void:
+func _on_hit(victim: Dictionary, _dealt: float, is_ult: bool) -> void:
 	if is_ult and shake_cool <= 0.0:
 		shake_t = GC.SHAKE_DUR
 		shake_cool = GC.SHAKE_COOLDOWN
+	# سهم أحمر إذا تضررت وحدة لي خارج حدود الشاشة (12.3)
+	if int(victim["player"]) == me:
+		_add_alert(Vector2(victim["pos"]), "attack")
+
+# ============ التنبيهات والإشعارات (12.3) ============
+func _add_alert(tile: Vector2, kind: String) -> void:
+	if _visible_rect().has_point(tile_to_world(tile)):
+		return
+	for a in alerts:
+		if String(a["kind"]) == kind and Vector2(a["pos"]).distance_to(tile) <= GC.ALERT_AREA:
+			a["t"] = 0.0   # نفس المنطقة: نجدّد العمر ولا نضيف سهماً جديداً
+			return
+	if alerts.size() >= GC.ALERT_MAX:
+		alerts.sort_custom(func(x, y): return float(x["t"]) > float(y["t"]))
+		alerts.remove_at(0)
+	alerts.append({"pos": tile, "kind": kind, "t": 0.0, "cool": GC.ALERT_REPEAT})
+
+func _age_alerts(delta: float) -> void:
+	var keep := []
+	for a in alerts:
+		a["t"] = float(a["t"]) + delta
+		if float(a["t"]) < GC.ALERT_LIFE:
+			keep.append(a)
+	alerts = keep
+	var tk := []
+	for t in toasts:
+		t["t"] = float(t["t"]) + delta
+		if float(t["t"]) < GC.TOAST_LIFE:
+			tk.append(t)
+	toasts = tk
+
+func _toast(text: String) -> void:
+	toasts.append({"text": text, "t": 0.0})
+	if toasts.size() > 3:
+		toasts.pop_front()
+
+func _handle_district_events() -> void:
+	for e in districts_state.take_events():
+		var d: Dictionary = districts[int(e["district"])]
+		var pl: int = int(e["player"])
+		if String(e["kind"]) == "captured":
+			_refresh_clock_bonus()   # مكافأة برج الساعة تنتقل مع ملكيته (3.7)
+			if pl == me:
+				_toast("سيطرت على حي")
+			elif int(e.get("owner", -1)) == me:
+				_toast("خسرت حياً")
+		elif String(e["kind"]) == "losing" and int(e.get("owner", -1)) == me:
+			# سهم برتقالي عندما يبدأ عدو بالاستيلاء على حي تملكه (12.3)
+			_add_alert(Vector2(d["cap"]), "capture")
+			_toast("عدو يستولي على حيك")
 
 # ============ توليد الخريطة ============
 func generate_map() -> void:
@@ -104,7 +174,7 @@ func generate_map() -> void:
 		push_warning("[خريطة] %s" % w)
 
 	_build_astar()
-	_spawn_units()
+	_setup_match()
 	_refresh_info()
 
 func walkable(i: int, j: int) -> bool:
@@ -142,19 +212,53 @@ func _build_astar() -> void:
 		for i in n:
 			astar.set_point_solid(Vector2i(i, j), not walkable(i, j))
 
-func _spawn_units() -> void:
+func _setup_match() -> void:
 	combat.clear()
-	var p := 0
-	for c in caps:
-		if String(c["type"]) != "home":
+	alerts = []
+	toasts = []
+	match_over = -1
+	gang_of = {}
+	team_of = {}
+
+	# رقم لاعب لكل حي منزلي، بترتيب ثابت
+	var homes := []
+	for d in districts:
+		if String(d["type"]) == "home":
+			homes.append(d)
+	player_count = maxi(1, homes.size())
+	for p in homes.size():
+		gang_of[p] = String(homes[p]["gang"])
+		team_of[p] = p        # بلا تحالفات حتى المرحلة 8
+
+	districts_state.setup(districts, player_count, team_of)
+	for p in homes.size():
+		districts_state.claim_home(int(homes[p]["id"]), p)
+	spawner.setup(player_count, gang_of, GC.UNIT_LIMIT_DEFAULT)
+	_refresh_clock_bonus()
+
+	# البداية: 3 أفراد عاديين + البطل عند ساحة علم الحي المنزلي (7)
+	for p in homes.size():
+		var cap: Vector2i = homes[p]["cap"]
+		if cap.x < 0:
 			continue
-		var gang := String(c["gang"])
-		for spot in _free_near(c["tile"], GC.PROTO_UNITS_PER_HOME):
-			combat.spawn(gang + "_common", p, p, Vector2(float(spot.x), float(spot.y)))
+		var gang := String(gang_of[p])
+		var spots := _free_near(cap, GC.START_COMMONS + 1)
+		for i in spots.size():
+			var t := Vector2(float(spots[i].x), float(spots[i].y))
+			var key := gang + "_common"
+			if i == spots.size() - 1:
+				key = String(GC.GANG_HERO.get(gang, gang + "_common"))
+			combat.spawn(key, p, int(team_of[p]), t)
 		if p == me:
-			cam.position = tile_to_world(Vector2(float(c["tile"].x), float(c["tile"].y)))
+			cam.position = tile_to_world(Vector2(cap))
 			cam_home = cam.position
-		p += 1
+
+# برج الساعة (3.7): أزمنة الظهور لمالكه × 0.85
+func _refresh_clock_bonus() -> void:
+	spawner.clock_bonus = {}
+	for d in districts:
+		if String(d["special"]) == "clock" and int(d["owner"]) >= 0:
+			spawner.clock_bonus[int(d["owner"])] = true
 
 # معركة تجريبية: فريقان متقابلان قرب مركز الشاشة لتجربة القتال فوراً
 func _test_battle() -> void:
@@ -230,6 +334,7 @@ func _draw() -> void:
 				continue
 			var key: String = region[j * n + i]
 			var col: Color = GC.GROUND[key] if GC.GROUND.has(key) else GC.GROUND["neutral"]
+			col = _tinted(col, owner_dist[j * n + i], GC.TINT_GROUND)
 			draw_colored_polygon(PackedVector2Array([
 				c + Vector2(-GC.TW, 0), c + Vector2(0, -GC.TH),
 				c + Vector2(GC.TW, 0), c + Vector2(0, GC.TH)]), col)
@@ -242,7 +347,7 @@ func _draw() -> void:
 			var c := tile_to_world(Vector2(i, j))
 			if not view.has_point(c):
 				continue
-			_draw_object(kind[j * n + i], c, region[j * n + i], i, j, t)
+			_draw_object(kind[j * n + i], c, region[j * n + i], i, j, t, owner_dist[j * n + i])
 		for u in combat.units:
 			if int(round(u["pos"].x + u["pos"].y)) == s:
 				_draw_unit(u)
@@ -306,45 +411,62 @@ func _draw_projectile(pr: Dictionary) -> void:
 		_:
 			draw_circle(p, 1.8, Color("9a948c"))
 
-func _draw_object(k: String, c: Vector2, reg: String, i: int, j: int, t: float) -> void:
+# خلط لون المالك مع لون أصلي بنسبة معطاة (8)
+func _tinted(base: Color, dist: int, amount: float) -> Color:
+	if dist < 0 or dist >= districts.size():
+		return base
+	var d: Dictionary = districts[dist]
+	var a: float = float(d.get("tint_amt", 0.0))
+	if a <= 0.001:
+		return base
+	return base.lerp(Color(d["tint_col"]), amount * a)
+
+func _draw_object(k: String, c: Vector2, reg: String, i: int, j: int, t: float, dist: int) -> void:
+	# الأطلال والأشجار والفراغ لا تُصبغ — ليست ملكاً لأحد (8)
+	var roof := dist
+	var wall := dist
+	if GC.NO_TINT.has(k):
+		roof = -1
+		wall = -1
 	match k:
 		"H":
-			_box(c + Vector2(0, 1), 14, 7, 14, Color("b59a78"), Color("cdb391"), Color("00000000"))
-			_roof(c + Vector2(0, 1), 14, 7, 14, 12, _gang_dark(reg), _gang_light(reg))
+			_box(c + Vector2(0, 1), 14, 7, 14, _w(Color("b59a78"), wall), _w(Color("cdb391"), wall), Color("00000000"))
+			_roof(c + Vector2(0, 1), 14, 7, 14, 12, _r(_gang_dark(reg), roof), _r(_gang_light(reg), roof))
 		"A":
 			var h: float = 32.0 + float((i + j) % 2) * 8.0
-			_box(c, 15, 7.5, h, Color("8f8c85"), Color("aaa69e"), Color("77736c"))
+			_box(c, 15, 7.5, h, _w(Color("8f8c85"), wall), _w(Color("aaa69e"), wall), _r(Color("77736c"), roof))
 		"R":
 			_box(c, 13, 6.5, 9, Color("8a8074"), Color("a39888"), Color("5e574d"))
 		"W":
-			_box(c, 17, 8.5, 12, Color("7f7a70"), Color("99938a"), Color("6c675f"))
+			_box(c, 17, 8.5, 12, _w(Color("7f7a70"), wall), _w(Color("99938a"), wall), _r(Color("6c675f"), roof))
 		"T":
 			draw_rect(Rect2(c.x - 1, c.y - 8, 2, 8), Color("5b4636"))
 			draw_circle(c + Vector2(0, -13), 7, Color("4f7a3c"))
 			draw_circle(c + Vector2(-3, -15), 5, Color("5f8f48"))
 		"Q":
-			_box(c, 16, 8, 26, _gang_dark(reg), _gang_light(reg), Color("3a3632"))
+			_box(c, 16, 8, 26, _w(_gang_dark(reg), wall), _w(_gang_light(reg), wall), _r(Color("3a3632"), roof))
 			draw_line(c + Vector2(0, -26), c + Vector2(0, -46), Color("2b2825"), 1.2)
-			_tri(c + Vector2(0, -46), c + Vector2(12, -42), c + Vector2(0, -38), _flag_color(reg))
+			_tri(c + Vector2(0, -46), c + Vector2(12, -42), c + Vector2(0, -38), _owner_flag(dist, reg))
 		"P":
 			draw_colored_polygon(PackedVector2Array([
 				c + Vector2(-12, 0), c + Vector2(0, -6), c + Vector2(12, 0), c + Vector2(0, 6)]), Color("b3aa98"))
 			draw_line(c, c + Vector2(0, -22), Color("2b2825"), 1.2)
-			_tri(c + Vector2(0, -22), c + Vector2(10, -19), c + Vector2(0, -16), _flag_color(reg))
+			_tri(c + Vector2(0, -22), c + Vector2(10, -19), c + Vector2(0, -16), _owner_flag(dist, reg))
+			_capture_bar(c, dist)
 		"M":
-			_hospital(c)
+			_hospital(c, wall, roof)
 		"K":
-			_armory(c)
+			_armory(c, wall, roof)
 		"C":
-			_clock_tower(c, t)
+			_clock_tower(c, t, wall)
 		"F":
 			_fountain(c)
 		"S":
-			_police_station(c, t)
+			_police_station(c, t, wall, roof)
 
 # ---- مباني الأحياء المميزة ومركز الشرطة ----
-func _hospital(c: Vector2) -> void:
-	_box(c, 17, 8.5, 24, Color("a9a59b"), Color("c2bdb1"), Color("8e8a81"))
+func _hospital(c: Vector2, wall: int, roof: int) -> void:
+	_box(c, 17, 8.5, 24, _w(Color("a9a59b"), wall), _w(Color("c2bdb1"), wall), _r(Color("8e8a81"), roof))
 	# صليب باهت على الواجهة
 	var cross := Color("b8543f")
 	draw_rect(Rect2(c.x + 5.0, c.y - 19.0, 6.0, 2.2), cross)
@@ -353,15 +475,15 @@ func _hospital(c: Vector2) -> void:
 	for k in 3:
 		draw_rect(Rect2(c.x - 13.0 + float(k) * 4.5, c.y - 17.0 + float(k) * 2.2, 3.0, 4.0), Color("50524f"))
 
-func _armory(c: Vector2) -> void:
-	_box(c, 17, 8.5, 13, Color("7f7a70"), Color("99938a"), Color("6c675f"))
+func _armory(c: Vector2, wall: int, roof: int) -> void:
+	_box(c, 17, 8.5, 13, _w(Color("7f7a70"), wall), _w(Color("99938a"), wall), _r(Color("6c675f"), roof))
 	# صناديق ذخيرة أمام المستودع
 	_box(c + Vector2(-7, 6), 4, 2, 5, Color("6d5a3c"), Color("856e4a"), Color("57482f"))
 	_box(c + Vector2(2, 7), 4.5, 2.2, 4, Color("6d5a3c"), Color("856e4a"), Color("57482f"))
 	_box(c + Vector2(-2, 3), 3.5, 1.8, 7, Color("5f5137"), Color("796445"), Color("4a3f2a"))
 
-func _clock_tower(c: Vector2, t: float) -> void:
-	_box(c, 9, 4.5, 44, Color("9c9488"), Color("b5ac9e"), Color("00000000"))
+func _clock_tower(c: Vector2, t: float, wall: int) -> void:
+	_box(c, 9, 4.5, 44, _w(Color("9c9488"), wall), _w(Color("b5ac9e"), wall), Color("00000000"))
 	# وجه الساعة
 	var face := c + Vector2(0, -38)
 	draw_circle(face, 6.0, Color("e4dcc9"))
@@ -378,14 +500,49 @@ func _fountain(c: Vector2) -> void:
 	draw_rect(Rect2(c.x - 1.0, c.y - 9.0, 2.0, 9.0), Color("9c9488"))
 	_ellipse(c + Vector2(0, -10), 3.0, 1.5, Color("b7b0a4"))
 
-func _police_station(c: Vector2, t: float) -> void:
-	_box(c, 16, 8, 22, Color("6f7a86"), Color("8794a1"), Color("5b646e"))
+func _police_station(c: Vector2, t: float, wall: int, roof: int) -> void:
+	_box(c, 16, 8, 22, _w(Color("6f7a86"), wall), _w(Color("8794a1"), wall), _r(Color("5b646e"), roof))
 	# شريط أزرق على الواجهة
 	draw_rect(Rect2(c.x - 14.0, c.y - 12.0, 13.0, 2.4), GC.POLICE_COLOR)
 	# مصباح أزرق وامض فوق السطح
 	var blink: float = 0.45 + 0.55 * absf(sin(t * 3.0))
 	draw_circle(c + Vector2(0, -25), 2.6, Color(0.35, 0.6, 1.0, blink))
 	draw_circle(c + Vector2(0, -25), 4.6, Color(0.35, 0.6, 1.0, blink * 0.28))
+
+# لون العلم = لون مالك الحي، وإلا اللون المحايد (8)
+func _owner_flag(dist: int, reg: String) -> Color:
+	if dist >= 0 and dist < districts.size():
+		var o: int = int(districts[dist].get("owner", -1))
+		if o >= 0:
+			return UnitsArt.lt(GC.PLAYER_COLORS[o % GC.PLAYER_COLORS.size()], 0.25)
+	return _flag_color(reg)
+
+# شريط تقدم الاستيلاء فوق العلم بلون المستولي (8)
+func _capture_bar(c: Vector2, dist: int) -> void:
+	if dist < 0 or dist >= districts.size():
+		return
+	var d: Dictionary = districts[dist]
+	var v: float = float(d.get("value", 0.0))
+	var owner: int = int(d.get("owner", -1))
+	var claimer: int = int(d.get("claimer", -1))
+	# لا يُعرض الشريط لحي مستقر بيد مالكه ولا لحي محايد فارغ
+	if (owner >= 0 and v >= GC.CAPTURE_MAX) or (owner < 0 and v <= 0.0):
+		return
+	var w := 16.0
+	var y := c.y - 28.0
+	var x := c.x - w * 0.5
+	draw_rect(Rect2(x - 0.5, y - 0.5, w + 1.0, 3.0), Color(0, 0, 0, 0.55))
+	var who: int = claimer if claimer >= 0 else owner
+	var col: Color = GC.PLAYER_COLORS[who % GC.PLAYER_COLORS.size()] if who >= 0 else Color("cfc8b8")
+	if bool(d.get("frozen", false)):
+		col = col.lerp(Color(0.6, 0.6, 0.6), 0.5)   # متجمد: جانبان داخل المنطقة
+	draw_rect(Rect2(x, y, w * (v / GC.CAPTURE_MAX), 2.0), col)
+
+func _w(base: Color, dist: int) -> Color:
+	return _tinted(base, dist, GC.TINT_WALL)
+
+func _r(base: Color, dist: int) -> Color:
+	return _tinted(base, dist, GC.TINT_ROOF)
 
 func _gang_dark(reg: String) -> Color:
 	if GC.GANG_COLORS.has(reg):
@@ -504,6 +661,15 @@ func _selected() -> Array:
 	return sel
 
 func _tap(screen_pos: Vector2) -> void:
+	# رأس لوحة القوة يطويها، وسهم التنبيه ينقل الكاميرا (12.3)
+	if hud != null:
+		if hud.toggle_at(screen_pos):
+			return
+		var a = hud.alert_at(screen_pos)
+		if a != null:
+			cam.position = tile_to_world(Vector2(a["pos"]))
+			alerts.erase(a)
+			return
 	# لمسة على وحدة من وحداتي = تحديدها
 	var mine = _unit_at(screen_pos, true)
 	if mine != null:

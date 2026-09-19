@@ -141,7 +141,7 @@ const UNIT_BASE := {
 }
 const UNIT_STATS := {
 	# الغربان (6.2)
-	"crow_common":      {"speed": 2.5, "capture": 1.5},
+	"crow_common":      {"speed": 2.5, "capture": 1.25},
 	"crow_spear":       {"hp": 150.0, "dmg": 12.0, "rate": 1.3, "range": 1.8, "detect": 4.5, "speed": 2.2},
 	"crow_dual":        {"hp": 95.0, "dmg": 7.0, "rate": 0.8, "speed": 2.6},
 	"crow_hero":        {"hp": 260.0, "armor": 0.10, "dmg": 18.0, "rate": 1.2, "range": 2.2, "speed": 2.5, "hero": true},
@@ -177,6 +177,56 @@ static func stat(key: String, field: String) -> Variant:
 	if s.has(field):
 		return s[field]
 	return UNIT_BASE.get(field, 0.0)
+
+# ---------- الظهور (7) ----------
+const START_COMMONS := 3            # كل لاعب يبدأ بـ 3 أفراد عاديين + بطله
+const SPAWN_COMMON_BASE := 14.0     # max(4, 14 − (D−1) × 1)
+const SPAWN_COMMON_STEP := 1.0
+const SPAWN_COMMON_MIN := 4.0
+const SPAWN_SPECIAL_BASE := 75.0    # max(30, 75 − (D−1) × 3)
+const SPAWN_SPECIAL_STEP := 3.0
+const SPAWN_SPECIAL_MIN := 30.0
+const UNIT_LIMIT_DEFAULT := 60      # يُختار في قائمة الإعداد (المرحلة 9)
+const SCORP_SPAWN_FACTOR := 0.8     # العقارب: العاديون × 0.8
+const GANG_SPECIALS := {
+	"crow": ["crow_spear", "crow_dual"],
+	"hammer": ["hammer_shield", "hammer_breaker"],
+	"viper": ["viper_sniper", "viper_firebomber"],
+	"scorp": ["scorp_boss", "scorp_medic"],
+}
+const GANG_HERO := {
+	"crow": "crow_hero", "hammer": "hammer_hero",
+	"viper": "viper_hero", "scorp": "scorp_hero",
+}
+
+# ---------- الاستيلاء (8) ----------
+const CAPTURE_MAX := 100.0
+const CAPTURE_RATE := 8.0           # نقطة/ث لكل وحدة قوة استيلاء
+const CAPTURE_POWER_MAX := 6.0      # سقف قوة الاستيلاء داخل المنطقة
+const CAPTURE_DECAY := 5.0          # رجوع التقدم عند خلو المنطقة
+const CAPTURE_TICK := 0.2           # دورة حساب الاستيلاء (توفيراً للأداء)
+const TINT_GROUND := 0.30           # خلط أرض الحي بلون المالك
+const TINT_ROOF := 0.45             # الأسطح والأجزاء العلوية
+const TINT_WALL := 0.20             # الجدران، أقل حتى تبقى قراءة المباني واضحة
+const TINT_TIME := 0.5              # زمن الانتقال اللوني
+# لا تُصبغ: الأطلال والأشجار والفراغ — ليست ملكاً لأحد
+const NO_TINT := ["R", "T", "."]
+
+# ---------- منع الاكتساح (9) ----------
+const LEADER_SHARE := 0.40          # من يملك 40% من الأحياء يصير هدف البوتات الأول
+
+# ---------- شريط القوة وتنبيهات الحافة (12.3) ----------
+const POWER_ROW_H := 18.0
+const POWER_UPDATE := 1.0           # تتحدث كل ثانية لا كل إطار
+const POWER_MAX_SCREEN := 0.34      # لا تغطي أكثر من ثلث ارتفاع الشاشة
+const POWER_DEAD_ALPHA := 0.4       # وضوح سطر اللاعب المهزوم
+const ALERT_MAX := 2                # لا أكثر من سهمين في وقت واحد
+const ALERT_REPEAT := 5.0           # لا يتكرر التنبيه لنفس المنطقة إلا كل 5 ثوانٍ
+const ALERT_AREA := 6.0             # مربعات تُعتبر نفس المنطقة
+const ALERT_LIFE := 3.0
+const ALERT_ATTACK_COLOR := Color("d94a3a")   # سهم أحمر: وحداتك تتعرض للهجوم
+const ALERT_CAPTURE_COLOR := Color("e08a2a")  # سهم برتقالي: عدو يستولي على حيك
+const TOAST_LIFE := 2.5
 
 # ---------- ألوان الأرض ----------
 const GROUND := {
