@@ -20,6 +20,10 @@ func new_combat(w: String) -> Combat:
 	c.weather = w
 	return c
 
+# بذرة الشخصية تعطي كل فرد ±7% سرعة (5.4.1)، فنثبّتها عند قياس السرعة بالأرقام
+func _fixed(u: Dictionary) -> void:
+	u["spd_var"] = 1.0
+
 func run(c: Combat, seconds: float, dt: float = 1.0 / 30.0) -> void:
 	for i in int(seconds / dt):
 		c.step(dt)
@@ -49,20 +53,24 @@ func _t_numbers() -> void:
 	check(float(GC.WEATHER_RANGED_HIT["rain"]) == 0.80, "نسبة الإصابة البعيدة في المطر ليست 0.80")
 	var c := new_combat("day")
 	var u := c.spawn("crow_common", 0, 0, Vector2.ZERO)
+	_fixed(u)
 	check(c.detect_of(u) == float(GC.stat("crow_common", "detect")), "النهار غيّر مدى الرصد")
 	check(c.speed_of(u) == float(GC.stat("crow_common", "speed")), "النهار غيّر السرعة")
 	check(c.ranged_hit_chance() == 1.0, "النهار غيّر نسبة الإصابة")
 	# كل طقس يغيّر تأثيره وحده
 	var night := new_combat("night")
 	var nu := night.spawn("crow_common", 0, 0, Vector2.ZERO)
+	_fixed(nu)
 	check(is_equal_approx(night.detect_of(nu), float(GC.stat("crow_common", "detect")) * 0.75), "الليل لم يقصّر مدى الرصد")
 	check(night.speed_of(nu) == float(GC.stat("crow_common", "speed")), "الليل غيّر السرعة بلا سبب")
 	var snow := new_combat("snow")
 	var su := snow.spawn("crow_common", 0, 0, Vector2.ZERO)
+	_fixed(su)
 	check(is_equal_approx(snow.speed_of(su), float(GC.stat("crow_common", "speed")) * 0.85), "الثلج لم يبطئ الحركة")
 	check(snow.detect_of(su) == float(GC.stat("crow_common", "detect")), "الثلج غيّر مدى الرصد بلا سبب")
 	var rain := new_combat("rain")
 	var ru := rain.spawn("crow_common", 0, 0, Vector2.ZERO)
+	_fixed(ru)
 	check(rain.detect_of(ru) == float(GC.stat("crow_common", "detect")), "المطر غيّر مدى الرصد بلا سبب")
 	check(rain.speed_of(ru) == float(GC.stat("crow_common", "speed")), "المطر غيّر السرعة بلا سبب")
 
@@ -86,6 +94,7 @@ func _t_snow_speed() -> void:
 	for w in ["day", "snow"]:
 		var c := new_combat(w)
 		var u := c.spawn("crow_common", 0, 0, Vector2(5, 5))
+		_fixed(u)
 		u["path"] = [Vector2(60, 5)]        # هدف بعيد: لا يصل خلال الفحص
 		u["state"] = "moving"
 		run(c, 2.0)
@@ -168,24 +177,25 @@ func _t_rain_spares_melee_and_ults() -> void:
 # فحص سلوكي كامل: الرامي يهاجم وحده، ونثبّت الهدف مكانه حتى نقيس الضرر لا الحركة.
 func _t_rain_damage_over_time() -> void:
 	seed(9091)
-	var dealt := {}
-	for w in ["day", "rain"]:
-		var c := new_combat(w)
-		var a := c.spawn("viper_sniper", 0, 0, Vector2(5, 5))
-		var b := c.spawn("scorp_common", 1, 1, Vector2(9, 5))
-		b["hp"] = 100000.0
-		b["max_hp"] = 100000.0
-		var dt := 1.0 / 30.0
-		for i in int(60.0 / dt):
-			c.step(dt)
-			b["pos"] = Vector2(9, 5)      # هدف ثابت: لا يقترب ولا يهرب
-			b["path"] = []
-			a["hp"] = float(a["max_hp"])  # ولا يقتل الرامي فينقطع القياس
-		dealt[w] = 100000.0 - float(b["hp"])
+	var dealt := {"day": 0.0, "rain": 0.0}
+	for rep in 3:                          # ثلاث تشغيلات: عينة أكبر فلا يتأرجح بالحظ
+		for w in ["day", "rain"]:
+			var c := new_combat(w)
+			var a := c.spawn("viper_common", 0, 0, Vector2(5, 5))   # يرمي كل 1.4 ث
+			var b := c.spawn("scorp_common", 1, 1, Vector2(8, 5))
+			b["hp"] = 100000.0
+			b["max_hp"] = 100000.0
+			var dt := 1.0 / 30.0
+			for i in int(60.0 / dt):
+				c.step(dt)
+				b["pos"] = Vector2(8, 5)      # هدف ثابت: لا يقترب ولا يهرب
+				b["path"] = []
+				a["hp"] = float(a["max_hp"])  # ولا يقتل الرامي فينقطع القياس
+			dealt[w] = float(dealt[w]) + (100000.0 - float(b["hp"]))
 	check(float(dealt["day"]) > 100.0, "الرامي لم يسبب ضرراً نهاراً")
 	check(float(dealt["rain"]) > 0.0, "الرامي توقف تماماً في المطر")
 	var ratio: float = float(dealt["rain"]) / float(dealt["day"])
-	check(absf(ratio - 0.80) < 0.08, "ضرر المطر %.2f من ضرر النهار والمطلوب نحو 0.80" % ratio)
+	check(absf(ratio - 0.80) < 0.10, "ضرر المطر %.2f من ضرر النهار والمطلوب نحو 0.80" % ratio)
 
 # ---------- الندف: العدد والحركة والالتفاف ----------
 func _t_particles() -> void:

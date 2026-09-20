@@ -149,6 +149,11 @@ jobs:
           set -e
           godot --headless --path "$PROJECT_PATH" --script tests/test_weather.gd
 
+      - name: فحص القتال الواقعي (الحركات)
+        run: |
+          set -e
+          godot --headless --path "$PROJECT_PATH" --script tests/test_moves.gd
+
       - name: فحص القوائم والحفظ
         run: |
           set -e

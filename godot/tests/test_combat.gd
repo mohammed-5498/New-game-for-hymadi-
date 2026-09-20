@@ -76,20 +76,37 @@ func _t_armor() -> void:
 	check(is_equal_approx(float(plain["hp"]), float(plain["max_hp"]) - 100.0), "الدرع 0% لم يطبَّق صحيحاً")
 	check(is_equal_approx(float(armored["hp"]), float(armored["max_hp"]) - 50.0), "الدرع 50% لم يخفّض الضرر للنصف")
 
-# الضربة تقع عند 47% من زمن الضربة، لا قبلها ولا بعد انتهاء الدورة بضربتين
+# لحظة الضرر في الالتحام = نهاية استعداد الحركة المختارة (5.4.2)،
+# وفي الرماية من بعيد تبقى عند 47% من زمن الضربة (5.2)
 func _t_hit_timing() -> void:
-	var c := new_combat()
-	var a := c.spawn("crow_common", 0, 0, Vector2(5, 5))   # زمن ضربة 1.0 ث
-	var b := c.spawn("scorp_common", 1, 1, Vector2(5.5, 5))
-	# البحث عن الأهداف موزّع عشوائياً على ربع ثانية لتخفيف الحِمل، فنصفّره هنا ليكون القياس دقيقاً
-	a["scan_t"] = 0.0
-	b["scan_t"] = 0.0
-	var before := float(b["hp"])
-	run(c, 0.45, 0.01)
-	check(float(b["hp"]) == before, "وقع ضرر قبل لحظة الارتطام (47%)")
-	run(c, 0.05, 0.01)
-	check(float(b["hp"]) < before, "لم يقع ضرر عند لحظة الارتطام")
-	check(a["state"] == "attacking", "المهاجم ليس في حالة attacking")
+	for mv in ["quick", "heavy", "thrust"]:
+		var c := new_combat()
+		var a := c.spawn("crow_common", 0, 0, Vector2(5, 5))   # زمن ضربة 1.0 ث
+		var b := c.spawn("scorp_common", 1, 1, Vector2(5.5, 5))
+		a["move_lock"] = mv
+		# البحث عن الأهداف موزّع عشوائياً على ربع ثانية، فنصفّره ليكون القياس دقيقاً
+		a["scan_t"] = 0.0
+		b["scan_t"] = 0.0
+		var spec: Dictionary = GC.MOVES[mv]
+		var cycle: float = (float(spec["wind"]) + float(spec["recover"])) * GC.MOVE_CYCLE_SCALE
+		var hit_at: float = cycle * float(spec["wind"]) / (float(spec["wind"]) + float(spec["recover"]))
+		var before := float(b["hp"])
+		run(c, hit_at - 0.03, 0.01)
+		check(float(b["hp"]) == before, "الحركة %s: وقع ضرر قبل نهاية الاستعداد" % mv)
+		run(c, 0.06, 0.01)
+		check(float(b["hp"]) < before, "الحركة %s: لم يقع ضرر عند نهاية الاستعداد" % mv)
+
+	# الرامي من بعيد: 47% من زمن ضربته كما كان
+	var cr := new_combat()
+	var s := cr.spawn("viper_sniper", 0, 0, Vector2(5, 5))     # زمن ضربة 2.5 ث، مدى 7
+	var t := cr.spawn("scorp_common", 1, 1, Vector2(10, 5))
+	s["scan_t"] = 0.0
+	t["scan_t"] = 0.0
+	run(cr, 2.5 * GC.UNIT_HIT_AT - 0.05, 0.01)
+	check(cr.projectiles.is_empty(), "الرامي أطلق قبل 47% من زمن ضربته")
+	run(cr, 0.1, 0.01)
+	check(not cr.projectiles.is_empty(), "الرامي لم يطلق عند 47% من زمن ضربته")
+	check(String(s["state"]) == "attacking", "المهاجم ليس في حالة attacking")
 
 # حد المطاردة: هدف بعيد جداً يُترك وترجع الوحدة لمكانها
 func _t_chase_limit() -> void:
@@ -185,9 +202,11 @@ func _t_attack_move_engages() -> void:
 	var c := new_combat()
 	var a := c.spawn("crow_common", 0, 0, Vector2(5, 5))
 	var b := c.spawn("scorp_common", 1, 1, Vector2(6.5, 5))
+	a["scan_t"] = 0.0
 	c.order_move([a], Vector2(20, 5), true)
 	check(a["state"] == "attackMove", "أمر الهجوم المتحرك لم يضع الوحدة في حالة attackMove")
-	run(c, 1.2)
+	# مهلة تكفي أبطأ الحركات: الاقتراب ثم استعداد الضربة القوية (5.4.2)
+	run(c, 1.6)
 	check(int(a["target"]) == int(b["id"]), "وحدة في attackMove لم ترصد عدواً في طريقها")
 	check(float(b["hp"]) < float(b["max_hp"]), "وحدة في attackMove لم تهاجم العدو الذي رصدته")
 

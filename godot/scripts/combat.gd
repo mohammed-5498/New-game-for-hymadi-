@@ -35,6 +35,7 @@ func spawn(key: String, player: int, team: int, tile: Vector2) -> Dictionary:
 	var hp: float = GC.stat(key, "hp")
 	var u := {
 		"id": next_id, "key": key, "player": player, "team": team,
+		"seed": randi(),                  # بذرة الشخصية الثابتة (5.4.1)
 		"pos": tile, "hp": hp, "max_hp": hp,
 		"state": "idle", "path": [] as Array,
 		"target": -1, "cmd_target": -1,   # cmd_target = أمر هجوم من اللاعب (بلا حد مطاردة)
@@ -52,11 +53,27 @@ func spawn(key: String, player: int, team: int, tile: Vector2) -> Dictionary:
 		"aura_dmg": 0.0, "volley": 0, "volley_t": 0.0, "volley_tgt": -1,
 		# الشرطة (3.8): مرساة حد المطاردة، والمركز التابع له، وحالة الرجوع
 		"anchor": Vector2.INF, "station": -1, "returning": false,
+		# القتال الواقعي (5.4): الحركة الحالية ودورتها، والترنّح
+		# move_lock فارغ في اللعب، وتضبطه الفحوص لتثبيت حركة بعينها
+		"move": "quick", "cycle": 0.0, "stagger_t": 0.0, "move_lock": "",
 	}
+	u.merge(_traits(u["seed"]))
 	next_id += 1
 	units.append(u)
 	_by_id[u["id"]] = u
 	return u
+
+# صفات الفرد تُشتق من بذرته وحدها: نفس البذرة تعطي نفس الشخصية دائماً (5.4.1)
+static func _traits(unit_seed: int) -> Dictionary:
+	var rg := RandomNumberGenerator.new()
+	rg.seed = unit_seed
+	return {
+		"bold": rg.randf_range(GC.TRAIT_BOLD[0], GC.TRAIT_BOLD[1]),
+		"dodge_skill": rg.randf_range(GC.TRAIT_DODGE[0], GC.TRAIT_DODGE[1]),
+		"react": rg.randf_range(GC.TRAIT_REACT[0], GC.TRAIT_REACT[1]),
+		"spd_var": 1.0 + rg.randf_range(-GC.TRAIT_SPEED_VAR, GC.TRAIT_SPEED_VAR),
+		"size": 1.0 + rg.randf_range(-GC.TRAIT_SIZE_VAR, GC.TRAIT_SIZE_VAR),
+	}
 
 func team_of_player(p: int) -> int:
 	return int(teams.get(p, p))
@@ -67,7 +84,9 @@ func detect_of(u: Dictionary) -> float:
 	return float(GC.stat(u["key"], "detect")) * float(GC.WEATHER_DETECT.get(weather, 1.0))
 
 func speed_of(u: Dictionary) -> float:
-	return float(GC.stat(u["key"], "speed")) * float(GC.WEATHER_SPEED.get(weather, 1.0))
+	# تنويع ±7% من بذرة الشخصية حتى لا يمشي الجيش كأنه نسخة واحدة (5.4.1)
+	return float(GC.stat(u["key"], "speed")) * float(GC.WEATHER_SPEED.get(weather, 1.0)) \
+		* float(u.get("spd_var", 1.0))
 
 func ranged_hit_chance() -> float:
 	return float(GC.WEATHER_RANGED_HIT.get(weather, 1.0))
@@ -104,6 +123,7 @@ func step(delta: float) -> void:
 func _step_timers(u: Dictionary, delta: float) -> void:
 	var key := String(u["key"])
 	u["invuln_t"] = maxf(0.0, float(u["invuln_t"]) - delta)
+	u["stagger_t"] = maxf(0.0, float(u["stagger_t"]) - delta)
 	u["slow_t"] = maxf(0.0, float(u["slow_t"]) - delta)
 	if float(u["slow_t"]) <= 0.0:
 		u["slow"] = 0.0
@@ -204,6 +224,7 @@ func _step_unit(u: Dictionary, delta: float) -> void:
 		if u["state"] == "attacking":
 			u["state"] = "idle"
 			u["swing"] = 0.0
+			u["cycle"] = 0.0
 		_advance(u, delta)
 
 # هالات الزعيم وبطل العقارب، وعلاج الطبيب. لا تتجمع هالتان: يؤخذ الأقوى فقط (6.6)
@@ -291,6 +312,7 @@ func _fight(u: Dictionary, tgt: Dictionary, delta: float) -> void:
 			u["state"] = "moving"
 			u["returning"] = true
 			u["swing"] = 0.0
+			u["cycle"] = 0.0
 			_path_to(u, Vector2(u["chase_from"]))
 			return
 	var rate: float = float(GC.stat(key, "melee_rate")) if melee_now else float(GC.stat(key, "rate"))
@@ -305,6 +327,7 @@ func _fight(u: Dictionary, tgt: Dictionary, delta: float) -> void:
 		# اقترب من الهدف
 		u["state"] = "moving" if u["state"] == "moving" else "attacking"
 		u["swing"] = 0.0
+		u["cycle"] = 0.0
 		u["hit_done"] = false
 		if u["repath_t"] <= 0.0:
 			u["repath_t"] = GC.REPATH_EVERY
@@ -314,16 +337,122 @@ func _fight(u: Dictionary, tgt: Dictionary, delta: float) -> void:
 		return
 
 	# داخل المدى: اضرب
-	u["path"] = []
 	u["state"] = "attacking"
 	_face(u, tgt["pos"])
+	# مترنّحة: لا تهاجم ولا تتقدم حتى ينتهي الترنّح (5.4.3)
+	if float(u["stagger_t"]) > 0.0:
+		u["path"] = []
+		u["swing"] = 0.0
+		u["cycle"] = 0.0
+		u["hit_done"] = false
+		return
+
+	# الجرأة تحدد مسافة الاقتحام (5.4.1): خطوة اقتراب أثناء التعافي وحده،
+	# فلا تُفقد الوحدة ضربة، ويصير لكل فرد مسافته المفضلة في الاشتباك.
+	var want: float = reach * close_frac(u)
+	if bool(u["hit_done"]) and d > want:
+		_creep(u, Vector2(tgt["pos"]), d - want, delta)
+	else:
+		u["path"] = []
+
+	# الرماية من بعيد تبقى بإيقاعها القديم (5.3)؛ نظام الحركات للالتحام (5.4.2)
+	if not uses_moves(u, melee_now):
+		u["swing"] += delta
+		if not u["hit_done"] and u["swing"] >= rate * GC.UNIT_HIT_AT:
+			u["hit_done"] = true
+			_land_attack(u, tgt, melee_now)
+		if u["swing"] >= rate:
+			u["swing"] -= rate
+			u["hit_done"] = false
+		return
+
+	if float(u["cycle"]) <= 0.0:
+		_start_move(u, tgt, d, reach, rate)
+	var spec: Dictionary = GC.MOVES[String(u["move"])]
+	var cycle: float = float(u["cycle"])
+	var hit_at: float = cycle * float(spec["wind"]) / (float(spec["wind"]) + float(spec["recover"]))
 	u["swing"] += delta
-	if not u["hit_done"] and u["swing"] >= rate * GC.UNIT_HIT_AT:
+	if not u["hit_done"] and u["swing"] >= hit_at:
 		u["hit_done"] = true
 		_land_attack(u, tgt, melee_now)
-	if u["swing"] >= rate:
-		u["swing"] -= rate
+	if u["swing"] >= cycle:
+		u["swing"] = 0.0
+		u["cycle"] = 0.0        # الدورة التالية تختار حركتها من جديد
 		u["hit_done"] = false
+
+# نسبة من المدى تقف عندها الوحدة في الاشتباك، من جرأتها (5.4.1)
+func close_frac(u: Dictionary) -> float:
+	var lo: float = GC.TRAIT_BOLD[0]
+	var hi: float = GC.TRAIT_BOLD[1]
+	var k: float = clampf((float(u.get("bold", 1.0)) - lo) / maxf(0.0001, hi - lo), 0.0, 1.0)
+	return 1.0 - k * GC.CLOSE_SPAN
+
+# خطوة صغيرة نحو الهدف بلا مسار: لا تتجاوز المسافة المطلوبة ولا تدخل مبنى
+func _creep(u: Dictionary, goal: Vector2, most: float, delta: float) -> void:
+	u["path"] = []
+	var to: Vector2 = goal - Vector2(u["pos"])
+	if to.length() < 0.01 or most <= 0.0:
+		return
+	var span: float = minf(speed_of(u) * (1.0 - float(u["slow"])) * delta, most)
+	var step: Vector2 = Vector2(u["pos"]) + to.normalized() * span
+	if _walkable_at(step):
+		u["pos"] = step
+
+# نظام الحركات للالتحام فقط: الرامي وهو يرمي من بعيد يبقى على إيقاعه (5.3)
+func uses_moves(u: Dictionary, melee_now: bool) -> bool:
+	return melee_now or not bool(GC.stat(u["key"], "ranged"))
+
+# بداية دورة ضرب: تُختار الحركة ويُحسب طولها الزمني (5.4.2)
+func _start_move(u: Dictionary, tgt: Dictionary, d: float, reach: float, rate: float) -> void:
+	u["move"] = pick_move(u, tgt, d, reach)
+	var spec: Dictionary = GC.MOVES[String(u["move"])]
+	u["cycle"] = (float(spec["wind"]) + float(spec["recover"])) * rate * GC.MOVE_CYCLE_SCALE
+	u["hit_done"] = false
+
+# هل الوحدة الآن في زمن التعافي بعد ضربتها؟ (فرصة للضربة القوية)
+func in_recover(u: Dictionary) -> bool:
+	return String(u["state"]) == "attacking" and float(u["cycle"]) > 0.0 \
+		and bool(u["hit_done"]) and float(u["swing"]) < float(u["cycle"])
+
+# اختيار الحركة بنظام نقاط لا بعشوائية محضة (5.4.2)
+func pick_move(u: Dictionary, tgt: Dictionary, d: float, reach: float) -> String:
+	var lock := String(u.get("move_lock", ""))
+	if lock != "" and GC.MOVES.has(lock):
+		return lock
+	var spin_ok: bool = GC.SPIN_UNITS.has(String(u["key"]))
+	var bold: float = float(u.get("bold", 1.0))
+	var low_hp: bool = float(u["hp"]) / maxf(1.0, float(u["max_hp"])) < GC.MOVE_LOW_HP
+	var far: bool = d > reach * GC.MOVE_FAR_FRAC
+	var tgt_recover: bool = in_recover(tgt)
+	var crowd := 0
+	if spin_ok:
+		crowd = _enemies_within(u, Vector2(u["pos"]), reach).size()
+	var best := "quick"
+	var best_score := -INF
+	for m in GC.MOVE_ORDER:
+		if m == "spin" and not spin_ok:
+			continue
+		var sc: float = float(GC.MOVE_BASE[m])
+		match m:
+			"heavy":
+				if tgt_recover:
+					sc += GC.MOVE_RECOVER_BONUS      # استغلال الفرصة
+				sc += (bold - 1.0) * GC.MOVE_BOLD_W  # الجريء يميل للقوية
+			"thrust":
+				if far:
+					sc += GC.MOVE_FAR_BONUS
+			"spin":
+				if crowd >= GC.MOVE_CROWD:
+					sc += GC.MOVE_CROWD_BONUS
+				sc += (bold - 1.0) * GC.MOVE_BOLD_W
+			"quick":
+				if low_hp:
+					sc += GC.MOVE_LOW_HP_BONUS       # حذر
+		sc *= randf_range(1.0 - GC.MOVE_RANDOM, 1.0 + GC.MOVE_RANDOM)
+		if sc > best_score:
+			best_score = sc
+			best = m
+	return best
 
 # مضاعف الضرر الصادر: هالة الزعيم + تعزيز الضربة المميزة + مخزن السلاح (6.5، 6.7، 3.7)
 func out_mult(u: Dictionary) -> float:
@@ -350,6 +479,19 @@ func _land_attack(u: Dictionary, tgt: Dictionary, melee_now: bool) -> void:
 	var key := String(u["key"])
 	var dmg: float = float(GC.stat(key, "melee_dmg")) if melee_now else float(GC.stat(key, "dmg"))
 	dmg *= out_mult(u)
+
+	# ---- الحركة الحالية وأثرها (5.4.2) ----
+	var moves: bool = uses_moves(u, melee_now)
+	var spec: Dictionary = GC.MOVES.get(String(u["move"]), {}) if moves else {}
+	var around: bool = bool(spec.get("around", false))
+	if moves:
+		dmg *= float(spec["dmg"])
+		var reach: float = (GC.MELEE_SWITCH_RANGE if melee_now else float(GC.stat(key, "range"))) \
+			+ float(spec["reach"])
+		# الهدف ابتعد أثناء الاستعداد: تمر الضربة في الهواء بلا ضرر ولا شحن
+		if not around and _dist(u, tgt) > reach + GC.MOVE_WHIFF_SLACK:
+			return
+
 	# تسارع الاشتباك: كل ضربة متتالية على نفس الهدف (6.2 و 6.6)
 	if int(u["combo_target"]) == int(tgt["id"]):
 		u["combo"] = int(u["combo"]) + 1
@@ -366,12 +508,34 @@ func _land_attack(u: Dictionary, tgt: Dictionary, melee_now: bool) -> void:
 		for i in maxi(1, shots):
 			_fire(u, tgt, dmg, String(GC.stat(key, "proj")), float(i - (shots - 1) * 0.5) * 0.18)
 		return
+
+	# الحركة الدائرية: كل الأعداء حول الوحدة (5.4.2)
+	if around:
+		var radius: float = (GC.MELEE_SWITCH_RANGE if melee_now else float(GC.stat(key, "range"))) \
+			+ float(spec["reach"])
+		for o in _enemies_within(u, Vector2(u["pos"]), radius):
+			damage(o, dmg, u, false)
+		return
+
 	damage(tgt, dmg, u, false)
 	var splash: float = float(GC.stat(key, "splash"))
 	if splash > 0.0:
 		for o in _enemies_within(u, Vector2(tgt["pos"]), splash):
 			if int(o["id"]) != int(tgt["id"]):
 				damage(o, dmg, u, false)
+	# الضربة القوية تُرنّح الهدف وتدفعه مربعاً (5.4.2)
+	if moves and alive(tgt):
+		_stagger(tgt, float(spec["stagger"]))
+		_push(tgt, Vector2(u["pos"]), float(spec["push"]))
+
+# ترنّح: لا تهاجم الوحدة خلاله وتُلغى دورة ضربها (5.4.3)
+func _stagger(u: Dictionary, dur: float) -> void:
+	if dur <= 0.0:
+		return
+	u["stagger_t"] = maxf(float(u["stagger_t"]), dur)
+	u["swing"] = 0.0
+	u["cycle"] = 0.0
+	u["hit_done"] = false
 
 # مقذوف يطير 0.3 – 0.5 ثانية (5.3)
 func _fire(u: Dictionary, tgt: Dictionary, dmg: float, kind: String, spread: float,
@@ -514,6 +678,7 @@ func order_move(sel: Array, goal: Vector2, attack_move: bool) -> void:
 		u["target"] = -1
 		u["cmd_target"] = -1
 		u["swing"] = 0.0
+		u["cycle"] = 0.0
 		u["state"] = "attackMove" if attack_move else "moving"
 		u["returning"] = false
 		u["chase_from"] = goal
@@ -528,6 +693,7 @@ func order_attack(sel: Array, tgt: Dictionary) -> void:
 		u["chase_from"] = u["pos"]
 		u["state"] = "attacking"
 		u["swing"] = 0.0
+		u["cycle"] = 0.0
 		u["hit_done"] = false
 		u["repath_t"] = 0.0
 
@@ -571,6 +737,7 @@ func _start_ult(u: Dictionary) -> void:
 	u["ult_swing"] = 0.0
 	u["ult_done"] = false
 	u["swing"] = 0.0
+	u["cycle"] = 0.0
 	u["hit_done"] = true      # الضربة العادية لا تقع أثناء الضربة المميزة
 
 func _step_ult(u: Dictionary, tgt, delta: float) -> void:
@@ -648,12 +815,21 @@ func _slow(u: Dictionary, amount: float, dur: float) -> void:
 	u["slow"] = maxf(float(u["slow"]), amount)
 	u["slow_t"] = maxf(float(u["slow_t"]), dur)
 
+# دفع وحدة بعيداً عن نقطة. لا تُدفع داخل مبنى (5.4.2 والضربات المميزة في 6.7)
 func _push(u: Dictionary, from: Vector2, tiles: float) -> void:
+	if tiles <= 0.0:
+		return
 	var d: Vector2 = Vector2(u["pos"]) - from
 	if d.length() < 0.01:
 		return
 	var goal: Vector2 = Vector2(u["pos"]) + d.normalized() * tiles
-	u["pos"] = goal
+	if _walkable_at(goal):
+		u["pos"] = goal
+
+func _walkable_at(p: Vector2) -> bool:
+	if map == null or not map.has_method("walkable"):
+		return true
+	return bool(map.walkable(int(round(p.x)), int(round(p.y))))
 
 func _enemies_within(u: Dictionary, center: Vector2, radius: float) -> Array:
 	var out := []
@@ -754,6 +930,9 @@ func draw_rate(u: Dictionary) -> float:
 	var key := String(u["key"])
 	if bool(u["ulting"]):
 		return maxf(0.05, float(GC.stat(key, "rate")))
+	# أثناء حركة التحام: زمن الرسم هو طول دورة الحركة نفسها (5.4.2)
+	if float(u["cycle"]) > 0.0 and String(u["state"]) == "attacking":
+		return maxf(0.05, float(u["cycle"]))
 	var tgt = get_unit(int(u["target"]))
 	if bool(GC.stat(key, "ranged")) and tgt != null and _dist(u, tgt) <= GC.MELEE_SWITCH_RANGE:
 		return maxf(0.05, float(GC.stat(key, "melee_rate")))

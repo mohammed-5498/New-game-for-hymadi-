@@ -94,6 +94,9 @@ func _t_breaker_splash_and_ult() -> void:
 	var b2 := idle_dummy(c, "scorp_common", 1, Vector2(6.3, 5))   # داخل دائرة 1 حول الهدف
 	a["charge"] = 0.0
 	a["scan_t"] = 0.0
+	# المقصود هنا دائرة الضرر حول الهدف (6.3). الحركة الدائرية حول الوحدة نفسها (5.4.2)
+	# لها فحصها في tests/test_moves.gd، فنثبّت حركة سريعة حتى لا تختلط الاثنتان.
+	a["move_lock"] = "quick"
 	run(c, 1.6, 0.01)
 	check(float(b1["hp"]) < float(b1["max_hp"]), "المحطِّم لم يصب هدفه")
 	check(float(b2["hp"]) < float(b2["max_hp"]), "ضربة المحطِّم لم تصب من حول الهدف")

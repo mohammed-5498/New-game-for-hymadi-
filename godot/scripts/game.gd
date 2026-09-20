@@ -531,8 +531,11 @@ func _draw_unit(u: Dictionary) -> void:
 		# وميض أبيض خفيف عند الإصابة (5.2)
 		col = col.lerp(Color(1, 1, 1), 0.55 * float(u["flash"]) / GC.HIT_FLASH)
 	var sc: float = GC.UNIT_SCALE_SPECIAL if not String(u["key"]).ends_with("_common") else GC.UNIT_SCALE
+	sc *= float(u.get("size", 1.0))   # تنويع ±4% من بذرة الشخصية (5.4.1)
+	# نوع الحركة يُمرَّر للرسم ليتغير القوس والاندفاع أثناء الالتحام فقط (5.4.2)
+	var mv: String = String(u["move"]) if combat.draw_state(u) == "attack" and float(u["cycle"]) > 0.0 else ""
 	art.draw_unit(self, String(u["key"]), tile_to_world(u["pos"]),
-		combat.draw_time(u), combat.draw_state(u), col, int(u["dir"]), sc, combat.draw_rate(u))
+		combat.draw_time(u), combat.draw_state(u), col, int(u["dir"]), sc, combat.draw_rate(u), mv)
 
 # شريط الدم: فوق المحدد أو ناقص الدم فقط، بلون مالك الوحدة (5.2)
 # بقعة نار مشتعلة: دائرة برتقالية نابضة مع ألسنة

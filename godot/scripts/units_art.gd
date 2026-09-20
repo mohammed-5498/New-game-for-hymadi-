@@ -31,6 +31,15 @@ const HIT_AT := 0.47   # لحظة الارتطام كنسبة من زمن الض
 # جانب، فتصير الأطراف أعرض من المرجع بمرتين تقريباً. الإطفاء يعطي العرض الصحيح بالضبط.
 const AA := false
 
+# شكل الحركات الأربع (5.4.2): sw سعة القوس، lg عمق الاندفاع.
+# هذه أرقام رسم فقط؛ أزمنة الحركات وأضرارها كلها في config.gd.
+const MOVE_ART := {
+	"quick":  {"sw": 0.75, "lg": 0.80},
+	"heavy":  {"sw": 1.25, "lg": 1.15},
+	"thrust": {"sw": 0.55, "lg": 1.50},
+	"spin":   {"sw": 1.15, "lg": 0.40},
+}
+
 # جدول الوحدات: sx/sy تشويه الجسم، spd سرعة الأنميشن، hero بطل، neutral لون ثابت
 const UNITS := {
 	"crow_common":      {"sx": 0.90, "sy": 1.08, "spd": 1.00},
@@ -195,7 +204,7 @@ func seg2(o: Vector2, a1: float, l1: float, a2: float, l2: float, w: float, col:
 
 # ============================ الهيكل الحركي (rig) ============================
 # يبني قاموس الحركة لكل إطار. مطابق لدالة rig في المرجع.
-func _rig(t: float, state: String, spd: float, rate: float) -> Dictionary:
+func _rig(t: float, state: String, spd: float, rate: float, move: String = "") -> Dictionary:
 	var st := state
 	var is_ult := st == "ult"
 	if is_ult:
@@ -234,6 +243,10 @@ func _rig(t: float, state: String, spd: float, rate: float) -> Dictionary:
 			var k3 := _ease((a - 0.53) / 0.47)
 			s = 1.0 - 1.28 * k3
 			lunge = 3.3 - 3.3 * k3
+		# نوع الحركة يغيّر سعة القوس وعمق الاندفاع من نفس الهيكل (5.4.6)
+		var art: Dictionary = MOVE_ART.get(move, {})
+		s *= float(art.get("sw", 1.0))
+		lunge *= float(art.get("lg", 1.0))
 		r["s"] = s
 		r["lunge"] = lunge
 		r["hit"] = a >= 0.44 and a < 0.53
@@ -1206,7 +1219,7 @@ func _draw_figure(key: String, r: Dictionary, col: Color) -> void:
 # state: idle | walk | attack | ult | hurt | death
 # في hurt و death مرّر t = الزمن المنقضي داخل الحالة.
 func draw_unit(canvas: CanvasItem, key: String, pos: Vector2, t: float, state: String,
-		col: Color, dir: int = 1, sc: float = 1.0, rate: float = 1.0) -> void:
+		col: Color, dir: int = 1, sc: float = 1.0, rate: float = 1.0, move: String = "") -> void:
 	var u: Dictionary = UNITS.get(key, {})
 	if u.is_empty():
 		return
@@ -1215,7 +1228,7 @@ func draw_unit(canvas: CanvasItem, key: String, pos: Vector2, t: float, state: S
 	_stack.clear()
 
 	var color: Color = POLICE if u.get("neutral", false) else col
-	var r := _rig(t, state, float(u.get("spd", 1.0)), rate)
+	var r := _rig(t, state, float(u.get("spd", 1.0)), rate, move)
 
 	var sx: float = sc * float(dir) * float(u.get("sx", 1.0))
 	var sy: float = sc * float(u.get("sy", 1.0))
@@ -1239,6 +1252,13 @@ func draw_unit(canvas: CanvasItem, key: String, pos: Vector2, t: float, state: S
 	_draw_figure(key, r, color)
 	if r["ult"]:
 		_draw_ult(key, r, color)
+
+	# الحركة الدائرية: حلقة تتسع حول القدمين لحظة الضرب (5.4.2)
+	if move == "spin" and String(r["st"]) == "attack" and float(r["fx"]) > 0.0:
+		var g: float = 1.0 - float(r["fx"])
+		ga = float(r["fx"]) * 0.9
+		ellipse_dashed(Vector2(0, 0.5), 7.0 + g * 9.0, 2.8 + g * 3.6, STEEL, 1.0)
+		ga = 1.0
 
 	var flinch: float = float(r["flinch"])
 	if flinch > 0.0:

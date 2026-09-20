@@ -81,6 +81,10 @@ func _t_freeze_on_contest() -> void:
 	var b := c.spawn("scorp_common", 1, 1, Vector2(0.2, 0))
 	a["state"] = "moving"
 	b["state"] = "moving"
+	# حركة سريعة للاثنين: الضربة القوية تدفع الهدف مربعاً فتُخرجه من المنطقة (5.4.2)،
+	# والمقصود هنا فحص تجمّد التقدم لا الدفع.
+	a["move_lock"] = "quick"
+	b["move_lock"] = "quick"
 	run(d, c, 3.0)
 	check(bool(d.list[0]["frozen"]), "لم يتجمد التقدم رغم وجود جانبين")
 	check(float(d.list[0]["value"]) < 1.0, "تقدّم الاستيلاء رغم التجمد")
