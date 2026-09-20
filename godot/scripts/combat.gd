@@ -21,6 +21,7 @@ var player_heal := {}          # المستشفى: علاج مستمر لكل و
 var heal_zones: Array = []     # منطقة استيلاء المستشفى: {pos, player, dps}
 var player_armor_bonus := {}   # مراكز الشرطة: درع إضافي للمالك (3.8)
 var teams := {}                # رقم اللاعب -> فريقه (التحالفات، 11)
+var weather := "day"           # طقس المباراة، يضبطه game.gd مرة واحدة (10)
 
 # استدعاءات للخارج: (وحدة مصابة، ضرر، هل من ضربة مميزة)
 var on_hit := Callable()
@@ -59,6 +60,17 @@ func spawn(key: String, player: int, team: int, tile: Vector2) -> Dictionary:
 
 func team_of_player(p: int) -> int:
 	return int(teams.get(p, p))
+
+# ============================ الطقس (10) ============================
+# ليل: مدى الرصد × 0.75 — ثلج: السرعة × 0.85 — مطر: الهجمات البعيدة تصيب 80%
+func detect_of(u: Dictionary) -> float:
+	return float(GC.stat(u["key"], "detect")) * float(GC.WEATHER_DETECT.get(weather, 1.0))
+
+func speed_of(u: Dictionary) -> float:
+	return float(GC.stat(u["key"], "speed")) * float(GC.WEATHER_SPEED.get(weather, 1.0))
+
+func ranged_hit_chance() -> float:
+	return float(GC.WEATHER_RANGED_HIT.get(weather, 1.0))
 
 func get_unit(id: int) -> Variant:
 	return _by_id.get(id, null)
@@ -142,7 +154,7 @@ func _step_unit(u: Dictionary, delta: float) -> void:
 	# البحث عن هدف: في idle و attackMove فقط. في moving لا ترد الوحدة على من يضربها (5.1)
 	if tgt == null and u["state"] != "moving" and u["scan_t"] <= 0.0:
 		u["scan_t"] = GC.SCAN_EVERY
-		var found = _nearest_enemy(u, float(GC.stat(u["key"], "detect")))
+		var found = _nearest_enemy(u, detect_of(u))
 		if found != null:
 			u["target"] = int(found["id"])
 			u["chase_from"] = _fresh_origin(u)
@@ -273,7 +285,7 @@ func _fight(u: Dictionary, tgt: Dictionary, delta: float) -> void:
 	# ولا على وحدة راجعة يعترضها عدو داخل مدى ضربتها مباشرة (3.8)
 	var blocked_on_way: bool = bool(u["returning"]) and is_guard(u) and d <= reach
 	if int(u["cmd_target"]) < 0 and not blocked_on_way:
-		var detect: float = GC.stat(key, "detect")
+		var detect: float = detect_of(u)
 		if d > detect * GC.CHASE_DETECT_FACTOR or Vector2(u["pos"]).distance_to(Vector2(u["chase_from"])) > GC.CHASE_MAX_TILES:
 			u["target"] = -1
 			u["state"] = "moving"
@@ -371,8 +383,14 @@ func _fire(u: Dictionary, tgt: Dictionary, dmg: float, kind: String, spread: flo
 		payload = {"radius": float(GC.stat(u["key"], "fire_radius")),
 			"dur": float(GC.stat(u["key"], "fire_dur")),
 			"dps": float(GC.stat(u["key"], "fire_dps"))}
+	# المطر الخفيف: 20% من الهجمات البعيدة العادية تسقط قرب الهدف بلا ضرر (10).
+	# الضربات المميزة لا تخطئ — الوصف يذكر الهجمات البعيدة وحدها.
+	var miss := Vector2.ZERO
+	if not is_ult and randf() >= ranged_hit_chance():
+		var ang := randf() * TAU
+		miss = Vector2(cos(ang), sin(ang)) * GC.WEATHER_MISS_SPREAD
 	projectiles.append({
-		"pos": u["pos"], "from": u["pos"], "target": int(tgt["id"]),
+		"pos": u["pos"], "from": u["pos"], "target": int(tgt["id"]), "miss": miss,
 		"t": 0.0, "dur": clampf(d / GC.PROJ_SPEED, GC.PROJ_MIN_TIME, GC.PROJ_MAX_TIME),
 		"dmg": dmg, "player": int(u["player"]), "owner": int(u["id"]),
 		"kind": kind, "spread": spread, "spin": randf() * TAU,
@@ -384,13 +402,16 @@ func _step_projectiles(delta: float) -> void:
 	for p in projectiles:
 		p["t"] += delta
 		var tgt = get_unit(int(p["target"]))
-		var goal: Vector2 = tgt["pos"] if tgt != null else p["pos"]
+		var off: Vector2 = p.get("miss", Vector2.ZERO)
+		var goal: Vector2 = Vector2(tgt["pos"]) + off if tgt != null else Vector2(p["pos"])
 		var k: float = clampf(p["t"] / p["dur"], 0.0, 1.0)
 		p["pos"] = Vector2(p["from"]).lerp(goal, k)
 		if k < 1.0:
 			keep.append(p)
 			continue
 		var owner = get_unit(int(p["owner"]))
+		if off != Vector2.ZERO:
+			continue     # سقطت قرب الهدف: لا ضرر ولا إشعال (10)
 		var payload: Dictionary = p.get("fire", {})
 		if not payload.is_empty() and owner != null:
 			add_fire(Vector2(p["pos"]), float(payload["radius"]), float(payload["dur"]),
@@ -448,7 +469,7 @@ func _advance(u: Dictionary, delta: float) -> void:
 		if u["state"] == "moving" or u["state"] == "attackMove":
 			u["state"] = "idle"
 		return
-	var speed: float = float(GC.stat(u["key"], "speed")) * (1.0 - float(u["slow"]))
+	var speed: float = speed_of(u) * (1.0 - float(u["slow"]))
 	var left: float = speed * delta
 	while left > 0.0 and not path.is_empty():
 		var goal: Vector2 = path[0]
@@ -540,7 +561,7 @@ func _ult_ready(u: Dictionary, tgt) -> bool:
 		"enemy":
 			return tgt != null and _dist(u, tgt) <= float(spec.get("range", GC.stat(key, "range")))
 		"foe_near":
-			return _nearest_enemy(u, float(GC.stat(key, "detect"))) != null
+			return _nearest_enemy(u, detect_of(u)) != null
 		"ally":
 			return _damaged_ally_near(u, float(spec.get("radius", 3.0)))
 	return false

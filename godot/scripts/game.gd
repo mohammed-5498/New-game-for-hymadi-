@@ -34,6 +34,9 @@ var toasts: Array = []     # إشعارات قصيرة
 var match_over := -1       # رقم الفريق الفائز، أو -1 إذا لم تنتهِ
 var hud = null
 var overlay = null
+var wx = null              # عقدة الطقس (10)
+var decor: Array = []      # زينة الشوارع: براميل نار وأعمدة إنارة
+var lights: Array = []     # مصادر الإضاءة الليلية، تُبنى مرة مع الخريطة (10)
 var me := 0                # رقم اللاعب البشري
 var shake_t := 0.0
 var shake_cool := 0.0
@@ -65,7 +68,7 @@ func _ready() -> void:
 		setup.reset()          # إعداد محفوظ غير صالح: نرجع للافتراضي بدل الانهيار
 	size_key = setup.size_key
 	unit_limit = setup.unit_limit
-	weather = setup.weather
+	weather = _roll_weather(setup.weather)
 	_apply_player_count()
 	combat = Combat.new(self)
 	combat.on_hit = _on_hit
@@ -82,6 +85,8 @@ func _ready() -> void:
 	$UI/DemoBtn.pressed.connect(func(): get_tree().change_scene_to_file("res://units_demo.tscn"))
 	$UI/FightBtn.pressed.connect(_test_battle)
 	$UI/DiffBtn.pressed.connect(_cycle_difficulty)
+	wx = $Weather
+	wx.set_kind(weather)
 	hud = $UI/Hud
 	hud.game = self
 	hud.load_pref()
@@ -91,6 +96,13 @@ func _ready() -> void:
 	$UI/PauseBtn.pressed.connect(func(): overlay.show_pause())
 	$UI/ClearBtn.pressed.connect(_clear_selection)
 	generate_map()
+
+# "عشوائي" يُحسم مرة واحدة عند بدء المباراة ويبقى ثابتاً طوالها (10)
+func _roll_weather(w: String) -> String:
+	if w != "random":
+		return w
+	var pool := GC.WEATHERS.filter(func(k): return k != "random")
+	return String(pool[randi() % pool.size()])
 
 # إعادة المباراة بنفس الإعدادات (12.4)
 func _restart() -> void:
@@ -214,6 +226,7 @@ func generate_map() -> void:
 	road = m["road"]
 	kind = m["kind"]
 	region = m["region"]
+	decor = m["decor"]
 	owner_dist = m["owner_dist"]
 	districts = m["districts"]
 
@@ -230,8 +243,35 @@ func generate_map() -> void:
 		push_warning("[خريطة] %s" % w)
 
 	_build_astar()
+	_build_lights()
 	_setup_match()
 	_refresh_info()
+
+# مصادر الإضاءة الليلية: نوافذ العمارات وبراميل النار وأعمدة الإنارة وساحات الأعلام (10).
+# تُبنى مرة واحدة مع الخريطة لأنها ثابتة، ولا تُحسب كل إطار.
+func _build_lights() -> void:
+	lights = []
+	for j in n:
+		for i in n:
+			var t := j * n + i
+			var c := tile_to_world(Vector2(i, j))
+			match String(kind[t]):
+				"A":
+					var h: float = 32.0 + float((i + j) % 2) * 8.0
+					_add_light(c + Vector2(0, -h * 0.5), GC.LIGHT_WINDOW)
+				"P":
+					_add_light(c + Vector2(0, -4), GC.LIGHT_FLAG)
+			match String(decor[t]):
+				"B":
+					_add_light(c + Vector2(0, -7), GC.LIGHT_BARREL)
+				"L":
+					_add_light(c + Vector2(6, -17), GC.LIGHT_LAMP)
+					_add_light(c + Vector2(6, 1), GC.LIGHT_LAMP_POOL)
+	if wx != null:
+		wx.lights = lights
+
+func _add_light(pos: Vector2, spec: Dictionary) -> void:
+	lights.append({"pos": pos, "r": float(spec["r"]), "c": Color(spec["c"]), "a": float(spec["a"])})
 
 func walkable(i: int, j: int) -> bool:
 	if i < 0 or j < 0 or i >= n or j >= n:
@@ -291,6 +331,7 @@ func _setup_match() -> void:
 		team_of[p] = int(w["team_id"])
 		color_of[p] = int(w["color"])
 
+	combat.weather = weather
 	districts_state.color_of = color_of
 	districts_state.setup(districts, player_count, team_of)
 	combat.teams = team_of
@@ -431,6 +472,7 @@ func _draw() -> void:
 			var key: String = region[j * n + i]
 			var col: Color = GC.GROUND[key] if GC.GROUND.has(key) else GC.GROUND["neutral"]
 			col = _tinted(col, owner_dist[j * n + i], GC.TINT_GROUND)
+			col = Weather.ground(col, bool(road[j * n + i]), weather)   # ثلج أبيض أو مطر أغمق (10)
 			draw_colored_polygon(PackedVector2Array([
 				c + Vector2(-GC.TW, 0), c + Vector2(0, -GC.TH),
 				c + Vector2(GC.TW, 0), c + Vector2(0, GC.TH)]), col)
@@ -448,6 +490,8 @@ func _draw() -> void:
 			if not view.has_point(c):
 				continue
 			_draw_object(kind[j * n + i], c, region[j * n + i], i, j, t, owner_dist[j * n + i])
+			if String(decor[j * n + i]) != "":
+				_draw_decor(String(decor[j * n + i]), c)
 		for u in combat.units:
 			if int(round(u["pos"].x + u["pos"].y)) == s:
 				_draw_unit(u)
@@ -579,8 +623,8 @@ func _draw_object(k: String, c: Vector2, reg: String, i: int, j: int, t: float, 
 			_box(c, 17, 8.5, 12, _w(Color("7f7a70"), wall), _w(Color("99938a"), wall), _r(Color("6c675f"), roof))
 		"T":
 			draw_rect(Rect2(c.x - 1, c.y - 8, 2, 8), Color("5b4636"))
-			draw_circle(c + Vector2(0, -13), 7, Color("4f7a3c"))
-			draw_circle(c + Vector2(-3, -15), 5, Color("5f8f48"))
+			draw_circle(c + Vector2(0, -13), 7, Weather.snow(Color("4f7a3c"), GC.SNOW_TREE, weather))
+			draw_circle(c + Vector2(-3, -15), 5, Weather.snow(Color("5f8f48"), GC.SNOW_TREE_TOP, weather))
 		"Q":
 			_box(c, 16, 8, 26, _w(_gang_dark(reg), wall), _w(_gang_light(reg), wall), _r(Color("3a3632"), roof))
 			draw_line(c + Vector2(0, -26), c + Vector2(0, -46), Color("2b2825"), 1.2)
@@ -601,6 +645,17 @@ func _draw_object(k: String, c: Vector2, reg: String, i: int, j: int, t: float, 
 			_fountain(c)
 		"S":
 			_police_station(c, t, wall, roof)
+
+# زينة الشوارع (7): برميل نار وعمود إنارة — منقولة من prototype.html
+func _draw_decor(d: String, c: Vector2) -> void:
+	if d == "B":
+		draw_rect(Rect2(c.x - 2.5, c.y - 5.0, 5.0, 6.0), Color("4f4337"))
+		_tri(c + Vector2(-3, -5), c + Vector2(0, -13), c + Vector2(3, -5), Color("e8893a"))
+		_tri(c + Vector2(-1.5, -5), c + Vector2(0, -9), c + Vector2(1.5, -5), Color("f2c14e"))
+	elif d == "L":
+		draw_line(c + Vector2(10, 3), c + Vector2(10, -18), Color("2b2825"), 1.2)
+		draw_line(c + Vector2(10, -18), c + Vector2(6, -19), Color("2b2825"), 1.0)
+		draw_circle(c + Vector2(6, -18.5), 1.6, Color("f2e3a8"))
 
 # ---- مباني الأحياء المميزة ومركز الشرطة ----
 func _hospital(c: Vector2, wall: int, roof: int) -> void:
@@ -713,14 +768,18 @@ func _box(c: Vector2, w: float, d: float, h: float, left: Color, right: Color, t
 	draw_colored_polygon(PackedVector2Array([
 		c + Vector2(0, d), c + Vector2(w, 0), c + Vector2(w, -h), c + Vector2(0, d - h)]), right)
 	if top.a > 0.0:
+		# الثلج يتراكم على الوجه العلوي (10)
 		draw_colored_polygon(PackedVector2Array([
-			c + Vector2(-w, -h), c + Vector2(0, -d - h), c + Vector2(w, -h), c + Vector2(0, d - h)]), top)
+			c + Vector2(-w, -h), c + Vector2(0, -d - h), c + Vector2(w, -h), c + Vector2(0, d - h)]),
+			Weather.snow(top, GC.SNOW_TOP, weather))
 
 func _roof(c: Vector2, w: float, d: float, h: float, rh: float, left: Color, right: Color) -> void:
 	var apex := c + Vector2(0, -h - rh)
 	draw_colored_polygon(PackedVector2Array([c + Vector2(-w, -h), apex, c + Vector2(w, -h)]), UnitsArt.dk(left, 0.3))
-	draw_colored_polygon(PackedVector2Array([c + Vector2(-w, -h), c + Vector2(0, d - h), apex]), left)
-	draw_colored_polygon(PackedVector2Array([c + Vector2(0, d - h), c + Vector2(w, -h), apex]), right)
+	draw_colored_polygon(PackedVector2Array([c + Vector2(-w, -h), c + Vector2(0, d - h), apex]),
+		Weather.snow(left, GC.SNOW_ROOF_L, weather))
+	draw_colored_polygon(PackedVector2Array([c + Vector2(0, d - h), c + Vector2(w, -h), apex]),
+		Weather.snow(right, GC.SNOW_ROOF_R, weather))
 
 # ============ اللمس ============
 func _unhandled_input(event: InputEvent) -> void:

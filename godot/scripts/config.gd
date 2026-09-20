@@ -310,6 +310,57 @@ const BOT_RETREAT_HP := 0.4        # الصعب يسحب المصاب دون ه�
 const BOT_REORDER_DIST := 1.5      # لا يُعاد إصدار الأمر إلا إذا تغيّر الهدف بهذا القدر
 const BOT_BACKLINE := 1.6          # الصعب يضع الرماة خلف المقاتلين بهذه المسافة
 
+# ---------- الطقس (10) ----------
+# يُختار في قائمة الإعداد ويبقى ثابتاً طوال المباراة.
+const WEATHER_DETECT := {"night": 0.75}      # مدى الرصد ليلاً × 0.75
+const WEATHER_SPEED := {"snow": 0.85}        # سرعة الحركة في الثلج × 0.85
+const WEATHER_RANGED_HIT := {"rain": 0.80}   # الهجمات البعيدة تصيب 80% في المطر
+const WEATHER_MISS_SPREAD := 0.55            # كم تبتعد الضربة الخاطئة عن الهدف (مربعات)
+# الطبقة التي تُرسم فوق المشهد كله (مطابقة لـ prototype.html)
+const WEATHER_OVERLAY := {
+	"night": Color(0.039, 0.063, 0.165, 0.62),
+	"rain": Color(0.176, 0.235, 0.314, 0.30),
+	"snow": Color(0.882, 0.922, 0.961, 0.12),
+}
+# الثلج: لون أبيض يُخلط بالأرض والأسطح والأشجار بنسب مختلفة
+const SNOW_TINT := Color("eef2f5")
+const SNOW_GROUND := 0.72
+const SNOW_ROAD := 0.45
+const SNOW_TOP := 0.75          # وجه علوي للصندوق
+const SNOW_ROOF_L := 0.55       # سقف مائل: الجهة اليسرى
+const SNOW_ROOF_R := 0.65       # سقف مائل: الجهة اليمنى
+const SNOW_TREE := 0.30         # جذع الشجرة وورقها الأساسي
+const SNOW_TREE_TOP := 0.55     # الورق العلوي أكثر بياضاً
+# المطر: الأرض أغمق
+const RAIN_GROUND_TINT := Color("2a2f36")
+const RAIN_GROUND := 0.20
+# ندف الثلج (إحداثيات الشاشة، مستقلة عن الكاميرا)
+const SNOW_COUNT := 110
+const SNOW_VY := [18.0, 40.0]       # سرعة السقوط: من، إلى
+const SNOW_VX := [-4.0, 4.0]
+const SNOW_R := [0.8, 2.4]
+const SNOW_SWAY := 12.0             # تمايل جانبي
+const SNOW_PART_COLOR := Color(1, 1, 1, 0.85)
+# خطوط المطر
+const RAIN_COUNT := 150
+const RAIN_VY := [420.0, 540.0]
+const RAIN_VX := -70.0
+const RAIN_LEN := [9.0, 15.0]
+const RAIN_SLANT := -2.5            # ميل الخط أفقياً
+const RAIN_PART_COLOR := Color(0.784, 0.843, 0.922, 0.45)
+const RAIN_PART_W := 1.0
+# مصادر الإضاءة الليلية: {r نصف القطر, c اللون, a الشدة}
+const LIGHT_WINDOW := {"r": 20.0, "c": Color(1.0, 0.804, 0.471), "a": 0.30}   # نوافذ العمارات
+const LIGHT_BARREL := {"r": 34.0, "c": Color(1.0, 0.588, 0.235), "a": 0.65}   # برميل نار
+const LIGHT_LAMP := {"r": 12.0, "c": Color(1.0, 0.882, 0.627), "a": 0.60}     # مصباح عمود الإنارة
+const LIGHT_LAMP_POOL := {"r": 24.0, "c": Color(1.0, 0.843, 0.549), "a": 0.28} # بركة ضوئه على الأرض
+const LIGHT_FLAG := {"r": 18.0, "c": Color(1.0, 0.922, 0.745), "a": 0.25}     # ساحة العلم
+
+# ---------- زينة الشوارع (7) ----------
+# عتبتان على رمية واحدة لكل مربع شارع: أقل من الأولى برميل، وما بينهما عمود إنارة
+const DECOR_BARREL_P := 0.015       # 1.5% براميل نار
+const DECOR_LAMP_P := 0.050         # و 3.5% أعمدة إنارة
+
 # ---------- ألوان الأرض ----------
 const GROUND := {
 	"crow": Color("7a7090"), "hammer": Color("8d6a60"), "viper": Color("6d7d5a"),

@@ -15,6 +15,7 @@ var road: Array = []        # bool لكل مربع
 var kind: Array = []        # رمز المبنى لكل مربع
 var region: Array = []      # مفتاح لون الأرض لكل مربع
 var owner_dist: Array = []  # رقم الحي لكل مربع (-1 للشارع)
+var decor: Array = []       # زينة الشارع لكل مربع: "" أو "B" برميل نار أو "L" عمود إنارة
 var districts: Array = []   # كل حي: {id, tiles, cx, cy, size, flavor, type, gang, special, cap, center}
 var warnings: Array = []
 
@@ -42,10 +43,11 @@ func generate(size_key: String, player_count: int, seed_value: int = 0, gangs: A
 	_place_caps()
 	_place_landmarks()
 	_fix_isolated()
+	_place_decor()
 
 	return {
 		"n": n, "size_key": size_key, "players": players,
-		"road": road, "kind": kind, "region": region,
+		"road": road, "kind": kind, "region": region, "decor": decor,
 		"owner_dist": owner_dist, "districts": districts,
 		"warnings": warnings,
 	}
@@ -56,11 +58,13 @@ func _reset() -> void:
 	region = []
 	owner_dist = []
 	districts = []
+	decor = []
 	for i in n * n:
 		road.append(false)
 		kind.append(".")
 		region.append("neutral")
 		owner_dist.append(-1)
+		decor.append("")
 
 # ============================ أدوات الشبكة ============================
 func id(i: int, j: int) -> int:
@@ -301,6 +305,19 @@ func _fill_buildings() -> void:
 			region[id(t.x, t.y)] = reg
 			# الحي الصغير جداً: أشجار أو أرض فارغة فقط (3.4)
 			kind[id(t.x, t.y)] = (("T" if rng.randf() < 0.5 else ".") if tiny else _pick_kind(flavor))
+
+# زينة الشوارع: براميل نار وأعمدة إنارة (7). لا تمنع المرور، وهي مصادر ضوء ليلاً (10).
+func _place_decor() -> void:
+	for j in n:
+		for i in n:
+			var t := id(i, j)
+			if not road[t]:
+				continue
+			var q := rng.randf()
+			if q < GC.DECOR_BARREL_P:
+				decor[t] = "B"
+			elif q < GC.DECOR_LAMP_P:
+				decor[t] = "L"
 
 func _pick_kind(flavor: String) -> String:
 	var table: Array = GC.BUILDING_MIX.get(flavor, GC.BUILDING_MIX["neutral"])
