@@ -21,13 +21,19 @@ var spawner := Spawner.new()
 var police := Police.new()
 var bots: Array = []           # بوت لكل لاعب غير بشري (11)
 var difficulty := GC.BOT_DIFFICULTY_DEFAULT
-var teams_setting: Array = []  # يملؤها قائمة الإعداد في المرحلة 9
+var setup: MatchSetup          # إعداد المباراة من قائمة الإعداد (12.2)
+var color_of := {}             # رقم اللاعب -> رقم لونه
+var unit_limit := GC.UNIT_LIMIT_DEFAULT
+var weather := "day"
+var stats := {}                # إحصائيات شاشة النهاية (12.5)
+var match_time := 0.0
 var gang_of := {}          # رقم اللاعب -> عصابته
 var team_of := {}          # رقم اللاعب -> فريقه (بلا تحالفات بعد: الفريق = اللاعب)
 var alerts: Array = []     # تنبيهات الحافة (12.3)
 var toasts: Array = []     # إشعارات قصيرة
 var match_over := -1       # رقم الفريق الفائز، أو -1 إذا لم تنتهِ
 var hud = null
+var overlay = null
 var me := 0                # رقم اللاعب البشري
 var shake_t := 0.0
 var shake_cool := 0.0
@@ -54,8 +60,16 @@ var press_t := 0.0         # لقياس الضغطة المطوّلة (4.3)
 var long_fired := false
 
 func _ready() -> void:
+	setup = MatchSetup.load_saved()
+	if setup.validate() != "":
+		setup.reset()          # إعداد محفوظ غير صالح: نرجع للافتراضي بدل الانهيار
+	size_key = setup.size_key
+	unit_limit = setup.unit_limit
+	weather = setup.weather
+	_apply_player_count()
 	combat = Combat.new(self)
 	combat.on_hit = _on_hit
+	combat.on_death = _on_death
 	cam = $Cam
 	mode_btn = $UI/ModeBtn
 	size_btn = $UI/SizeBtn
@@ -71,9 +85,26 @@ func _ready() -> void:
 	hud = $UI/Hud
 	hud.game = self
 	hud.load_pref()
+	overlay = $Overlay
+	overlay.resume_pressed.connect(func(): overlay.hide_menu())
+	overlay.restart_pressed.connect(_restart)
+	$UI/PauseBtn.pressed.connect(func(): overlay.show_pause())
+	$UI/ClearBtn.pressed.connect(_clear_selection)
 	generate_map()
 
+# إعادة المباراة بنفس الإعدادات (12.4)
+func _restart() -> void:
+	overlay.hide_menu()
+	generate_map()
+
+func _clear_selection() -> void:
+	for u in combat.units:
+		u["sel"] = false
+	_refresh_info()
+
 func _process(delta: float) -> void:
+	if match_over < 0:
+		match_time += delta
 	combat.step(delta)
 	districts_state.step(delta, combat.units)
 	police.step(delta, districts)
@@ -84,9 +115,11 @@ func _process(delta: float) -> void:
 	if match_over < 0:
 		for spawn in spawner.step(delta, player_count, districts_state, combat.units):
 			combat.spawn(String(spawn["key"]), int(spawn["player"]), int(team_of.get(int(spawn["player"]), int(spawn["player"]))), Vector2(spawn["pos"]))
+		stats["max_districts"] = maxi(int(stats.get("max_districts", 0)), districts_state.owned_by(me))
 		match_over = districts_state.winner_team(combat.units)
 		if match_over >= 0:
-			_toast("انتهت المباراة — فاز الفريق %d" % (match_over + 1))
+			# شاشة النهاية (12.5)
+			overlay.show_end(match_over == int(team_of.get(me, me)), match_time, stats)
 	_age_alerts(delta)
 	marker["t"] += delta
 	if dragging and not moved and not long_fired:
@@ -103,6 +136,12 @@ func _process(delta: float) -> void:
 	elif cam.offset != Vector2.ZERO:
 		cam.offset = Vector2.ZERO
 	queue_redraw()
+
+func _on_death(victim: Dictionary, killer) -> void:
+	if int(victim["player"]) == me:
+		stats["losses"] = int(stats.get("losses", 0)) + 1
+	elif killer != null and int(killer["player"]) == me:
+		stats["kills"] = int(stats.get("kills", 0)) + 1
 
 func _on_hit(victim: Dictionary, _dealt: float, is_ult: bool) -> void:
 	if is_ult and shake_cool <= 0.0:
@@ -160,9 +199,17 @@ func _handle_district_events() -> void:
 			_toast("عدو يستولي على حيك")
 
 # ============ توليد الخريطة ============
+# عدد اللاعبين من قائمة الإعداد، مقصوصاً على حد حجم الخريطة (3.2)
+func _apply_player_count() -> void:
+	player_count = clampi(setup.active_slots().size(), 2, int(GC.MAP_SIZES[size_key]["max_players"]))
+
 func generate_map() -> void:
 	var gen := MapGen.new()
-	var m := gen.generate(size_key, player_count)
+	# عصابات اللاعبين تُمرَّر للتوليد حتى يأخذ كل حي منزلي طابع عصابة صاحبه (3.6)
+	var want_gangs := []
+	for w in setup.players():
+		want_gangs.append(String(w["gang"]))
+	var m := gen.generate(size_key, player_count, 0, want_gangs)
 	n = int(m["n"])
 	road = m["road"]
 	kind = m["kind"]
@@ -229,17 +276,22 @@ func _setup_match() -> void:
 	gang_of = {}
 	team_of = {}
 
-	# رقم لاعب لكل حي منزلي، بترتيب ثابت
+	# اللاعبون من قائمة الإعداد (12.2): الخانة البشرية أولاً فيكون رقمها 0.
+	# العصابة تُقرأ من الحي المنزلي لأن التوليد حسم "العشوائي" فعلاً.
+	var wanted: Array = setup.players()
 	var homes := []
 	for d in districts:
 		if String(d["type"]) == "home":
 			homes.append(d)
-	player_count = maxi(1, homes.size())
-	for p in homes.size():
+	player_count = mini(homes.size(), wanted.size())
+	color_of = {}
+	for p in player_count:
+		var w: Dictionary = wanted[p]
 		gang_of[p] = String(homes[p]["gang"])
-		team_of[p] = p
-	_apply_teams()            # التحالفات (11) — تُختار في قائمة الإعداد (المرحلة 9)
+		team_of[p] = int(w["team_id"])
+		color_of[p] = int(w["color"])
 
+	districts_state.color_of = color_of
 	districts_state.setup(districts, player_count, team_of)
 	combat.teams = team_of
 	bots = []
@@ -247,11 +299,13 @@ func _setup_match() -> void:
 		if p == me:
 			continue
 		var b := Bot.new()
-		b.setup(p, difficulty)
+		b.setup(p, String(wanted[p]["difficulty"]))
 		bots.append(b)
+	stats = {"kills": 0, "losses": 0, "max_districts": 1}
+	match_time = 0.0
 	for p in homes.size():
 		districts_state.claim_home(int(homes[p]["id"]), p)
-	spawner.setup(player_count, gang_of, GC.UNIT_LIMIT_DEFAULT)
+	spawner.setup(player_count, gang_of, unit_limit)
 	police.setup(districts, combat, self)
 	police.spawn_initial()
 	_refresh_clock_bonus()
@@ -272,12 +326,6 @@ func _setup_match() -> void:
 		if p == me:
 			cam.position = tile_to_world(Vector2(cap))
 			cam_home = cam.position
-
-# التحالفات: قائمة أرقام فرق بطول عدد اللاعبين، وإلا كل لاعب في فريقه (11)
-func _apply_teams() -> void:
-	if teams_setting.size() == player_count:
-		for p in player_count:
-			team_of[p] = int(teams_setting[p])
 
 # مكافآت الأحياء المميزة ومراكز الشرطة (3.7 و 3.8) تنتقل مع الملكية
 func _refresh_clock_bonus() -> void:
@@ -430,7 +478,8 @@ func _draw() -> void:
 func _owner_color(player: int) -> Color:
 	if player < 0:
 		return GC.POLICE_COLOR
-	return GC.PLAYER_COLORS[player % GC.PLAYER_COLORS.size()]
+	var ci: int = int(color_of.get(player, player))
+	return GC.PLAYER_COLORS[ci % GC.PLAYER_COLORS.size()]
 
 func _draw_unit(u: Dictionary) -> void:
 	var col: Color = _owner_color(int(u["player"]))
@@ -603,7 +652,7 @@ func _owner_flag(dist: int, reg: String) -> Color:
 	if dist >= 0 and dist < districts.size():
 		var o: int = int(districts[dist].get("owner", -1))
 		if o >= 0:
-			return UnitsArt.lt(GC.PLAYER_COLORS[o % GC.PLAYER_COLORS.size()], 0.25)
+			return UnitsArt.lt(_owner_color(o), 0.25)
 	return _flag_color(reg)
 
 # شريط تقدم الاستيلاء فوق العلم بلون المستولي (8)
@@ -622,7 +671,7 @@ func _capture_bar(c: Vector2, dist: int) -> void:
 	var x := c.x - w * 0.5
 	draw_rect(Rect2(x - 0.5, y - 0.5, w + 1.0, 3.0), Color(0, 0, 0, 0.55))
 	var who: int = claimer if claimer >= 0 else owner
-	var col: Color = GC.PLAYER_COLORS[who % GC.PLAYER_COLORS.size()] if who >= 0 else Color("cfc8b8")
+	var col: Color = _owner_color(who) if who >= 0 else Color("cfc8b8")
 	if bool(d.get("frozen", false)):
 		col = col.lerp(Color(0.6, 0.6, 0.6), 0.5)   # متجمد: جانبان داخل المنطقة
 	draw_rect(Rect2(x, y, w * (v / GC.CAPTURE_MAX), 2.0), col)
@@ -821,8 +870,8 @@ func _cycle_difficulty() -> void:
 func _cycle_size() -> void:
 	var idx: int = GC.SIZE_ORDER.find(size_key)
 	size_key = GC.SIZE_ORDER[(idx + 1) % GC.SIZE_ORDER.size()]
-	var info_d: Dictionary = GC.MAP_SIZES[size_key]
-	player_count = mini(player_count, int(info_d["max_players"]))
+	setup.size_key = size_key
+	_apply_player_count()
 	generate_map()
 
 func _select_all() -> void:
@@ -856,5 +905,7 @@ func _refresh_info() -> void:
 			capturable += 1
 	var label: String = String(GC.MAP_SIZES[size_key]["label"])
 	size_btn.text = "الحجم: %s" % label
-	info.text = "%s %d×%d | أحياء %d | مميزة %d | مراكز شرطة %d | شرطة حية %d | جنودي %d | أعداء %d | محدد %d" % [
-		label, n, n, capturable, specials, police_places, police.alive_count(), mine, foes, sel]
+	# شريط المعلومات (4.1): المحدد، الوحدات/الحد، الأحياء المملوكة، أيقونة الطقس
+	info.text = "%s  محدد %d  |  وحدات %d/%d  |  أحيائي %d من %d  |  أعداء %d" % [
+		String(GC.WEATHER_ICONS.get(weather, "")), sel, mine, unit_limit,
+		districts_state.owned_by(me), capturable, foes]

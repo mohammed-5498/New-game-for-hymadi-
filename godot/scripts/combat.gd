@@ -24,6 +24,7 @@ var teams := {}                # رقم اللاعب -> فريقه (التحال
 
 # استدعاءات للخارج: (وحدة مصابة، ضرر، هل من ضربة مميزة)
 var on_hit := Callable()
+var on_death := Callable()   # (الوحدة الميتة، قاتلها أو null)
 
 func _init(map_node) -> void:
 	map = map_node
@@ -422,6 +423,8 @@ func damage(tgt: Dictionary, amount: float, src, is_ult: bool) -> void:
 	if on_hit.is_valid():
 		on_hit.call(tgt, dealt, is_ult)
 	if tgt["hp"] <= 0.0:
+		if on_death.is_valid():
+			on_death.call(tgt, src)
 		_kill(tgt)
 
 func _kill(u: Dictionary) -> void:

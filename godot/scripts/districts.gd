@@ -8,6 +8,7 @@ var caps: Array = []          # فهرس الأحياء التي لها ساحة
 var teams: Dictionary = {}    # رقم اللاعب -> رقم الفريق
 var player_count := 0
 var events: Array = []        # إشعارات: {"kind": "captured"/"losing", "district": i, "player": p}
+var color_of := {}            # رقم اللاعب -> رقم لونه في جدول ألوان 12.2
 var _acc := 0.0
 
 # ============================ التهيئة ============================
@@ -43,7 +44,7 @@ func _set_tint(d: Dictionary, player: int, instant: bool) -> void:
 		d["want_col"] = Color(0, 0, 0, 0)
 		d["want_amt"] = 0.0
 	else:
-		d["want_col"] = GC.PLAYER_COLORS[player % GC.PLAYER_COLORS.size()]
+		d["want_col"] = GC.PLAYER_COLORS[int(color_of.get(player, player)) % GC.PLAYER_COLORS.size()]
 		d["want_amt"] = 1.0
 	if instant:
 		d["tint_col"] = d["want_col"]

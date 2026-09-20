@@ -19,7 +19,7 @@ var districts: Array = []   # كل حي: {id, tiles, cx, cy, size, flavor, type,
 var warnings: Array = []
 
 # ============================ نقطة الدخول ============================
-func generate(size_key: String, player_count: int, seed_value: int = 0) -> Dictionary:
+func generate(size_key: String, player_count: int, seed_value: int = 0, gangs: Array = []) -> Dictionary:
 	var info: Dictionary = GC.MAP_SIZES.get(size_key, GC.MAP_SIZES["small"])
 	n = int(info["n"])
 	var players: int = clampi(player_count, 2, int(info["max_players"]))
@@ -35,7 +35,7 @@ func generate(size_key: String, player_count: int, seed_value: int = 0) -> Dicti
 			warnings.append("تعذّر توليد شوارع متصلة بعد %d محاولة" % GC.GEN_MAX_TRIES)
 
 	_build_districts()
-	_assign_homes(players)
+	_assign_homes(players, gangs)
 	_assign_specials(int(info["special"]))
 	_assign_police(int(info["police"]))
 	_fill_buildings()
@@ -181,7 +181,7 @@ func _build_districts() -> void:
 			})
 
 # ============================ 3.5 الأحياء المنزلية ============================
-func _assign_homes(players: int) -> void:
+func _assign_homes(players: int, gangs: Array = []) -> void:
 	var mid := float(n - 1) * 0.5
 	var radius := float(n) * GC.HOME_RING
 	for p in players:
@@ -199,7 +199,8 @@ func _assign_homes(players: int) -> void:
 		if best < 0:
 			warnings.append("لا يوجد حي كبير كافٍ للاعب %d" % (p + 1))
 			continue
-		var gang: String = GC.GANGS[p % GC.GANGS.size()]
+		# عصابة اللاعب من قائمة الإعداد إن وُجدت، وإلا بالتناوب
+		var gang: String = String(gangs[p]) if p < gangs.size() else GC.GANGS[p % GC.GANGS.size()]
 		districts[best]["type"] = "home"
 		districts[best]["gang"] = gang
 		districts[best]["flavor"] = gang

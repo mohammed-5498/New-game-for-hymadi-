@@ -71,10 +71,13 @@ const GANG_COLORS := {
 }
 const POLICE_COLOR := Color("3a5a86")
 
-# ألوان اللاعبين الثمانية (12.2) — منفصلة عن العصابة، والوحدات والأعلام تأخذها
+# ألوان اللاعبين الثمانية كما في 12.2 — منفصلة عن العصابة، ولا يتكرر اللون بين لاعبين
 const PLAYER_COLORS := [
-	Color("8a5cc7"), Color("d9463b"), Color("3fa34d"), Color("e0b030"),
-	Color("2f8fc7"), Color("d96fa8"), Color("c96a2a"), Color("7f8c8d"),
+	Color("3b7dd8"), Color("d9463b"), Color("3fa34d"), Color("e0b030"),
+	Color("2fb5c0"), Color("8a5cc7"), Color("8c8c8c"), Color("e07b2e"),
+]
+const PLAYER_COLOR_NAMES := [
+	"أزرق", "أحمر", "أخضر", "أصفر", "سماوي", "بنفسجي", "رمادي", "برتقالي",
 ]
 
 # ---------- رسم الوحدات (13.1) ----------
@@ -267,6 +270,28 @@ const ALERT_LIFE := 3.0
 const ALERT_ATTACK_COLOR := Color("d94a3a")   # سهم أحمر: وحداتك تتعرض للهجوم
 const ALERT_CAPTURE_COLOR := Color("e08a2a")  # سهم برتقالي: عدو يستولي على حيك
 const TOAST_LIFE := 2.5
+
+# ---------- القوائم والحفظ (12) ----------
+const GAME_TITLE := "مدينة العصابات"
+const SAVE_PATH := "user://settings.cfg"
+const MAX_SLOTS := 8
+const UNIT_LIMITS := [30, 50, 100, 150, 200, 250]
+const UNIT_LIMIT_DEFAULT_INDEX := 2          # الافتراضي 100
+const WEATHERS := ["day", "night", "snow", "rain", "random"]
+const WEATHER_NAMES := {
+	"day": "نهار", "night": "ليل", "snow": "ثلج", "rain": "مطر خفيف", "random": "عشوائي",
+}
+const WEATHER_ICONS := {
+	"day": "☀", "night": "☾", "snow": "❄", "rain": "☂", "random": "?",
+}
+const SLOT_KINDS := ["human", "bot", "closed"]
+const SLOT_KIND_NAMES := {"human": "أنت", "bot": "بوت", "closed": "مغلقة"}
+const GANG_CHOICES := ["random", "crow", "hammer", "viper", "scorp"]
+const GANG_CHOICE_NAMES := {
+	"random": "عشوائي", "crow": "الغربان", "hammer": "المطارق",
+	"viper": "الأفاعي", "scorp": "العقارب",
+}
+const TEAM_NAMES := ["بدون", "فريق 1", "فريق 2", "فريق 3", "فريق 4"]
 
 # ---------- البوتات والتحالفات (11) ----------
 const DIFFICULTIES := ["easy", "medium", "hard"]
