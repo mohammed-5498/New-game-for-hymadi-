@@ -10,6 +10,7 @@ var player_count := 0
 var events: Array = []        # إشعارات: {"kind": "captured"/"losing", "district": i, "player": p}
 var color_of := {}            # رقم اللاعب -> رقم لونه في جدول ألوان 12.2
 var _acc := 0.0
+var tint_dirty := true        # هل تغيّر تلوين حي فتحتاج الخريطة الثابتة رسمة جديدة؟ (14)
 
 # ============================ التهيئة ============================
 func setup(districts: Array, players: int, team_of: Dictionary) -> void:
@@ -49,6 +50,7 @@ func _set_tint(d: Dictionary, player: int, instant: bool) -> void:
 	if instant:
 		d["tint_col"] = d["want_col"]
 		d["tint_amt"] = d["want_amt"]
+		tint_dirty = true
 
 # ============================ الخطوة الزمنية ============================
 func step(delta: float, units: Array) -> void:
@@ -58,6 +60,7 @@ func step(delta: float, units: Array) -> void:
 		if float(d["tint_amt"]) != float(d["want_amt"]) or Color(d["tint_col"]) != Color(d["want_col"]):
 			d["tint_amt"] = lerpf(float(d["tint_amt"]), float(d["want_amt"]), k)
 			d["tint_col"] = Color(d["tint_col"]).lerp(Color(d["want_col"]), k)
+			tint_dirty = true   # الخريطة الثابتة تحتاج رسمة جديدة (14)
 
 	_acc += delta
 	if _acc < GC.CAPTURE_TICK:

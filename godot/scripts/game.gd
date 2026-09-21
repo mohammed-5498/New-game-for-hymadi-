@@ -34,7 +34,24 @@ var toasts: Array = []     # إشعارات قصيرة
 var match_over := -1       # رقم الفريق الفائز، أو -1 إذا لم تنتهِ
 var hud = null
 var overlay = null
-var wx = null              # عقدة الطقس (10)
+var wx = null
+# لوحات الرسم (14): الخريطة ثابتة لا تُعاد في كل إطار، والوحدات وحدها تتحرك
+var _ci: CanvasItem = null       # اللوحة الجارية الآن
+var ground_layer: DrawLayer = null
+var fire_layer: DrawLayer = null
+var top_layer: DrawLayer = null
+var map_bands: Array = []        # لوحة مباني ثابتة لكل قطر
+var unit_bands: Array = []       # لوحة وحدات متحركة لكل قطر
+var band_units: Array = []       # وحدات كل قطر، تُوزَّع مرة في الإطار (14)
+var band_prev: Array = []        # أي قطر كان فيه وحدات في الإطار الماضي
+var live_tiles: Array = []       # مبانٍ فيها جزء متحرك: الساعة والشرطة والأعلام
+var _view := Rect2()             # ما تراه الكاميرا الآن، يُحسب مرة كل إطار (14)
+var map_draws := 0               # كم مرة أُعيد رسم الخريطة الثابتة (للفحص)
+var unit_draws := 0              # وكم وحدة رُسمت في الإطار الأخير (للفحص)
+var show_fps := false            # يظهر بثلاث لمسات على شريط المعلومات (14)
+var _fps_taps := 0
+var _fps_tap_t := 0.0
+var _fps_t := 0.0              # عقدة الطقس (10)
 var decor: Array = []      # زينة الشوارع: براميل نار وأعمدة إنارة
 var lights: Array = []     # مصادر الإضاءة الليلية، تُبنى مرة مع الخريطة (10)
 var me := 0                # رقم اللاعب البشري
@@ -77,6 +94,8 @@ func _ready() -> void:
 	mode_btn = $UI/ModeBtn
 	size_btn = $UI/SizeBtn
 	info = $UI/Info
+	info.mouse_filter = Control.MOUSE_FILTER_STOP
+	info.gui_input.connect(_info_tapped)
 	cam.zoom = Vector2.ONE * GC.ZOOM_START
 	mode_btn.pressed.connect(_toggle_mode)
 	size_btn.pressed.connect(_cycle_size)
@@ -103,6 +122,20 @@ func _roll_weather(w: String) -> String:
 		return w
 	var pool := GC.WEATHERS.filter(func(k): return k != "random")
 	return String(pool[randi() % pool.size()])
+
+# ثلاث لمسات متتالية على شريط المعلومات تُظهر عدّاد الإطارات (14)
+func _info_tapped(event: InputEvent) -> void:
+	var down: bool = (event is InputEventScreenTouch and event.pressed) \
+		or (event is InputEventMouseButton and event.pressed)
+	if not down:
+		return
+	var now: float = float(Time.get_ticks_msec()) / 1000.0
+	_fps_taps = (_fps_taps + 1) if now - _fps_tap_t < GC.FPS_TAP_GAP else 1
+	_fps_tap_t = now
+	if _fps_taps >= 3:
+		_fps_taps = 0
+		show_fps = not show_fps
+		_refresh_info()
 
 # إعادة المباراة بنفس الإعدادات (12.4)
 func _restart() -> void:
@@ -147,7 +180,38 @@ func _process(delta: float) -> void:
 		cam.offset = Vector2(randf_range(-1, 1), randf_range(-1, 1)) * GC.SHAKE_PIXELS * k
 	elif cam.offset != Vector2.ZERO:
 		cam.offset = Vector2.ZERO
-	queue_redraw()
+	_refresh_layers()
+	if show_fps:
+		_fps_t += delta
+		if _fps_t >= GC.FPS_UPDATE:
+			_fps_t = 0.0
+			_refresh_info()
+
+# لا يُعاد رسم إلا ما تحرّك فعلاً (14)
+func _refresh_layers() -> void:
+	if top_layer == null:
+		return
+	_view = _visible_rect()   # "رسم ما يظهر في الشاشة فقط" (14)
+	unit_draws = 0
+	top_layer.queue_redraw()
+	fire_layer.queue_redraw()
+	# توزيع الوحدات على الأقطار مرة واحدة، وداخل الشاشة فقط (14)
+	for s in band_units.size():
+		band_prev[s] = not band_units[s].is_empty()
+		band_units[s].clear()
+	for u in combat.units:
+		if not _view.has_point(tile_to_world(u["pos"])):
+			continue
+		var s: int = int(round(u["pos"].x + u["pos"].y))
+		if s >= 0 and s < band_units.size():
+			band_units[s].append(u)
+	for s in band_units.size():
+		if band_prev[s] or not band_units[s].is_empty():
+			unit_bands[s].queue_redraw()
+	# تلوين حي تغيّر: الخريطة الثابتة تحتاج رسمة واحدة جديدة (8)
+	if districts_state.tint_dirty:
+		districts_state.tint_dirty = false
+		redraw_map()
 
 func _on_death(victim: Dictionary, killer) -> void:
 	if int(victim["player"]) == me:
@@ -244,6 +308,7 @@ func generate_map() -> void:
 
 	_build_astar()
 	_build_lights()
+	_build_layers()
 	_setup_match()
 	_refresh_info()
 
@@ -461,63 +526,148 @@ func _visible_rect() -> Rect2:
 		r = r.expand(p)
 	return r.grow(64.0)
 
-func _draw() -> void:
-	var view := _visible_rect()
-	# الأرض
+# ---- بناء اللوحات: مرة مع كل خريطة جديدة (14) ----
+func _build_layers() -> void:
+	for node in [ground_layer, fire_layer, top_layer]:
+		if node != null:
+			node.queue_free()
+	for node in map_bands + unit_bands:
+		node.queue_free()
+	map_bands = []
+	unit_bands = []
+	ground_layer = _new_layer("ground", 0)
+	fire_layer = _new_layer("fires", 0)
+	for s in range(0, 2 * n - 1):
+		map_bands.append(_new_layer("band", s))
+		unit_bands.append(_new_layer("units", s))
+	top_layer = _new_layer("top", 0)
+	band_units = []
+	band_prev = []
+	for s in range(0, 2 * n - 1):
+		band_units.append([])
+		band_prev.append(false)
+	# الطقس فوق الجميع، والواجهة فوقه
+	if wx != null:
+		move_child(wx, get_child_count() - 1)
+	_collect_live_tiles()
+	redraw_map()
+
+func _new_layer(what: String, band: int) -> DrawLayer:
+	var l := DrawLayer.new()
+	l.game = self
+	l.what = what
+	l.band = band
+	add_child(l)
+	return l
+
+# المباني التي فيها جزء يتحرك كل إطار: عقارب الساعة، ومصباح الشرطة،
+# وأعلام الأحياء وأشرطة الاستيلاء. تُرسم هذه فوق الخريطة الثابتة.
+func _collect_live_tiles() -> void:
+	live_tiles = []
+	for j in n:
+		for i in n:
+			var k: String = kind[j * n + i]
+			if k == "C" or k == "S" or k == "P" or k == "Q":
+				live_tiles.append({"i": i, "j": j, "k": k})
+
+# تُستدعى عند أي تغيّر يمس شكل الخريطة الثابت (استيلاء، طقس، خريطة جديدة)
+func redraw_map() -> void:
+	if ground_layer != null:
+		ground_layer.queue_redraw()
+	for b in map_bands:
+		b.queue_redraw()
+
+func draw_layer(ci: CanvasItem, what: String, band: int) -> void:
+	_ci = ci
+	match what:
+		"ground":
+			map_draws += 1
+			_draw_ground()
+		"fires":
+			for f in combat.fires:
+				if _view.has_point(tile_to_world(Vector2(f["pos"]))):
+					_draw_fire(f)
+		"band":
+			map_draws += 1
+			_draw_band(band)
+		"units":
+			_draw_unit_band(band)
+		"top":
+			_draw_top()
+	_ci = self
+
+func _draw_ground() -> void:
 	for j in n:
 		for i in n:
 			var c := tile_to_world(Vector2(i, j))
-			if not view.has_point(c):
-				continue
 			var key: String = region[j * n + i]
 			var col: Color = GC.GROUND[key] if GC.GROUND.has(key) else GC.GROUND["neutral"]
 			col = _tinted(col, owner_dist[j * n + i], GC.TINT_GROUND)
 			col = Weather.ground(col, bool(road[j * n + i]), weather)   # ثلج أبيض أو مطر أغمق (10)
-			draw_colored_polygon(PackedVector2Array([
+			_ci.draw_colored_polygon(PackedVector2Array([
 				c + Vector2(-GC.TW, 0), c + Vector2(0, -GC.TH),
 				c + Vector2(GC.TW, 0), c + Vector2(0, GC.TH)]), col)
 
-	# بقع النار على الأرض (6.4 و 6.7)
-	for f in combat.fires:
-		_draw_fire(f)
+# مباني قطر واحد (i + j = s) بترتيب العمق كما كان
+func _draw_band(s: int) -> void:
+	for i in range(max(0, s - n + 1), min(n - 1, s) + 1):
+		var j := s - i
+		var c := tile_to_world(Vector2(i, j))
+		_draw_object(kind[j * n + i], c, region[j * n + i], i, j, 0.0, owner_dist[j * n + i])
+		if String(decor[j * n + i]) != "":
+			_draw_decor(String(decor[j * n + i]), c)
 
-	# المباني والوحدات بترتيب العمق (painter's algorithm)
+func _draw_unit_band(s: int) -> void:
+	for u in band_units[s]:
+		unit_draws += 1
+		_draw_unit(u)
+
+# كل ما يتحرك فوق الخريطة: الأجزاء الحية من المباني، والمقذوفات، وأشرطة الدم
+func _draw_top() -> void:
 	var t := float(Time.get_ticks_msec()) / 1000.0
-	for s in range(0, 2 * n - 1):
-		for i in range(max(0, s - n + 1), min(n - 1, s) + 1):
-			var j := s - i
-			var c := tile_to_world(Vector2(i, j))
-			if not view.has_point(c):
-				continue
-			_draw_object(kind[j * n + i], c, region[j * n + i], i, j, t, owner_dist[j * n + i])
-			if String(decor[j * n + i]) != "":
-				_draw_decor(String(decor[j * n + i]), c)
-		for u in combat.units:
-			if int(round(u["pos"].x + u["pos"].y)) == s:
-				_draw_unit(u)
+	for e in live_tiles:
+		var c := tile_to_world(Vector2(int(e["i"]), int(e["j"])))
+		if not _view.has_point(c):
+			continue
+		_draw_live(String(e["k"]), c, t, owner_dist[int(e["j"]) * n + int(e["i"])],
+			region[int(e["j"]) * n + int(e["i"])])
 
-	# المقذوفات (5.3)
 	for pr in combat.projectiles:
-		_draw_projectile(pr)
+		if _view.has_point(tile_to_world(pr["pos"])):
+			_draw_projectile(pr)
 
-	# فوق كل شيء: دوائر التحديد وأشرطة الدم
 	for u in combat.units:
 		if u["state"] == "dead":
 			continue
 		var p := tile_to_world(u["pos"])
+		if not _view.has_point(p):
+			continue
 		if u["sel"]:
-			draw_arc(p, 5.5, 0, TAU, 20, Color(0.95, 0.93, 0.89), 1.0, true)
+			_ci.draw_arc(p, 5.5, 0, TAU, 20, Color(0.95, 0.93, 0.89), 1.0, true)
 		_draw_hp_bar(u, p)
 		# نجمة ذهبية فوق الوحدة الجاهزة لضربتها المميزة (6.7)
 		if Combat.has_ult(String(u["key"])) and float(u["charge"]) >= GC.CHARGE_FULL and not bool(u["ulting"]):
 			var sc: float = GC.UNIT_SCALE_SPECIAL if not String(u["key"]).ends_with("_common") else GC.UNIT_SCALE
-			art.draw_ready_mark(self, p, sc)
+			art.draw_ready_mark(_ci, p, sc)
 
 	# علامة نقطة الهدف
 	if marker["t"] < 0.8:
 		var g: float = marker["t"] / 0.8
 		var mcol: Color = Color(0.95, 0.5, 0.35, 1.0 - g) if marker.get("attack", false) else Color(0.95, 0.93, 0.89, 1.0 - g)
-		draw_arc(tile_to_world(marker["pos"]), 6.0 + g * 14.0, 0, TAU, 24, mcol, 1.2, true)
+		_ci.draw_arc(tile_to_world(marker["pos"]), 6.0 + g * 14.0, 0, TAU, 24, mcol, 1.2, true)
+
+# الأجزاء المتحركة من المباني الثابتة (14)
+func _draw_live(k: String, c: Vector2, t: float, dist: int, reg: String) -> void:
+	match k:
+		"C":
+			_clock_hands(c, t)
+		"S":
+			_police_light(c, t)
+		"P":
+			_tri(c + Vector2(0, -22), c + Vector2(10, -19), c + Vector2(0, -16), _owner_flag(dist, reg))
+			_capture_bar(c, dist)
+		"Q":
+			_tri(c + Vector2(0, -46), c + Vector2(12, -42), c + Vector2(0, -38), _owner_flag(dist, reg))
 
 func _owner_color(player: int) -> Color:
 	if player < 0:
@@ -534,8 +684,9 @@ func _draw_unit(u: Dictionary) -> void:
 	sc *= float(u.get("size", 1.0))   # تنويع ±4% من بذرة الشخصية (5.4.1)
 	# نوع الحركة يُمرَّر للرسم ليتغير القوس والاندفاع أثناء الالتحام فقط (5.4.2)
 	var mv: String = String(u["move"]) if combat.draw_state(u) == "attack" and float(u["cycle"]) > 0.0 else ""
-	art.draw_unit(self, String(u["key"]), tile_to_world(u["pos"]),
-		combat.draw_time(u), combat.draw_state(u), col, int(u["dir"]), sc, combat.draw_rate(u), mv)
+	art.draw_unit(_ci, String(u["key"]), tile_to_world(u["pos"]),
+		combat.draw_time(u), combat.draw_state(u), col, int(u["dir"]), sc, combat.draw_rate(u), mv,
+		sc * cam.zoom.x)
 
 # شريط الدم: فوق المحدد أو ناقص الدم فقط، بلون مالك الوحدة (5.2)
 # بقعة نار مشتعلة: دائرة برتقالية نابضة مع ألسنة
@@ -562,8 +713,8 @@ func _draw_hp_bar(u: Dictionary, p: Vector2) -> void:
 	var w := GC.HP_BAR_W
 	var x := p.x - w * 0.5
 	var y := p.y + GC.HP_BAR_Y
-	draw_rect(Rect2(x - 0.5, y - 0.5, w + 1.0, GC.HP_BAR_H + 1.0), Color(0, 0, 0, 0.55))
-	draw_rect(Rect2(x, y, w * frac, GC.HP_BAR_H), _owner_color(int(u["player"])))
+	_ci.draw_rect(Rect2(x - 0.5, y - 0.5, w + 1.0, GC.HP_BAR_H + 1.0), Color(0, 0, 0, 0.55))
+	_ci.draw_rect(Rect2(x, y, w * frac, GC.HP_BAR_H), _owner_color(int(u["player"])))
 	_draw_charge(u, x, y, w)
 
 # شريط الشحن الذهبي تحت شريط الدم، ونجمة فوق الرأس عند الجاهزية (6.7)
@@ -575,8 +726,8 @@ func _draw_charge(u: Dictionary, x: float, y: float, w: float) -> void:
 	if not u["sel"] and not ready:
 		return
 	var cy: float = y + GC.HP_BAR_H + 1.0
-	draw_rect(Rect2(x - 0.5, cy - 0.5, w + 1.0, 2.2), Color(0, 0, 0, 0.5))
-	draw_rect(Rect2(x, cy, w * ch, 1.2), Color("ffd66e"))
+	_ci.draw_rect(Rect2(x - 0.5, cy - 0.5, w + 1.0, 2.2), Color(0, 0, 0, 0.5))
+	_ci.draw_rect(Rect2(x, cy, w * ch, 1.2), Color("ffd66e"))
 
 func _draw_projectile(pr: Dictionary) -> void:
 	var p := tile_to_world(pr["pos"])
@@ -588,13 +739,13 @@ func _draw_projectile(pr: Dictionary) -> void:
 			var d: Vector2 = (tile_to_world(pr["pos"]) - tile_to_world(pr["from"])).normalized()
 			if d == Vector2.ZERO:
 				d = Vector2.RIGHT
-			draw_line(p - d * 3.0, p + d * 3.0, Color("d9d3c6"), 1.0)
+			_ci.draw_line(p - d * 3.0, p + d * 3.0, Color("d9d3c6"), 1.0)
 		"bottle":
 			var ang: float = float(pr["spin"]) + k * 12.0
-			draw_circle(p, 2.0, Color("5a8a6a"))
-			draw_circle(p + Vector2(cos(ang), sin(ang)) * 2.2, 1.3, Color("e8893a"))
+			_ci.draw_circle(p, 2.0, Color("5a8a6a"))
+			_ci.draw_circle(p + Vector2(cos(ang), sin(ang)) * 2.2, 1.3, Color("e8893a"))
 		_:
-			draw_circle(p, 1.8, Color("9a948c"))
+			_ci.draw_circle(p, 1.8, Color("9a948c"))
 
 # خلط لون المالك مع لون أصلي بنسبة معطاة (8)
 func _tinted(base: Color, dist: int, amount: float) -> Color:
@@ -625,19 +776,18 @@ func _draw_object(k: String, c: Vector2, reg: String, i: int, j: int, t: float, 
 		"W":
 			_box(c, 17, 8.5, 12, _w(Color("7f7a70"), wall), _w(Color("99938a"), wall), _r(Color("6c675f"), roof))
 		"T":
-			draw_rect(Rect2(c.x - 1, c.y - 8, 2, 8), Color("5b4636"))
-			draw_circle(c + Vector2(0, -13), 7, Weather.snow(Color("4f7a3c"), GC.SNOW_TREE, weather))
-			draw_circle(c + Vector2(-3, -15), 5, Weather.snow(Color("5f8f48"), GC.SNOW_TREE_TOP, weather))
+			_ci.draw_rect(Rect2(c.x - 1, c.y - 8, 2, 8), Color("5b4636"))
+			_ci.draw_circle(c + Vector2(0, -13), 7, Weather.snow(Color("4f7a3c"), GC.SNOW_TREE, weather))
+			_ci.draw_circle(c + Vector2(-3, -15), 5, Weather.snow(Color("5f8f48"), GC.SNOW_TREE_TOP, weather))
 		"Q":
+			# العلم نفسه يُرسم في الطبقة العليا لأن لونه يتغير مع المالك (14)
 			_box(c, 16, 8, 26, _w(_gang_dark(reg), wall), _w(_gang_light(reg), wall), _r(Color("3a3632"), roof))
-			draw_line(c + Vector2(0, -26), c + Vector2(0, -46), Color("2b2825"), 1.2)
-			_tri(c + Vector2(0, -46), c + Vector2(12, -42), c + Vector2(0, -38), _owner_flag(dist, reg))
+			_ci.draw_line(c + Vector2(0, -26), c + Vector2(0, -46), Color("2b2825"), 1.2)
 		"P":
-			draw_colored_polygon(PackedVector2Array([
+			# الساحة والسارية ثابتتان، والعلم وشريط الاستيلاء في الطبقة العليا (14)
+			_ci.draw_colored_polygon(PackedVector2Array([
 				c + Vector2(-12, 0), c + Vector2(0, -6), c + Vector2(12, 0), c + Vector2(0, 6)]), Color("b3aa98"))
-			draw_line(c, c + Vector2(0, -22), Color("2b2825"), 1.2)
-			_tri(c + Vector2(0, -22), c + Vector2(10, -19), c + Vector2(0, -16), _owner_flag(dist, reg))
-			_capture_bar(c, dist)
+			_ci.draw_line(c, c + Vector2(0, -22), Color("2b2825"), 1.2)
 		"M":
 			_hospital(c, wall, roof)
 		"K":
@@ -652,24 +802,24 @@ func _draw_object(k: String, c: Vector2, reg: String, i: int, j: int, t: float, 
 # زينة الشوارع (7): برميل نار وعمود إنارة — منقولة من prototype.html
 func _draw_decor(d: String, c: Vector2) -> void:
 	if d == "B":
-		draw_rect(Rect2(c.x - 2.5, c.y - 5.0, 5.0, 6.0), Color("4f4337"))
+		_ci.draw_rect(Rect2(c.x - 2.5, c.y - 5.0, 5.0, 6.0), Color("4f4337"))
 		_tri(c + Vector2(-3, -5), c + Vector2(0, -13), c + Vector2(3, -5), Color("e8893a"))
 		_tri(c + Vector2(-1.5, -5), c + Vector2(0, -9), c + Vector2(1.5, -5), Color("f2c14e"))
 	elif d == "L":
-		draw_line(c + Vector2(10, 3), c + Vector2(10, -18), Color("2b2825"), 1.2)
-		draw_line(c + Vector2(10, -18), c + Vector2(6, -19), Color("2b2825"), 1.0)
-		draw_circle(c + Vector2(6, -18.5), 1.6, Color("f2e3a8"))
+		_ci.draw_line(c + Vector2(10, 3), c + Vector2(10, -18), Color("2b2825"), 1.2)
+		_ci.draw_line(c + Vector2(10, -18), c + Vector2(6, -19), Color("2b2825"), 1.0)
+		_ci.draw_circle(c + Vector2(6, -18.5), 1.6, Color("f2e3a8"))
 
 # ---- مباني الأحياء المميزة ومركز الشرطة ----
 func _hospital(c: Vector2, wall: int, roof: int) -> void:
 	_box(c, 17, 8.5, 24, _w(Color("a9a59b"), wall), _w(Color("c2bdb1"), wall), _r(Color("8e8a81"), roof))
 	# صليب باهت على الواجهة
 	var cross := Color("b8543f")
-	draw_rect(Rect2(c.x + 5.0, c.y - 19.0, 6.0, 2.2), cross)
-	draw_rect(Rect2(c.x + 6.9, c.y - 21.0, 2.2, 6.0), cross)
+	_ci.draw_rect(Rect2(c.x + 5.0, c.y - 19.0, 6.0, 2.2), cross)
+	_ci.draw_rect(Rect2(c.x + 6.9, c.y - 21.0, 2.2, 6.0), cross)
 	# نوافذ مكسورة
 	for k in 3:
-		draw_rect(Rect2(c.x - 13.0 + float(k) * 4.5, c.y - 17.0 + float(k) * 2.2, 3.0, 4.0), Color("50524f"))
+		_ci.draw_rect(Rect2(c.x - 13.0 + float(k) * 4.5, c.y - 17.0 + float(k) * 2.2, 3.0, 4.0), Color("50524f"))
 
 func _armory(c: Vector2, wall: int, roof: int) -> void:
 	_box(c, 17, 8.5, 13, _w(Color("7f7a70"), wall), _w(Color("99938a"), wall), _r(Color("6c675f"), roof))
@@ -678,32 +828,36 @@ func _armory(c: Vector2, wall: int, roof: int) -> void:
 	_box(c + Vector2(2, 7), 4.5, 2.2, 4, Color("6d5a3c"), Color("856e4a"), Color("57482f"))
 	_box(c + Vector2(-2, 3), 3.5, 1.8, 7, Color("5f5137"), Color("796445"), Color("4a3f2a"))
 
-func _clock_tower(c: Vector2, t: float, wall: int) -> void:
+func _clock_tower(c: Vector2, _t: float, wall: int) -> void:
 	_box(c, 9, 4.5, 44, _w(Color("9c9488"), wall), _w(Color("b5ac9e"), wall), Color("00000000"))
-	# وجه الساعة
+	# وجه الساعة (العقارب في الطبقة العليا لأنها تدور)
 	var face := c + Vector2(0, -38)
-	draw_circle(face, 6.0, Color("e4dcc9"))
-	draw_arc(face, 6.0, 0, TAU, 20, Color("4a443c"), 1.0, true)
-	var mins := fmod(t * 0.6, 1.0) * TAU
-	draw_line(face, face + Vector2(sin(mins), -cos(mins)) * 4.6, Color("32302b"), 1.0)
-	draw_line(face, face + Vector2(sin(mins * 0.08), -cos(mins * 0.08)) * 3.0, Color("32302b"), 1.3)
+	_ci.draw_circle(face, 6.0, Color("e4dcc9"))
+	_ci.draw_arc(face, 6.0, 0, TAU, 20, Color("4a443c"), 1.0, true)
 	# سقف هرمي
 	_tri(c + Vector2(-9, -44), c + Vector2(0, -56), c + Vector2(9, -44), Color("6b5a44"))
+
+func _clock_hands(c: Vector2, t: float) -> void:
+	var face := c + Vector2(0, -38)
+	var mins := fmod(t * 0.6, 1.0) * TAU
+	_ci.draw_line(face, face + Vector2(sin(mins), -cos(mins)) * 4.6, Color("32302b"), 1.0)
+	_ci.draw_line(face, face + Vector2(sin(mins * 0.08), -cos(mins * 0.08)) * 3.0, Color("32302b"), 1.3)
 
 func _fountain(c: Vector2) -> void:
 	_ellipse(c, 11.0, 5.5, Color("8f8a80"))
 	_ellipse(c, 8.5, 4.2, Color("4d6f82"))
-	draw_rect(Rect2(c.x - 1.0, c.y - 9.0, 2.0, 9.0), Color("9c9488"))
+	_ci.draw_rect(Rect2(c.x - 1.0, c.y - 9.0, 2.0, 9.0), Color("9c9488"))
 	_ellipse(c + Vector2(0, -10), 3.0, 1.5, Color("b7b0a4"))
 
-func _police_station(c: Vector2, t: float, wall: int, roof: int) -> void:
+func _police_station(c: Vector2, _t: float, wall: int, roof: int) -> void:
 	_box(c, 16, 8, 22, _w(Color("6f7a86"), wall), _w(Color("8794a1"), wall), _r(Color("5b646e"), roof))
-	# شريط أزرق على الواجهة
-	draw_rect(Rect2(c.x - 14.0, c.y - 12.0, 13.0, 2.4), GC.POLICE_COLOR)
-	# مصباح أزرق وامض فوق السطح
+	# شريط أزرق على الواجهة (المصباح الوامض في الطبقة العليا)
+	_ci.draw_rect(Rect2(c.x - 14.0, c.y - 12.0, 13.0, 2.4), GC.POLICE_COLOR)
+
+func _police_light(c: Vector2, t: float) -> void:
 	var blink: float = 0.45 + 0.55 * absf(sin(t * 3.0))
-	draw_circle(c + Vector2(0, -25), 2.6, Color(0.35, 0.6, 1.0, blink))
-	draw_circle(c + Vector2(0, -25), 4.6, Color(0.35, 0.6, 1.0, blink * 0.28))
+	_ci.draw_circle(c + Vector2(0, -25), 2.6, Color(0.35, 0.6, 1.0, blink))
+	_ci.draw_circle(c + Vector2(0, -25), 4.6, Color(0.35, 0.6, 1.0, blink * 0.28))
 
 # لون العلم = لون مالك الحي، وإلا اللون المحايد (8)
 func _owner_flag(dist: int, reg: String) -> Color:
@@ -727,12 +881,12 @@ func _capture_bar(c: Vector2, dist: int) -> void:
 	var w := 16.0
 	var y := c.y - 28.0
 	var x := c.x - w * 0.5
-	draw_rect(Rect2(x - 0.5, y - 0.5, w + 1.0, 3.0), Color(0, 0, 0, 0.55))
+	_ci.draw_rect(Rect2(x - 0.5, y - 0.5, w + 1.0, 3.0), Color(0, 0, 0, 0.55))
 	var who: int = claimer if claimer >= 0 else owner
 	var col: Color = _owner_color(who) if who >= 0 else Color("cfc8b8")
 	if bool(d.get("frozen", false)):
 		col = col.lerp(Color(0.6, 0.6, 0.6), 0.5)   # متجمد: جانبان داخل المنطقة
-	draw_rect(Rect2(x, y, w * (v / GC.CAPTURE_MAX), 2.0), col)
+	_ci.draw_rect(Rect2(x, y, w * (v / GC.CAPTURE_MAX), 2.0), col)
 
 func _w(base: Color, dist: int) -> Color:
 	return _tinted(base, dist, GC.TINT_WALL)
@@ -756,32 +910,32 @@ func _flag_color(reg: String) -> Color:
 	return Color("e8e2d6")
 
 func _tri(a: Vector2, b: Vector2, c: Vector2, col: Color) -> void:
-	draw_colored_polygon(PackedVector2Array([a, b, c]), col)
+	_ci.draw_colored_polygon(PackedVector2Array([a, b, c]), col)
 
 func _ellipse(center: Vector2, rx: float, ry: float, col: Color) -> void:
 	var pts := PackedVector2Array()
 	for i in 20:
 		var ang := TAU * float(i) / 20.0
 		pts.push_back(center + Vector2(cos(ang) * rx, sin(ang) * ry))
-	draw_colored_polygon(pts, col)
+	_ci.draw_colored_polygon(pts, col)
 
 func _box(c: Vector2, w: float, d: float, h: float, left: Color, right: Color, top: Color) -> void:
-	draw_colored_polygon(PackedVector2Array([
+	_ci.draw_colored_polygon(PackedVector2Array([
 		c + Vector2(-w, 0), c + Vector2(0, d), c + Vector2(0, d - h), c + Vector2(-w, -h)]), left)
-	draw_colored_polygon(PackedVector2Array([
+	_ci.draw_colored_polygon(PackedVector2Array([
 		c + Vector2(0, d), c + Vector2(w, 0), c + Vector2(w, -h), c + Vector2(0, d - h)]), right)
 	if top.a > 0.0:
 		# الثلج يتراكم على الوجه العلوي (10)
-		draw_colored_polygon(PackedVector2Array([
+		_ci.draw_colored_polygon(PackedVector2Array([
 			c + Vector2(-w, -h), c + Vector2(0, -d - h), c + Vector2(w, -h), c + Vector2(0, d - h)]),
 			Weather.snow(top, GC.SNOW_TOP, weather))
 
 func _roof(c: Vector2, w: float, d: float, h: float, rh: float, left: Color, right: Color) -> void:
 	var apex := c + Vector2(0, -h - rh)
-	draw_colored_polygon(PackedVector2Array([c + Vector2(-w, -h), apex, c + Vector2(w, -h)]), UnitsArt.dk(left, 0.3))
-	draw_colored_polygon(PackedVector2Array([c + Vector2(-w, -h), c + Vector2(0, d - h), apex]),
+	_ci.draw_colored_polygon(PackedVector2Array([c + Vector2(-w, -h), apex, c + Vector2(w, -h)]), UnitsArt.dk(left, 0.3))
+	_ci.draw_colored_polygon(PackedVector2Array([c + Vector2(-w, -h), c + Vector2(0, d - h), apex]),
 		Weather.snow(left, GC.SNOW_ROOF_L, weather))
-	draw_colored_polygon(PackedVector2Array([c + Vector2(0, d - h), c + Vector2(w, -h), apex]),
+	_ci.draw_colored_polygon(PackedVector2Array([c + Vector2(0, d - h), c + Vector2(w, -h), apex]),
 		Weather.snow(right, GC.SNOW_ROOF_R, weather))
 
 # ============ اللمس ============
@@ -971,3 +1125,5 @@ func _refresh_info() -> void:
 	info.text = "%s  محدد %d  |  وحدات %d/%d  |  أحيائي %d من %d  |  أعداء %d" % [
 		String(GC.WEATHER_ICONS.get(weather, "")), sel, mine, unit_limit,
 		districts_state.owned_by(me), capturable, foes]
+	if show_fps:
+		info.text = "%d إطار/ث  |  %s" % [int(Engine.get_frames_per_second()), info.text]

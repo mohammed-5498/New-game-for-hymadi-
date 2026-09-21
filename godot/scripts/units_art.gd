@@ -31,6 +31,22 @@ const HIT_AT := 0.47   # لحظة الارتطام كنسبة من زمن الض
 # جانب، فتصير الأطراف أعرض من المرجع بمرتين تقريباً. الإطفاء يعطي العرض الصحيح بالضبط.
 const AA := false
 
+# أصغر نصف قطر بالبكسل تستحق عنده نهاية الطرف أن تُرسم (14)
+const CAP_MIN_PX := 1.5
+
+# جداول الدائرة محسوبة مرة واحدة: بناء بيضاوي من 20 ضلعاً كان يستدعي sin و cos
+# أربعين مرة لكل وحدة في كل إطار (14)
+const RING20 := [
+	Vector2(1, 0), Vector2(0.95105654, 0.30901699), Vector2(0.80901699, 0.58778525),
+	Vector2(0.58778525, 0.80901699), Vector2(0.30901699, 0.95105654), Vector2(0, 1),
+	Vector2(-0.30901699, 0.95105654), Vector2(-0.58778525, 0.80901699),
+	Vector2(-0.80901699, 0.58778525), Vector2(-0.95105654, 0.30901699), Vector2(-1, 0),
+	Vector2(-0.95105654, -0.30901699), Vector2(-0.80901699, -0.58778525),
+	Vector2(-0.58778525, -0.80901699), Vector2(-0.30901699, -0.95105654), Vector2(0, -1),
+	Vector2(0.30901699, -0.95105654), Vector2(0.58778525, -0.80901699),
+	Vector2(0.80901699, -0.58778525), Vector2(0.95105654, -0.30901699),
+]
+
 # شكل الحركات الأربع (5.4.2): sw سعة القوس، lg عمق الاندفاع.
 # هذه أرقام رسم فقط؛ أزمنة الحركات وأضرارها كلها في config.gd.
 const MOVE_ART := {
@@ -65,6 +81,7 @@ const UNITS := {
 # حالة الرسم (تقابل ctx في Canvas): الهدف، الشفافية العامة، ومكدّس التحويلات
 var ci: CanvasItem = null
 var ga := 1.0                       # globalAlpha
+var _px := 0.0                      # بكسل الشاشة لكل وحدة رسم محلية (0 = كل التفاصيل)
 var _xf := Transform2D()
 var _stack: Array[Transform2D] = []
 
@@ -76,6 +93,8 @@ static func lt(c: Color, amount: float) -> Color:
 	return Color(c.r + (1.0 - c.r) * amount, c.g + (1.0 - c.g) * amount, c.b + (1.0 - c.b) * amount, c.a)
 
 func _a(c: Color) -> Color:
+	if ga >= 1.0:
+		return c          # الحالة الغالبة: لا شفافية عامة، فلا داعي للنسخ (14)
 	return Color(c.r, c.g, c.b, c.a * ga)
 
 static func _ease(x: float) -> float:
@@ -107,10 +126,14 @@ func _scale(v: Vector2) -> void:
 	ci.draw_set_transform_matrix(_xf)
 
 # ============================ أدوات الرسم ============================
-# خط بنهايات دائرية (lineCap = round)
+# خط بنهايات دائرية (lineCap = round).
+# النهايتان دائرتان صغيرتان: إن كان نصف قطرهما أقل من بكسل ونصف على الشاشة فلا
+# تُرسمان، لأنهما لا تظهران أصلاً وتكلّفان ثلثي أوامر رسم الوحدة (14).
 func limb(p1: Vector2, p2: Vector2, w: float, col: Color) -> void:
 	var c := _a(col)
 	ci.draw_line(p1, p2, c, w, AA)
+	if _px > 0.0 and w * 0.5 * _px < CAP_MIN_PX:
+		return
 	ci.draw_circle(p1, w * 0.5, c)
 	ci.draw_circle(p2, w * 0.5, c)
 
@@ -120,9 +143,15 @@ func bone(p1: Vector2, p2: Vector2, p3: Vector2, w: float, col: Color) -> void:
 
 func ellipse(center: Vector2, rx: float, ry: float, col: Color, seg: int = 20) -> void:
 	var pts := PackedVector2Array()
-	for i in seg:
-		var ang := TAU2 * float(i) / float(seg)
-		pts.push_back(center + Vector2(cos(ang) * rx, sin(ang) * ry))
+	if seg == 20:
+		pts.resize(20)
+		for i in 20:
+			var u: Vector2 = RING20[i]
+			pts[i] = center + Vector2(u.x * rx, u.y * ry)
+	else:
+		for i in seg:
+			var ang := TAU2 * float(i) / float(seg)
+			pts.push_back(center + Vector2(cos(ang) * rx, sin(ang) * ry))
 	ci.draw_colored_polygon(pts, _a(col))
 
 # ملاحظة: draw_polyline في Godot يرسم أعرض بكثير من المطلوب عند العروض الصغيرة،
@@ -1218,13 +1247,17 @@ func _draw_figure(key: String, r: Dictionary, col: Color) -> void:
 # الواجهة الرئيسية — تقابل drawUnit في المرجع.
 # state: idle | walk | attack | ult | hurt | death
 # في hurt و death مرّر t = الزمن المنقضي داخل الحالة.
+# px = كم بكسل على الشاشة تساوي وحدة واحدة من نظام الرسم المحلي (المقياس × تقريب
+# الكاميرا). صفر يعني ارسم كل التفاصيل (الفحوص والمعرض).
 func draw_unit(canvas: CanvasItem, key: String, pos: Vector2, t: float, state: String,
-		col: Color, dir: int = 1, sc: float = 1.0, rate: float = 1.0, move: String = "") -> void:
+		col: Color, dir: int = 1, sc: float = 1.0, rate: float = 1.0, move: String = "",
+		px: float = 0.0) -> void:
 	var u: Dictionary = UNITS.get(key, {})
 	if u.is_empty():
 		return
 	ci = canvas
 	ga = 1.0
+	_px = px
 	_stack.clear()
 
 	var color: Color = POLICE if u.get("neutral", false) else col
