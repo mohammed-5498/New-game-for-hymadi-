@@ -39,7 +39,10 @@ var wx = null
 var _ci: CanvasItem = null       # اللوحة الجارية الآن
 var fire_layer: DrawLayer = null
 var top_layer: DrawLayer = null
-var map_bands: Array = []        # لوحة مباني ثابتة لكل قطر
+var map_bands: Array = []        # (لم يعد يُستعمل، بقي للتوافق مع الفحوص)
+var map_segs: Array = []         # قطع المباني الثابتة، كل واحدة تُخفى وحدها (14)
+var band_segs: Array = []        # قطع كل قطر
+var seg_rect: Array = []         # حدود كل قطعة في العالم (للفحص والتوثيق)
 var unit_bands: Array = []       # لوحة وحدات متحركة لكل قطر
 var band_units: Array = []       # وحدات كل قطر، تُوزَّع مرة في الإطار (14)
 var band_prev: Array = []        # أي قطر كان فيه وحدات في الإطار الماضي
@@ -77,8 +80,11 @@ var pinch_zoom := 1.0
 var sel_box_a := Vector2.ZERO
 var sel_box_b := Vector2.ZERO
 var box_active := false
-var press_t := 0.0         # لقياس الضغطة المطوّلة (4.3)
+var press_t := 0.0         # لقياس الضغطة المطوّلة (4.2)
 var long_fired := false
+var last_tap_t := -99.0    # زمن آخر لمسة على وحدة، للنقر المزدوج (4.2)
+var last_tap_unit := -1
+var cam_bounds := Rect2()  # حدود الخريطة، لا تخرج عنها الكاميرا (4.2)
 
 func _ready() -> void:
 	setup = MatchSetup.load_saved()
@@ -181,6 +187,7 @@ func _process(delta: float) -> void:
 		cam.offset = Vector2(randf_range(-1, 1), randf_range(-1, 1)) * GC.SHAKE_PIXELS * k
 	elif cam.offset != Vector2.ZERO:
 		cam.offset = Vector2.ZERO
+	_clamp_cam()
 	_refresh_layers()
 	if show_fps:
 		_fps_t += delta
@@ -189,6 +196,13 @@ func _process(delta: float) -> void:
 			_refresh_info()
 
 # لا يُعاد رسم إلا ما تحرّك فعلاً (14)
+func _clamp_cam() -> void:
+	if cam_bounds.size.x <= 0.0:
+		return
+	cam.position = Vector2(
+		clampf(cam.position.x, cam_bounds.position.x, cam_bounds.end.x),
+		clampf(cam.position.y, cam_bounds.position.y, cam_bounds.end.y))
+
 func _refresh_layers() -> void:
 	if top_layer == null:
 		return
@@ -543,15 +557,35 @@ func _build_layers() -> void:
 			node.queue_free()
 	for node in map_bands + unit_bands:
 		node.queue_free()
+	for seg in map_segs:
+		seg.queue_free()
 	map_bands = []
+	map_segs = []
+	band_segs = []
 	unit_bands = []
 	fire_layer = _new_layer("fires", 0)
+	# لكل قطر: قطع مباني ثابتة (بحدود ضيقة تُخفى وحدها) ثم لوحة وحداته المتحركة
 	for s in range(0, 2 * n - 1):
-		map_bands.append(_new_layer("band", s))
+		var lo := maxi(0, s - n + 1)
+		var hi := mini(n - 1, s)
+		var mine := []
+		var a := lo
+		while a <= hi:
+			var b: int = mini(hi, a + GC.BAND_SEG - 1)
+			var seg := _new_layer("band", s)
+			seg.from_i = a
+			seg.to_i = b
+			map_segs.append(seg)
+			mine.append(seg)
+			a = b + 1
+		band_segs.append(mine)
 		unit_bands.append(_new_layer("units", s))
 	top_layer = _new_layer("top", 0)
 	band_units = []
 	band_prev = []
+	seg_rect = []
+	for seg in map_segs:
+		seg_rect.append(_seg_bounds(seg.band, seg.from_i, seg.to_i))
 	for s in range(0, 2 * n - 1):
 		band_units.append([])
 		band_prev.append(false)
@@ -560,7 +594,25 @@ func _build_layers() -> void:
 		move_child(wx, get_child_count() - 1)
 	_collect_live_tiles()
 	_measure_districts()
+	# حدود الخريطة في العالم: من أقصى يسار إلى أقصى يمين ومن أعلى إلى أسفل (4.2)
+	cam_bounds = Rect2(Vector2(-float(n) * GC.TW, 0.0), Vector2(float(n) * GC.TW * 2.0, float(n) * GC.TH * 2.0))
+	cam_bounds = cam_bounds.grow(GC.CAM_MARGIN)
 	redraw_map()
+
+# حدود قطعة من قطر في إحداثيات العالم. الارتفاع من أعلى مبنى فيها فعلاً، لا هامش
+# واحد كبير للجميع: كلما ضاقت الحدود أمكن إخفاء القطعة أبكر (14)
+func _seg_bounds(s: int, a: int, b: int) -> Rect2:
+	var p1 := tile_to_world(Vector2(a, s - a))
+	var p2 := tile_to_world(Vector2(b, s - b))
+	var r := Rect2(p1, Vector2.ZERO).expand(p2)
+	var high := 0.0
+	for i in range(a, b + 1):
+		var j := s - i
+		var k: String = kind[j * n + i]
+		high = maxf(high, float(GC.KIND_HEIGHT.get(k, GC.KIND_HEIGHT_DEFAULT)))
+		if String(decor[j * n + i]) != "":
+			high = maxf(high, 22.0)
+	return Rect2(r.position - Vector2(GC.TW, high), r.size + Vector2(GC.TW * 2.0, high + GC.TH))
 
 func _new_layer(what: String, band: int) -> DrawLayer:
 	var l := DrawLayer.new()
@@ -595,8 +647,8 @@ func _collect_live_tiles() -> void:
 
 # تُستدعى عند أي تغيّر يمس شكل الخريطة الثابت (استيلاء، طقس، خريطة جديدة)
 func redraw_map() -> void:
-	for b in map_bands:
-		b.queue_redraw()
+	for seg in map_segs:
+		seg.queue_redraw()
 
 # لا يُعاد رسم إلا الأقطار التي يمر بها الحي الذي تغيّر لونه (14)
 func redraw_district(d: int) -> void:
@@ -605,10 +657,11 @@ func redraw_district(d: int) -> void:
 		return
 	var rng: Vector2i = dist_bands[d]
 	for s in range(rng.x, rng.y + 1):
-		if s >= 0 and s < map_bands.size():
-			map_bands[s].queue_redraw()
+		if s >= 0 and s < band_segs.size():
+			for seg in band_segs[s]:
+				seg.queue_redraw()
 
-func draw_layer(ci: CanvasItem, what: String, band: int) -> void:
+func draw_layer(ci: CanvasItem, what: String, band: int, from_i: int = 0, to_i: int = 0) -> void:
 	_ci = ci
 	match what:
 		"fires":
@@ -617,7 +670,7 @@ func draw_layer(ci: CanvasItem, what: String, band: int) -> void:
 					_draw_fire(f)
 		"band":
 			map_draws += 1
-			_draw_band(band)
+			_draw_band(band, from_i, to_i)
 		"units":
 			_draw_unit_band(band)
 		"top":
@@ -625,8 +678,8 @@ func draw_layer(ci: CanvasItem, what: String, band: int) -> void:
 	_ci = self
 
 # أرض قطر واحد: تُرسم قبل مبانيه، وكل مربع داخل معيّنه فلا يتداخل مع جاره
-func _draw_ground_band(s: int) -> void:
-	for i in range(max(0, s - n + 1), min(n - 1, s) + 1):
+func _draw_ground_band(s: int, a: int, b: int) -> void:
+	for i in range(a, b + 1):
 		var j := s - i
 		var c := tile_to_world(Vector2(i, j))
 		var key: String = region[j * n + i]
@@ -647,9 +700,10 @@ func _draw_ground_band(s: int) -> void:
 			_ci.draw_line(c + Vector2(4, -2), c + Vector2(-4, 2), Color("c9bd85"), 1.0)
 
 # قطر واحد (i + j = s): أرضه ثم مبانيه، بترتيب العمق كما كان
-func _draw_band(s: int) -> void:
-	_draw_ground_band(s)
-	for i in range(max(0, s - n + 1), min(n - 1, s) + 1):
+# مربعات القطر الواحد لا يغطي بعضها بعضاً (متجاورة أفقياً)، فترتيبها داخل القطعة حر
+func _draw_band(s: int, a: int, b: int) -> void:
+	_draw_ground_band(s, a, b)
+	for i in range(a, b + 1):
 		var j := s - i
 		var c := tile_to_world(Vector2(i, j))
 		_draw_object(kind[j * n + i], c, region[j * n + i], i, j, 0.0, owner_dist[j * n + i])
@@ -692,7 +746,7 @@ func _draw_top() -> void:
 	# علامة نقطة الهدف
 	if marker["t"] < 0.8:
 		var g: float = marker["t"] / 0.8
-		var mcol: Color = Color(0.95, 0.5, 0.35, 1.0 - g) if marker.get("attack", false) else Color(0.95, 0.93, 0.89, 1.0 - g)
+		var mcol: Color = Color(0.85, 0.22, 0.18, 1.0 - g) if marker.get("attack", false) else Color(0.95, 0.93, 0.89, 1.0 - g)
 		_ci.draw_arc(tile_to_world(marker["pos"]), 6.0 + g * 14.0, 0, TAU, 24, mcol, 1.2, true)
 
 # الأجزاء المتحركة من المباني الثابتة (14)
@@ -1117,12 +1171,19 @@ func _unhandled_input(event: InputEvent) -> void:
 					_apply_box()
 				dragging = false
 				box_active = false
+	elif event is InputEventMouseButton and event.pressed:
+		# عجلة الماوس على الكمبيوتر: تكبير وتصغير (4.2)
+		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
+			_zoom_at(clampf(cam.zoom.x * GC.WHEEL_ZOOM, GC.ZOOM_MIN, GC.ZOOM_MAX), event.position)
+		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			_zoom_at(clampf(cam.zoom.x / GC.WHEEL_ZOOM, GC.ZOOM_MIN, GC.ZOOM_MAX), event.position)
 	elif event is InputEventScreenDrag:
 		touches[event.index] = event.position
 		if touches.size() >= 2:
 			var v: Array = touches.values()
 			var d: float = maxf(1.0, (Vector2(v[0]) - Vector2(v[1])).length())
-			cam.zoom = Vector2.ONE * clampf(pinch_zoom * d / pinch_dist, GC.ZOOM_MIN, GC.ZOOM_MAX)
+			var mid: Vector2 = (Vector2(v[0]) + Vector2(v[1])) * 0.5
+			_zoom_at(clampf(pinch_zoom * d / pinch_dist, GC.ZOOM_MIN, GC.ZOOM_MAX), mid)
 			return
 		if not dragging:
 			return
@@ -1136,6 +1197,14 @@ func _unhandled_input(event: InputEvent) -> void:
 			sel_box_b = event.position
 		else:
 			cam.position = drag_cam - (event.position - drag_start) / cam.zoom.x
+
+# تكبير يُبقي النقطة التي تحت الإصبعين (أو مؤشر الماوس) ثابتة مكانها (4.2)
+func _zoom_at(z: float, screen_pos: Vector2) -> void:
+	var before := screen_to_world(screen_pos)
+	cam.zoom = Vector2.ONE * z
+	var after := screen_to_world(screen_pos)
+	cam.position += before - after
+	_clamp_cam()
 
 func _tile_at(screen_pos: Vector2) -> Vector2i:
 	var t := world_to_tile(screen_to_world(screen_pos))
@@ -1174,14 +1243,28 @@ func _tap(screen_pos: Vector2) -> void:
 			cam.position = tile_to_world(Vector2(a["pos"]))
 			alerts.erase(a)
 			return
-	# لمسة على وحدة من وحداتي = تحديدها
+	# لمسة على وحدة من وحداتي = تحديدها، ونقرتان سريعتان = تحديد مجموعتها (4.2)
 	var mine = _unit_at(screen_pos, true)
 	if mine != null:
+		var now: float = float(Time.get_ticks_msec()) / 1000.0
+		var again: bool = int(mine["id"]) == last_tap_unit and now - last_tap_t <= GC.DOUBLE_TAP
+		last_tap_t = now
+		last_tap_unit = int(mine["id"])
 		for v in combat.units:
 			v["sel"] = false
-		mine["sel"] = true
+		if again:
+			# كل وحداتي داخل 5 مربعات حول تلك الوحدة، أياً كان نوعها
+			for v in combat.units:
+				if int(v["player"]) == me and v["state"] != "dead" \
+						and Vector2(v["pos"]).distance_to(Vector2(mine["pos"])) <= GC.DOUBLE_TAP_RADIUS:
+					v["sel"] = true
+		else:
+			mine["sel"] = true
 		_refresh_info()
+		if select_mode:
+			_toggle_mode()   # تحديد ناجح: رجوع تلقائي لوضع تحريك الخريطة (4.2)
 		return
+	last_tap_unit = -1
 	# لمسة على عدو ومعي وحدات محددة = أمر هجوم (بلا حد مطاردة، 5.2)
 	var sel := _selected()
 	var foe = _unit_at(screen_pos, false)
@@ -1212,14 +1295,19 @@ func _command(target: Vector2i, attack_move: bool) -> void:
 
 func _apply_box() -> void:
 	var r := Rect2(sel_box_a, sel_box_b - sel_box_a).abs()
+	var got := 0
 	for u in combat.units:
 		if int(u["player"]) != me or u["state"] == "dead":
 			continue
 		u["sel"] = r.has_point(world_to_screen(tile_to_world(u["pos"])))
+		if u["sel"]:
+			got += 1
 	box_active = false
 	_refresh_info()
-	if select_mode:
-		_toggle_mode()   # رجوع تلقائي لوضع تحريك الخريطة
+	# الرجوع التلقائي لوضع التحريك بعد تحديد ناجح فقط؛ المربع الفارغ يبقيك
+	# في وضع التحديد لتعيد المحاولة (4.2)
+	if select_mode and got > 0:
+		_toggle_mode()
 
 func _toggle_mode() -> void:
 	select_mode = not select_mode

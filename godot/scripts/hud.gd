@@ -74,6 +74,29 @@ func _draw() -> void:
 	_draw_power_panel()
 	_draw_edge_alerts()
 	_draw_toasts()
+	_draw_select_box()
+
+# مربع التحديد المنقّط أثناء السحب في وضع "تحديد الجنود" (4.2)
+func _draw_select_box() -> void:
+	if not game.box_active:
+		return
+	var r := Rect2(game.sel_box_a, game.sel_box_b - game.sel_box_a).abs()
+	draw_rect(r, Color(0.95, 0.93, 0.89, 0.10))
+	var col := Color(0.95, 0.93, 0.89, 0.85)
+	var dash := 6.0
+	var gap := 4.0
+	for side in 2:
+		var y: float = r.position.y if side == 0 else r.end.y
+		var x: float = r.position.x
+		while x < r.end.x:
+			draw_line(Vector2(x, y), Vector2(minf(x + dash, r.end.x), y), col, 1.0)
+			x += dash + gap
+	for side in 2:
+		var x2: float = r.position.x if side == 0 else r.end.x
+		var y2: float = r.position.y
+		while y2 < r.end.y:
+			draw_line(Vector2(x2, y2), Vector2(x2, minf(y2 + dash, r.end.y)), col, 1.0)
+			y2 += dash + gap
 
 func _draw_power_panel() -> void:
 	var font := ThemeDB.fallback_font
@@ -121,6 +144,10 @@ func _draw_power_panel() -> void:
 			HORIZONTAL_ALIGNMENT_RIGHT, 38.0, 10, Color(0.87, 0.85, 0.80, a))
 		draw_string(font, Vector2(x + 5.0, ry + 12), "%d" % int(r["units"]),
 			HORIZONTAL_ALIGNMENT_LEFT, 20.0, 10, Color(0.70, 0.68, 0.64, a))
+		# الحلفاء: خط سفلي خفيف تحت السطر (12.3)
+		if int(r["player"]) != game.me and int(r["team"]) == int(game.team_of.get(game.me, game.me)):
+			draw_line(Vector2(x + 6, ry + GC.POWER_ROW_H - 2), Vector2(x + w - 6, ry + GC.POWER_ROW_H - 2),
+				Color(0.87, 0.85, 0.80, a * 0.45), 1.0)
 		# المهزوم يُشطب اسمه بخط فوقه
 		if bool(r["dead"]):
 			draw_line(Vector2(x + 24, ry + 9), Vector2(x + w - 20, ry + 9), Color(0.9, 0.85, 0.8, a), 1.0)

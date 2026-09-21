@@ -11,9 +11,11 @@ extends Node2D
 # وحدات متحركة، فتظهر الوحدة خلف المبنى الذي أمامها وأمام الذي خلفها.
 
 var game = null
-var what := "ground"   # ground | fires | band | units | top
-var band := 0
+var what := "band"     # band | units | fires | top
+var band := 0          # رقم القطر (i + j)
+var from_i := 0        # أول مربع في هذه القطعة من القطر
+var to_i := 0          # وآخر مربع فيها
 
 func _draw() -> void:
 	if game != null:
-		game.draw_layer(self, what, band)
+		game.draw_layer(self, what, band, from_i, to_i)

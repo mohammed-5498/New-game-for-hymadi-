@@ -29,8 +29,9 @@ func _run() -> void:
 		await process_frame
 
 	# ---- 1. اللوحات موجودة بعدد الأقطار ----
-	check(g.map_bands.size() == 2 * g.n - 1, "عدد لوحات المباني لا يطابق أقطار الخريطة")
+	check(g.band_segs.size() == 2 * g.n - 1, "قطع المباني لا تغطي كل أقطار الخريطة")
 	check(g.unit_bands.size() == 2 * g.n - 1, "عدد لوحات الوحدات لا يطابق أقطار الخريطة")
+	check(g.map_segs.size() > g.band_segs.size(), "الأقطار لم تُقطَّع إلى قطع أصغر")
 	check(g.top_layer != null and g.fire_layer != null, "الطبقة العليا أو طبقة النار غير موجودة")
 	check(g.dist_bands.size() == g.districts.size(), "مدى أقطار الأحياء غير محسوب")
 
@@ -43,7 +44,7 @@ func _run() -> void:
 	# ---- 3. ولا حتى عند تحريك الكاميرا أو تقريبها ----
 	g.map_draws = 0
 	for i in 20:
-		g.cam.position += Vector2(6, 4)
+		g.cam.position += Vector2(8, 5)
 		g.cam.zoom = Vector2.ONE * (2.0 + float(i) * 0.05)
 		await process_frame
 	check(g.map_draws == 0, "تحريك الكاميرا أعاد رسم الخريطة الثابتة %d مرة" % g.map_draws)
@@ -82,7 +83,7 @@ func _run() -> void:
 			break
 	var rng: Vector2i = g.dist_bands[small]
 	var span: int = rng.y - rng.x + 1
-	check(span < g.map_bands.size(), "مدى أقطار الحي يغطي الخريطة كلها")
+	check(span < g.band_segs.size(), "مدى أقطار الحي يغطي الخريطة كلها")
 	g.map_draws = 0
 	g.districts_state._set_tint(g.districts[small], 0, false)
 	var g2 := 0
@@ -92,8 +93,12 @@ func _run() -> void:
 	for i in 5:
 		await process_frame
 	# خطوات الانتقال × أقطار الحي، لا أقطار الخريطة × كل إطار
-	check(g.map_draws <= span * (GC.TINT_STEPS + 2),
-		"رسم %d قطر لتغيّر لون حي واحد مداه %d أقطار" % [g.map_draws, span])
+	# قطع القطر الواحد قد تكون عدة، فالسقف يُحسب بعددها الفعلي
+	var segs := 0
+	for b in range(rng.x, rng.y + 1):
+		segs += g.band_segs[b].size()
+	check(g.map_draws <= segs * (GC.TINT_STEPS + 2),
+		"رسم %d قطعة لتغيّر لون حي واحد قطعه %d" % [g.map_draws, segs])
 
 	# ---- 5. خريطة جديدة تبني اللوحات من جديد ----
 	g.map_draws = 0
@@ -101,7 +106,16 @@ func _run() -> void:
 	for i in 3:
 		await process_frame
 	check(g.map_draws > 0, "خريطة جديدة لم تُرسم")
-	check(g.map_bands.size() == 2 * g.n - 1, "لوحات الخريطة الجديدة لا تطابق حجمها")
+	check(g.band_segs.size() == 2 * g.n - 1, "قطع الخريطة الجديدة لا تطابق حجمها")
+
+	# ---- 5ب. القطع صغيرة الحدود حتى يقصّها المحرك وحده ----
+	# القطر كله شريط مائل يعبر الخريطة: حدوده تغطيها كلها فلا يُقصّ. القطعة الصغيرة
+	# حدودها ضيقة، وهذا وحده ما جعل محرك الرسم يتجاهل ما هو خارج الشاشة.
+	var widest := 0.0
+	for r2 in g.seg_rect:
+		widest = maxf(widest, r2.size.x)
+	var map_w: float = float(g.n) * GC.TW * 2.0
+	check(widest < map_w * 0.5, "حدود القطعة %.0f بكسل من خريطة عرضها %.0f: واسعة جداً" % [widest, map_w])
 
 	# ---- 6. الوحدات خارج الشاشة لا تُرسم ----
 	g.combat.clear()

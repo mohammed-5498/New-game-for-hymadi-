@@ -22,6 +22,10 @@ var heal_zones: Array = []     # منطقة استيلاء المستشفى: {po
 var player_armor_bonus := {}   # مراكز الشرطة: درع إضافي للمالك (3.8)
 var teams := {}                # رقم اللاعب -> فريقه (التحالفات، 11)
 var weather := "day"           # طقس المباراة، يضبطه game.gd مرة واحدة (10)
+# شبكة مكانية بخلايا 2 × 2 مربع (14): البحث عن الأعداء كان يمر على كل الوحدات
+# لكل وحدة، فيصير O(n²). الآن يمر على الخلايا المجاورة وحدها.
+var _grid := {}
+var _grid_t := 0.0
 
 # استدعاءات للخارج: (وحدة مصابة، ضرر، هل من ضربة مميزة)
 var on_hit := Callable()
@@ -61,6 +65,7 @@ func spawn(key: String, player: int, team: int, tile: Vector2) -> Dictionary:
 	next_id += 1
 	units.append(u)
 	_by_id[u["id"]] = u
+	_grid_add(u)     # حتى تجدها عمليات البحث قبل أول خطوة زمنية
 	return u
 
 # صفات الفرد تُشتق من بذرته وحدها: نفس البذرة تعطي نفس الشخصية دائماً (5.4.1)
@@ -98,6 +103,7 @@ func alive(u) -> bool:
 	return u != null and u["state"] != "dead"
 
 func clear() -> void:
+	_grid.clear()
 	units.clear()
 	projectiles.clear()
 	_by_id.clear()
@@ -105,6 +111,13 @@ func clear() -> void:
 
 # ============================ الخطوة الزمنية ============================
 func step(delta: float) -> void:
+	# الشبكة والتباعد عشر مرات في الثانية: بناء الشبكة في كل إطار يكلّف أكثر مما يوفّر،
+	# والبحث عن الأهداف أصلاً كل ربع ثانية (14)
+	_grid_t -= delta
+	if _grid_t <= 0.0:
+		_rebuild_grid()
+		_separate(GC.GRID_REBUILD + absf(_grid_t))
+		_grid_t = GC.GRID_REBUILD
 	for u in units:
 		u["anim_t"] += delta
 		u["flash"] = maxf(0.0, u["flash"] - delta)
@@ -147,6 +160,65 @@ func _step_timers(u: Dictionary, delta: float) -> void:
 	if has_ult(key):
 		var per_sec: float = GC.HERO_CHARGE_PER_SEC if bool(GC.stat(key, "hero")) else GC.CHARGE_PER_SEC
 		u["charge"] = minf(GC.CHARGE_FULL, float(u["charge"]) + per_sec * delta)
+
+# ============================ الشبكة المكانية (14) ============================
+func _rebuild_grid() -> void:
+	_grid.clear()
+	for u in units:
+		if u["state"] == "dead":
+			continue
+		_grid_add(u)
+
+func _grid_add(u: Dictionary) -> void:
+	var key := _cell_of(Vector2(u["pos"]))
+	if _grid.has(key):
+		_grid[key].append(u)
+	else:
+		_grid[key] = [u]
+
+func _cell_of(p: Vector2) -> Vector2i:
+	return Vector2i(int(floor(p.x / GC.GRID_CELL)), int(floor(p.y / GC.GRID_CELL)))
+
+# كل الوحدات داخل نصف قطر، من الخلايا التي يمسّها فقط
+func _near_units(center: Vector2, radius: float) -> Array:
+	var out := []
+	# دائرة خلايا زائدة: الشبكة قد تكون متأخرة جزءاً من الثانية فتكون الوحدة انتقلت
+	var r := int(ceil(radius / GC.GRID_CELL)) + 1
+	var mid := _cell_of(center)
+	for cx in range(mid.x - r, mid.x + r + 1):
+		for cy in range(mid.y - r, mid.y + r + 1):
+			var cell = _grid.get(Vector2i(cx, cy), null)
+			if cell != null:
+				out.append_array(cell)
+	return out
+
+# قوة تباعد خفيفة بين المتلاصقين، ولا تدفع أحداً داخل مبنى (4.3)
+func _separate(delta: float) -> void:
+	for u in units:
+		if u["state"] == "dead":
+			continue
+		var push := Vector2.ZERO
+		var mid := _cell_of(Vector2(u["pos"]))
+		for cx in range(mid.x - 1, mid.x + 2):
+			for cy in range(mid.y - 1, mid.y + 2):
+				var cell = _grid.get(Vector2i(cx, cy), null)
+				if cell == null:
+					continue
+				for o in cell:
+					if int(o["id"]) == int(u["id"]) or o["state"] == "dead":
+						continue
+					var away: Vector2 = Vector2(u["pos"]) - Vector2(o["pos"])
+					var d: float = away.length()
+					if d < 0.001:
+						away = Vector2(randf() - 0.5, randf() - 0.5)
+						d = 0.5
+					if d < GC.SEPARATE_DIST:
+						push += away / d * (GC.SEPARATE_DIST - d) / GC.SEPARATE_DIST
+		if push == Vector2.ZERO:
+			continue
+		var to: Vector2 = Vector2(u["pos"]) + push.limit_length(1.0) * GC.SEPARATE_PUSH * delta
+		if _walkable_at(to):
+			u["pos"] = to
 
 func _reap() -> void:
 	var keep := []
@@ -833,7 +905,7 @@ func _walkable_at(p: Vector2) -> bool:
 
 func _enemies_within(u: Dictionary, center: Vector2, radius: float) -> Array:
 	var out := []
-	for o in units:
+	for o in _near_units(center, radius):
 		if o["state"] == "dead" or not _hostile(u, o):
 			continue
 		if Vector2(o["pos"]).distance_to(center) <= radius:
@@ -842,7 +914,7 @@ func _enemies_within(u: Dictionary, center: Vector2, radius: float) -> Array:
 
 func _allies_within(u: Dictionary, radius: float) -> Array:
 	var out := []
-	for o in units:
+	for o in _near_units(Vector2(u["pos"]), radius):
 		if o["state"] == "dead" or not _friendly(u, o):
 			continue
 		if int(o["id"]) == int(u["id"]) and not GC.ULT_HEAL_SELF:
@@ -891,7 +963,7 @@ func _dist(a: Dictionary, b: Dictionary) -> float:
 func _nearest_enemy(u: Dictionary, within: float):
 	var best = null
 	var bd := within
-	for o in units:
+	for o in _near_units(Vector2(u["pos"]), within):
 		if o["state"] == "dead" or not _hostile(u, o):
 			continue
 		var d := _dist(u, o)
