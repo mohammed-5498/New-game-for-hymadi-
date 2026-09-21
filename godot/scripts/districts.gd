@@ -29,6 +29,9 @@ func setup(districts: Array, players: int, team_of: Dictionary) -> void:
 		d["tint_amt"] = 0.0
 		d["want_col"] = Color(0, 0, 0, 0)
 		d["want_amt"] = 0.0
+		d["from_col"] = Color(0, 0, 0, 0)
+		d["from_amt"] = 0.0
+		d["tint_t"] = 1.0          # 1 = الانتقال اللوني انتهى
 		if cap.x < 0:
 			continue
 		caps.append({"i": int(d["id"]), "tile": cap, "pos": Vector2(cap)})
@@ -47,6 +50,9 @@ func _set_tint(d: Dictionary, player: int, instant: bool) -> void:
 	else:
 		d["want_col"] = GC.PLAYER_COLORS[int(color_of.get(player, player)) % GC.PLAYER_COLORS.size()]
 		d["want_amt"] = 1.0
+	d["from_col"] = d["tint_col"]
+	d["from_amt"] = d["tint_amt"]
+	d["tint_t"] = 1.0 if instant else 0.0
 	if instant:
 		d["tint_col"] = d["want_col"]
 		d["tint_amt"] = d["want_amt"]
@@ -54,13 +60,18 @@ func _set_tint(d: Dictionary, player: int, instant: bool) -> void:
 
 # ============================ الخطوة الزمنية ============================
 func step(delta: float, units: Array) -> void:
-	# الانتقال اللوني خلال نصف ثانية لا دفعة واحدة (8)
-	var k: float = clampf(delta / GC.TINT_TIME, 0.0, 1.0)
+	# الانتقال اللوني خلال نصف ثانية بالضبط ثم ينتهي (8).
+	# كان lerp متدرجاً لا يصل هدفه أبداً، فتبقى الخريطة "متغيّرة" إلى الأبد
+	# ويُعاد رسمها كل إطار بعد أول استيلاء — وهذا يهدم كسب الأداء كله (14).
 	for d in list:
-		if float(d["tint_amt"]) != float(d["want_amt"]) or Color(d["tint_col"]) != Color(d["want_col"]):
-			d["tint_amt"] = lerpf(float(d["tint_amt"]), float(d["want_amt"]), k)
-			d["tint_col"] = Color(d["tint_col"]).lerp(Color(d["want_col"]), k)
-			tint_dirty = true   # الخريطة الثابتة تحتاج رسمة جديدة (14)
+		var tt: float = float(d["tint_t"])
+		if tt >= 1.0:
+			continue
+		tt = minf(1.0, tt + delta / GC.TINT_TIME)
+		d["tint_t"] = tt
+		d["tint_amt"] = lerpf(float(d["from_amt"]), float(d["want_amt"]), tt)
+		d["tint_col"] = Color(d["from_col"]).lerp(Color(d["want_col"]), tt)
+		tint_dirty = true   # الخريطة الثابتة تحتاج رسمة جديدة (14)
 
 	_acc += delta
 	if _acc < GC.CAPTURE_TICK:

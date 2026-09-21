@@ -54,6 +54,25 @@ func _run() -> void:
 		await process_frame
 	check(g.map_draws > 0, "تغيّر التلوين لم يُعد رسم الخريطة الثابتة")
 
+	# ---- 4ب. وينتهي الانتقال اللوني فيتوقف الرسم ----
+	# الانتقال كان بـ lerp متدرج لا يصل هدفه أبداً، فتبقى الخريطة تُرسم كل إطار
+	# إلى الأبد بعد أول استيلاء. هذا الفحص يمسك ذلك.
+	var d: Dictionary = g.districts[0]
+	g.districts_state._set_tint(d, 0, false)
+	# الانتقال محسوب بالزمن لا بعدد الإطارات، وسرعة الإطارات بلا شاشة غير ثابتة،
+	# فننتظر انتهاءه فعلاً بسقف أمان بدل عدد إطارات ثابت.
+	var guard := 0
+	while float(d["tint_t"]) < 1.0 and guard < 3000:
+		guard += 1
+		await process_frame
+	check(guard < 3000, "لم ينتهِ الانتقال اللوني أبداً")
+	check(float(d["tint_amt"]) == float(d["want_amt"]), "لم تصل شدة التلوين إلى هدفها")
+	check(Color(d["tint_col"]) == Color(d["want_col"]), "لم يصل لون التلوين إلى هدفه")
+	g.map_draws = 0
+	for i in 40:
+		await process_frame
+	check(g.map_draws == 0, "بقيت الخريطة تُرسم (%d مرة) بعد انتهاء الانتقال اللوني" % g.map_draws)
+
 	# ---- 5. خريطة جديدة تبني اللوحات من جديد ----
 	g.map_draws = 0
 	g.generate_map()
