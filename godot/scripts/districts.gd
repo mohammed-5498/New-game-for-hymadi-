@@ -11,6 +11,7 @@ var events: Array = []        # إشعارات: {"kind": "captured"/"losing", "d
 var color_of := {}            # رقم اللاعب -> رقم لونه في جدول ألوان 12.2
 var _acc := 0.0
 var tint_dirty := true        # هل تغيّر تلوين حي فتحتاج الخريطة الثابتة رسمة جديدة؟ (14)
+var tint_dirty_ids: Array = []   # أرقام الأحياء التي تغيّر لونها، فلا يُعاد رسم غيرها
 
 # ============================ التهيئة ============================
 func setup(districts: Array, players: int, team_of: Dictionary) -> void:
@@ -56,7 +57,13 @@ func _set_tint(d: Dictionary, player: int, instant: bool) -> void:
 	if instant:
 		d["tint_col"] = d["want_col"]
 		d["tint_amt"] = d["want_amt"]
-		tint_dirty = true
+		_mark_tint(d)
+
+func _mark_tint(d: Dictionary) -> void:
+	tint_dirty = true
+	var id: int = int(d["id"])
+	if not tint_dirty_ids.has(id):
+		tint_dirty_ids.append(id)
 
 # ============================ الخطوة الزمنية ============================
 func step(delta: float, units: Array) -> void:
@@ -67,11 +74,15 @@ func step(delta: float, units: Array) -> void:
 		var tt: float = float(d["tint_t"])
 		if tt >= 1.0:
 			continue
+		var was: int = int(tt * float(GC.TINT_STEPS))
 		tt = minf(1.0, tt + delta / GC.TINT_TIME)
 		d["tint_t"] = tt
 		d["tint_amt"] = lerpf(float(d["from_amt"]), float(d["want_amt"]), tt)
 		d["tint_col"] = Color(d["from_col"]).lerp(Color(d["want_col"]), tt)
-		tint_dirty = true   # الخريطة الثابتة تحتاج رسمة جديدة (14)
+		# الخريطة الثابتة تُعاد على خطوات معدودة لا في كل إطار: العين لا تفرّق
+		# بين تدرّج من خمس خطوات وتدرّج مستمر، والفرق في الأداء كبير (14)
+		if int(tt * float(GC.TINT_STEPS)) != was or tt >= 1.0:
+			_mark_tint(d)
 
 	_acc += delta
 	if _acc < GC.CAPTURE_TICK:

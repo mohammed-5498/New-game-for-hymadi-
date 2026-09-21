@@ -16,6 +16,7 @@ var kind: Array = []        # رمز المبنى لكل مربع
 var region: Array = []      # مفتاح لون الأرض لكل مربع
 var owner_dist: Array = []  # رقم الحي لكل مربع (-1 للشارع)
 var decor: Array = []       # زينة الشارع لكل مربع: "" أو "B" برميل نار أو "L" عمود إنارة
+var dash: Array = []        # علامة منتصف الشارع: 0 بلا، 1 أفقية، 2 رأسية
 var districts: Array = []   # كل حي: {id, tiles, cx, cy, size, flavor, type, gang, special, cap, center}
 var warnings: Array = []
 
@@ -47,7 +48,7 @@ func generate(size_key: String, player_count: int, seed_value: int = 0, gangs: A
 
 	return {
 		"n": n, "size_key": size_key, "players": players,
-		"road": road, "kind": kind, "region": region, "decor": decor,
+		"road": road, "kind": kind, "region": region, "decor": decor, "dash": dash,
 		"owner_dist": owner_dist, "districts": districts,
 		"warnings": warnings,
 	}
@@ -59,12 +60,14 @@ func _reset() -> void:
 	owner_dist = []
 	districts = []
 	decor = []
+	dash = []
 	for i in n * n:
 		road.append(false)
 		kind.append(".")
 		region.append("neutral")
 		owner_dist.append(-1)
 		decor.append("")
+		dash.append(0)
 
 # ============================ أدوات الشبكة ============================
 func id(i: int, j: int) -> int:
@@ -307,17 +310,22 @@ func _fill_buildings() -> void:
 			kind[id(t.x, t.y)] = (("T" if rng.randf() < 0.5 else ".") if tiny else _pick_kind(flavor))
 
 # زينة الشوارع: براميل نار وأعمدة إنارة (7). لا تمنع المرور، وهي مصادر ضوء ليلاً (10).
+# ومعها علامات منتصف الشارع: أفقية للشارع الممتد يميناً ويساراً ورأسية لغيره،
+# تماماً كما في prototype.html.
 func _place_decor() -> void:
 	for j in n:
 		for i in n:
 			var t := id(i, j)
 			if not road[t]:
 				continue
+			var horiz: bool = (inb(i - 1, j) and road[id(i - 1, j)]) or (inb(i + 1, j) and road[id(i + 1, j)])
+			var vert: bool = (inb(i, j - 1) and road[id(i, j - 1)]) or (inb(i, j + 1) and road[id(i, j + 1)])
+			dash[t] = 1 if (horiz and not vert) else (2 if (vert and not horiz) else 0)
 			var q := rng.randf()
 			if q < GC.DECOR_BARREL_P:
 				decor[t] = "B"
-			elif q < GC.DECOR_LAMP_P:
-				decor[t] = "L"
+			elif q < GC.DECOR_LAMP_P and dash[t] != 0:
+				decor[t] = "L"   # الأعمدة على الشوارع الممتدة فقط، كما في النموذج
 
 func _pick_kind(flavor: String) -> String:
 	var table: Array = GC.BUILDING_MIX.get(flavor, GC.BUILDING_MIX["neutral"])

@@ -37,7 +37,6 @@ var overlay = null
 var wx = null
 # لوحات الرسم (14): الخريطة ثابتة لا تُعاد في كل إطار، والوحدات وحدها تتحرك
 var _ci: CanvasItem = null       # اللوحة الجارية الآن
-var ground_layer: DrawLayer = null
 var fire_layer: DrawLayer = null
 var top_layer: DrawLayer = null
 var map_bands: Array = []        # لوحة مباني ثابتة لكل قطر
@@ -45,6 +44,7 @@ var unit_bands: Array = []       # لوحة وحدات متحركة لكل قط�
 var band_units: Array = []       # وحدات كل قطر، تُوزَّع مرة في الإطار (14)
 var band_prev: Array = []        # أي قطر كان فيه وحدات في الإطار الماضي
 var live_tiles: Array = []       # مبانٍ فيها جزء متحرك: الساعة والشرطة والأعلام
+var dist_bands: Array = []       # أول وآخر قطر يمر به كل حي (14)
 var _view := Rect2()             # ما تراه الكاميرا الآن، يُحسب مرة كل إطار (14)
 var map_draws := 0               # كم مرة أُعيد رسم الخريطة الثابتة (للفحص)
 var unit_draws := 0              # وكم وحدة رُسمت في الإطار الأخير (للفحص)
@@ -53,6 +53,7 @@ var _fps_taps := 0
 var _fps_tap_t := 0.0
 var _fps_t := 0.0              # عقدة الطقس (10)
 var decor: Array = []      # زينة الشوارع: براميل نار وأعمدة إنارة
+var dash: Array = []       # علامات منتصف الشوارع
 var lights: Array = []     # مصادر الإضاءة الليلية، تُبنى مرة مع الخريطة (10)
 var me := 0                # رقم اللاعب البشري
 var shake_t := 0.0
@@ -211,7 +212,13 @@ func _refresh_layers() -> void:
 	# تلوين حي تغيّر: الخريطة الثابتة تحتاج رسمة واحدة جديدة (8)
 	if districts_state.tint_dirty:
 		districts_state.tint_dirty = false
-		redraw_map()
+		var ids: Array = districts_state.tint_dirty_ids.duplicate()
+		districts_state.tint_dirty_ids.clear()
+		if ids.is_empty():
+			redraw_map()
+		else:
+			for d in ids:
+				redraw_district(int(d))
 
 func _on_death(victim: Dictionary, killer) -> void:
 	if int(victim["player"]) == me:
@@ -291,6 +298,7 @@ func generate_map() -> void:
 	kind = m["kind"]
 	region = m["region"]
 	decor = m["decor"]
+	dash = m["dash"]
 	owner_dist = m["owner_dist"]
 	districts = m["districts"]
 
@@ -326,6 +334,8 @@ func _build_lights() -> void:
 					_add_light(c + Vector2(0, -h * 0.5), GC.LIGHT_WINDOW)
 				"P":
 					_add_light(c + Vector2(0, -4), GC.LIGHT_FLAG)
+				"B":
+					_add_light(c + Vector2(0, -7), GC.LIGHT_BARREL)
 			match String(decor[t]):
 				"B":
 					_add_light(c + Vector2(0, -7), GC.LIGHT_BARREL)
@@ -528,14 +538,13 @@ func _visible_rect() -> Rect2:
 
 # ---- بناء اللوحات: مرة مع كل خريطة جديدة (14) ----
 func _build_layers() -> void:
-	for node in [ground_layer, fire_layer, top_layer]:
+	for node in [fire_layer, top_layer]:
 		if node != null:
 			node.queue_free()
 	for node in map_bands + unit_bands:
 		node.queue_free()
 	map_bands = []
 	unit_bands = []
-	ground_layer = _new_layer("ground", 0)
 	fire_layer = _new_layer("fires", 0)
 	for s in range(0, 2 * n - 1):
 		map_bands.append(_new_layer("band", s))
@@ -550,6 +559,7 @@ func _build_layers() -> void:
 	if wx != null:
 		move_child(wx, get_child_count() - 1)
 	_collect_live_tiles()
+	_measure_districts()
 	redraw_map()
 
 func _new_layer(what: String, band: int) -> DrawLayer:
@@ -562,6 +572,19 @@ func _new_layer(what: String, band: int) -> DrawLayer:
 
 # المباني التي فيها جزء يتحرك كل إطار: عقارب الساعة، ومصباح الشرطة،
 # وأعلام الأحياء وأشرطة الاستيلاء. تُرسم هذه فوق الخريطة الثابتة.
+# أول وآخر قطر (i + j) يمر به كل حي، حتى نعيد رسم ما يخصه وحده عند تغيّر لونه
+func _measure_districts() -> void:
+	dist_bands = []
+	for d in districts:
+		var lo := 99999
+		var hi := -1
+		for t in d["tiles"]:
+			var s: int = int(t.x) + int(t.y)
+			lo = mini(lo, s)
+			hi = maxi(hi, s)
+		# المباني العالية ترتفع فوق مربعها، فنوسّع المدى قليلاً
+		dist_bands.append(Vector2i(maxi(0, lo - 1), hi + 1))
+
 func _collect_live_tiles() -> void:
 	live_tiles = []
 	for j in n:
@@ -572,17 +595,22 @@ func _collect_live_tiles() -> void:
 
 # تُستدعى عند أي تغيّر يمس شكل الخريطة الثابت (استيلاء، طقس، خريطة جديدة)
 func redraw_map() -> void:
-	if ground_layer != null:
-		ground_layer.queue_redraw()
 	for b in map_bands:
 		b.queue_redraw()
+
+# لا يُعاد رسم إلا الأقطار التي يمر بها الحي الذي تغيّر لونه (14)
+func redraw_district(d: int) -> void:
+	if d < 0 or d >= dist_bands.size():
+		redraw_map()
+		return
+	var rng: Vector2i = dist_bands[d]
+	for s in range(rng.x, rng.y + 1):
+		if s >= 0 and s < map_bands.size():
+			map_bands[s].queue_redraw()
 
 func draw_layer(ci: CanvasItem, what: String, band: int) -> void:
 	_ci = ci
 	match what:
-		"ground":
-			map_draws += 1
-			_draw_ground()
 		"fires":
 			for f in combat.fires:
 				if _view.has_point(tile_to_world(Vector2(f["pos"]))):
@@ -596,20 +624,31 @@ func draw_layer(ci: CanvasItem, what: String, band: int) -> void:
 			_draw_top()
 	_ci = self
 
-func _draw_ground() -> void:
-	for j in n:
-		for i in n:
-			var c := tile_to_world(Vector2(i, j))
-			var key: String = region[j * n + i]
-			var col: Color = GC.GROUND[key] if GC.GROUND.has(key) else GC.GROUND["neutral"]
-			col = _tinted(col, owner_dist[j * n + i], GC.TINT_GROUND)
-			col = Weather.ground(col, bool(road[j * n + i]), weather)   # ثلج أبيض أو مطر أغمق (10)
-			_ci.draw_colored_polygon(PackedVector2Array([
-				c + Vector2(-GC.TW, 0), c + Vector2(0, -GC.TH),
-				c + Vector2(GC.TW, 0), c + Vector2(0, GC.TH)]), col)
+# أرض قطر واحد: تُرسم قبل مبانيه، وكل مربع داخل معيّنه فلا يتداخل مع جاره
+func _draw_ground_band(s: int) -> void:
+	for i in range(max(0, s - n + 1), min(n - 1, s) + 1):
+		var j := s - i
+		var c := tile_to_world(Vector2(i, j))
+		var key: String = region[j * n + i]
+		var col: Color = GC.GROUND[key] if GC.GROUND.has(key) else GC.GROUND["neutral"]
+		col = _tinted(col, owner_dist[j * n + i], GC.TINT_GROUND)
+		col = Weather.ground(col, bool(road[j * n + i]), weather)   # ثلج أبيض أو مطر أغمق (10)
+		var quad := PackedVector2Array([
+			c + Vector2(-GC.TW, 0), c + Vector2(0, -GC.TH),
+			c + Vector2(GC.TW, 0), c + Vector2(0, GC.TH)])
+		_ci.draw_colored_polygon(quad, col)
+		# حدّ رفيع بنفس اللون يمنع خطوط الفراغ بين المربعات (كما في النموذج)
+		_ci.draw_polyline(quad + PackedVector2Array([quad[0]]), col, 0.6)
+		# علامة منتصف الشارع
+		var dm: int = int(dash[j * n + i])
+		if dm == 1:
+			_ci.draw_line(c + Vector2(-4, -2), c + Vector2(4, 2), Color("c9bd85"), 1.0)
+		elif dm == 2:
+			_ci.draw_line(c + Vector2(4, -2), c + Vector2(-4, 2), Color("c9bd85"), 1.0)
 
-# مباني قطر واحد (i + j = s) بترتيب العمق كما كان
+# قطر واحد (i + j = s): أرضه ثم مبانيه، بترتيب العمق كما كان
 func _draw_band(s: int) -> void:
+	_draw_ground_band(s)
 	for i in range(max(0, s - n + 1), min(n - 1, s) + 1):
 		var j := s - i
 		var c := tile_to_world(Vector2(i, j))
@@ -757,36 +796,133 @@ func _tinted(base: Color, dist: int, amount: float) -> Color:
 		return base
 	return base.lerp(Color(d["tint_col"]), amount * a)
 
+# ألوان ثابتة من prototype.html — لا تُبدَّل، المرجع هو الملف نفسه
+const DKW := Color("3d3a36")      # نافذة مطفأة
+const LTW := Color("e3c06a")      # نافذة مضاءة
+const CRT := [Color("8a6a4a"), Color("a07e5a"), Color("b89470")]   # خشب الأكشاك
+const HOUSE_WALLS := [
+	[Color("b59a78"), Color("cdb391")],
+	[Color("a88f7a"), Color("c4ab95")],
+	[Color("9f9a86"), Color("bab5a0")],
+]
+
+# نافذة على الوجه الأيسر من صندوق، بإحداثيات نسبية كما في النموذج (wL)
+func _win_l(c: Vector2, w: float, d: float, u: float, v: float, du: float, dv: float, col: Color) -> void:
+	_ci.draw_colored_polygon(PackedVector2Array([
+		c + Vector2(-w + u * w, u * d - v),
+		c + Vector2(-w + (u + du) * w, (u + du) * d - v),
+		c + Vector2(-w + (u + du) * w, (u + du) * d - v - dv),
+		c + Vector2(-w + u * w, u * d - v - dv)]), col)
+
+# ونافذة على الوجه الأيمن (wR)
+func _win_r(c: Vector2, w: float, d: float, u: float, v: float, du: float, dv: float, col: Color) -> void:
+	_ci.draw_colored_polygon(PackedVector2Array([
+		c + Vector2(u * w, d - u * d - v),
+		c + Vector2((u + du) * w, d - (u + du) * d - v),
+		c + Vector2((u + du) * w, d - (u + du) * d - v - dv),
+		c + Vector2(u * w, d - u * d - v - dv)]), col)
+
+func _poly(pts: Array, col: Color) -> void:
+	var out := PackedVector2Array()
+	for pt in pts:
+		out.push_back(pt)
+	_ci.draw_colored_polygon(out, col)
+
 func _draw_object(k: String, c: Vector2, reg: String, i: int, j: int, t: float, dist: int) -> void:
-	# الأطلال والأشجار والفراغ لا تُصبغ — ليست ملكاً لأحد (8)
+	# الأطلال والأشجار والسيارات المحطمة والبراميل لا تُصبغ — ليست ملكاً لأحد (8)
 	var roof := dist
 	var wall := dist
 	if GC.NO_TINT.has(k):
 		roof = -1
 		wall = -1
+	var k3: int = (i * 7 + j * 3) % 3        # اختلاف ألوان البيوت كما في النموذج
 	match k:
 		"H":
-			_box(c + Vector2(0, 1), 14, 7, 14, _w(Color("b59a78"), wall), _w(Color("cdb391"), wall), Color("00000000"))
-			_roof(c + Vector2(0, 1), 14, 7, 14, 12, _r(_gang_dark(reg), roof), _r(_gang_light(reg), roof))
+			# بيت بسقف مائل ونافذتين وباب
+			var wc: Array = HOUSE_WALLS[k3]
+			var b := c + Vector2(0, 1)
+			_box(b, 14, 7, 14, _w(wc[0], wall), _w(wc[1], wall), Color("00000000"))
+			_roof(b, 14, 7, 14, 12, _r(_gang_dark(reg), roof), _r(_gang_light(reg), roof))
+			_win_l(b, 14, 7, 0.2, 5, 0.25, 4, DKW)
+			_win_r(b, 14, 7, 0.6, 5, 0.22, 4, DKW)
+			_win_r(b, 14, 7, 0.15, 0, 0.2, 8, Color("5b4636"))
 		"A":
+			# عمارة بصفوف نوافذ، بعضها مضاء
 			var h: float = 32.0 + float((i + j) % 2) * 8.0
 			_box(c, 15, 7.5, h, _w(Color("8f8c85"), wall), _w(Color("aaa69e"), wall), _r(Color("77736c"), roof))
+			var v := 6
+			while float(v) < h - 4.0:
+				for n in 2:
+					var u: float = 0.15 if n == 0 else 0.55
+					_win_l(c, 15, 7.5, u, float(v), 0.25, 4, LTW if (i + j + v + n) % 4 == 0 else DKW)
+					_win_r(c, 15, 7.5, u, float(v), 0.25, 4, LTW if (i + 2 * j + v + n) % 5 == 0 else DKW)
+				v += 7
+			_box(c + Vector2(-4, -h), 3, 1.5, 5, Color("6b6861"), Color("7f7c75"), Color("5e5b55"))
 		"R":
-			_box(c, 13, 6.5, 9, Color("8a8074"), Color("a39888"), Color("5e574d"))
+			# أطلال مهدمة بجدران مكسورة وركام على الأرض
+			var rw := 14.0
+			var rd := 7.0
+			_poly([c + Vector2(-rw, -12), c + Vector2(0, -rd - 10), c + Vector2(rw, -5), c + Vector2(0, rd - 9)], Color("5e574d"))
+			_poly([c + Vector2(-rw, 0), c + Vector2(0, rd), c + Vector2(0, rd - 9),
+				c + Vector2(-rw * 0.5, rd * 0.5 - 17), c + Vector2(-rw, -12)], Color("8a8074"))
+			_poly([c + Vector2(0, rd), c + Vector2(rw, 0), c + Vector2(rw, -5),
+				c + Vector2(rw * 0.55, rd * 0.45 - 13), c + Vector2(0, rd - 9)], Color("a39888"))
+			_win_l(c, rw, rd, 0.3, 4, 0.22, 4, DKW)
+			_poly([c + Vector2(5, 7), c + Vector2(9, 4), c + Vector2(14, 7), c + Vector2(9, 9)], Color("6e665b"))
+			_poly([c + Vector2(-12, 4), c + Vector2(-8, 2), c + Vector2(-4, 5), c + Vector2(-8, 7)], Color("7d7466"))
+		"Y":
+			# مصنع بمدخنة ودخان (3.6)
+			_box(c, 16, 8, 18, _w(Color("7a5040"), wall), _w(Color("945f4b"), wall), _r(Color("5e4035"), roof))
+			for u in [0.1, 0.4, 0.7]:
+				_win_l(c, 16, 8, u, 7, 0.18, 6, DKW)
+			_win_r(c, 16, 8, 0.35, 0, 0.3, 10, Color("4a3b32"))
+			_box(c + Vector2(6, -19), 3, 1.5, 22, Color("5d4a3f"), Color("6e584b"), Color("4a3b32"))
+			_ci.draw_circle(c + Vector2(7, -46), 4.0, Color(0.639, 0.616, 0.584, 0.7))
+			_ci.draw_circle(c + Vector2(11, -52), 5.0, Color(0.639, 0.616, 0.584, 0.55))
+			_ci.draw_circle(c + Vector2(16, -59), 6.0, Color(0.639, 0.616, 0.584, 0.4))
 		"W":
 			_box(c, 17, 8.5, 12, _w(Color("7f7a70"), wall), _w(Color("99938a"), wall), _r(Color("6c675f"), roof))
+			_win_r(c, 17, 8.5, 0.3, 0, 0.35, 8, Color("4a453f"))      # باب المستودع الكبير
 		"T":
-			_ci.draw_rect(Rect2(c.x - 1, c.y - 8, 2, 8), Color("5b4636"))
-			_ci.draw_circle(c + Vector2(0, -13), 7, Weather.snow(Color("4f7a3c"), GC.SNOW_TREE, weather))
-			_ci.draw_circle(c + Vector2(-3, -15), 5, Weather.snow(Color("5f8f48"), GC.SNOW_TREE_TOP, weather))
+			var o: float = float((i + j) % 2) * 3.0 - 1.5
+			_ci.draw_rect(Rect2(c.x - 1.0 + o, c.y - 8.0, 2.0, 8.0), Color("5b4636"))
+			_ci.draw_circle(c + Vector2(o, -13), 7.0, Weather.snow(Color("4f7a3c"), GC.SNOW_TREE, weather))
+			_ci.draw_circle(c + Vector2(-3 + o, -15), 5.0, Weather.snow(Color("5f8f48"), GC.SNOW_TREE_TOP, weather))
+			_ci.draw_circle(c + Vector2(3 + o, -11), 4.0, Weather.snow(Color("5f8f48"), GC.SNOW_TREE, weather))
+		"Z":
+			# أكشاك سوق بمظلات ملونة (3.6)
+			_box(c + Vector2(2, -5), 3, 1.5, 3, CRT[0], CRT[1], CRT[2])
+			for st in [[Vector2(-7, 0), Color("c24f3e")], [Vector2(6, 3), Color("3e6fa0")]]:
+				var sp: Vector2 = c + st[0]
+				_box(sp, 6, 3, 5, Color("8a6a4a"), Color("a07e5a"), Color("00000000"))
+				_roof(sp, 7, 3.5, 5, 4, st[1], Color("e8e0d0"))
+		"X":
+			# سيارة محطمة
+			_box(c + Vector2(0, 2), 8, 4, 4, Color("6b4f3a"), Color("85624a"), Color("57402f"))
+			_box(c + Vector2(1, -2), 4, 2, 3, Color("3d3a36"), Color("555049"), Color("4a4540"))
+		"G":
+			# خزان ماء على أعمدة
+			_ci.draw_line(c + Vector2(-7, 2), c + Vector2(-5, -20), Color("5d4a3f"), 1.5)
+			_ci.draw_line(c + Vector2(7, 2), c + Vector2(5, -20), Color("5d4a3f"), 1.5)
+			_ci.draw_line(c + Vector2(0, 5), c + Vector2(0, -20), Color("5d4a3f"), 1.5)
+			_ellipse(c + Vector2(0, -20), 8.0, 3.0, Color("7a6552"))
+			_ci.draw_rect(Rect2(c.x - 8.0, c.y - 32.0, 16.0, 12.0), _w(Color("8c7560"), wall))
+			_ellipse(c + Vector2(0, -32), 8.0, 3.0, _r(Color("a08a74"), roof))
+			_tri(c + Vector2(-8, -32), c + Vector2(0, -41), c + Vector2(8, -32), _r(Color("6e584b"), roof))
+		"B":
+			_draw_barrel(c)
 		"Q":
-			# العلم نفسه يُرسم في الطبقة العليا لأن لونه يتغير مع المالك (14)
+			# مقر العصابة: نوافذ وسارية، والعلم في الطبقة العليا لأن لونه يتغير (14)
 			_box(c, 16, 8, 26, _w(_gang_dark(reg), wall), _w(_gang_light(reg), wall), _r(Color("3a3632"), roof))
+			for pw in [[0.2, 8.0], [0.6, 8.0], [0.2, 17.0], [0.6, 17.0]]:
+				_win_l(c, 16, 8, pw[0], pw[1], 0.2, 5, Color("2b2825"))
+				_win_r(c, 16, 8, pw[0], pw[1], 0.2, 5, Color("2b2825"))
 			_ci.draw_line(c + Vector2(0, -26), c + Vector2(0, -46), Color("2b2825"), 1.2)
 		"P":
 			# الساحة والسارية ثابتتان، والعلم وشريط الاستيلاء في الطبقة العليا (14)
 			_ci.draw_colored_polygon(PackedVector2Array([
 				c + Vector2(-12, 0), c + Vector2(0, -6), c + Vector2(12, 0), c + Vector2(0, 6)]), Color("b3aa98"))
+			_ellipse_dashed(c, 15.0, 7.5, Color(1, 1, 1, 0.55), 0.8)
 			_ci.draw_line(c, c + Vector2(0, -22), Color("2b2825"), 1.2)
 		"M":
 			_hospital(c, wall, roof)
@@ -799,12 +935,26 @@ func _draw_object(k: String, c: Vector2, reg: String, i: int, j: int, t: float, 
 		"S":
 			_police_station(c, t, wall, roof)
 
+# بيضاوي متقطع (بديل setLineDash في النموذج)
+func _ellipse_dashed(center: Vector2, rx: float, ry: float, col: Color, w: float) -> void:
+	var seg := 36
+	for e in seg:
+		if e % 2 == 1:
+			continue
+		var a1: float = TAU * float(e) / float(seg)
+		var a2: float = TAU * float(e + 1) / float(seg)
+		_ci.draw_line(center + Vector2(cos(a1) * rx, sin(a1) * ry),
+			center + Vector2(cos(a2) * rx, sin(a2) * ry), col, w)
+
 # زينة الشوارع (7): برميل نار وعمود إنارة — منقولة من prototype.html
+func _draw_barrel(c: Vector2) -> void:
+	_ci.draw_rect(Rect2(c.x - 2.5, c.y - 5.0, 5.0, 6.0), Color("4f4337"))
+	_tri(c + Vector2(-3, -5), c + Vector2(0, -13), c + Vector2(3, -5), Color("e8893a"))
+	_tri(c + Vector2(-1.5, -5), c + Vector2(0, -9), c + Vector2(1.5, -5), Color("f2c14e"))
+
 func _draw_decor(d: String, c: Vector2) -> void:
 	if d == "B":
-		_ci.draw_rect(Rect2(c.x - 2.5, c.y - 5.0, 5.0, 6.0), Color("4f4337"))
-		_tri(c + Vector2(-3, -5), c + Vector2(0, -13), c + Vector2(3, -5), Color("e8893a"))
-		_tri(c + Vector2(-1.5, -5), c + Vector2(0, -9), c + Vector2(1.5, -5), Color("f2c14e"))
+		_draw_barrel(c)
 	elif d == "L":
 		_ci.draw_line(c + Vector2(10, 3), c + Vector2(10, -18), Color("2b2825"), 1.2)
 		_ci.draw_line(c + Vector2(10, -18), c + Vector2(6, -19), Color("2b2825"), 1.0)

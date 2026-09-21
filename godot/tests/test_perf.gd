@@ -31,7 +31,8 @@ func _run() -> void:
 	# ---- 1. اللوحات موجودة بعدد الأقطار ----
 	check(g.map_bands.size() == 2 * g.n - 1, "عدد لوحات المباني لا يطابق أقطار الخريطة")
 	check(g.unit_bands.size() == 2 * g.n - 1, "عدد لوحات الوحدات لا يطابق أقطار الخريطة")
-	check(g.ground_layer != null and g.top_layer != null, "لوحة الأرض أو الطبقة العليا غير موجودة")
+	check(g.top_layer != null and g.fire_layer != null, "الطبقة العليا أو طبقة النار غير موجودة")
+	check(g.dist_bands.size() == g.districts.size(), "مدى أقطار الأحياء غير محسوب")
 
 	# ---- 2. الخريطة الثابتة لا تُعاد في كل إطار ----
 	g.map_draws = 0
@@ -72,6 +73,27 @@ func _run() -> void:
 	for i in 40:
 		await process_frame
 	check(g.map_draws == 0, "بقيت الخريطة تُرسم (%d مرة) بعد انتهاء الانتقال اللوني" % g.map_draws)
+
+	# ---- 4ج. تغيّر لون حي لا يعيد رسم الخريطة كلها ----
+	var small: int = 0
+	for k in g.districts.size():
+		if int(g.districts[k]["size"]) < 20:
+			small = k
+			break
+	var rng: Vector2i = g.dist_bands[small]
+	var span: int = rng.y - rng.x + 1
+	check(span < g.map_bands.size(), "مدى أقطار الحي يغطي الخريطة كلها")
+	g.map_draws = 0
+	g.districts_state._set_tint(g.districts[small], 0, false)
+	var g2 := 0
+	while float(g.districts[small]["tint_t"]) < 1.0 and g2 < 3000:
+		g2 += 1
+		await process_frame
+	for i in 5:
+		await process_frame
+	# خطوات الانتقال × أقطار الحي، لا أقطار الخريطة × كل إطار
+	check(g.map_draws <= span * (GC.TINT_STEPS + 2),
+		"رسم %d قطر لتغيّر لون حي واحد مداه %d أقطار" % [g.map_draws, span])
 
 	# ---- 5. خريطة جديدة تبني اللوحات من جديد ----
 	g.map_draws = 0
