@@ -87,8 +87,10 @@ const UNITS := {
 	"police_captain":   {"sx": 1.14, "sy": 1.04, "spd": 0.92, "neutral": true},
 }
 
-# حالة الرسم (تقابل ctx في Canvas): الهدف، الشفافية العامة، ومكدّس التحويلات
-var ci: CanvasItem = null
+# حالة الرسم (تقابل ctx في Canvas): الهدف، الشفافية العامة، ومكدّس التحويلات.
+# ci بلا نوع عن قصد: قد يكون CanvasItem حقيقياً، أو مُسجِّل مثلثات من `unit_mesh.gd`
+# يقلّد نفس الواجهة فيلتقط الشكل بدل رسمه (14).
+var ci = null
 var ga := 1.0                       # globalAlpha
 var _px := 0.0                      # بكسل الشاشة لكل وحدة رسم محلية (0 = كل التفاصيل)
 var _xf := Transform2D()
@@ -560,7 +562,7 @@ func _hero_ring() -> void:
 	ellipse_stroke(Vector2(0, 0.6), 6.4, 2.6, Color(0.941, 0.753, 0.290, 0.8), 0.9)
 
 # نجمة فوق الرأس تدل أن الضربة المميزة جاهزة (القسم 6.7) — تُرسم من منطق اللعبة
-func draw_ready_mark(canvas: CanvasItem, pos: Vector2, sc: float = 1.0) -> void:
+func draw_ready_mark(canvas, pos: Vector2, sc: float = 1.0) -> void:
 	ci = canvas
 	ga = 1.0
 	_xf = Transform2D(0.0, pos) * Transform2D(Vector2(sc, 0), Vector2(0, sc), Vector2.ZERO)
@@ -1313,7 +1315,7 @@ func _draw_figure(key: String, r: Dictionary, col: Color) -> void:
 # في hurt و death مرّر t = الزمن المنقضي داخل الحالة.
 # px = كم بكسل على الشاشة تساوي وحدة واحدة من نظام الرسم المحلي (المقياس × تقريب
 # الكاميرا). صفر يعني ارسم كل التفاصيل (الفحوص والمعرض).
-func draw_unit(canvas: CanvasItem, key: String, pos: Vector2, t: float, state: String,
+func draw_unit(canvas, key: String, pos: Vector2, t: float, state: String,
 		col: Color, dir: int = 1, sc: float = 1.0, rate: float = 1.0, move: String = "",
 		px: float = 0.0) -> void:
 	var u: Dictionary = UNITS.get(key, {})

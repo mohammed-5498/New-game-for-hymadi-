@@ -15,6 +15,7 @@ var districts: Array = []
 var caps: Array = []       # {tile, gang, type, special, district}
 
 var art := UnitsArt.new()
+var unit_mesh := UnitMesh.new()   # مخزن أشكال الوحدات (14)
 var combat: Combat
 var districts_state := Districts.new()
 var spawner := Spawner.new()
@@ -426,6 +427,7 @@ func _build_astar() -> void:
 
 func _setup_match() -> void:
 	combat.clear()
+	unit_mesh.clear()      # ألوان اللاعبين تتغير بين مباراة وأخرى (14)
 	alerts = []
 	toasts = []
 	match_over = -1
@@ -797,15 +799,24 @@ func _owner_color(player: int) -> Color:
 
 func _draw_unit(u: Dictionary) -> void:
 	var col: Color = _owner_color(int(u["player"]))
-	if float(u["flash"]) > 0.0:
+	var flashing: bool = float(u["flash"]) > 0.0
+	if flashing:
 		# وميض أبيض خفيف عند الإصابة (5.2)
 		col = col.lerp(Color(1, 1, 1), 0.55 * float(u["flash"]) / GC.HIT_FLASH)
 	var sc: float = GC.UNIT_SCALE_SPECIAL if not String(u["key"]).ends_with("_common") else GC.UNIT_SCALE
 	sc *= float(u.get("size", 1.0))   # تنويع ±4% من بذرة الشخصية (5.4.1)
 	# نوع الحركة يُمرَّر للرسم ليتغير القوس والاندفاع أثناء الالتحام فقط (5.4.2)
-	var mv: String = String(u["move"]) if combat.draw_state(u) == "attack" and float(u["cycle"]) > 0.0 else ""
-	art.draw_unit(_ci, String(u["key"]), tile_to_world(u["pos"]),
-		combat.draw_time(u), combat.draw_state(u), col, int(u["dir"]), sc, combat.draw_rate(u), mv,
+	var st: String = combat.draw_state(u)
+	var mv: String = String(u["move"]) if st == "attack" and float(u["cycle"]) > 0.0 else ""
+	var pos := tile_to_world(u["pos"])
+	# الشكل المخزَّن أولاً: أمر رسم واحد بدل 43 (14). الوميض لون مختلف في كل إطار
+	# فلا يُخزَّن، والضربة المميزة لها توهّج متغيّر، وكلاهما نادر.
+	if GC.MESH_CACHE and not flashing and not bool(u["ulting"]):
+		if unit_mesh.draw(_ci, art, String(u["key"]), pos, combat.draw_time(u), st,
+				col, int(u["dir"]), sc, combat.draw_rate(u), mv):
+			return
+	art.draw_unit(_ci, String(u["key"]), pos,
+		combat.draw_time(u), st, col, int(u["dir"]), sc, combat.draw_rate(u), mv,
 		sc * cam.zoom.x)
 
 # شريط الدم: فوق المحدد أو ناقص الدم فقط، بلون مالك الوحدة (5.2)

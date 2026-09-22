@@ -180,7 +180,37 @@ func _run() -> void:
 	check(Vector2(walker["pos"]).distance_to(p0) > 0.1, "الوحدة لم تتحرك بعد الأمر")
 	g.combat.clear()
 
-	# ---- 8. مؤشر الإطارات يعمل (14) ----
+	# ---- 8د. اللعبة تستعمل مخزن الأشكال فعلاً، وترجع للرسم المباشر عند الحاجة ----
+	g.combat.clear()
+	g.unit_mesh.clear()
+	var near2: Vector2 = g.world_to_tile(g.cam.position)
+	var crowd: Array = []
+	for k in 12:
+		var cu: Dictionary = g.combat.spawn("crow_common", g.me, 0,
+			near2 + Vector2(float(k) * 0.4 - 2.0, 0))
+		cu["state"] = "moving"
+		cu["path"] = [near2 + Vector2(float(k) * 0.4 - 1.6, 0)]
+		crowd.append(cu)
+	for i in 4:
+		await process_frame
+	check(g.unit_draws > 0, "لم تُرسم وحدات أصلاً")
+	check(g.unit_mesh.size() > 0, "اللعبة لم تستعمل مخزن الأشكال")
+	check(g.unit_mesh.hits > 0, "لم يُعَد استعمال أي شكل مخزَّن")
+	var shapes_before: int = g.unit_mesh.size()
+	# الوميض لون مختلف في كل إطار: يجب ألا يدخل المخزن
+	for cu in crowd:
+		cu["flash"] = GC.HIT_FLASH
+	for i in 6:
+		await process_frame
+		for cu in crowd:
+			cu["flash"] = GC.HIT_FLASH
+	check(g.unit_mesh.size() == shapes_before, "وميض الإصابة أضاف %d شكلاً للمخزن" % [
+		g.unit_mesh.size() - shapes_before])
+	for cu in crowd:
+		cu["flash"] = 0.0
+	g.combat.clear()
+
+
 	check(not g.show_fps, "مؤشر الإطارات يبدأ ظاهراً")
 	g.show_fps = true
 	g._refresh_info()
