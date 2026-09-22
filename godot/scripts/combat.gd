@@ -556,7 +556,8 @@ func _jump_away(u: Dictionary, from: Vector2) -> void:
 		var to: Vector2 = Vector2(u["pos"]) + dir * GC.DODGE_DIST
 		if _walkable_at(to):
 			u["pos"] = to
-			u["path"] = []
+			# المسار لا يُمسح: وحدة تنفّذ أمر حركة تبقى عليه بعد القفزة، وإلا
+			# صارت idle فردّت على من يضربها، وهذا يكسر قاعدة 5.1
 			return
 
 # هل الوحدة الآن في زمن التعافي بعد ضربتها؟ (فرصة للضربة القوية)
