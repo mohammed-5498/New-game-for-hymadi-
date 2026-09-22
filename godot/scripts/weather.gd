@@ -17,8 +17,11 @@ var _glow: Node2D          # عقدة الأضواء، مزجها جمعي (addi
 var _halo: GradientTexture2D   # تدرج دائري أبيض، يُلوَّن لكل مصدر ضوء
 var _flakes: Node2D        # عقدة الندف، فوق كل شيء
 var _size := Vector2(1152, 648)
+var _light_mat: ShaderMaterial = null   # شيدر الإضاءة، null = الطبقة المسطّحة القديمة
+var _light_off := false                 # أطفأته الجودة التلقائية
 
 func _ready() -> void:
+	_setup_light_shader()
 	_halo = _make_halo()
 	var mat := CanvasItemMaterial.new()
 	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
@@ -48,6 +51,7 @@ func _make_halo() -> GradientTexture2D:
 # يُستدعى مرة عند بدء المباراة. "عشوائي" يُحسم في game.gd قبل الوصول إلى هنا.
 func set_kind(w: String) -> void:
 	kind = w if GC.WEATHER_NAMES.has(w) and w != "random" else "day"
+	_apply_light_params()
 	_reset_parts()
 	queue_redraw()
 
@@ -109,12 +113,53 @@ func step(delta: float) -> void:
 func _screen_matrix() -> Transform2D:
 	return get_canvas_transform().affine_inverse()
 
+# الطبقة فوق المشهد. مع الشيدر تُرسم دائماً (حتى نهاراً) لأنه هو من يحسب اللون،
+# وبدونه ترجع مستطيلاً مسطّحاً بلون الطقس كما كانت. أمر رسم واحد في الحالتين (10).
 func _draw() -> void:
 	var col: Color = GC.WEATHER_OVERLAY.get(kind, Color(0, 0, 0, 0))
-	if col.a <= 0.0:
+	if (_light_mat == null or _light_off) and col.a <= 0.0:
 		return
 	draw_set_transform_matrix(_screen_matrix())
-	draw_rect(Rect2(Vector2.ZERO, get_viewport_rect().size), col)
+	var vp: Vector2 = get_viewport_rect().size
+	if _light_mat != null and not _light_off:
+		# الشيدر يقرأ اللون من uniform، والمستطيل يُرسم أبيض ليمرّ كما هو
+		_light_mat.set_shader_parameter("aspect", maxf(1.0, vp.x / maxf(1.0, vp.y)) * 0.72 + 0.4)
+		draw_rect(Rect2(Vector2.ZERO, vp), Color(1, 1, 1, 1))
+		return
+	draw_rect(Rect2(Vector2.ZERO, vp), col)
+
+# ---------- شيدر الإضاءة (10) ----------
+func _setup_light_shader() -> void:
+	if not GC.LIGHT_SHADER:
+		return
+	var sh = load("res://shaders/lighting.gdshader")
+	if sh == null:
+		push_warning("[إضاءة] لم يُحمَّل الشيدر، ترجع الطبقة المسطّحة")
+		return
+	_light_mat = ShaderMaterial.new()
+	_light_mat.shader = sh
+	material = _light_mat
+	_apply_light_params()
+
+# إطفاء الشيدر أو إرجاعه دون إعادة بنائه (الجودة التلقائية، 14)
+func set_light_shader(on: bool) -> void:
+	if _light_off == (not on):
+		return
+	_light_off = not on
+	material = null if _light_off else _light_mat
+	queue_redraw()
+
+func light_shader_on() -> bool:
+	return _light_mat != null and not _light_off
+
+func _apply_light_params() -> void:
+	if _light_mat == null:
+		return
+	var night: bool = kind == "night"
+	_light_mat.set_shader_parameter("tint", GC.WEATHER_OVERLAY.get(kind, Color(0, 0, 0, 0)))
+	_light_mat.set_shader_parameter("vignette", GC.VIGNETTE_NIGHT if night else GC.VIGNETTE)
+	_light_mat.set_shader_parameter("vignette_from", GC.VIGNETTE_FROM)
+	_light_mat.set_shader_parameter("floor_shade", GC.FLOOR_SHADE_NIGHT if night else GC.FLOOR_SHADE)
 
 # هالة دافئة حول كل مصدر ضوء: حلقات متناقصة الشفافية، بمزج جمعي (10)
 func _draw_lights() -> void:

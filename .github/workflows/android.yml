@@ -164,6 +164,11 @@ jobs:
           set -e
           godot --headless --path "$PROJECT_PATH" --script tests/test_lod.gd
 
+      - name: فحص الإضاءة والجودة التلقائية
+        run: |
+          set -e
+          godot --headless --path "$PROJECT_PATH" --script tests/test_light.gd
+
       - name: فحص توزيع العمل على الإطارات
         run: |
           set -e

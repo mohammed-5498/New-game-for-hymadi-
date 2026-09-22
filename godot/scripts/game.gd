@@ -192,6 +192,7 @@ func _process(delta: float) -> void:
 	_clamp_cam()
 	_refresh_layers()
 	_refresh_lod(delta)
+	_auto_quality(delta)
 	if show_fps:
 		_fps_t += delta
 		if _fps_t >= GC.FPS_UPDATE:
@@ -224,6 +225,41 @@ func _refresh_lod(delta: float) -> void:
 		near[i][1]["lod"] = GC.LOD_FULL
 
 # لا يُعاد رسم إلا ما تحرّك فعلاً (14)
+# الجودة التلقائية (14): على الجهاز الضعيف يُطفأ شيدر الإضاءة وحده، لأنه تحسين
+# شكل لا قاعدة لعب. ويرجع إن تحسّن الأداء ثلاث مراجعات متتالية، منعاً للتذبذب.
+var light_auto_off := false
+var _q_t := 0.0
+var _q_sum := 0.0
+var _q_n := 0
+var _q_good := 0
+
+func _auto_quality(delta: float) -> void:
+	if wx == null or not GC.LIGHT_SHADER or delta <= 0.0:
+		return
+	_q_sum += 1.0 / delta
+	_q_n += 1
+	_q_t += delta
+	if _q_t < GC.QUALITY_CHECK:
+		return
+	var fps: float = _q_sum / float(maxi(1, _q_n))
+	_q_t = 0.0
+	_q_sum = 0.0
+	_q_n = 0
+	if not light_auto_off:
+		if fps < GC.QUALITY_LOW_FPS:
+			light_auto_off = true
+			wx.set_light_shader(false)
+			_q_good = 0
+		return
+	if fps > GC.QUALITY_BACK_FPS:
+		_q_good += 1
+		if _q_good >= GC.QUALITY_BACK_TIMES:
+			light_auto_off = false
+			_q_good = 0
+			wx.set_light_shader(true)
+	else:
+		_q_good = 0
+
 func _clamp_cam() -> void:
 	if cam_bounds.size.x <= 0.0:
 		return
