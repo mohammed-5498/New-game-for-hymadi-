@@ -162,7 +162,7 @@ const MOVES := {
 	"quick":  {"wind": 0.18, "recover": 0.25, "dmg": 0.7, "reach": 0.0, "arc": 120.0,
 			   "stagger": 0.0, "push": 0.0, "around": false},
 	"heavy":  {"wind": 0.45, "recover": 0.55, "dmg": 1.6, "reach": 0.0, "arc": 100.0,
-			   "stagger": 0.4, "push": 1.0, "around": false},
+			   "stagger": 0.4, "push": 0.5, "around": false},
 	"thrust": {"wind": 0.30, "recover": 0.35, "dmg": 1.0, "reach": 0.6, "arc": 45.0,
 			   "stagger": 0.0, "push": 0.0, "around": false},
 	"spin":   {"wind": 0.50, "recover": 0.60, "dmg": 0.8, "reach": 0.0, "arc": 360.0,
@@ -181,7 +181,7 @@ const DODGE_CHANCE := 0.18      # الاحتمال الأساسي، يُضرب �
 const DODGE_DIST := 0.8         # قفزة التفادي بالمربعات
 const DODGE_DUR := 0.25         # مدتها، وفيها مناعة كاملة
 const DODGE_COOLDOWN := 1.2     # تبريد بين تفاديين
-const BLOCK_PUSH := 0.5         # ارتداد المهاجم عن الدرع بالمربعات
+const BLOCK_PUSH := 0.25        # ارتداد المهاجم عن الدرع بالمربعات
 const BLOCK_STAGGER := 0.25     # وترنّحه بعده
 # الصدّ لأصحاب الدروع وحدهم: المصفّح وبطل المطارق والشرطي (5.4.3)
 const SHIELD_UNITS := ["hammer_shield", "hammer_hero", "police_common", "police_captain"]
@@ -201,14 +201,14 @@ const STAMINA_BLOCK := 25.0
 const STAMINA_REGEN := 20.0     # في الثانية
 
 # ---------- المواقف الطريفة (5.4.4) ----------
-const SHOVE_ALLY_DIST := 0.6    # الوحدة المرتدّة تصطدم بحليف داخل هذه المسافة
+const SHOVE_ALLY_DIST := 0.4    # الوحدة المرتدّة تصطدم بحليف داخل هذه المسافة
 const SHOVE_ALLY_STAGGER := 0.3 # فيترنّح الاثنان
-const SPIN_ALLY_PUSH := 0.5     # الضربة الدائرية تدفع الحلفاء بلا ضرر
-const CORPSE_ROLL := 0.045      # مسافة تدحرج الجثة لكل نقطة ضرر من الضربة القاتلة
-const CORPSE_ROLL_MAX := 2.5    # سقف المسافة بالمربعات
+const SPIN_ALLY_PUSH := 0.25    # الضربة الدائرية تدفع الحلفاء بلا ضرر
+const CORPSE_ROLL := 0.022      # مسافة تدحرج الجثة لكل نقطة ضرر من الضربة القاتلة
+const CORPSE_ROLL_MAX := 1.2    # سقف المسافة بالمربعات
 const CORPSE_DRAG := 4.0        # تباطؤ التدحرج في الثانية
 const CORPSE_ROLLING_MAX := 20  # أكثر من عشرين جثة متدحرجة: الأقدم يتوقف
-const CORPSE_SHOVE := 0.35      # كم تزحزح الجثةُ من في طريقها
+const CORPSE_SHOVE := 0.18      # كم تزحزح الجثةُ من في طريقها
 
 # ---------- مستويات التفصيل (5.4.5) ----------
 const LOD_FULL := "full"        # كل ما سبق
@@ -316,7 +316,7 @@ const ULTS := {
 	"scorp_hero":       {"kind": "buff_heal", "need": "foe_near", "radius": 3.5,
 						 "dmg": 0.50, "dur": 5.0, "hp": 60.0},
 	"crow_hero":        {"kind": "arc", "need": "enemy", "radius": 2.5, "dmg": 36.0},
-	"police_common":    {"kind": "bash", "need": "enemy", "dmg": 18.0, "push": 1.0,
+	"police_common":    {"kind": "bash", "need": "enemy", "dmg": 18.0, "push": 0.5,
 						 "slow": 0.40, "slow_dur": 1.5},
 	"police_captain":   {"kind": "rally", "need": "foe_near", "radius": 3.0, "dmg": 0.30, "dur": 5.0},
 }
@@ -478,6 +478,17 @@ const GROUND := {
 # ---------- الأداء (14) ----------
 const FPS_TAP_GAP := 0.6     # أقصى فاصل بين لمستين ليُحسبا متتاليتين
 const FPS_UPDATE := 0.5      # تحديث رقم الإطارات كل نصف ثانية
+# طابور طلبات المسار: لا يحسب التحديث الواحد أكثر من عشرين مساراً مهما كثرت الأوامر،
+# والباقي ينتظر دوره في التحديثات التالية فلا يتجمّد الإطار عند أمر جماعي كبير (14)
+const PATH_PER_STEP := 20
+# مجموعة أكبر من هذه تتحرك بحقل تدفق واحد بدل A* لكل وحدة (14)
+const FLOW_MIN_GROUP := 10
+const FLOW_MAX_STEPS := 4096   # حد أمان لنزول الوحدة في الحقل
+# عند ازدحام الوجهة: بحث صغير عن أقرب مربع حر لوحدة وجدت مربعها محجوزاً (4.3)
+const FLOW_SPREAD_MAX := 64
+# تفصيل الرسم حسب حجم الوحدة على الشاشة (14):
+const DRAW_COARSE_PX := 9.0    # بيضاوي أصغر من هذا يُرسم بثمانية أضلاع لا بعشرين
+const DRAW_SHADOW_PX := 2.2    # ظل أو غبار أصغر من هذا القطر لا يُرى فلا يُرسم
 
 # ---------- الكاميرا والتحكم (4) ----------
 const ZOOM_MIN := 0.8

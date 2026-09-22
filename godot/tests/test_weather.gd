@@ -150,6 +150,8 @@ func _t_rain_miss_is_harmless() -> void:
 func _t_rain_spares_melee_and_ults() -> void:
 	var dmg := {}
 	for w in ["day", "rain"]:
+		# نفس البذرة للجولتين: فرقهما الوحيد يجب أن يكون الطقس لا العشوائية
+		seed(9090)
 		var c := new_combat(w)
 		var a := c.spawn("hammer_common", 0, 0, Vector2(5, 5))
 		var b := c.spawn("scorp_common", 1, 1, Vector2(5.4, 5))

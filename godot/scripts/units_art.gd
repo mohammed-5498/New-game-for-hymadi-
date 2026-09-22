@@ -48,6 +48,13 @@ const RING20 := [
 	Vector2(0.30901699, -0.95105654), Vector2(0.58778525, -0.80901699),
 	Vector2(0.80901699, -0.58778525), Vector2(0.95105654, -0.30901699),
 ]
+# وللبيضاويات الصغيرة على الشاشة ثمانية أضلاع تكفي: الفرق لا يُرى وعدد الرؤوس ينزل
+# إلى أقل من النصف (14)
+const RING8 := [
+	Vector2(1, 0), Vector2(0.70710678, 0.70710678), Vector2(0, 1),
+	Vector2(-0.70710678, 0.70710678), Vector2(-1, 0), Vector2(-0.70710678, -0.70710678),
+	Vector2(0, -1), Vector2(0.70710678, -0.70710678),
+]
 
 # شكل الحركات الأربع (5.4.2): sw سعة القوس، lg عمق الاندفاع.
 # هذه أرقام رسم فقط؛ أزمنة الحركات وأضرارها كلها في config.gd.
@@ -143,8 +150,26 @@ func bone(p1: Vector2, p2: Vector2, p3: Vector2, w: float, col: Color) -> void:
 	limb(p1, p2, w, col)
 	limb(p2, p3, w, col)
 
+# كم ضلعاً يستحق بيضاوي بهذا النصف على الشاشة؟ ثمانية للصغير وعشرون للكبير (14).
+# منفصلة عن الرسم حتى تُفحص وحدها.
+func ellipse_segments(rx: float) -> int:
+	if _px > 0.0 and absf(rx) * _px < GC.DRAW_COARSE_PX:
+		return 8
+	return 20
+
+# وهل يستحق ظل أو غبار بهذا النصف أن يُرسم أصلاً؟ (14)
+func draws_puff(rx: float) -> bool:
+	return _px <= 0.0 or absf(rx) * _px >= GC.DRAW_SHADOW_PX
+
 func ellipse(center: Vector2, rx: float, ry: float, col: Color, seg: int = 20) -> void:
 	var pts := PackedVector2Array()
+	if seg == 20 and ellipse_segments(rx) == 8:
+		pts.resize(8)
+		for i in 8:
+			var u8: Vector2 = RING8[i]
+			pts[i] = center + Vector2(u8.x * rx, u8.y * ry)
+		ci.draw_colored_polygon(pts, _a(col))
+		return
 	if seg == 20:
 		pts.resize(20)
 		for i in 20:
@@ -377,9 +402,16 @@ func _body_end() -> void:
 
 func shadow(r: Dictionary, w: float) -> void:
 	var s: float = 1.0 - float(r["air"]) * 0.35
-	ellipse(Vector2(0, 0.6), (w if w > 0.0 else 3.8) * s, 1.6 * s, Color(0, 0, 0, 0.3 * s))
+	var rx: float = (w if w > 0.0 else 3.8) * s
+	# عند التصغير يصير الظل بضعة بكسلات باهتة لا تُرى، وهو مضلع كامل لكل وحدة (14)
+	if not draws_puff(rx):
+		return
+	ellipse(Vector2(0, 0.6), rx, 1.6 * s, Color(0, 0, 0, 0.3 * s))
 
 func _dust(r: Dictionary) -> void:
+	# وكذلك غبار الخطوة والضربة (14)
+	if not draws_puff(3.0):
+		return
 	var st := String(r["st"])
 	if st == "attack" and float(r["a"]) > 0.34 and float(r["a"]) < 0.62:
 		var g: float = (float(r["a"]) - 0.34) / 0.28

@@ -103,7 +103,7 @@ jobs:
       - name: فحص الأخطاء النحوية
         run: |
           set -e
-          for f in scripts/config.gd scripts/map_gen.gd scripts/game.gd scripts/units_art.gd scripts/units_demo.gd scripts/combat.gd scripts/districts.gd scripts/spawner.gd scripts/hud.gd scripts/police.gd scripts/bot.gd scripts/match_setup.gd scripts/menu.gd scripts/overlay.gd scripts/weather.gd scripts/draw_layer.gd; do
+          for f in scripts/config.gd scripts/map_gen.gd scripts/game.gd scripts/units_art.gd scripts/units_demo.gd scripts/combat.gd scripts/districts.gd scripts/spawner.gd scripts/hud.gd scripts/police.gd scripts/bot.gd scripts/match_setup.gd scripts/menu.gd scripts/overlay.gd scripts/weather.gd scripts/draw_layer.gd scripts/flow_field.gd; do
             out=$(godot --headless --path "$PROJECT_PATH" --check-only --script "$f" 2>&1 | grep -v "^Godot Engine" || true)
             if [ -n "$(echo $out)" ]; then echo "خطأ في $f:"; echo "$out"; exit 1; fi
             echo "سليم: $f"
@@ -163,6 +163,11 @@ jobs:
         run: |
           set -e
           godot --headless --path "$PROJECT_PATH" --script tests/test_lod.gd
+
+      - name: فحص المسارات وحقل التدفق
+        run: |
+          set -e
+          godot --headless --path "$PROJECT_PATH" --script tests/test_paths.gd
 
       - name: فحص الأداء
         run: |

@@ -27,6 +27,14 @@ var weather := "day"           # طقس المباراة، يضبطه game.gd م
 var _grid := {}
 var _grid_t := 0.0
 
+# طابور طلبات المسار (14): آخر طلب لكل وحدة يلغي ما قبله، فلا تُحسب لوحدة واحدة
+# مساران في نفس الدورة، والميزانية تُجدَّد في كل تحديث.
+var path_q: Array = []        # أرقام الوحدات المنتظرة، الأقدم أولاً
+var path_goal := {}           # رقم الوحدة -> وجهتها المنتظرة
+# تبدأ ممتلئة وتُجدَّد في كل تحديث: أوامر اللاعب تأتي بين التحديثين، فتجد نصيبها
+# جاهزاً وتُحسب فوراً، ولا ينتظر الطابور إلا حين يمتلئ فعلاً
+var _path_budget := GC.PATH_PER_STEP
+
 # استدعاءات للخارج: (وحدة مصابة، ضرر، هل من ضربة مميزة)
 var on_hit := Callable()
 var on_death := Callable()   # (الوحدة الميتة، قاتلها أو null)
@@ -41,7 +49,7 @@ func spawn(key: String, player: int, team: int, tile: Vector2) -> Dictionary:
 		"id": next_id, "key": key, "player": player, "team": team,
 		"seed": randi(),                  # بذرة الشخصية الثابتة (5.4.1)
 		"pos": tile, "hp": hp, "max_hp": hp,
-		"state": "idle", "path": [] as Array,
+		"state": "idle", "path": [] as Array, "path_wait": false,
 		"target": -1, "cmd_target": -1,   # cmd_target = أمر هجوم من اللاعب (بلا حد مطاردة)
 		"swing": 0.0, "hit_done": false,
 		"scan_t": randf() * GC.SCAN_EVERY, "repath_t": 0.0,
@@ -110,6 +118,8 @@ func alive(u) -> bool:
 
 func clear() -> void:
 	_grid.clear()
+	path_q.clear()
+	path_goal.clear()
 	units.clear()
 	projectiles.clear()
 	_by_id.clear()
@@ -117,6 +127,9 @@ func clear() -> void:
 
 # ============================ الخطوة الزمنية ============================
 func step(delta: float) -> void:
+	# ميزانية المسارات تُجدَّد في كل تحديث، وينال الطابور نصيبه منها أولاً (14)
+	_path_budget = GC.PATH_PER_STEP
+	_serve_paths()
 	# الشبكة والتباعد عشر مرات في الثانية: بناء الشبكة في كل إطار يكلّف أكثر مما يوفّر،
 	# والبحث عن الأهداف أصلاً كل ربع ثانية (14)
 	_grid_t -= delta
@@ -430,7 +443,7 @@ func _fight(u: Dictionary, tgt: Dictionary, delta: float) -> void:
 	_face(u, tgt["pos"])
 	# مترنّحة: لا تهاجم ولا تتقدم حتى ينتهي الترنّح (5.4.3)
 	if float(u["stagger_t"]) > 0.0:
-		u["path"] = []
+		_clear_path(u)
 		u["swing"] = 0.0
 		u["cycle"] = 0.0
 		u["hit_done"] = false
@@ -442,7 +455,7 @@ func _fight(u: Dictionary, tgt: Dictionary, delta: float) -> void:
 	if bool(u["hit_done"]) and d > want:
 		_creep(u, Vector2(tgt["pos"]), d - want, delta)
 	else:
-		u["path"] = []
+		_clear_path(u)
 
 	# المستوى الإحصائي (خارج الشاشة): بلا أنميشن ولا ردود أفعال، تبادل ضرر بالأرقام
 	# مع ضرب الضرر × 0.85 تعويضاً عن التفادي المتوسط حتى لا تختلف النتائج (5.4.5)
@@ -491,7 +504,7 @@ func close_frac(u: Dictionary) -> float:
 
 # خطوة صغيرة نحو الهدف بلا مسار: لا تتجاوز المسافة المطلوبة ولا تدخل مبنى
 func _creep(u: Dictionary, goal: Vector2, most: float, delta: float) -> void:
-	u["path"] = []
+	_clear_path(u)
 	var to: Vector2 = goal - Vector2(u["pos"])
 	if to.length() < 0.01 or most <= 0.0:
 		return
@@ -864,7 +877,7 @@ func _kill(u: Dictionary, blow: float = 0.0, from = null) -> void:
 		# مع تباطؤ ثابت a تكون مسافة التوقف v² / (2a)، فالسرعة الأولى:
 		u["roll"] = dir.normalized() * sqrt(2.0 * GC.CORPSE_DRAG * dist)
 		_cap_rolling(u)
-	u["path"] = []
+	_clear_path(u)
 	u["sel"] = false
 	# من كان يقاتله يبحث فوراً عن هدف آخر (5.2)
 	for other in units:
@@ -878,6 +891,8 @@ func _kill(u: Dictionary, blow: float = 0.0, from = null) -> void:
 func _advance(u: Dictionary, delta: float) -> void:
 	var path: Array = u["path"]
 	if path.is_empty():
+		if bool(u.get("path_wait", false)):
+			return     # مسارها ما زال في الطابور: ليست واصلة، إنما تنتظر (14)
 		if u["state"] == "moving" or u["state"] == "attackMove":
 			u["state"] = "idle"
 		return
@@ -945,22 +960,122 @@ func side_damage(side: String) -> float:
 		"side": return GC.DMG_SIDE
 	return GC.DMG_BACK
 
+# طلب مسار. تحت الميزانية يُحسب فوراً كما كان، وفوقها يدخل الطابور فلا يتجاوز
+# التحديث الواحد عشرين عملية A* مهما كثرت الأوامر (14).
 func _path_to(u: Dictionary, goal: Vector2) -> void:
-	u["path"] = map.find_path(u["pos"], goal)
+	var id := int(u["id"])
+	if _path_budget > 0:
+		_path_budget -= 1
+		path_goal.erase(id)
+		u["path_wait"] = false
+		u["path"] = map.find_path(u["pos"], goal)
+		return
+	if not path_goal.has(id):
+		path_q.append(id)
+	path_goal[id] = goal
+	u["path_wait"] = true
+
+func _serve_paths() -> void:
+	while _path_budget > 0 and not path_q.is_empty():
+		var id: int = int(path_q.pop_front())
+		if not path_goal.has(id):
+			continue          # أُلغي الطلب أو حُسب فوراً بعد دخوله الطابور
+		var goal: Vector2 = path_goal[id]
+		path_goal.erase(id)
+		var u = get_unit(id)
+		if u == null or not alive(u):
+			continue
+		_path_budget -= 1
+		u["path_wait"] = false
+		u["path"] = map.find_path(u["pos"], goal)
+
+# إيقاف الوحدة: يلغي أيضاً أي طلب مسار معلّق لها حتى لا يصلها مسار بعد توقفها
+func _clear_path(u: Dictionary) -> void:
+	u["path"] = []
+	u["path_wait"] = false
+	path_goal.erase(int(u["id"]))
+
+# عدد الطلبات المنتظرة الآن (للفحص)
+func path_pending() -> int:
+	return path_goal.size()
 
 # ============================ أوامر اللاعب ============================
 func order_move(sel: Array, goal: Vector2, attack_move: bool) -> void:
 	for u in sel:
 		if not alive(u):
 			continue
-		u["target"] = -1
-		u["cmd_target"] = -1
-		u["swing"] = 0.0
-		u["cycle"] = 0.0
-		u["state"] = "attackMove" if attack_move else "moving"
-		u["returning"] = false
-		u["chase_from"] = goal
+		_begin_order(u, attack_move, goal)
 		_path_to(u, goal)
+
+# المجموعة الكبيرة (أكثر من عشر وحدات) تتحرك بحقل تدفق واحد بدل A* لكل وحدة (14).
+# الحقل يُبنى من كل مربعات الوجهة معاً، فتنزل كل وحدة إلى أقرب مربع منها ولا
+# تتكدس المجموعة في مربع واحد (4.3).
+func order_move_flow(sel: Array, dests: Array, attack_move: bool) -> void:
+	if map == null or dests.is_empty():
+		return
+	var field: PackedInt32Array = map.build_flow(dests)
+	var taken := {}
+	for u in sel:
+		if not alive(u):
+			continue
+		var path: Array = map.flow_path(u["pos"], field)
+		# الوحدات القادمة من نفس الجهة تنزل كلها إلى أقرب مربع وجهة فتتكدس فيه.
+		# فمن وجد مربعه محجوزاً مشى خطوات قليلة إلى أقرب مربع حر حوله، وإن لم يجد
+		# وقف في آخر مربع حر على طريقه هو. فلكل وحدة مربعها ولا تتكدس (4.3).
+		var here: Vector2 = Vector2(path[-1]) if not path.is_empty() else Vector2(u["pos"])
+		if taken.has(here.round()):
+			var extra: Array = _spread_from(here, taken)
+			if extra.is_empty():
+				while path.size() > 1 and taken.has(Vector2(path[-1]).round()):
+					path.remove_at(path.size() - 1)
+			else:
+				path.append_array(extra)
+		if not path.is_empty():
+			taken[Vector2(path[-1]).round()] = true
+		else:
+			taken[Vector2(u["pos"]).round()] = true
+		var goal: Vector2 = Vector2(path[-1]) if not path.is_empty() else Vector2(u["pos"])
+		_begin_order(u, attack_move, goal)
+		_clear_path(u)
+		u["path"] = path
+
+# ما يشترك فيه أمرا الحركة: إسقاط الهدف، وضبط الحالة، وتثبيت نقطة الرجوع
+# أقرب مربع حر غير محجوز حول مربع مزدحم، مع خطوات الوصول إليه. بحث صغير محدود
+# بعشرات المربعات: أرخص بمراتب من A* لكل وحدة، وهو الغرض كله (14 و 4.3).
+func _spread_from(start: Vector2, taken: Dictionary) -> Array:
+	var s := Vector2i(int(round(start.x)), int(round(start.y)))
+	var came := {s: s}
+	var q: Array[Vector2i] = [s]
+	var head := 0
+	while head < q.size() and head < GC.FLOW_SPREAD_MAX:
+		var c: Vector2i = q[head]
+		head += 1
+		if c != s and not taken.has(Vector2(c)):
+			var out: Array = []
+			var cur := c
+			while cur != s:
+				out.push_front(Vector2(cur))
+				cur = came[cur]
+			return out
+		for d in FlowField.DIRS:
+			var p: Vector2i = c + d
+			if came.has(p) or not _walkable_at(Vector2(p)):
+				continue
+			if p.x != c.x and p.y != c.y:
+				if not _walkable_at(Vector2(p.x, c.y)) or not _walkable_at(Vector2(c.x, p.y)):
+					continue
+			came[p] = c
+			q.append(p)
+	return []
+
+func _begin_order(u: Dictionary, attack_move: bool, goal: Vector2) -> void:
+	u["target"] = -1
+	u["cmd_target"] = -1
+	u["swing"] = 0.0
+	u["cycle"] = 0.0
+	u["state"] = "attackMove" if attack_move else "moving"
+	u["returning"] = false
+	u["chase_from"] = goal
 
 func order_attack(sel: Array, tgt: Dictionary) -> void:
 	for u in sel:

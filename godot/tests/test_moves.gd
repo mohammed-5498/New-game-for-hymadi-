@@ -91,7 +91,7 @@ func _t_numbers() -> void:
 		check(is_equal_approx(float(m["dmg"]), float(want[k][2])), "ضرر %s خطأ" % k)
 	check(is_equal_approx(float(GC.MOVES["thrust"]["reach"]), 0.6), "الطعنة لا تزيد المدى 0.6")
 	check(is_equal_approx(float(GC.MOVES["heavy"]["stagger"]), 0.4), "القوية لا تُرنّح 0.4 ث")
-	check(is_equal_approx(float(GC.MOVES["heavy"]["push"]), 1.0), "القوية لا تدفع مربعاً")
+	check(is_equal_approx(float(GC.MOVES["heavy"]["push"]), 0.5), "القوية لا تدفع نصف مربع")
 	check(bool(GC.MOVES["spin"]["around"]), "الدائرية لا تصيب ما حول الوحدة")
 	check(GC.MOVE_RANDOM == 0.15, "العشوائية على النقاط ليست 15%")
 
@@ -265,11 +265,19 @@ func _t_stagger_and_push() -> void:
 	no_react(a)
 	no_react(b)                # المصفّح صاحب درع: صدّه له فحصه في test_defense
 	b["move_lock"] = "quick"
-	var x0: float = float(b["pos"].x)
-	# القوية لـ crow_common: دورة 1.6 ث والضرر عند 0.72 ث، فنفحص بعدها بقليل
-	run(c, 0.8, 0.01)
+	# القوية لـ crow_common: دورة 1.6 ث والضرر عند 0.72 ث، فنفحص بعدها بقليل.
+	# نقيس قفزة الدفع نفسها لا الإزاحة الكلية: الهدف يزحف نحو مهاجمه قبل الضربة
+	# (مسافة الاقتحام، 5.4.1) فتبتلع الإزاحةُ الكلية جزءاً من الدفع ويصير القياس
+	# معتمداً على جرأة الهدف العشوائية.
+	var push: float = float(GC.MOVES["heavy"]["push"])
+	var jump := 0.0
+	var prev: float = float(b["pos"].x)
+	for i in 80:
+		run(c, 0.01, 0.01)
+		jump = maxf(jump, float(b["pos"].x) - prev)
+		prev = float(b["pos"].x)
 	check(float(b["stagger_t"]) > 0.0, "الضربة القوية لم تُرنّح الهدف")
-	check(float(b["pos"].x) > x0 + 0.5, "الضربة القوية لم تدفع الهدف")
+	check(jump > push * 0.9, "الضربة القوية دفعت الهدف %.2f والمطلوب %.2f" % [jump, push])
 	# المترنّح لا يبدأ دورة ضرب
 	b["stagger_t"] = 0.4
 	b["swing"] = 0.0

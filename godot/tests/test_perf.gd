@@ -134,6 +134,48 @@ func _run() -> void:
 		await process_frame
 	check(g.unit_draws >= 6, "لم تُرسم الوحدات التي أمام الكاميرا (%d)" % g.unit_draws)
 
+	# ---- 8ب. أمر لمجموعة كبيرة على الخريطة الحقيقية: حقل تدفق سالك (14) ----
+	g.combat.clear()
+	var home: Vector2 = g.world_to_tile(g.cam.position)
+	var start: Array = g._free_near(Vector2i(int(home.x), int(home.y)), 80)
+	check(start.size() > 40, "لم أجد مربعات حرة كافية لفحص المجموعة")
+	var group: Array = []
+	for k in 40:
+		var t: Vector2i = start[k]
+		var u: Dictionary = g.combat.spawn("crow_common", g.me, 0, Vector2(float(t.x), float(t.y)))
+		u["sel"] = true
+		group.append(u)
+	var far_tile: Vector2i = Vector2i(int(home.x) + 12, int(home.y) + 12)
+	far_tile.x = clampi(far_tile.x, 1, g.n - 2)
+	far_tile.y = clampi(far_tile.y, 1, g.n - 2)
+	g._command(far_tile, false)
+	var got := 0
+	for u in group:
+		if not u["path"].is_empty():
+			got += 1
+		for stp in u["path"]:
+			check(g.walkable(int(stp.x), int(stp.y)), "خطوة من حقل التدفق داخل مبنى")
+	check(got > 30, "%d وحدة فقط من 40 نالت مساراً من حقل التدفق" % got)
+	check(g.combat.path_pending() == 0, "أمر المجموعة الكبيرة ترك طلبات A* في الطابور")
+	# ولا تتكدس: لكل وحدة تقريباً مربع نهاية خاص بها (4.3)
+	var ends := {}
+	for u in group:
+		if not u["path"].is_empty():
+			ends[Vector2(u["path"][-1])] = true
+	check(ends.size() >= got - 2, "%d وحدة تقاسمت %d مربع نهاية" % [got, ends.size()])
+	g.combat.clear()
+
+	# ---- 8ج. الوحدات فعلاً تمشي على مسار الحقل ----
+	var walker: Dictionary = g.combat.spawn("crow_common", g.me, 0,
+		Vector2(float(start[0].x), float(start[0].y)))
+	walker["sel"] = true
+	g._command(far_tile, false)
+	var p0: Vector2 = Vector2(walker["pos"])
+	for i in 30:
+		await process_frame
+	check(Vector2(walker["pos"]).distance_to(p0) > 0.1, "الوحدة لم تتحرك بعد الأمر")
+	g.combat.clear()
+
 	# ---- 8. مؤشر الإطارات يعمل (14) ----
 	check(not g.show_fps, "مؤشر الإطارات يبدأ ظاهراً")
 	g.show_fps = true

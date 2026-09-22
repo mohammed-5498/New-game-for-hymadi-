@@ -157,6 +157,8 @@ func _police_ok(d: Dictionary, army: int) -> bool:
 
 # ============================ الأوامر ============================
 func _send(combat: Combat, units: Array, goal: Vector2, attack_move: bool) -> void:
+	var going: Array = []
+	var dests: Array = []
 	for u in units:
 		var id: int = int(u["id"])
 		var prev: Vector2 = last_goal.get(id, Vector2.INF)
@@ -172,7 +174,16 @@ func _send(combat: Combat, units: Array, goal: Vector2, attack_move: bool) -> vo
 			var back: Vector2 = (Vector2(u["pos"]) - goal).normalized() * GC.BOT_BACKLINE
 			dest = goal + back
 		last_goal[id] = goal
-		combat.order_move([u], dest, attack_move)
+		going.append(u)
+		dests.append(dest)
+	if going.is_empty():
+		return
+	# البوت يرسل جيشه كله دفعة واحدة، فهو أكثر من يستفيد من حقل التدفق (14)
+	if going.size() > GC.FLOW_MIN_GROUP:
+		combat.order_move_flow(going, dests, attack_move)
+		return
+	for i in going.size():
+		combat.order_move([going[i]], dests[i], attack_move)
 
 # الصعب يسحب المصابين إلى المستشفى إن امتلكه، ويرجع بقية الوحدات
 func _retreat_wounded(combat: Combat, districts: Array, army: Array) -> Array:
