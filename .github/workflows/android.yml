@@ -154,6 +154,11 @@ jobs:
           set -e
           godot --headless --path "$PROJECT_PATH" --script tests/test_moves.gd
 
+      - name: فحص ردود الأفعال الدفاعية
+        run: |
+          set -e
+          godot --headless --path "$PROJECT_PATH" --script tests/test_defense.gd
+
       - name: فحص الأداء
         run: |
           set -e

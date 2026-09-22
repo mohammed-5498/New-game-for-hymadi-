@@ -24,6 +24,8 @@ const CROSS := Color("c0392b")
 const LINEN := Color("efe6d2")
 
 const HURT_DUR := 0.35
+const DODGE_DUR := 0.25     # مدة التفادي والصدّ (5.4.3)
+const STAGGER_DUR := 0.4    # مدة الترنّح (5.4.2)
 const DEATH_DUR := 1.0
 const HIT_AT := 0.47   # لحظة الارتطام كنسبة من زمن الضربة (13.1)
 
@@ -291,6 +293,36 @@ func _rig(t: float, state: String, spd: float, rate: float, move: String = "") -
 		r["lean"] = 0.05 - f * 0.55
 		r["s"] = -f * 0.4
 		r["lunge"] = -f * 1.8
+	elif st == "dodge":
+		# قفزة للخلف: ميل عكسي وارتفاع عن الأرض ثم هبوط (5.4.3)
+		var ad: float = clampf(t / DODGE_DUR, 0.0, 1.0)
+		var hop: float = sin(ad * PI)
+		r["a"] = ad
+		r["air"] = hop * 0.9
+		r["bounce"] = -hop * 2.6
+		r["lean"] = 0.05 - hop * 0.75
+		r["s"] = -hop * 0.85
+		r["lunge"] = -hop * 3.4
+		r["arm_ph"] = 1.4
+	elif st == "block":
+		# انكفاء خلف الدرع: انخفاض وميل للأمام وثبات (5.4.3)
+		var ab: float = clampf(t / DODGE_DUR, 0.0, 1.0)
+		var br: float = sin(ab * PI)
+		r["a"] = ab
+		r["bounce"] = br * 1.3
+		r["lean"] = 0.05 + br * 0.5
+		r["s"] = -0.25 - br * 0.2
+		r["lunge"] = -br * 0.8
+	elif st == "stagger":
+		# ترنّح: تمايل للخلف مرتين قبل استعادة التوازن (5.4.3)
+		var ag: float = clampf(t / STAGGER_DUR, 0.0, 1.0)
+		var sw: float = sin(ag * PI) * cos(ag * 9.0)
+		r["a"] = ag
+		r["bounce"] = -absf(sw) * 1.1
+		r["lean"] = 0.05 - sw * 0.6
+		r["s"] = -sw * 0.5
+		r["lunge"] = -sw * 2.2
+		r["arm_ph"] = ag * 6.0
 	elif st == "death":
 		var a3: float = minf(1.0, t / DEATH_DUR)
 		r["a"] = a3

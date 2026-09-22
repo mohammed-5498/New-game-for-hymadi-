@@ -60,6 +60,10 @@ func spawn(key: String, player: int, team: int, tile: Vector2) -> Dictionary:
 		# القتال الواقعي (5.4): الحركة الحالية ودورتها، والترنّح
 		# move_lock فارغ في اللعب، وتضبطه الفحوص لتثبيت حركة بعينها
 		"move": "quick", "cycle": 0.0, "stagger_t": 0.0, "move_lock": "",
+		# ردود الأفعال الدفاعية (5.4.3)
+		"face": Vector2(1, 0),      # اتجاه نظر الوحدة، تُحسب منه قاعدة الزاوية
+		"stamina": GC.STAMINA_MAX, "dodge_t": 0.0, "dodge_cool": 0.0, "block_t": 0.0,
+		"react_t": -1.0, "react_from": -1, "react_kind": "",
 	}
 	u.merge(_traits(u["seed"]))
 	next_id += 1
@@ -137,6 +141,16 @@ func _step_timers(u: Dictionary, delta: float) -> void:
 	var key := String(u["key"])
 	u["invuln_t"] = maxf(0.0, float(u["invuln_t"]) - delta)
 	u["stagger_t"] = maxf(0.0, float(u["stagger_t"]) - delta)
+	u["dodge_t"] = maxf(0.0, float(u["dodge_t"]) - delta)
+	u["block_t"] = maxf(0.0, float(u["block_t"]) - delta)
+	u["dodge_cool"] = maxf(0.0, float(u["dodge_cool"]) - delta)
+	u["stamina"] = minf(GC.STAMINA_MAX, float(u["stamina"]) + GC.STAMINA_REGEN * delta)
+	# رأت ضربة قادمة وتتصرف بعد زمن رد فعلها (5.4.3)
+	if float(u["react_t"]) >= 0.0:
+		u["react_t"] = float(u["react_t"]) - delta
+		if float(u["react_t"]) <= 0.0:
+			u["react_t"] = -1.0
+			_do_react(u)
 	u["slow_t"] = maxf(0.0, float(u["slow_t"]) - delta)
 	if float(u["slow_t"]) <= 0.0:
 		u["slow"] = 0.0
@@ -480,6 +494,70 @@ func _start_move(u: Dictionary, tgt: Dictionary, d: float, reach: float, rate: f
 	var spec: Dictionary = GC.MOVES[String(u["move"])]
 	u["cycle"] = (float(spec["wind"]) + float(spec["recover"])) * rate * GC.MOVE_CYCLE_SCALE
 	u["hit_done"] = false
+	# الهدف يرى الاستعداد فيستعد للرد (5.4.3)
+	var wind: float = float(u["cycle"]) * float(spec["wind"]) / (float(spec["wind"]) + float(spec["recover"]))
+	_warn(tgt, u, wind)
+
+# ============================ ردود الأفعال الدفاعية (5.4.3) ============================
+# الوحدة ترى الضربة القادمة إذا كان المهاجم داخل قوس 120 درجة أمامها وبدأ استعداده،
+# ثم تتصرف بعد زمن رد فعلها. إن كان استعداد الضربة أقصر من رد فعلها فاتتها.
+func _warn(victim: Dictionary, attacker: Dictionary, wind: float) -> void:
+	if not alive(victim) or float(victim["react_t"]) >= 0.0:
+		return
+	var side := hit_side(victim, Vector2(attacker["pos"]))
+	if side_react(side) <= 0.0:
+		return                      # من الخلف لا تُرى الضربة أصلاً
+	var react: float = float(victim.get("react", 0.2))
+	if react >= wind:
+		return                      # رد فعلها أبطأ من الضربة
+	victim["react_t"] = react
+	victim["react_from"] = int(attacker["id"])
+	victim["react_kind"] = "block" if GC.SHIELD_UNITS.has(String(victim["key"])) else "dodge"
+
+# حان وقت الرد: تُحسب فرصته الآن من الزاوية والمهارة والتحمّل
+func _do_react(u: Dictionary) -> void:
+	var src = get_unit(int(u["react_from"]))
+	u["react_from"] = -1
+	if not alive(u) or not alive(src):
+		return
+	# المترنّحة أو التي في زمن تعافيها لا تتفادى (5.4.3)
+	if float(u["stagger_t"]) > 0.0 or in_recover(u):
+		return
+	var side := hit_side(u, Vector2(src["pos"]))
+	var factor: float = side_react(side)
+	if factor <= 0.0:
+		return
+	var blocking: bool = String(u["react_kind"]) == "block"
+	var cost: float = GC.STAMINA_BLOCK if blocking else GC.STAMINA_DODGE
+	if float(u["stamina"]) < cost:
+		return                      # نفد تحمّلها فتتلقى الضربة
+	if not blocking and float(u["dodge_cool"]) > 0.0:
+		return                      # ما زالت في تبريد التفادي
+	var chance: float = GC.DODGE_CHANCE * float(u.get("dodge_skill", 1.0)) * factor
+	if blocking:
+		chance = factor             # صاحب الدرع يصدّ متى رأى الضربة
+	if randf() > chance:
+		return
+	u["stamina"] = float(u["stamina"]) - cost
+	if blocking:
+		u["block_t"] = GC.DODGE_DUR
+	else:
+		u["dodge_t"] = GC.DODGE_DUR
+		u["dodge_cool"] = GC.DODGE_COOLDOWN
+		_jump_away(u, Vector2(src["pos"]))
+
+# قفزة التفادي: للخلف أو للجانب، ولا تقفز داخل مبنى
+func _jump_away(u: Dictionary, from: Vector2) -> void:
+	var away: Vector2 = Vector2(u["pos"]) - from
+	if away.length() < 0.001:
+		away = Vector2(1, 0)
+	away = away.normalized()
+	for dir in [away, away.rotated(PI * 0.5), away.rotated(-PI * 0.5)]:
+		var to: Vector2 = Vector2(u["pos"]) + dir * GC.DODGE_DIST
+		if _walkable_at(to):
+			u["pos"] = to
+			u["path"] = []
+			return
 
 # هل الوحدة الآن في زمن التعافي بعد ضربتها؟ (فرصة للضربة القوية)
 func in_recover(u: Dictionary) -> bool:
@@ -664,6 +742,22 @@ func damage(tgt: Dictionary, amount: float, src, is_ult: bool) -> void:
 		return   # لا ضرر على الحلفاء ولا على وحدات نفس اللاعب (5.2)
 	if float(tgt["invuln_t"]) > 0.0:
 		return   # تصلّب: لا يتلقى أي ضرر (6.7.1)
+	# الضربة المتفاداة أو المصدودة تبقى "هجوماً" تعرفه الوحدة: ثبات الهدف (5.2)
+	# يعتمد على من هاجمها لا على من أدماها.
+	if src != null and (float(tgt["dodge_t"]) > 0.0 or float(tgt["block_t"]) > 0.0):
+		tgt["last_attacker"] = int(src["id"])
+	if float(tgt["dodge_t"]) > 0.0:
+		return   # تفادٍ: مناعة كاملة أثناء القفزة (5.4.3)
+	# الصدّ: يمتص الضرر كاملاً، ويرتد المهاجم نصف مربع ويترنّح (5.4.3)
+	if float(tgt["block_t"]) > 0.0:
+		if src != null:
+			_push(src, Vector2(tgt["pos"]), GC.BLOCK_PUSH)
+			_stagger(src, GC.BLOCK_STAGGER)
+		tgt["flash"] = GC.HIT_FLASH
+		return
+	# قاعدة الزاوية: الضربة من الجانب +10% ومن الخلف +25% (5.4.3)
+	if src != null:
+		amount *= side_damage(hit_side(tgt, Vector2(src["pos"])))
 	var armor: float = float(GC.stat(tgt["key"], "armor")) + float(player_armor_bonus.get(int(tgt["player"]), 0.0))
 	var dealt: float = amount * (1.0 - clampf(armor, 0.0, 0.95))
 	tgt["hp"] -= dealt
@@ -738,6 +832,36 @@ func _face(u: Dictionary, to: Vector2) -> void:
 	var sx: float = d.x - d.y
 	if absf(sx) > 0.01:
 		u["dir"] = 1 if sx >= 0.0 else -1
+	# واتجاه النظر الحقيقي على الشبكة، تُحسب منه قاعدة الزاوية (5.4.3)
+	if d.length() > 0.01:
+		u["face"] = d.normalized()
+
+# من أين جاءت الضربة: "front" أو "side" أو "back" (5.4.3)
+func hit_side(victim: Dictionary, from: Vector2) -> String:
+	var to_attacker: Vector2 = from - Vector2(victim["pos"])
+	if to_attacker.length() < 0.001:
+		return "front"
+	var face: Vector2 = Vector2(victim.get("face", Vector2(1, 0)))
+	if face.length() < 0.001:
+		face = Vector2(1, 0)
+	var ang: float = rad_to_deg(absf(face.angle_to(to_attacker)))
+	if ang <= GC.ARC_FRONT * 0.5:
+		return "front"
+	if ang <= GC.ARC_SIDE * 0.5:
+		return "side"
+	return "back"
+
+func side_react(side: String) -> float:
+	match side:
+		"front": return GC.REACT_FRONT
+		"side": return GC.REACT_SIDE
+	return GC.REACT_BACK
+
+func side_damage(side: String) -> float:
+	match side:
+		"front": return GC.DMG_FRONT
+		"side": return GC.DMG_SIDE
+	return GC.DMG_BACK
 
 func _path_to(u: Dictionary, goal: Vector2) -> void:
 	u["path"] = map.find_path(u["pos"], goal)
@@ -978,6 +1102,13 @@ func draw_state(u: Dictionary) -> String:
 		return "death"
 	if bool(u["ulting"]):
 		return "ult"
+	# ردود الأفعال الدفاعية تعلو على الإصابة (5.4.3 و 5.4.6)
+	if float(u["dodge_t"]) > 0.0:
+		return "dodge"
+	if float(u["block_t"]) > 0.0:
+		return "block"
+	if float(u["stagger_t"]) > 0.0:
+		return "stagger"
 	if float(u["hurt_t"]) < GC.UNIT_HURT_DUR:
 		return "hurt"
 	if u["state"] == "attacking" and u["path"].is_empty():
@@ -992,6 +1123,12 @@ func draw_time(u: Dictionary) -> float:
 		return float(u["dead_t"])
 	if bool(u["ulting"]):
 		return float(u["ult_swing"])
+	if float(u["dodge_t"]) > 0.0:
+		return GC.DODGE_DUR - float(u["dodge_t"])
+	if float(u["block_t"]) > 0.0:
+		return GC.DODGE_DUR - float(u["block_t"])
+	if float(u["stagger_t"]) > 0.0:
+		return float(GC.MOVES["heavy"]["stagger"]) - float(u["stagger_t"])
 	if float(u["hurt_t"]) < GC.UNIT_HURT_DUR:
 		return float(u["hurt_t"])
 	if u["state"] == "attacking" and u["path"].is_empty():

@@ -43,6 +43,10 @@ func check(cond: bool, msg: String) -> void:
 func new_combat(m = null) -> Combat:
 	return Combat.new(FlatMap.new() if m == null else m)
 
+# تعطيل ردود الأفعال الدفاعية (5.4.3) عند قياس الحركات وحدها
+func no_react(u: Dictionary) -> void:
+	u["react"] = 99.0
+
 func run(c: Combat, seconds: float, dt: float = 1.0 / 30.0) -> void:
 	for i in int(seconds / dt):
 		c.step(dt)
@@ -129,6 +133,8 @@ func _t_cycle_length() -> void:
 		b["max_hp"] = 100000.0
 		a["move_lock"] = mv
 		a["scan_t"] = 0.0
+		no_react(a)
+		no_react(b)
 		run(c, 0.2, 0.01)
 		var spec: Dictionary = GC.MOVES[mv]
 		var want: float = (float(spec["wind"]) + float(spec["recover"])) * GC.MOVE_CYCLE_SCALE
@@ -147,6 +153,8 @@ func _t_dps_matches_spec() -> void:
 		b["max_hp"] = 1000000.0
 		a["move_lock"] = mv
 		a["scan_t"] = 0.0
+		no_react(a)                         # قفزة التفادي تُبعد المهاجم فتضيع ضربته
+		no_react(b)                         # القياس للإيقاع، والتفادي له فحصه (5.4.3)
 		b["move_lock"] = "quick"            # حتى لا يدفع المهاجم ولا يُرنّحه فيختل القياس
 		var dt := 1.0 / 60.0
 		for i in int(60.0 / dt):
@@ -254,6 +262,8 @@ func _t_stagger_and_push() -> void:
 	var b := c.spawn("hammer_shield", 1, 1, Vector2(5.6, 5))   # دم كبير فلا يموت
 	a["move_lock"] = "heavy"
 	a["scan_t"] = 0.0
+	no_react(a)
+	no_react(b)                # المصفّح صاحب درع: صدّه له فحصه في test_defense
 	b["move_lock"] = "quick"
 	var x0: float = float(b["pos"].x)
 	# القوية لـ crow_common: دورة 1.6 ث والضرر عند 0.72 ث، فنفحص بعدها بقليل
@@ -273,6 +283,8 @@ func _t_stagger_and_push() -> void:
 	var wb := w.spawn("hammer_shield", 1, 1, Vector2(5.6, 5))
 	wa["move_lock"] = "heavy"
 	wa["scan_t"] = 0.0
+	no_react(wa)
+	no_react(wb)
 	var wx: Vector2 = Vector2(wb["pos"])
 	run(w, 0.8, 0.01)
 	check(Vector2(wb["pos"]) == wx, "الدفع أدخل الوحدة في مبنى")
@@ -284,8 +296,11 @@ func _t_spin_hits_around() -> void:
 	var a := c.spawn("hammer_breaker", 0, 0, Vector2(5, 5))
 	a["move_lock"] = "spin"
 	a["scan_t"] = 0.0
+	no_react(a)
 	var front := c.spawn("hammer_shield", 1, 1, Vector2(5.9, 5))
 	var back := c.spawn("hammer_shield", 1, 1, Vector2(4.1, 5))
+	no_react(front)
+	no_react(back)
 	run(c, 2.2, 0.01)
 	check(float(front["hp"]) < float(front["max_hp"]), "الدائرية لم تصب الهدف أمامها")
 	check(float(back["hp"]) < float(back["max_hp"]), "الدائرية لم تصب العدو خلفها")
@@ -306,6 +321,8 @@ func _t_thrust_reach() -> void:
 	var c := new_combat()
 	var a := c.spawn("crow_common", 0, 0, Vector2(5, 5))
 	var b := c.spawn("hammer_shield", 1, 1, Vector2(6.5, 5))   # خارج المدى 1.0 وداخل 1.6
+	no_react(a)
+	no_react(b)
 	a["move_lock"] = "thrust"
 	a["scan_t"] = 0.0
 	a["cycle"] = 1.0                       # دورة جاهزة حتى لا يتحرك أولاً
@@ -317,6 +334,7 @@ func _t_thrust_reach() -> void:
 	check(float(b["hp"]) < before, "الطعنة لم تصل هدفاً على 1.5 مربع")
 	# نفس المسافة بالحركة السريعة: تمر في الهواء
 	var b2 := c.spawn("hammer_shield", 1, 1, Vector2(6.5, 5))
+	no_react(b2)
 	a["move"] = "quick"
 	var before2 := float(b2["hp"])
 	c._land_attack(a, b2, false)

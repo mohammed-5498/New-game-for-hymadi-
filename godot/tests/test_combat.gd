@@ -23,6 +23,11 @@ func run(c: Combat, seconds: float, dt: float = 1.0 / 30.0) -> void:
 func new_combat() -> Combat:
 	return Combat.new(FlatMap.new())
 
+# تعطيل ردود الأفعال الدفاعية (5.4.3) عند قياس شيء آخر:
+# رد فعل أبطأ من أي استعداد يعني أن الوحدة لا ترى الضربة أصلاً.
+func no_react(u: Dictionary) -> void:
+	u["react"] = 99.0
+
 func _initialize() -> void:
 	_t_basic_kill()
 	_t_no_friendly_fire()
@@ -71,6 +76,10 @@ func _t_armor() -> void:
 	var src := c.spawn("crow_common", 0, 0, Vector2(0, 0))
 	var plain := c.spawn("scorp_common", 1, 1, Vector2(9, 9))     # درع 0%
 	var armored := c.spawn("hammer_shield", 1, 1, Vector2(9, 9))  # درع 50%
+	# ضربة من الأمام تماماً: قاعدة الزاوية (5.4.3) لها فحصها المستقل، والمقصود هنا الدرع
+	var face: Vector2 = (Vector2(src["pos"]) - Vector2(9, 9)).normalized()
+	plain["face"] = face
+	armored["face"] = face
 	c.damage(plain, 100.0, src, false)
 	c.damage(armored, 100.0, src, false)
 	check(is_equal_approx(float(plain["hp"]), float(plain["max_hp"]) - 100.0), "الدرع 0% لم يطبَّق صحيحاً")
@@ -203,6 +212,8 @@ func _t_attack_move_engages() -> void:
 	var a := c.spawn("crow_common", 0, 0, Vector2(5, 5))
 	var b := c.spawn("scorp_common", 1, 1, Vector2(6.5, 5))
 	a["scan_t"] = 0.0
+	no_react(a)
+	no_react(b)      # المقصود هنا الهجوم المتحرك لا التفادي
 	c.order_move([a], Vector2(20, 5), true)
 	check(a["state"] == "attackMove", "أمر الهجوم المتحرك لم يضع الوحدة في حالة attackMove")
 	# مهلة تكفي أبطأ الحركات: الاقتراب ثم استعداد الضربة القوية (5.4.2)

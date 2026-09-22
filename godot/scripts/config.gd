@@ -105,7 +105,7 @@ const UNIT_NAMES := {
 	"scorp_common": "عقرب", "scorp_boss": "الزعيم", "scorp_medic": "الطبيب", "scorp_hero": "بطل العقارب",
 	"police_common": "شرطي", "police_captain": "ضابط",
 }
-const UNIT_STATES := ["idle", "walk", "attack", "ult", "hurt", "death"]
+const UNIT_STATES := ["idle", "walk", "attack", "ult", "hurt", "death", "dodge", "block", "stagger"]
 const UNIT_STATE_NAMES := {
 	"idle": "وقوف", "walk": "جري", "attack": "قتال",
 	"ult": "ضربة مميزة", "hurt": "إصابة", "death": "موت",
@@ -175,6 +175,30 @@ const SPIN_UNITS := ["hammer_breaker", "crow_hero", "hammer_hero", "viper_hero",
 # الفروق بين الوحدات كما هي، وفي 1.6 (= معامل ضرر القوية) حتى يبقى معدل الضرر
 # في الثانية مطابقاً لأرقام القسم 6 تماماً قبل التفادي والصدّ.
 const MOVE_CYCLE_SCALE := 1.6
+
+# ---------- ردود الأفعال الدفاعية (5.4.3) ----------
+const DODGE_CHANCE := 0.18      # الاحتمال الأساسي، يُضرب في مهارة التفادي ومعامل الزاوية
+const DODGE_DIST := 0.8         # قفزة التفادي بالمربعات
+const DODGE_DUR := 0.25         # مدتها، وفيها مناعة كاملة
+const DODGE_COOLDOWN := 1.2     # تبريد بين تفاديين
+const BLOCK_PUSH := 0.5         # ارتداد المهاجم عن الدرع بالمربعات
+const BLOCK_STAGGER := 0.25     # وترنّحه بعده
+# الصدّ لأصحاب الدروع وحدهم: المصفّح وبطل المطارق والشرطي (5.4.3)
+const SHIELD_UNITS := ["hammer_shield", "hammer_hero", "police_common", "police_captain"]
+# قاعدة الزاوية، وهي أهم قاعدة في النظام:
+const ARC_FRONT := 120.0        # قوس الأمام بالدرجات (60 يميناً و 60 يساراً)
+const ARC_SIDE := 240.0         # وما بعده حتى هنا يُعدّ جانباً، والباقي خلف
+const REACT_FRONT := 1.0        # احتمال التفادي والصدّ من الأمام
+const REACT_SIDE := 0.5         # من الجانب
+const REACT_BACK := 0.0         # من الخلف: لا تفادي ولا صدّ أبداً
+const DMG_FRONT := 1.0          # الضرر من الأمام
+const DMG_SIDE := 1.1           # ومن الجانب
+const DMG_BACK := 1.25          # ومن الخلف
+# التحمّل: فلا تتفادى الوحدة إلا ثلاث مرات متتالية ثم تُجبَر على تلقي الضرب
+const STAMINA_MAX := 100.0
+const STAMINA_DODGE := 35.0
+const STAMINA_BLOCK := 25.0
+const STAMINA_REGEN := 20.0     # في الثانية
 
 # ---------- اختيار الحركة بنظام نقاط (5.4.2) ----------
 const MOVE_BASE := {"quick": 1.0, "heavy": 1.0, "thrust": 0.8, "spin": 0.6}
