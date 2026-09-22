@@ -196,16 +196,19 @@ func _run() -> void:
 	check(g.unit_draws > 0, "لم تُرسم وحدات أصلاً")
 	check(g.unit_mesh.size() > 0, "اللعبة لم تستعمل مخزن الأشكال")
 	check(g.unit_mesh.hits > 0, "لم يُعَد استعمال أي شكل مخزَّن")
+	# علامة الارتطام لا تلوّن جسم الوحدة (5.2)، فالوحدة المصابة تبقى في المخزن.
+	# التلوين القديم كان يمزج لونها نحو الأبيض بمقدار مختلف في كل إطار، فتخرج من
+	# المخزن وتكلّف 63 ميكروثانية بدل 3.8 — وهذا أسوأ ما يكون وقت المعركة.
 	var shapes_before: int = g.unit_mesh.size()
-	# الوميض لون مختلف في كل إطار: يجب ألا يدخل المخزن
-	for cu in crowd:
-		cu["flash"] = GC.HIT_FLASH
-	for i in 6:
-		await process_frame
+	var hits_before: int = g.unit_mesh.hits
+	for i in 20:
 		for cu in crowd:
-			cu["flash"] = GC.HIT_FLASH
-	check(g.unit_mesh.size() == shapes_before, "وميض الإصابة أضاف %d شكلاً للمخزن" % [
-		g.unit_mesh.size() - shapes_before])
+			cu["flash"] = GC.HIT_FLASH      # وميض مستمر طوال القياس
+		await process_frame
+	check(g.unit_mesh.hits > hits_before, "الوحدة المصابة لم تُرسم من المخزن")
+	# نمو المخزن من تغيّر الحالة وحده (إصابة/مشي)، لا وحدة × إطار كما كان
+	var grew: int = g.unit_mesh.size() - shapes_before
+	check(grew < 30, "وميض الإصابة أضاف %d شكلاً للمخزن (كان يجب أن يبقى محدوداً)" % grew)
 	for cu in crowd:
 		cu["flash"] = 0.0
 	g.combat.clear()

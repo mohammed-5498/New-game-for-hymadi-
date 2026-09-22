@@ -24,8 +24,17 @@ var teams := {}                # رقم اللاعب -> فريقه (التحال
 var weather := "day"           # طقس المباراة، يضبطه game.gd مرة واحدة (10)
 # شبكة مكانية بخلايا 2 × 2 مربع (14): البحث عن الأعداء كان يمر على كل الوحدات
 # لكل وحدة، فيصير O(n²). الآن يمر على الخلايا المجاورة وحدها.
+# الشبكة المكانية (14). تُبنى على مهل عبر الإطارات في نسخة جانبية ثم تُبدَّل:
+# بناؤها دفعة واحدة كل عُشر ثانية كان يصنع نتوءاً يُحَسّ تقطيعاً مع كثرة الوحدات
+# (قياس: متوسط 5.4 ms لكن أسوأ إطار 12.9 عند 500 وحدة).
 var _grid := {}
-var _grid_t := 0.0
+var _grid_next := {}
+var _grid_i := 0
+var _grid_carry := 0.0
+var _sep_i := 0               # وكذلك التباعد: شريحة في كل إطار لا الكل دفعة
+var _sep_carry := 0.0
+var _sep_pass := 0
+var _aura_on := false   # هل في الساحة صاحب هالة؟ فلا نمسح aura_dmg بلا داعٍ
 
 # طابور طلبات المسار (14): آخر طلب لكل وحدة يلغي ما قبله، فلا تُحسب لوحدة واحدة
 # مساران في نفس الدورة، والميزانية تُجدَّد في كل تحديث.
@@ -34,6 +43,7 @@ var path_goal := {}           # رقم الوحدة -> وجهتها المنتظ
 # تبدأ ممتلئة وتُجدَّد في كل تحديث: أوامر اللاعب تأتي بين التحديثين، فتجد نصيبها
 # جاهزاً وتُحسب فوراً، ولا ينتظر الطابور إلا حين يمتلئ فعلاً
 var _path_budget := GC.PATH_PER_STEP
+var _frame := 0               # رقم الإطار، لتوزيع تحديث ما هو خارج الشاشة (14)
 
 # استدعاءات للخارج: (وحدة مصابة، ضرر، هل من ضربة مميزة)
 var on_hit := Callable()
@@ -55,6 +65,15 @@ func spawn(key: String, player: int, team: int, tile: Vector2) -> Dictionary:
 		"seed": randi(),                  # بذرة الشخصية الثابتة (5.4.1)
 		"pos": tile, "hp": hp, "max_hp": hp,
 		"state": "idle", "path": [] as Array, "path_wait": false,
+		# تحديث ما هو خارج الشاشة مرة كل عدة إطارات بزمن متراكم (14)
+		"acc": 0.0, "on_screen": true,
+		# ثوابت الوحدة: كانت تُقرأ من config في كل إطار لكل وحدة
+		"can_ult": has_ult(key), "combo_reset": float(GC.stat(key, "combo_reset")),
+		# ثوابت الهالة والعلاج: كانت تُقرأ من config لكل وحدة في كل إطار، رغم أن
+		# قليلاً من الوحدات يملك هالة أصلاً (14)
+		"aura_r": float(GC.stat(key, "aura")), "aura_bonus": float(GC.stat(key, "aura_dmg")),
+		"heal_r": float(GC.stat(key, "heal_range")), "heal_rate": float(GC.stat(key, "heal_rate")),
+		"charge_rate": GC.HERO_CHARGE_PER_SEC if bool(GC.stat(key, "hero")) else GC.CHARGE_PER_SEC,
 		"target": -1, "cmd_target": -1,   # cmd_target = أمر هجوم من اللاعب (بلا حد مطاردة)
 		"swing": 0.0, "hit_done": false,
 		"scan_t": randf() * GC.SCAN_EVERY, "repath_t": 0.0,
@@ -123,6 +142,11 @@ func alive(u) -> bool:
 
 func clear() -> void:
 	_grid.clear()
+	_grid_next.clear()
+	_grid_i = 0
+	_grid_carry = 0.0
+	_sep_i = 0
+	_sep_carry = 0.0
 	path_q.clear()
 	path_goal.clear()
 	units.clear()
@@ -137,21 +161,28 @@ func step(delta: float) -> void:
 	_serve_paths()
 	# الشبكة والتباعد عشر مرات في الثانية: بناء الشبكة في كل إطار يكلّف أكثر مما يوفّر،
 	# والبحث عن الأهداف أصلاً كل ربع ثانية (14)
-	_grid_t -= delta
-	if _grid_t <= 0.0:
-		_rebuild_grid()
-		_separate(GC.GRID_REBUILD + absf(_grid_t))
-		_grid_t = GC.GRID_REBUILD
+	_grid_step(delta)
+	_separate_step(delta)
+	_frame += 1
 	for u in units:
-		u["anim_t"] += delta
-		u["flash"] = maxf(0.0, u["flash"] - delta)
-		u["hurt_t"] += delta
+		# ما هو خارج الشاشة يُحدَّث مرة كل STAT_EVERY إطاراً بمجموع الزمن المتراكم،
+		# فيقطع الطريق ويضرب بنفس المعدل، والفرق لا يُرى لأنه غير مرسوم أصلاً (14).
+		# الوحدات موزَّعة على الإطارات برقمها فلا تتحدث كلها في إطار واحد.
+		var d: float = float(u["acc"]) + delta
+		if not bool(u["on_screen"]):
+			if (_frame + int(u["id"])) % GC.STAT_EVERY != 0:
+				u["acc"] = d
+				continue
+		u["acc"] = 0.0
+		u["anim_t"] += d
+		u["flash"] = maxf(0.0, float(u["flash"]) - d)
+		u["hurt_t"] += d
 		if u["state"] == "dead":
-			u["dead_t"] += delta
-			_roll_corpse(u, delta)
+			u["dead_t"] += d
+			_roll_corpse(u, d)
 			continue
-		_step_timers(u, delta)
-		_step_unit(u, delta)
+		_step_timers(u, d)
+		_step_unit(u, d)
 	_step_auras(delta)
 	_step_projectiles(delta)
 	_step_fires(delta)
@@ -181,24 +212,59 @@ func _step_timers(u: Dictionary, delta: float) -> void:
 		u["buff_rate"] = 0.0
 	# تسارع الاشتباك يرجع للأصل بعد توقف الضرب (6.2 و 6.6)
 	u["combo_t"] = float(u["combo_t"]) + delta
-	var reset: float = float(GC.stat(key, "combo_reset"))
+	var reset: float = float(u["combo_reset"])
 	if reset > 0.0 and float(u["combo_t"]) > reset:
 		u["combo"] = 0
 		u["combo_target"] = -1
 	# العلاج المستمر: المستشفى عالمياً، ومنطقته، والطبيب، وهالة بطل العقارب
 	var heal: float = float(player_heal.get(int(u["player"]), 0.0))
-	for z in heal_zones:
-		if int(z["player"]) == int(u["player"]) and Vector2(u["pos"]).distance_to(Vector2(z["pos"])) <= GC.CAPTURE_RADIUS:
-			heal += float(z["dps"])
+	if not heal_zones.is_empty():
+		for z in heal_zones:
+			if int(z["player"]) == int(u["player"]) and Vector2(u["pos"]).distance_to(Vector2(z["pos"])) <= GC.CAPTURE_RADIUS:
+				heal += float(z["dps"])
 	if heal > 0.0:
 		u["hp"] = minf(float(u["max_hp"]), float(u["hp"]) + heal * delta)
-	if has_ult(key):
-		var per_sec: float = GC.HERO_CHARGE_PER_SEC if bool(GC.stat(key, "hero")) else GC.CHARGE_PER_SEC
-		u["charge"] = minf(GC.CHARGE_FULL, float(u["charge"]) + per_sec * delta)
+	if bool(u["can_ult"]):
+		u["charge"] = minf(GC.CHARGE_FULL, float(u["charge"]) + float(u["charge_rate"]) * delta)
 
 # ============================ الشبكة المكانية (14) ============================
+# شريحة من بناء الشبكة: تكفي لإتمام دورة كاملة مرة كل GRID_REBUILD ثانية.
+# الشبكة المستعملة تبقى كما هي حتى تكتمل الجديدة ثم تُبدَّل، فلا تُستعمل ناقصة.
+func _grid_step(delta: float) -> void:
+	var n: int = units.size()
+	if n == 0:
+		_grid.clear()
+		_grid_next.clear()
+		_grid_i = 0
+		return
+	if _grid.is_empty():
+		_rebuild_grid()        # أول خطوة أو بعد مسح: لا نترك الوحدات بلا جيران
+		return
+	_grid_carry += float(n) * delta / GC.GRID_REBUILD
+	var count: int = int(_grid_carry)
+	if count <= 0:
+		return
+	_grid_carry -= float(count)
+	for i in count:
+		if _grid_i >= units.size():
+			_grid = _grid_next
+			_grid_next = {}
+			_grid_i = 0
+			break
+		var u: Dictionary = units[_grid_i]
+		_grid_i += 1
+		if u["state"] == "dead":
+			continue
+		var key := _cell_of(Vector2(u["pos"]))
+		if _grid_next.has(key):
+			_grid_next[key].append(u)
+		else:
+			_grid_next[key] = [u]
+
 func _rebuild_grid() -> void:
 	_grid.clear()
+	_grid_next.clear()
+	_grid_i = 0
 	for u in units:
 		if u["state"] == "dead":
 			continue
@@ -227,33 +293,59 @@ func _near_units(center: Vector2, radius: float) -> Array:
 				out.append_array(cell)
 	return out
 
+# شريحة من التباعد: كل وحدة تنال دورها مرة كل GRID_REBUILD ثانية، فيبقى مقدار
+# الدفع كما كان بالضبط ويختفي النتوء (14 و 4.3)
+func _separate_step(delta: float) -> void:
+	var n: int = units.size()
+	if n == 0:
+		return
+	_sep_carry += float(n) * delta / GC.GRID_REBUILD
+	var count: int = mini(int(_sep_carry), n)
+	if count <= 0:
+		return
+	_sep_carry -= float(count)
+	for i in count:
+		if _sep_i >= units.size():
+			_sep_i = 0
+			_sep_pass += 1
+		var u: Dictionary = units[_sep_i]
+		_sep_i += 1
+		if bool(u["on_screen"]):
+			_separate_one(u, GC.GRID_REBUILD)
+		elif (_sep_pass + int(u["id"])) % GC.SEP_OFF_EVERY == 0:
+			# خارج الشاشة: مرة كل أربع دورات بقوة مضاعفة، فالمحصّلة واحدة
+			_separate_one(u, GC.GRID_REBUILD * float(GC.SEP_OFF_EVERY))
+
 # قوة تباعد خفيفة بين المتلاصقين، ولا تدفع أحداً داخل مبنى (4.3)
 func _separate(delta: float) -> void:
 	for u in units:
-		if u["state"] == "dead":
-			continue
-		var push := Vector2.ZERO
-		var mid := _cell_of(Vector2(u["pos"]))
-		for cx in range(mid.x - 1, mid.x + 2):
-			for cy in range(mid.y - 1, mid.y + 2):
-				var cell = _grid.get(Vector2i(cx, cy), null)
-				if cell == null:
+		_separate_one(u, delta)
+
+func _separate_one(u: Dictionary, delta: float) -> void:
+	if u["state"] == "dead":
+		return
+	var push := Vector2.ZERO
+	var mid := _cell_of(Vector2(u["pos"]))
+	for cx in range(mid.x - 1, mid.x + 2):
+		for cy in range(mid.y - 1, mid.y + 2):
+			var cell = _grid.get(Vector2i(cx, cy), null)
+			if cell == null:
+				continue
+			for o in cell:
+				if int(o["id"]) == int(u["id"]) or o["state"] == "dead":
 					continue
-				for o in cell:
-					if int(o["id"]) == int(u["id"]) or o["state"] == "dead":
-						continue
-					var away: Vector2 = Vector2(u["pos"]) - Vector2(o["pos"])
-					var d: float = away.length()
-					if d < 0.001:
-						away = Vector2(randf() - 0.5, randf() - 0.5)
-						d = 0.5
-					if d < GC.SEPARATE_DIST:
-						push += away / d * (GC.SEPARATE_DIST - d) / GC.SEPARATE_DIST
-		if push == Vector2.ZERO:
-			continue
-		var to: Vector2 = Vector2(u["pos"]) + push.limit_length(1.0) * GC.SEPARATE_PUSH * delta
-		if _walkable_at(to):
-			u["pos"] = to
+				var away: Vector2 = Vector2(u["pos"]) - Vector2(o["pos"])
+				var d: float = away.length()
+				if d < 0.001:
+					away = Vector2(randf() - 0.5, randf() - 0.5)
+					d = 0.5
+				if d < GC.SEPARATE_DIST:
+					push += away / d * (GC.SEPARATE_DIST - d) / GC.SEPARATE_DIST
+	if push == Vector2.ZERO:
+		return
+	var to: Vector2 = Vector2(u["pos"]) + push.limit_length(1.0) * GC.SEPARATE_PUSH * delta
+	if _walkable_at(to):
+		u["pos"] = to
 
 func _reap() -> void:
 	var keep := []
@@ -336,25 +428,37 @@ func _step_unit(u: Dictionary, delta: float) -> void:
 
 # هالات الزعيم وبطل العقارب، وعلاج الطبيب. لا تتجمع هالتان: يؤخذ الأقوى فقط (6.6)
 func _step_auras(delta: float) -> void:
-	for u in units:
-		u["aura_dmg"] = 0.0
+	# أصحاب الهالات قلة (زعيم العقارب وأبطالها والطبيب). جمعُهم أولاً يوفّر المرور
+	# على كل وحدة ثلاث مرات في كل إطار، وهو ما كان يكلّف ربع خطوة القتال (14).
+	var srcs: Array = []
 	for src in units:
 		if src["state"] == "dead":
 			continue
-		var key := String(src["key"])
-		var radius: float = float(GC.stat(key, "aura"))
+		if float(src["aura_r"]) > 0.0 or (float(src["heal_r"]) > 0.0 and float(src["heal_rate"]) > 0.0):
+			srcs.append(src)
+	if srcs.is_empty():
+		if _aura_on:
+			for u in units:
+				u["aura_dmg"] = 0.0
+			_aura_on = false
+		return
+	_aura_on = true
+	for u in units:
+		u["aura_dmg"] = 0.0
+	for src in srcs:
+		var radius: float = float(src["aura_r"])
 		if radius > 0.0:
-			var bonus: float = float(GC.stat(key, "aura_dmg"))
+			var bonus: float = float(src["aura_bonus"])
 			for o in units:
 				if o["state"] == "dead" or not _friendly(src, o):
 					continue
 				if _dist(src, o) <= radius:
 					o["aura_dmg"] = maxf(float(o["aura_dmg"]), bonus)
 		# علاج بطل العقارب المستمر داخل هالته
-		var hr: float = float(GC.stat(key, "heal_range"))
-		var hrate: float = float(GC.stat(key, "heal_rate"))
+		var hr: float = float(src["heal_r"])
+		var hrate: float = float(src["heal_rate"])
 		if hr > 0.0 and hrate > 0.0:
-			if key == "scorp_medic":
+			if String(src["key"]) == "scorp_medic":
 				_medic_heal(src, hr, hrate, delta)
 			else:
 				for o in units:

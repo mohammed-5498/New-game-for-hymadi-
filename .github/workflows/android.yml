@@ -164,6 +164,11 @@ jobs:
           set -e
           godot --headless --path "$PROJECT_PATH" --script tests/test_lod.gd
 
+      - name: فحص توزيع العمل على الإطارات
+        run: |
+          set -e
+          godot --headless --path "$PROJECT_PATH" --script tests/test_sched.gd
+
       - name: فحص مخزن أشكال الوحدات
         run: |
           set -e

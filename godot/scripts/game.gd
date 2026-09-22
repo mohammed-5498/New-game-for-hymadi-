@@ -243,8 +243,13 @@ func _refresh_layers() -> void:
 		band_prev[s] = not band_units[s].is_empty()
 		band_units[s].clear()
 	for u in combat.units:
+		# نفس فحص الرؤية يخدم أمرين: توزيع الوحدات على الأقطار، وإخبار محرك القتال
+		# أيّها خارج الشاشة فيوزّع تحديثه على الإطارات (14). يُحسب كل إطار لا كل
+		# نصف ثانية، فالوحدة الداخلة إلى الشاشة تتحرك بسلاسة من أول إطار.
 		if not _view.has_point(tile_to_world(u["pos"])):
+			u["on_screen"] = false
 			continue
+		u["on_screen"] = true
 		var s: int = int(round(u["pos"].x + u["pos"].y))
 		if s >= 0 and s < band_units.size():
 			band_units[s].append(u)
@@ -766,6 +771,9 @@ func _draw_top() -> void:
 			continue
 		if u["sel"]:
 			_ci.draw_arc(p, 5.5, 0, TAU, 20, Color(0.95, 0.93, 0.89), 1.0, true)
+		if float(u["flash"]) > 0.0:
+			var hsc: float = GC.UNIT_SCALE_SPECIAL if not String(u["key"]).ends_with("_common") else GC.UNIT_SCALE
+			_draw_hit_mark(p, float(u["flash"]) / GC.HIT_FLASH, hsc * float(u.get("size", 1.0)))
 		_draw_hp_bar(u, p)
 		# نجمة ذهبية فوق الوحدة الجاهزة لضربتها المميزة (6.7)
 		if Combat.has_ult(String(u["key"])) and float(u["charge"]) >= GC.CHARGE_FULL and not bool(u["ulting"]):
@@ -799,10 +807,6 @@ func _owner_color(player: int) -> Color:
 
 func _draw_unit(u: Dictionary) -> void:
 	var col: Color = _owner_color(int(u["player"]))
-	var flashing: bool = float(u["flash"]) > 0.0
-	if flashing:
-		# وميض أبيض خفيف عند الإصابة (5.2)
-		col = col.lerp(Color(1, 1, 1), 0.55 * float(u["flash"]) / GC.HIT_FLASH)
 	var sc: float = GC.UNIT_SCALE_SPECIAL if not String(u["key"]).ends_with("_common") else GC.UNIT_SCALE
 	sc *= float(u.get("size", 1.0))   # تنويع ±4% من بذرة الشخصية (5.4.1)
 	# نوع الحركة يُمرَّر للرسم ليتغير القوس والاندفاع أثناء الالتحام فقط (5.4.2)
@@ -811,7 +815,7 @@ func _draw_unit(u: Dictionary) -> void:
 	var pos := tile_to_world(u["pos"])
 	# الشكل المخزَّن أولاً: أمر رسم واحد بدل 43 (14). الوميض لون مختلف في كل إطار
 	# فلا يُخزَّن، والضربة المميزة لها توهّج متغيّر، وكلاهما نادر.
-	if GC.MESH_CACHE and not flashing and not bool(u["ulting"]):
+	if GC.MESH_CACHE and not bool(u["ulting"]):
 		if unit_mesh.draw(_ci, art, String(u["key"]), pos, combat.draw_time(u), st,
 				col, int(u["dir"]), sc, combat.draw_rate(u), mv):
 			return
@@ -835,6 +839,15 @@ func _draw_fire(f: Dictionary) -> void:
 		var h: float = 4.0 + sin(t * 7.0 + float(i)) * 2.0
 		_tri(p + Vector2(-2, 0), p + Vector2(0, -h), p + Vector2(2, 0),
 			Color(0.97, 0.83, 0.33, 0.75 * left))
+
+# علامة الارتطام (5.2): حلقة تتسع وتخفت، بيضاء بحدّ داكن حولها فتُرى على أي أرض
+# — على العشب والرمل والثلج وفي الليل. تُرسم في الطبقة العليا فلا تمس لون الوحدة
+# ولا تُخرجها من مخزن الأشكال (14).
+func _draw_hit_mark(p: Vector2, k: float, sc: float) -> void:
+	var c := p + Vector2(0, GC.HIT_MARK_Y * sc)
+	var r: float = (GC.HIT_MARK_R + (1.0 - k) * GC.HIT_MARK_GROW) * sc
+	_ci.draw_arc(c, r, 0, TAU, 12, Color(0, 0, 0, 0.55 * k), 2.6 * sc, true)
+	_ci.draw_arc(c, r, 0, TAU, 12, Color(1.0, 0.96, 0.88, 0.95 * k), 1.2 * sc, true)
 
 func _draw_hp_bar(u: Dictionary, p: Vector2) -> void:
 	var frac: float = clampf(float(u["hp"]) / maxf(1.0, float(u["max_hp"])), 0.0, 1.0)
