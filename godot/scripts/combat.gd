@@ -39,8 +39,13 @@ var _path_budget := GC.PATH_PER_STEP
 var on_hit := Callable()
 var on_death := Callable()   # (الوحدة الميتة، قاتلها أو null)
 
+# has_method في كل استدعاء كان يكلّف أكثر من الفحص نفسه، ويُستدعى عشرات الآلاف
+# من المرات في الأمر الجماعي الواحد (14)
+var _map_has_walk := false
+
 func _init(map_node) -> void:
 	map = map_node
+	_map_has_walk = map != null and map.has_method("walkable")
 
 # ============================ إنشاء الوحدات ============================
 func spawn(key: String, player: int, team: int, tile: Vector2) -> Dictionary:
@@ -1004,78 +1009,14 @@ func order_move(sel: Array, goal: Vector2, attack_move: bool) -> void:
 	for u in sel:
 		if not alive(u):
 			continue
-		_begin_order(u, attack_move, goal)
+		u["target"] = -1
+		u["cmd_target"] = -1
+		u["swing"] = 0.0
+		u["cycle"] = 0.0
+		u["state"] = "attackMove" if attack_move else "moving"
+		u["returning"] = false
+		u["chase_from"] = goal
 		_path_to(u, goal)
-
-# المجموعة الكبيرة (أكثر من عشر وحدات) تتحرك بحقل تدفق واحد بدل A* لكل وحدة (14).
-# الحقل يُبنى من كل مربعات الوجهة معاً، فتنزل كل وحدة إلى أقرب مربع منها ولا
-# تتكدس المجموعة في مربع واحد (4.3).
-func order_move_flow(sel: Array, dests: Array, attack_move: bool) -> void:
-	if map == null or dests.is_empty():
-		return
-	var field: PackedInt32Array = map.build_flow(dests)
-	var taken := {}
-	for u in sel:
-		if not alive(u):
-			continue
-		var path: Array = map.flow_path(u["pos"], field)
-		# الوحدات القادمة من نفس الجهة تنزل كلها إلى أقرب مربع وجهة فتتكدس فيه.
-		# فمن وجد مربعه محجوزاً مشى خطوات قليلة إلى أقرب مربع حر حوله، وإن لم يجد
-		# وقف في آخر مربع حر على طريقه هو. فلكل وحدة مربعها ولا تتكدس (4.3).
-		var here: Vector2 = Vector2(path[-1]) if not path.is_empty() else Vector2(u["pos"])
-		if taken.has(here.round()):
-			var extra: Array = _spread_from(here, taken)
-			if extra.is_empty():
-				while path.size() > 1 and taken.has(Vector2(path[-1]).round()):
-					path.remove_at(path.size() - 1)
-			else:
-				path.append_array(extra)
-		if not path.is_empty():
-			taken[Vector2(path[-1]).round()] = true
-		else:
-			taken[Vector2(u["pos"]).round()] = true
-		var goal: Vector2 = Vector2(path[-1]) if not path.is_empty() else Vector2(u["pos"])
-		_begin_order(u, attack_move, goal)
-		_clear_path(u)
-		u["path"] = path
-
-# ما يشترك فيه أمرا الحركة: إسقاط الهدف، وضبط الحالة، وتثبيت نقطة الرجوع
-# أقرب مربع حر غير محجوز حول مربع مزدحم، مع خطوات الوصول إليه. بحث صغير محدود
-# بعشرات المربعات: أرخص بمراتب من A* لكل وحدة، وهو الغرض كله (14 و 4.3).
-func _spread_from(start: Vector2, taken: Dictionary) -> Array:
-	var s := Vector2i(int(round(start.x)), int(round(start.y)))
-	var came := {s: s}
-	var q: Array[Vector2i] = [s]
-	var head := 0
-	while head < q.size() and head < GC.FLOW_SPREAD_MAX:
-		var c: Vector2i = q[head]
-		head += 1
-		if c != s and not taken.has(Vector2(c)):
-			var out: Array = []
-			var cur := c
-			while cur != s:
-				out.push_front(Vector2(cur))
-				cur = came[cur]
-			return out
-		for d in FlowField.DIRS:
-			var p: Vector2i = c + d
-			if came.has(p) or not _walkable_at(Vector2(p)):
-				continue
-			if p.x != c.x and p.y != c.y:
-				if not _walkable_at(Vector2(p.x, c.y)) or not _walkable_at(Vector2(c.x, p.y)):
-					continue
-			came[p] = c
-			q.append(p)
-	return []
-
-func _begin_order(u: Dictionary, attack_move: bool, goal: Vector2) -> void:
-	u["target"] = -1
-	u["cmd_target"] = -1
-	u["swing"] = 0.0
-	u["cycle"] = 0.0
-	u["state"] = "attackMove" if attack_move else "moving"
-	u["returning"] = false
-	u["chase_from"] = goal
 
 func order_attack(sel: Array, tgt: Dictionary) -> void:
 	for u in sel:
@@ -1228,7 +1169,7 @@ func _push(u: Dictionary, from: Vector2, tiles: float) -> void:
 		break
 
 func _walkable_at(p: Vector2) -> bool:
-	if map == null or not map.has_method("walkable"):
+	if not _map_has_walk:
 		return true
 	return bool(map.walkable(int(round(p.x)), int(round(p.y))))
 

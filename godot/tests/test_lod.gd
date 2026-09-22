@@ -89,7 +89,9 @@ func _t_corpse_shoves() -> void:
 	var c := new_combat()
 	var killer := c.spawn("crow_common", 0, 0, Vector2(5, 5))
 	var v := c.spawn("scorp_common", 1, 1, Vector2(6, 5))
-	var bystander := c.spawn("scorp_common", 1, 1, Vector2(7.2, 5))
+	# على مسار التدحرج لا عند نهايته بالضبط: سقف التدحرج 1.2 مربع بعد أن قلّل
+	# المستخدم مدى الارتداد، ومن يقف عند النهاية تماماً قد لا تبلغه الخطوة الأخيرة
+	var bystander := c.spawn("scorp_common", 1, 1, Vector2(6.7, 5))
 	bystander["react"] = 99.0
 	var before: Vector2 = Vector2(bystander["pos"])
 	v["hp"] = 1.0

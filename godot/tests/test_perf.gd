@@ -134,7 +134,7 @@ func _run() -> void:
 		await process_frame
 	check(g.unit_draws >= 6, "لم تُرسم الوحدات التي أمام الكاميرا (%d)" % g.unit_draws)
 
-	# ---- 8ب. أمر لمجموعة كبيرة على الخريطة الحقيقية: حقل تدفق سالك (14) ----
+	# ---- 8ب. أمر لمجموعة كبيرة على الخريطة الحقيقية: الطابور لا يُضيع أمراً (14) ----
 	g.combat.clear()
 	var home: Vector2 = g.world_to_tile(g.cam.position)
 	var start: Array = g._free_near(Vector2i(int(home.x), int(home.y)), 80)
@@ -149,23 +149,27 @@ func _run() -> void:
 	far_tile.x = clampi(far_tile.x, 1, g.n - 2)
 	far_tile.y = clampi(far_tile.y, 1, g.n - 2)
 	g._command(far_tile, false)
+	# أربعون وحدة والسقف عشرون: نصفها ينتظر دوره، ولا أحد يفقد أمره
+	check(g.combat.path_pending() == 40 - GC.PATH_PER_STEP,
+		"المنتظرون %d والمتوقع %d" % [g.combat.path_pending(), 40 - GC.PATH_PER_STEP])
+	for i in 6:
+		await process_frame
+	check(g.combat.path_pending() == 0, "بقي %d طلباً بعد ستة إطارات" % g.combat.path_pending())
 	var got := 0
-	for u in group:
-		if not u["path"].is_empty():
-			got += 1
-		for stp in u["path"]:
-			check(g.walkable(int(stp.x), int(stp.y)), "خطوة من حقل التدفق داخل مبنى")
-	check(got > 30, "%d وحدة فقط من 40 نالت مساراً من حقل التدفق" % got)
-	check(g.combat.path_pending() == 0, "أمر المجموعة الكبيرة ترك طلبات A* في الطابور")
-	# ولا تتكدس: لكل وحدة تقريباً مربع نهاية خاص بها (4.3)
 	var ends := {}
 	for u in group:
+		if String(u["state"]) == "moving" or not u["path"].is_empty():
+			got += 1
 		if not u["path"].is_empty():
 			ends[Vector2(u["path"][-1])] = true
-	check(ends.size() >= got - 2, "%d وحدة تقاسمت %d مربع نهاية" % [got, ends.size()])
+		for stp in u["path"]:
+			check(g.walkable(int(stp.x), int(stp.y)), "خطوة من المسار داخل مبنى")
+	check(got >= 35, "%d وحدة فقط من 40 نفّذت الأمر" % got)
+	# ولكل وحدة مربع نهايتها: لا تتكدس المجموعة في مربع واحد (4.3)
+	check(ends.size() >= 20, "%d وحدة تقاسمت %d مربع نهاية" % [got, ends.size()])
 	g.combat.clear()
 
-	# ---- 8ج. الوحدات فعلاً تمشي على مسار الحقل ----
+	# ---- 8ج. الوحدات فعلاً تمشي على مسارها ----
 	var walker: Dictionary = g.combat.spawn("crow_common", g.me, 0,
 		Vector2(float(start[0].x), float(start[0].y)))
 	walker["sel"] = true

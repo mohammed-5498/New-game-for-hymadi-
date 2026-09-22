@@ -176,12 +176,6 @@ func _send(combat: Combat, units: Array, goal: Vector2, attack_move: bool) -> vo
 		last_goal[id] = goal
 		going.append(u)
 		dests.append(dest)
-	if going.is_empty():
-		return
-	# البوت يرسل جيشه كله دفعة واحدة، فهو أكثر من يستفيد من حقل التدفق (14)
-	if going.size() > GC.FLOW_MIN_GROUP:
-		combat.order_move_flow(going, dests, attack_move)
-		return
 	for i in going.size():
 		combat.order_move([going[i]], dests[i], attack_move)
 

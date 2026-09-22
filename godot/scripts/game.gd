@@ -414,38 +414,7 @@ func find_path(from: Vector2, to: Vector2) -> Array:
 		out.append(Vector2(float(ids[i].x), float(ids[i].y)))
 	return out
 
-# ============ حقل التدفق للمجموعات الكبيرة (14) ============
-# المنطق كله في scripts/flow_field.gd حتى يُفحص وحده. هنا ربطه بالخريطة فقط.
-var _walk_grid := PackedByteArray()   # شبكة المشي، تُبنى مع الخريطة ولا تتغير بعدها
-
-func _build_walk_grid() -> void:
-	_walk_grid.resize(n * n)
-	for j2 in n:
-		for i2 in n:
-			_walk_grid[j2 * n + i2] = 1 if walkable(i2, j2) else 0
-
-func build_flow(goals: Array) -> PackedInt32Array:
-	if _walk_grid.size() != n * n:
-		_build_walk_grid()
-	# وجهة داخل مبنى تُزحزح إلى أقرب مربع حر، كما يفعل A* تماماً
-	var tiles: Array = []
-	for g in goals:
-		var t := Vector2i(clampi(int(round(g.x)), 0, n - 1), clampi(int(round(g.y)), 0, n - 1))
-		if not walkable(t.x, t.y):
-			var near := _free_near(t, 1)
-			if near.is_empty():
-				continue
-			t = near[0]
-		tiles.append(t)
-	return FlowField.build(n, _walk_grid, tiles)
-
-func flow_path(from: Vector2, field: PackedInt32Array) -> Array:
-	if _walk_grid.size() != n * n:
-		_build_walk_grid()
-	return FlowField.path(n, _walk_grid, from, field, GC.FLOW_MAX_STEPS)
-
 func _build_astar() -> void:
-	_walk_grid = PackedByteArray()   # تُعاد مع كل خريطة جديدة
 	astar = AStarGrid2D.new()
 	astar.region = Rect2i(0, 0, n, n)
 	astar.cell_size = Vector2.ONE
@@ -1340,22 +1309,16 @@ func _command(target: Vector2i, attack_move: bool) -> void:
 		return
 	var goal := Vector2i(clampi(target.x, 0, n - 1), clampi(target.y, 0, n - 1))
 	var spots := _free_near(goal, sel.size() * 2)
-	if sel.size() > GC.FLOW_MIN_GROUP:
-		# مجموعة كبيرة: حقل تدفق واحد من كل المربعات بدل A* لكل وحدة (14)
-		var dests: Array = []
-		for sp in spots:
-			dests.append(Vector2(float(sp.x), float(sp.y)))
-		if dests.is_empty():
-			dests.append(Vector2(float(goal.x), float(goal.y)))
-		combat.order_move_flow(sel, dests, attack_move)
-	else:
-		var k := 0
-		for u in sel:
-			var dest := goal
-			if k < spots.size():
-				dest = spots[k]
-			k += 1
-			combat.order_move([u], Vector2(float(dest.x), float(dest.y)), attack_move)
+	# لكل وحدة مربعها وبحثها. الطابور في combat.gd هو ما يمنع تجمّد الإطار عند
+	# الأمر الكبير، لا تجميع البحث: A* في قودوت أصلي بلغة C++ وأسرع من أي بديل
+	# مكتوب بـ GDScript (قياس في CLAUDE.md).
+	var k := 0
+	for u in sel:
+		var dest := goal
+		if k < spots.size():
+			dest = spots[k]
+		k += 1
+		combat.order_move([u], Vector2(float(dest.x), float(dest.y)), attack_move)
 	marker["pos"] = Vector2(float(goal.x), float(goal.y))
 	marker["t"] = 0.0
 	marker["attack"] = attack_move
