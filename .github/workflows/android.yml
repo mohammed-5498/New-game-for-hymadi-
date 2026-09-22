@@ -159,6 +159,11 @@ jobs:
           set -e
           godot --headless --path "$PROJECT_PATH" --script tests/test_defense.gd
 
+      - name: فحص المواقف ومستويات التفصيل
+        run: |
+          set -e
+          godot --headless --path "$PROJECT_PATH" --script tests/test_lod.gd
+
       - name: فحص الأداء
         run: |
           set -e

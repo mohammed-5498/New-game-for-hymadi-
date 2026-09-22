@@ -49,6 +49,7 @@ var band_prev: Array = []        # أي قطر كان فيه وحدات في ا�
 var live_tiles: Array = []       # مبانٍ فيها جزء متحرك: الساعة والشرطة والأعلام
 var dist_bands: Array = []       # أول وآخر قطر يمر به كل حي (14)
 var _view := Rect2()             # ما تراه الكاميرا الآن، يُحسب مرة كل إطار (14)
+var _lod_t := 0.0                # مؤقت إعادة حساب مستويات التفصيل (5.4.5)
 var map_draws := 0               # كم مرة أُعيد رسم الخريطة الثابتة (للفحص)
 var unit_draws := 0              # وكم وحدة رُسمت في الإطار الأخير (للفحص)
 var show_fps := false            # يظهر بثلاث لمسات على شريط المعلومات (14)
@@ -189,11 +190,37 @@ func _process(delta: float) -> void:
 		cam.offset = Vector2.ZERO
 	_clamp_cam()
 	_refresh_layers()
+	_refresh_lod(delta)
 	if show_fps:
 		_fps_t += delta
 		if _fps_t >= GC.FPS_UPDATE:
 			_fps_t = 0.0
 			_refresh_info()
+
+# مستويات التفصيل الثلاثة (5.4.5): الأقرب للكاميرا كامل، وباقي ما على الشاشة مبسّط،
+# وما خارجها إحصائي. يُعاد الحساب كل نصف ثانية لا كل إطار.
+func _refresh_lod(delta: float) -> void:
+	_lod_t -= delta
+	if _lod_t > 0.0:
+		return
+	_lod_t = GC.LOD_EVERY
+	var center: Vector2 = _view.position + _view.size * 0.5
+	var near := []
+	for u in combat.units:
+		if u["state"] == "dead":
+			continue
+		var p := tile_to_world(u["pos"])
+		if _view.has_point(p):
+			u["lod"] = GC.LOD_SIMPLE
+			near.append([p.distance_squared_to(center), u])
+		else:
+			u["lod"] = GC.LOD_STAT
+	# أقرب 60 وحدة للكاميرا كاملة، و 30 فقط إذا تجاوزت المباراة 800 وحدة
+	var cap: int = GC.LOD_NEAR_CROWDED if combat.units.size() > GC.LOD_CROWD else GC.LOD_NEAR
+	if near.size() > cap:
+		near.sort_custom(func(a, b): return float(a[0]) < float(b[0]))
+	for i in mini(cap, near.size()):
+		near[i][1]["lod"] = GC.LOD_FULL
 
 # لا يُعاد رسم إلا ما تحرّك فعلاً (14)
 func _clamp_cam() -> void:

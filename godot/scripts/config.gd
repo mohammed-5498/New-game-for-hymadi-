@@ -200,6 +200,26 @@ const STAMINA_DODGE := 35.0
 const STAMINA_BLOCK := 25.0
 const STAMINA_REGEN := 20.0     # في الثانية
 
+# ---------- المواقف الطريفة (5.4.4) ----------
+const SHOVE_ALLY_DIST := 0.6    # الوحدة المرتدّة تصطدم بحليف داخل هذه المسافة
+const SHOVE_ALLY_STAGGER := 0.3 # فيترنّح الاثنان
+const SPIN_ALLY_PUSH := 0.5     # الضربة الدائرية تدفع الحلفاء بلا ضرر
+const CORPSE_ROLL := 0.045      # مسافة تدحرج الجثة لكل نقطة ضرر من الضربة القاتلة
+const CORPSE_ROLL_MAX := 2.5    # سقف المسافة بالمربعات
+const CORPSE_DRAG := 4.0        # تباطؤ التدحرج في الثانية
+const CORPSE_ROLLING_MAX := 20  # أكثر من عشرين جثة متدحرجة: الأقدم يتوقف
+const CORPSE_SHOVE := 0.35      # كم تزحزح الجثةُ من في طريقها
+
+# ---------- مستويات التفصيل (5.4.5) ----------
+const LOD_FULL := "full"        # كل ما سبق
+const LOD_SIMPLE := "simple"    # حركة واحدة، بلا تفادٍ، مع الترنّح
+const LOD_STAT := "stat"        # أرقام فقط بلا أنميشن ولا ردود أفعال
+const LOD_NEAR := 60            # أقرب 60 وحدة للكاميرا داخل الشاشة
+const LOD_NEAR_CROWDED := 30    # وإذا تجاوزت المباراة 800 وحدة
+const LOD_CROWD := 800
+const LOD_EVERY := 0.5          # يُعاد الحساب كل نصف ثانية لا كل إطار
+const LOD_STAT_DMG := 0.85      # تعويض التفادي المتوسط حتى لا تختلف النتائج
+
 # ---------- اختيار الحركة بنظام نقاط (5.4.2) ----------
 const MOVE_BASE := {"quick": 1.0, "heavy": 1.0, "thrust": 0.8, "spin": 0.6}
 const MOVE_RECOVER_BONUS := 2.0   # الهدف في زمن تعافٍ: فرصة للقوية

@@ -64,6 +64,8 @@ func spawn(key: String, player: int, team: int, tile: Vector2) -> Dictionary:
 		"face": Vector2(1, 0),      # اتجاه نظر الوحدة، تُحسب منه قاعدة الزاوية
 		"stamina": GC.STAMINA_MAX, "dodge_t": 0.0, "dodge_cool": 0.0, "block_t": 0.0,
 		"react_t": -1.0, "react_from": -1, "react_kind": "",
+		# مستوى التفصيل وتدحرج الجثة (5.4.4 و 5.4.5)
+		"lod": GC.LOD_FULL, "roll": Vector2.ZERO, "roll_t": 0.0,
 	}
 	u.merge(_traits(u["seed"]))
 	next_id += 1
@@ -128,6 +130,7 @@ func step(delta: float) -> void:
 		u["hurt_t"] += delta
 		if u["state"] == "dead":
 			u["dead_t"] += delta
+			_roll_corpse(u, delta)
 			continue
 		_step_timers(u, delta)
 		_step_unit(u, delta)
@@ -441,6 +444,19 @@ func _fight(u: Dictionary, tgt: Dictionary, delta: float) -> void:
 	else:
 		u["path"] = []
 
+	# المستوى الإحصائي (خارج الشاشة): بلا أنميشن ولا ردود أفعال، تبادل ضرر بالأرقام
+	# مع ضرب الضرر × 0.85 تعويضاً عن التفادي المتوسط حتى لا تختلف النتائج (5.4.5)
+	if String(u.get("lod", GC.LOD_FULL)) == GC.LOD_STAT:
+		u["cycle"] = 0.0
+		u["swing"] += delta
+		if not u["hit_done"] and u["swing"] >= rate * GC.UNIT_HIT_AT:
+			u["hit_done"] = true
+			_land_attack(u, tgt, melee_now)
+		if u["swing"] >= rate:
+			u["swing"] -= rate
+			u["hit_done"] = false
+		return
+
 	# الرماية من بعيد تبقى بإيقاعها القديم (5.3)؛ نظام الحركات للالتحام (5.4.2)
 	if not uses_moves(u, melee_now):
 		u["swing"] += delta
@@ -503,6 +519,9 @@ func _start_move(u: Dictionary, tgt: Dictionary, d: float, reach: float, rate: f
 # ثم تتصرف بعد زمن رد فعلها. إن كان استعداد الضربة أقصر من رد فعلها فاتتها.
 func _warn(victim: Dictionary, attacker: Dictionary, wind: float) -> void:
 	if not alive(victim) or float(victim["react_t"]) >= 0.0:
+		return
+	# التفادي والصدّ للمستوى الكامل وحده (5.4.5)
+	if String(victim.get("lod", GC.LOD_FULL)) != GC.LOD_FULL:
 		return
 	var side := hit_side(victim, Vector2(attacker["pos"]))
 	if side_react(side) <= 0.0:
@@ -567,6 +586,9 @@ func in_recover(u: Dictionary) -> bool:
 
 # اختيار الحركة بنظام نقاط لا بعشوائية محضة (5.4.2)
 func pick_move(u: Dictionary, tgt: Dictionary, d: float, reach: float) -> String:
+	# المستوى المبسّط: حركة واحدة فقط (5.4.5)
+	if String(u.get("lod", GC.LOD_FULL)) != GC.LOD_FULL:
+		return "quick"
 	var lock := String(u.get("move_lock", ""))
 	if lock != "" and GC.MOVES.has(lock):
 		return lock
@@ -630,9 +652,12 @@ func _land_attack(u: Dictionary, tgt: Dictionary, melee_now: bool) -> void:
 	var key := String(u["key"])
 	var dmg: float = float(GC.stat(key, "melee_dmg")) if melee_now else float(GC.stat(key, "dmg"))
 	dmg *= out_mult(u)
+	if String(u.get("lod", GC.LOD_FULL)) == GC.LOD_STAT:
+		dmg *= GC.LOD_STAT_DMG    # تعويض التفادي المتوسط الغائب هنا (5.4.5)
 
 	# ---- الحركة الحالية وأثرها (5.4.2) ----
-	var moves: bool = uses_moves(u, melee_now)
+	# المستوى الإحصائي بلا حركات أصلاً، فلا يُضرب ضرره في معامل حركة (5.4.5)
+	var moves: bool = uses_moves(u, melee_now) and String(u.get("lod", GC.LOD_FULL)) != GC.LOD_STAT
 	var spec: Dictionary = GC.MOVES.get(String(u["move"]), {}) if moves else {}
 	var around: bool = bool(spec.get("around", false))
 	if moves:
@@ -666,6 +691,11 @@ func _land_attack(u: Dictionary, tgt: Dictionary, melee_now: bool) -> void:
 			+ float(spec["reach"])
 		for o in _enemies_within(u, Vector2(u["pos"]), radius):
 			damage(o, dmg, u, false)
+		# وتدفع الحلفاء المحيطين بلا ضرر عليهم: لا ضرر صديق أبداً، لكن الدفع مسموح (5.4.4)
+		for o in _near_units(Vector2(u["pos"]), radius):
+			if o["state"] == "dead" or int(o["id"]) == int(u["id"]) or not _friendly(u, o):
+				continue
+			_push(o, Vector2(u["pos"]), GC.SPIN_ALLY_PUSH)
 		return
 
 	damage(tgt, dmg, u, false)
@@ -777,12 +807,63 @@ func damage(tgt: Dictionary, amount: float, src, is_ult: bool) -> void:
 	if tgt["hp"] <= 0.0:
 		if on_death.is_valid():
 			on_death.call(tgt, src)
-		_kill(tgt)
+		_kill(tgt, dealt, src)
 
-func _kill(u: Dictionary) -> void:
+# الجثة ترتد وتتدحرج مسافة تتناسب مع قوة الضربة القاتلة، وتزحزح من في طريقها (5.4.4)
+func _roll_corpse(u: Dictionary, delta: float) -> void:
+	var v: Vector2 = Vector2(u["roll"])
+	if v.length() < 0.01:
+		return
+	var step: Vector2 = v * delta
+	var to: Vector2 = Vector2(u["pos"]) + step
+	if _walkable_at(to):
+		u["pos"] = to
+		# تصطدم بمن في طريقها فتزحزحهم قليلاً
+		for o in _near_units(to, GC.SHOVE_ALLY_DIST):
+			if o["state"] == "dead" or int(o["id"]) == int(u["id"]):
+				continue
+			var away: Vector2 = Vector2(o["pos"]) - to
+			if away.length() < 0.001:
+				away = v.normalized()
+			var shoved: Vector2 = Vector2(o["pos"]) + away.normalized() * GC.CORPSE_SHOVE * delta * 10.0
+			if _walkable_at(shoved):
+				o["pos"] = shoved
+	else:
+		u["roll"] = Vector2.ZERO
+		return
+	u["roll"] = v.move_toward(Vector2.ZERO, GC.CORPSE_DRAG * delta)
+
+# كم جثة تتدحرج الآن؟ الحد عشرون والأقدم يتوقف (5.4.5)
+func _cap_rolling(latest: Dictionary) -> void:
+	var rolling := []
+	for u in units:
+		if u["state"] == "dead" and Vector2(u["roll"]).length() > 0.01:
+			rolling.append(u)
+	if rolling.size() <= GC.CORPSE_ROLLING_MAX:
+		return
+	rolling.sort_custom(func(x, y): return float(x["dead_t"]) > float(y["dead_t"]))
+	var to_stop: int = rolling.size() - GC.CORPSE_ROLLING_MAX
+	for r in rolling:
+		if to_stop <= 0:
+			break
+		if int(r["id"]) == int(latest["id"]):
+			continue          # الأحدث يبقى، والأقدم هو الذي يتوقف
+		r["roll"] = Vector2.ZERO
+		to_stop -= 1
+
+func _kill(u: Dictionary, blow: float = 0.0, from = null) -> void:
 	u["hp"] = 0.0
 	u["state"] = "dead"
 	u["dead_t"] = 0.0
+	# ارتداد الجثة: مسافته من قوة الضربة القاتلة (5.4.4)
+	if from != null and blow > 0.0:
+		var dir: Vector2 = Vector2(u["pos"]) - Vector2(from["pos"])
+		if dir.length() < 0.001:
+			dir = Vector2(1, 0)
+		var dist: float = minf(blow * GC.CORPSE_ROLL, GC.CORPSE_ROLL_MAX)
+		# مع تباطؤ ثابت a تكون مسافة التوقف v² / (2a)، فالسرعة الأولى:
+		u["roll"] = dir.normalized() * sqrt(2.0 * GC.CORPSE_DRAG * dist)
+		_cap_rolling(u)
 	u["path"] = []
 	u["sel"] = false
 	# من كان يقاتله يبحث فوراً عن هدف آخر (5.2)
@@ -1020,8 +1101,16 @@ func _push(u: Dictionary, from: Vector2, tiles: float) -> void:
 	if d.length() < 0.01:
 		return
 	var goal: Vector2 = Vector2(u["pos"]) + d.normalized() * tiles
-	if _walkable_at(goal):
-		u["pos"] = goal
+	if not _walkable_at(goal):
+		return
+	u["pos"] = goal
+	# ارتطام بحليف: يترنّح الاثنان (5.4.4)
+	for o in _near_units(goal, GC.SHOVE_ALLY_DIST):
+		if o["state"] == "dead" or int(o["id"]) == int(u["id"]) or not _friendly(u, o):
+			continue
+		_stagger(u, GC.SHOVE_ALLY_STAGGER)
+		_stagger(o, GC.SHOVE_ALLY_STAGGER)
+		break
 
 func _walkable_at(p: Vector2) -> bool:
 	if map == null or not map.has_method("walkable"):
