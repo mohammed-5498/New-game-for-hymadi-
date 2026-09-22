@@ -13,6 +13,15 @@ class FlatMap:
 		return [to]
 	func walkable(_i: int, _j: int) -> bool:
 		return true
+	# تحتاجها الشرطة لاختيار مربع ظهور حر
+	func _free_near(start: Vector2i, count: int) -> Array:
+		var out: Array = []
+		for dx in range(-2, 3):
+			for dy in range(-2, 3):
+				if out.size() >= count:
+					return out
+				out.append(Vector2i(start.x + dx, start.y + dy))
+		return out
 
 func check(cond: bool, msg: String) -> void:
 	if not cond:
