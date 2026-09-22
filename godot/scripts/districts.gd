@@ -5,6 +5,7 @@ extends RefCounted
 
 var list: Array = []          # مصفوفة الأحياء من MapGen (مرجع مباشر)
 var caps: Array = []          # فهرس الأحياء التي لها ساحة علم: {i, tile, pos}
+var _cap_tiles := {}          # مربع -> ساحات العلم القريبة منه (14)
 var teams: Dictionary = {}    # رقم اللاعب -> رقم الفريق
 var player_count := 0
 var events: Array = []        # إشعارات: {"kind": "captured"/"losing", "district": i, "player": p}
@@ -36,6 +37,24 @@ func setup(districts: Array, players: int, team_of: Dictionary) -> void:
 		if cap.x < 0:
 			continue
 		caps.append({"i": int(d["id"]), "tile": cap, "pos": Vector2(cap)})
+	_build_cap_tiles()
+
+# فهرس: مربع الخريطة -> ساحات العلم القريبة منه. ساحات العلم ثابتة فيُبنى مرة واحدة.
+# بدونه كان حساب الاستيلاء يقارن كل وحدة بكل ساحة: ألف وحدة × اثنتي عشرة ساحة
+# خمس مرات في الثانية، وهو نتوء يُحَسّ تقطيعاً في المعارك الكبيرة (14).
+func _build_cap_tiles() -> void:
+	_cap_tiles.clear()
+	# المربع الذي تُقرَّب إليه الوحدة يبعد عن موضعها 0.71 على الأكثر، فنوسّع المدى
+	var r: int = int(ceil(GC.CAPTURE_RADIUS + 0.75))
+	for c in caps:
+		var cp: Vector2i = Vector2i(c["tile"])
+		for dx in range(-r, r + 1):
+			for dy in range(-r, r + 1):
+				var t := Vector2i(cp.x + dx, cp.y + dy)
+				if _cap_tiles.has(t):
+					_cap_tiles[t].append(c)
+				else:
+					_cap_tiles[t] = [c]
 
 func claim_home(dist_id: int, player: int) -> void:
 	var d: Dictionary = list[dist_id]
@@ -98,14 +117,18 @@ func _capture_step(dt: float, units: Array) -> void:
 		if u["state"] == "dead" or int(u["player"]) < 0:
 			continue      # الشرطة لا تستولي على أي حي ولا تجمّد التقدم (3.8)
 		var p: Vector2 = u["pos"]
-		for c in caps:
+		# من فهرس المربعات: الوحدات البعيدة عن كل الساحات تخرج بقراءة واحدة
+		var nearby = _cap_tiles.get(Vector2i(int(round(p.x)), int(round(p.y))), null)
+		if nearby == null:
+			continue
+		for c in nearby:
 			if p.distance_to(Vector2(c["pos"])) > GC.CAPTURE_RADIUS:
 				continue
 			var di: int = int(c["i"])
 			if not power.has(di):
 				power[di] = {}
 			var pl: int = int(u["player"])
-			power[di][pl] = float(power[di].get(pl, 0.0)) + float(GC.stat(u["key"], "capture"))
+			power[di][pl] = float(power[di].get(pl, 0.0)) + float(u["capture"])
 			break
 
 	for c in caps:

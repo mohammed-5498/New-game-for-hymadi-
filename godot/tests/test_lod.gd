@@ -25,6 +25,7 @@ func run(c: Combat, seconds: float, dt: float = 1.0 / 60.0) -> void:
 
 func _initialize() -> void:
 	_t_numbers()
+	_t_stat_matches_visible()
 	_t_corpse_roll()
 	_t_corpse_roll_cap()
 	_t_corpse_shoves()
@@ -49,7 +50,43 @@ func _t_numbers() -> void:
 	check(GC.LOD_NEAR_CROWDED == 30, "الحد المزدحم ليس 30")
 	check(GC.LOD_CROWD == 800, "عتبة الازدحام ليست 800 وحدة")
 	check(GC.LOD_EVERY == 0.5, "إعادة حساب المستوى ليست كل نصف ثانية")
-	check(GC.LOD_STAT_DMG == 0.85, "ضرر المستوى الإحصائي ليس × 0.85")
+	check(GC.LOD_STAT_DMG == 0.74, "معامل ضرر المستوى الإحصائي ليس 0.74")
+
+# ---------- المعركة خارج الشاشة تُحسم كمثيلتها أمام العين (5.4.5) ----------
+# هذا هو هدف الوصف نصاً: «حتى لا تختلف النتائج عن القتال المرئي». والمعامل وسيلة
+# إليه لا غاية، فيُفحص الهدف نفسه. مهم جداً مع مئات الوحدات لأن معظم القتال يجري
+# خارج الشاشة: لو اختل المعامل حُسمت المعارك التي لا يراها اللاعب بقواعد أخرى.
+func _t_stat_matches_visible() -> void:
+	var pairs := [
+		["crow_common", "scorp_common"], ["hammer_common", "crow_common"],
+		["crow_dual", "hammer_common"],
+	]
+	var sum := 0.0
+	for p in pairs:
+		var full := _dealt(String(p[0]), String(p[1]), GC.LOD_FULL)
+		var stat := _dealt(String(p[0]), String(p[1]), GC.LOD_STAT)
+		check(full > 0.0, "لم يقع ضرر في %s ضد %s" % [p[0], p[1]])
+		sum += stat / maxf(1.0, full)
+	var avg: float = sum / float(pairs.size())
+	print("   ضرر المستوى الإحصائي = %.2f من ضرر القتال المرئي (المطلوب 1.00)" % avg)
+	check(absf(avg - 1.0) < 0.10,
+		"معركة خارج الشاشة تُحسم بنسبة %.2f من المرئية: عدّل LOD_STAT_DMG" % avg)
+
+func _dealt(atk: String, def: String, lod: String) -> float:
+	seed(777)
+	var c := new_combat()
+	var a := c.spawn(atk, 0, 0, Vector2(5, 5))
+	var b := c.spawn(def, 1, 1, Vector2(5.4, 5))
+	b["hp"] = 1.0e8
+	b["max_hp"] = 1.0e8
+	for i in int(25.0 * 60.0):
+		for u in [a, b]:
+			u["lod"] = lod
+		c.step(1.0 / 60.0)
+		a["pos"] = Vector2(5, 5)
+		b["pos"] = Vector2(5.4, 5)
+		a["hp"] = float(a["max_hp"])
+	return 1.0e8 - float(b["hp"])
 
 # ---------- الجثة تتدحرج بقدر قوة الضربة القاتلة ----------
 func _t_corpse_roll() -> void:

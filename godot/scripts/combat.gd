@@ -34,7 +34,9 @@ var _grid_carry := 0.0
 var _sep_i := 0               # وكذلك التباعد: شريحة في كل إطار لا الكل دفعة
 var _sep_carry := 0.0
 var _sep_pass := 0
-var _aura_on := false   # هل في الساحة صاحب هالة؟ فلا نمسح aura_dmg بلا داعٍ
+var _aura_on := false
+var _aura_srcs: Array = []
+var _aura_t := 0.0   # هل في الساحة صاحب هالة؟ فلا نمسح aura_dmg بلا داعٍ
 
 # طابور طلبات المسار (14): آخر طلب لكل وحدة يلغي ما قبله، فلا تُحسب لوحدة واحدة
 # مساران في نفس الدورة، والميزانية تُجدَّد في كل تحديث.
@@ -72,6 +74,7 @@ func spawn(key: String, player: int, team: int, tile: Vector2) -> Dictionary:
 		# ثوابت الهالة والعلاج: كانت تُقرأ من config لكل وحدة في كل إطار، رغم أن
 		# قليلاً من الوحدات يملك هالة أصلاً (14)
 		"aura_r": float(GC.stat(key, "aura")), "aura_bonus": float(GC.stat(key, "aura_dmg")),
+		"capture": float(GC.stat(key, "capture")),
 		"heal_r": float(GC.stat(key, "heal_range")), "heal_rate": float(GC.stat(key, "heal_rate")),
 		"charge_rate": GC.HERO_CHARGE_PER_SEC if bool(GC.stat(key, "hero")) else GC.CHARGE_PER_SEC,
 		"target": -1, "cmd_target": -1,   # cmd_target = أمر هجوم من اللاعب (بلا حد مطاردة)
@@ -143,6 +146,8 @@ func alive(u) -> bool:
 func clear() -> void:
 	_grid.clear()
 	_grid_next.clear()
+	_aura_srcs.clear()
+	_aura_t = 0.0
 	_grid_i = 0
 	_grid_carry = 0.0
 	_sep_i = 0
@@ -325,25 +330,36 @@ func _separate_one(u: Dictionary, delta: float) -> void:
 	if u["state"] == "dead":
 		return
 	var push := Vector2.ZERO
-	var mid := _cell_of(Vector2(u["pos"]))
-	for cx in range(mid.x - 1, mid.x + 2):
-		for cy in range(mid.y - 1, mid.y + 2):
+	var pos: Vector2 = Vector2(u["pos"])
+	# مدى التباعد 0.55 مربع فقط، وخلية الشبكة 2×2. مسح تسع خلايا كان يمسح 6×6
+	# مربعات لجوار نصف مربع. نأخذ الخلايا التي تلمسها الدائرة وحدها، مع هامش
+	# لأن الشبكة قد تكون متأخرة جزءاً من الثانية فتكون الوحدة انتقلت (14).
+	var reach: float = GC.SEPARATE_DIST + GC.GRID_SLACK
+	var lo := _cell_of(pos - Vector2(reach, reach))
+	var hi := _cell_of(pos + Vector2(reach, reach))
+	var uid: int = int(u["id"])
+	var dist2: float = GC.SEPARATE_DIST * GC.SEPARATE_DIST
+	for cx in range(lo.x, hi.x + 1):
+		for cy in range(lo.y, hi.y + 1):
 			var cell = _grid.get(Vector2i(cx, cy), null)
 			if cell == null:
 				continue
 			for o in cell:
-				if int(o["id"]) == int(u["id"]) or o["state"] == "dead":
+				if int(o["id"]) == uid or o["state"] == "dead":
 					continue
-				var away: Vector2 = Vector2(u["pos"]) - Vector2(o["pos"])
-				var d: float = away.length()
+				var away: Vector2 = pos - Vector2(o["pos"])
+				# مربّع المسافة أولاً: معظم الجيران خارج المدى، فلا جذر لهم
+				var d2: float = away.x * away.x + away.y * away.y
+				if d2 >= dist2:
+					continue
+				var d: float = sqrt(d2)
 				if d < 0.001:
 					away = Vector2(randf() - 0.5, randf() - 0.5)
 					d = 0.5
-				if d < GC.SEPARATE_DIST:
-					push += away / d * (GC.SEPARATE_DIST - d) / GC.SEPARATE_DIST
+				push += away / d * (GC.SEPARATE_DIST - d) / GC.SEPARATE_DIST
 	if push == Vector2.ZERO:
 		return
-	var to: Vector2 = Vector2(u["pos"]) + push.limit_length(1.0) * GC.SEPARATE_PUSH * delta
+	var to: Vector2 = pos + push.limit_length(1.0) * GC.SEPARATE_PUSH * delta
 	if _walkable_at(to):
 		u["pos"] = to
 
@@ -430,11 +446,20 @@ func _step_unit(u: Dictionary, delta: float) -> void:
 func _step_auras(delta: float) -> void:
 	# أصحاب الهالات قلة (زعيم العقارب وأبطالها والطبيب). جمعُهم أولاً يوفّر المرور
 	# على كل وحدة ثلاث مرات في كل إطار، وهو ما كان يكلّف ربع خطوة القتال (14).
+	# أصحاب الهالات لا يتغيرون إلا بظهور أو موت، فلا داعي لمسح كل الوحدات في كل
+	# إطار بحثاً عنهم: تُجمع القائمة على فترات ويُتحقق من حياتهم عند الاستعمال (14)
+	_aura_t -= delta
+	if _aura_t <= 0.0:
+		_aura_t = GC.AURA_RESCAN
+		_aura_srcs.clear()
+		for src in units:
+			if src["state"] == "dead":
+				continue
+			if float(src["aura_r"]) > 0.0 or (float(src["heal_r"]) > 0.0 and float(src["heal_rate"]) > 0.0):
+				_aura_srcs.append(src)
 	var srcs: Array = []
-	for src in units:
-		if src["state"] == "dead":
-			continue
-		if float(src["aura_r"]) > 0.0 or (float(src["heal_r"]) > 0.0 and float(src["heal_rate"]) > 0.0):
+	for src in _aura_srcs:
+		if src["state"] != "dead":
 			srcs.append(src)
 	if srcs.is_empty():
 		if _aura_on:
@@ -1334,16 +1359,27 @@ func _hostile(a, b) -> bool:
 func _dist(a: Dictionary, b: Dictionary) -> float:
 	return Vector2(a["pos"]).distance_to(Vector2(b["pos"]))
 
+# أكثر دالة تُستدعى في المعركة الكبيرة. تمسح خلايا الشبكة مباشرة بلا بناء مصفوفة
+# وسيطة (كانت تبني مصفوفة بمئات العناصر لكل بحث)، وتقارن مربّع المسافة فتوفّر
+# جذراً تربيعياً لكل مقارنة — وهي آلاف المقارنات في الإطار الواحد (14).
 func _nearest_enemy(u: Dictionary, within: float):
 	var best = null
-	var bd := within
-	for o in _near_units(Vector2(u["pos"]), within):
-		if o["state"] == "dead" or not _hostile(u, o):
-			continue
-		var d := _dist(u, o)
-		if d <= bd:
-			bd = d
-			best = o
+	var bd2: float = within * within
+	var pos: Vector2 = Vector2(u["pos"])
+	var r := int(ceil(within / GC.GRID_CELL)) + 1
+	var mid := _cell_of(pos)
+	for cx in range(mid.x - r, mid.x + r + 1):
+		for cy in range(mid.y - r, mid.y + r + 1):
+			var cell = _grid.get(Vector2i(cx, cy), null)
+			if cell == null:
+				continue
+			for o in cell:
+				if o["state"] == "dead" or not _hostile(u, o):
+					continue
+				var d2: float = pos.distance_squared_to(Vector2(o["pos"]))
+				if d2 <= bd2:
+					bd2 = d2
+					best = o
 	return best
 
 # الحالة التي تُرسم بها الوحدة (13.1): hurt تعلو 0.35 ثانية ثم ترجع لحالتها

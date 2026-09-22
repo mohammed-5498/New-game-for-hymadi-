@@ -44,18 +44,33 @@ func _spawn(st: Dictionary, key: String) -> Dictionary:
 	var u := combat.spawn(key, PLAYER, TEAM, _free_spot(st))
 	u["station"] = int(st["district"])
 	u["anchor"] = Vector2(st["pos"])    # حد المطاردة يُقاس من المركز لا من مكان الرصد
+	# العدّاد يُحدَّث فوراً: بقية الخطوة تسأل عنه، والعدّ الكامل مرة واحدة في أولها
+	var k := "%d|%s" % [int(st["district"]), key]
+	_counts[k] = int(_counts.get(k, 0)) + 1
 	return u
 
-func count_of(st: Dictionary, key: String) -> int:
-	var c := 0
+# عدّ كل شرطة كل المراكز في مرور واحد على الوحدات. كان يُستدعى لكل مركز ولكل نوع
+# في كل إطار، أي ثمانية مرورات كاملة على آلاف الوحدات في الإطار الواحد (14).
+var _counts := {}     # "رقم المركز|المفتاح" -> العدد
+
+func _recount() -> void:
+	_counts.clear()
+	if combat == null:
+		return
 	for u in combat.units:
-		if u["state"] == "dead" or int(u.get("station", -1)) != int(st["district"]):
+		if u["state"] == "dead":
 			continue
-		if String(u["key"]) == key:
-			c += 1
-	return c
+		var st_id: int = int(u.get("station", -1))
+		if st_id < 0:
+			continue
+		var k := "%d|%s" % [st_id, u["key"]]
+		_counts[k] = int(_counts.get(k, 0)) + 1
+
+func count_of(st: Dictionary, key: String) -> int:
+	return int(_counts.get("%d|%s" % [int(st["district"]), key], 0))
 
 func step(delta: float, districts: Array) -> void:
+	_recount()
 	for st in stations:
 		var d: Dictionary = districts[int(st["district"])]
 		# أول استيلاء يوقف الإنتاج إلى الأبد (3.8)
@@ -92,6 +107,7 @@ func step(delta: float, districts: Array) -> void:
 			st["captain_t"] = GC.POLICE_CAPTAIN_RESPAWN
 
 func _clear(st: Dictionary) -> void:
+	_counts.clear()
 	for u in combat.units:
 		if u["state"] == "dead" or int(u.get("station", -1)) != int(st["district"]):
 			continue
