@@ -39,8 +39,8 @@ var _path_budget := GC.PATH_PER_STEP
 var on_hit := Callable()
 var on_death := Callable()   # (الوحدة الميتة، قاتلها أو null)
 
-# has_method في كل استدعاء كان يكلّف أكثر من الفحص نفسه، ويُستدعى عشرات الآلاف
-# من المرات في الأمر الجماعي الواحد (14)
+# هل للخريطة دالة walkable؟ يُسأل مرة واحدة: has_method في كل استدعاء يكلّف أكثر
+# من الفحص نفسه، وهو يُستدعى في الدفع والتباعد لكل وحدة في كل إطار (14)
 var _map_has_walk := false
 
 func _init(map_node) -> void:
