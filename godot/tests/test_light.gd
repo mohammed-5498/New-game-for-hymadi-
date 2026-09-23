@@ -34,8 +34,6 @@ func _t_shader_file() -> void:
 		check(names.has(want), "الشيدر ينقصه المتغير %s" % want)
 	check(GC.VIGNETTE > 0.0 and GC.VIGNETTE < 1.0, "شدة حفّة الأطراف خارج المعقول")
 	check(GC.VIGNETTE_NIGHT >= GC.VIGNETTE, "الليل ليس أقوى حفّة من النهار")
-	check(GC.QUALITY_LOW_FPS < GC.QUALITY_BACK_FPS,
-		"عتبة الإطفاء ليست أقل من عتبة الرجوع: سيتذبذب")
 
 func _t_in_game() -> void:
 	var g = load("res://main.tscn").instantiate()
@@ -60,46 +58,13 @@ func _t_in_game() -> void:
 			"شدة الحفّة في %s خطأ" % w)
 	g.wx.set_kind("day")
 
-	# ---- 3. الجودة التلقائية: أداء ضعيف يُطفئ الشيدر ----
-	check(not g.light_auto_off, "الجودة التلقائية تبدأ مطفئة")
-	_feed(g, 1.0 / 12.0)      # 12 إطاراً/ث
-	check(g.light_auto_off, "لم يُطفأ الشيدر رغم ضعف الأداء")
-	check(not g.wx.light_shader_on(), "الشيدر ما زال يعمل بعد قرار الإطفاء")
-	check(g.wx.material == null, "المادة ما زالت مربوطة بعد الإطفاء")
-
-	# ---- 4. ولا يرجع بمراجعة واحدة جيدة: منعاً للتذبذب ----
-	_feed(g, 1.0 / 60.0)
-	check(g.light_auto_off, "رجع الشيدر من أول مراجعة جيدة")
-	# مراجعة سيئة تُصفّر العدّاد
-	_feed(g, 1.0 / 12.0)
-	_feed(g, 1.0 / 60.0)
-	_feed(g, 1.0 / 60.0)
-	check(g.light_auto_off, "رجع الشيدر رغم تصفير العدّاد بمراجعة سيئة")
-
-	# ---- 5. ويرجع بعد مراجعات جيدة متتالية ----
-	for i in GC.QUALITY_BACK_TIMES:
-		_feed(g, 1.0 / 60.0)
-	check(not g.light_auto_off, "لم يرجع الشيدر رغم تحسن الأداء")
-	check(g.wx.light_shader_on(), "الشيدر لم يُعَد تفعيله")
-	check(g.wx.material != null, "لم تُعَد مادة الشيدر بعد الرجوع")
-
-	# ---- 6. وإطفاء الشيدر لا يكسر الرسم: الطبقة ترجع مسطّحة كما كانت ----
-	g.wx.set_light_shader(false)
-	g.wx.set_kind("night")
-	for i in 3:
+	# ---- 3. الشيدر لا يُطفأ ولا يُشغَّل من تلقاء نفسه أثناء اللعب ----
+	# كانت جودة تلقائية تُطفئه عند هبوط الإطارات وتُرجعه، فكانت الهالة السوداء
+	# تختفي وتعود أمام اللاعب. شيء يظهر ويختفي أسوأ من بضعة بالمئة من الأداء.
+	for i in 40:
 		await process_frame
-	check(true, "")
-	g.wx.set_light_shader(true)
+	check(g.wx.light_shader_on(), "انطفأ الشيدر من تلقاء نفسه أثناء اللعب")
+	check(g.wx.material != null, "فُقدت مادة الشيدر أثناء اللعب")
+
 	g.queue_free()
 	await process_frame
-
-# مراجعة واحدة بالضبط بمعدل إطارات ثابت. تُصفَّر المتراكمات أولاً حتى لا تختلط
-# بإطارات اللعبة الحقيقية السريعة (بلا شاشة) فيصير القياس على عيّنة مخلوطة.
-func _feed(g, dt: float, _secs: float = 0.0) -> void:
-	g._q_t = 0.0
-	g._q_sum = 0.0
-	g._q_n = 0
-	var t := 0.0
-	while t <= GC.QUALITY_CHECK:
-		g._auto_quality(dt)
-		t += dt

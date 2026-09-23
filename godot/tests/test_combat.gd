@@ -52,9 +52,11 @@ func _t_basic_kill() -> void:
 	var c := new_combat()
 	var a := c.spawn("crow_common", 0, 0, Vector2(5, 5))
 	var b := c.spawn("scorp_common", 1, 1, Vector2(5.5, 5))
-	run(c, 14.0)
+	# المهلة بهامش مقيس لا مرتجل: أقصى زمن حسم في 400 مبارزة كان 13.1 ث، و14 ث
+	# كانت تترك 7% هامشاً فيتذبذب الفحص أحياناً. عشرون ثانية تترك 50%.
+	run(c, 20.0)
 	check(a["hp"] < a["max_hp"] or b["hp"] < b["max_hp"], "لم يقع أي ضرر بين عدوين متلاصقين")
-	check(b["state"] == "dead" or a["state"] == "dead", "لم يمت أحد بعد 14 ثانية من القتال")
+	check(b["state"] == "dead" or a["state"] == "dead", "لم يمت أحد بعد 20 ثانية من القتال")
 
 # لا ضرر على وحدات نفس اللاعب ولا على الحلفاء
 func _t_no_friendly_fire() -> void:

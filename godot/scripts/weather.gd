@@ -18,7 +18,6 @@ var _halo: GradientTexture2D   # تدرج دائري أبيض، يُلوَّن �
 var _flakes: Node2D        # عقدة الندف، فوق كل شيء
 var _size := Vector2(1152, 648)
 var _light_mat: ShaderMaterial = null   # شيدر الإضاءة، null = الطبقة المسطّحة القديمة
-var _light_off := false                 # أطفأته الجودة التلقائية
 
 func _ready() -> void:
 	_setup_light_shader()
@@ -117,11 +116,11 @@ func _screen_matrix() -> Transform2D:
 # وبدونه ترجع مستطيلاً مسطّحاً بلون الطقس كما كانت. أمر رسم واحد في الحالتين (10).
 func _draw() -> void:
 	var col: Color = GC.WEATHER_OVERLAY.get(kind, Color(0, 0, 0, 0))
-	if (_light_mat == null or _light_off) and col.a <= 0.0:
+	if _light_mat == null and col.a <= 0.0:
 		return
 	draw_set_transform_matrix(_screen_matrix())
 	var vp: Vector2 = get_viewport_rect().size
-	if _light_mat != null and not _light_off:
+	if _light_mat != null:
 		# الشيدر يقرأ اللون من uniform، والمستطيل يُرسم أبيض ليمرّ كما هو
 		_light_mat.set_shader_parameter("aspect", maxf(1.0, vp.x / maxf(1.0, vp.y)) * 0.72 + 0.4)
 		draw_rect(Rect2(Vector2.ZERO, vp), Color(1, 1, 1, 1))
@@ -141,16 +140,8 @@ func _setup_light_shader() -> void:
 	material = _light_mat
 	_apply_light_params()
 
-# إطفاء الشيدر أو إرجاعه دون إعادة بنائه (الجودة التلقائية، 14)
-func set_light_shader(on: bool) -> void:
-	if _light_off == (not on):
-		return
-	_light_off = not on
-	material = null if _light_off else _light_mat
-	queue_redraw()
-
 func light_shader_on() -> bool:
-	return _light_mat != null and not _light_off
+	return _light_mat != null
 
 func _apply_light_params() -> void:
 	if _light_mat == null:

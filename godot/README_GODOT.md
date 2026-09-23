@@ -30,8 +30,6 @@ godot/
   scripts/weather.gd   الطقس: الطبقة والإضاءة الليلية وندف الثلج وخطوط المطر
   scripts/draw_layer.gd لوحة رسم فرعية: الخريطة الثابتة لا تُعاد في كل إطار (14)
   scripts/units_art.gd رسم الوحدات الثماني عشرة وأنميشنها (منقول من docs/units-art.js)
-  scripts/units_demo.gd معرض الوحدات للتحقق البصري
-  units_demo.tscn      مشهد المعرض
   tests/               فحوص تعمل بلا واجهة
 ```
 

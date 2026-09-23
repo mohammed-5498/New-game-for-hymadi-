@@ -110,7 +110,6 @@ func _ready() -> void:
 	size_btn.pressed.connect(_cycle_size)
 	$UI/SelAllBtn.pressed.connect(_select_all)
 	$UI/NewMapBtn.pressed.connect(generate_map)
-	$UI/DemoBtn.pressed.connect(func(): get_tree().change_scene_to_file("res://units_demo.tscn"))
 	$UI/FightBtn.pressed.connect(_test_battle)
 	$UI/DiffBtn.pressed.connect(_cycle_difficulty)
 	wx = $Weather
@@ -190,9 +189,9 @@ func _process(delta: float) -> void:
 	elif cam.offset != Vector2.ZERO:
 		cam.offset = Vector2.ZERO
 	_clamp_cam()
+	_refresh_res()
 	_refresh_layers()
 	_refresh_lod(delta)
-	_auto_quality(delta)
 	if show_fps:
 		_fps_t += delta
 		if _fps_t >= GC.FPS_UPDATE:
@@ -225,40 +224,64 @@ func _refresh_lod(delta: float) -> void:
 		near[i][1]["lod"] = GC.LOD_FULL
 
 # لا يُعاد رسم إلا ما تحرّك فعلاً (14)
-# الجودة التلقائية (14): على الجهاز الضعيف يُطفأ شيدر الإضاءة وحده، لأنه تحسين
-# شكل لا قاعدة لعب. ويرجع إن تحسّن الأداء ثلاث مراجعات متتالية، منعاً للتذبذب.
-var light_auto_off := false
-var _q_t := 0.0
-var _q_sum := 0.0
-var _q_n := 0
-var _q_good := 0
+# دقة العرض حسب التقريب (14). الخطوة تتغير فقط عند تجاوز الحدّ بهامش، فلا يتذبذب
+# حجم هدف العرض مع كل حركة إصبع — وتغييره نفسه أغلى من المكسب لو تكرر.
+var res_step := 0                  # رقم الخطوة الحالية في GC.RES_STEPS
+var _res_base := Vector2i.ZERO     # حجم النافذة الأصلي
 
-func _auto_quality(delta: float) -> void:
-	if wx == null or not GC.LIGHT_SHADER or delta <= 0.0:
+func _refresh_res() -> void:
+	if not GC.RES_SCALE:
 		return
-	_q_sum += 1.0 / delta
-	_q_n += 1
-	_q_t += delta
-	if _q_t < GC.QUALITY_CHECK:
+	var win := get_window()
+	if win == null:
 		return
-	var fps: float = _q_sum / float(maxi(1, _q_n))
-	_q_t = 0.0
-	_q_sum = 0.0
-	_q_n = 0
-	if not light_auto_off:
-		if fps < GC.QUALITY_LOW_FPS:
-			light_auto_off = true
-			wx.set_light_shader(false)
-			_q_good = 0
+	if _res_base.x <= 0:
+		_res_base = win.size
+	var z: float = cam.zoom.x
+	var want: int = res_step
+	# النزول يحتاج تجاوز الحدّ، والصعود يحتاج تجاوزه بهامش: هذا هو منع التذبذب
+	for i in GC.RES_ZOOM_AT.size():
+		var limit: float = float(GC.RES_ZOOM_AT[i])
+		if z < limit - (GC.RES_HYST if res_step <= i else 0.0):
+			want = i + 1
+	if z > float(GC.RES_ZOOM_AT[0]) + GC.RES_HYST:
+		want = 0
+	want = clampi(want, 0, GC.RES_STEPS.size() - 1)
+	if want == res_step:
 		return
-	if fps > GC.QUALITY_BACK_FPS:
-		_q_good += 1
-		if _q_good >= GC.QUALITY_BACK_TIMES:
-			light_auto_off = false
-			_q_good = 0
-			wx.set_light_shader(true)
-	else:
-		_q_good = 0
+	res_step = want
+	_apply_res()
+
+# تصغير حجم العرض وحده يقلّل **مساحة العالم المرئية** أيضاً، فيبدو المشهد وكأنه
+# تقرّب من نفسه وتختل مطابقة اللمس. لذلك يُعوَّض بمعامل المحتوى: العرض يُرسم
+# ببكسلات أقل، والفضاء المنطقي يبقى حجم النافذة تماماً — فنفس مساحة العالم
+# ونفس مكان اللمسة، والمكسب هو البكسلات وحدها (14).
+func _apply_res() -> void:
+	var win := get_window()
+	if win == null or _res_base.x <= 0:
+		return
+	var f: float = float(GC.RES_STEPS[res_step])
+	if f >= 0.999:
+		# مهم: يُعاد حجم العرض المرجعي أيضاً. هو مرجع نظام التمدد في **كل** الأوضاع،
+		# فلو بقي مصغّراً لبقي الفضاء المنطقي مصغّراً وظهر المشهد مقرَّباً.
+		win.content_scale_mode = Window.CONTENT_SCALE_MODE_CANVAS_ITEMS
+		win.content_scale_size = _res_base
+		win.content_scale_factor = 1.0
+		return
+	# العرض يُشتق من x ثم يُحسب المعامل منه، فيكون الفضاء المنطقي = النافذة بالضبط
+	var w: int = maxi(320, int(round(float(_res_base.x) * f)))
+	var h: int = maxi(180, int(round(float(w) * float(_res_base.y) / float(_res_base.x))))
+	win.content_scale_mode = Window.CONTENT_SCALE_MODE_VIEWPORT
+	win.content_scale_size = Vector2i(w, h)
+	win.content_scale_factor = float(w) / float(_res_base.x)
+
+# عند مغادرة المشهد (القائمة مثلاً) ترجع الدقة الكاملة
+func _exit_tree() -> void:
+	var win := get_window()
+	if win != null and GC.RES_SCALE and _res_base.x > 0:
+		win.content_scale_mode = Window.CONTENT_SCALE_MODE_CANVAS_ITEMS
+		win.content_scale_size = _res_base
+		win.content_scale_factor = 1.0
 
 func _clamp_cam() -> void:
 	if cam_bounds.size.x <= 0.0:
@@ -291,6 +314,7 @@ func _refresh_layers() -> void:
 			band_units[s].append(u)
 	for s in band_units.size():
 		if band_prev[s] or not band_units[s].is_empty():
+			_set_band_rect(s)
 			unit_bands[s].queue_redraw()
 	# تلوين حي تغيّر: الخريطة الثابتة تحتاج رسمة واحدة جديدة (8)
 	if districts_state.tint_dirty:
@@ -683,6 +707,25 @@ func _seg_bounds(s: int, a: int, b: int) -> Rect2:
 		if String(decor[j * n + i]) != "":
 			high = maxf(high, 22.0)
 	return Rect2(r.position - Vector2(GC.TW, high), r.size + Vector2(GC.TW * 2.0, high + GC.TH))
+
+# حدود لوحة وحدات القطر تُضبط صراحةً في كل إطار.
+#
+# **لماذا:** المحرك يقصّ اللوحة إن وقعت حدودها خارج الشاشة، وهو يحسب هذه الحدود
+# من أوامر الرسم. لكنه **لا يحسب موضع أمر `draw_mesh`** — يأخذ حدود الشبكة حول
+# أصلها ويتجاهل التحويل الذي يضعها في مكانها. ولأن وحداتنا تُرسم من مخزن الأشكال
+# بـ `draw_mesh`، كانت حدود كل لوحة تبقى عند نقطة أصل الخريطة، فتُقصّ اللوحة
+# وتختفي كل وحداتها إلا إذا صادف أن أصل الخريطة داخل الشاشة.
+# (ثبت بفحص مباشر يعدّ البكسلات: `tests/test_cull.gd`)
+func _set_band_rect(s: int) -> void:
+	var item: RID = unit_bands[s].get_canvas_item()
+	var us: Array = band_units[s]
+	if us.is_empty():
+		RenderingServer.canvas_item_set_custom_rect(item, false, Rect2())
+		return
+	var r := Rect2(tile_to_world(us[0]["pos"]), Vector2.ZERO)
+	for u in us:
+		r = r.expand(tile_to_world(u["pos"]))
+	RenderingServer.canvas_item_set_custom_rect(item, true, r.grow(GC.BAND_MARGIN))
 
 func _new_layer(what: String, band: int) -> DrawLayer:
 	var l := DrawLayer.new()
