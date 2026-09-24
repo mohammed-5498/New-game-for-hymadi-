@@ -15,6 +15,7 @@ func check(cond: bool, msg: String) -> void:
 
 func _initialize() -> void:
 	_t_numbers()
+	await _t_ui_scale()
 	await _t_in_game()
 	if failures == 0:
 		print("نجح فحص دقة العرض: لا أخطاء.")
@@ -35,6 +36,48 @@ func _t_numbers() -> void:
 		check(float(GC.RES_ZOOM_AT[i]) < float(GC.RES_ZOOM_AT[i - 1]),
 			"حدود التقريب ليست متناقصة")
 	check(GC.RES_HYST > 0.0, "بلا هامش تبديل سيتذبذب عند الحدّ")
+
+# ---------- حجم الواجهة لا يتغير: المرجع هو دقة المشروع لا دقة الجهاز ----------
+# **هذا الفحص موجود بسبب خطأ وقع فعلاً:** كان مرجع نظام التمدد يُؤخذ من حجم
+# نافذة الجهاز، فصار على الجوال عالي الدقة مساوياً له، فسقط تكبير الواجهة من
+# نحو ١٫٩× إلى ١٫٠ — وصغرت الكتابة. والفحص يجري على نافذة أكبر من دقة المشروع
+# عمداً، وإلا لما ظهر الفرق أصلاً.
+func _t_ui_scale() -> void:
+	var proj := Vector2i(
+		int(ProjectSettings.get_setting("display/window/size/viewport_width", 1280)),
+		int(ProjectSettings.get_setting("display/window/size/viewport_height", 720)))
+	var win := get_root()
+	var before: Vector2i = win.content_scale_size
+	var g = load("res://main.tscn").instantiate()
+	root.add_child(g)
+	for i in 20:
+		await process_frame
+	# كامل التقريب: يجب أن يكون المرجع دقة المشروع بالضبط
+	g.cam.zoom = Vector2(GC.ZOOM_MAX, GC.ZOOM_MAX)
+	for i in 4:
+		await process_frame
+	check(win.content_scale_size == proj,
+		"مرجع التمدد %s وليس دقة المشروع %s: ستصغر الكتابة على الأجهزة عالية الدقة"
+		% [win.content_scale_size, proj])
+	check(is_equal_approx(win.content_scale_factor, 1.0),
+		"معامل المحتوى ليس 1 عند الدقة الكاملة")
+	# وبعد الإبعاد والرجوع يبقى المرجع كما هو
+	g.cam.zoom = Vector2(GC.ZOOM_MIN, GC.ZOOM_MIN)
+	for i in 5:
+		await process_frame
+	var small: Vector2i = win.content_scale_size
+	check(small.x < proj.x, "الإبعاد لم يخفّض دقة العرض")
+	check(is_equal_approx(float(small.x) / float(proj.x), win.content_scale_factor),
+		"المعامل لا يطابق نسبة التصغير، فالفضاء المنطقي سيختل")
+	g.cam.zoom = Vector2(GC.ZOOM_MAX, GC.ZOOM_MAX)
+	for i in 5:
+		await process_frame
+	check(win.content_scale_size == proj,
+		"بعد الإبعاد والرجوع صار المرجع %s بدل %s" % [win.content_scale_size, proj])
+	g.queue_free()
+	await process_frame
+	check(win.content_scale_size == proj or win.content_scale_size == before,
+		"لم يُعَد المرجع بعد مغادرة المشهد")
 
 func _t_in_game() -> void:
 	var g = load("res://main.tscn").instantiate()

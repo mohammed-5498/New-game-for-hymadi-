@@ -227,7 +227,11 @@ func _refresh_lod(delta: float) -> void:
 # دقة العرض حسب التقريب (14). الخطوة تتغير فقط عند تجاوز الحدّ بهامش، فلا يتذبذب
 # حجم هدف العرض مع كل حركة إصبع — وتغييره نفسه أغلى من المكسب لو تكرر.
 var res_step := 0                  # رقم الخطوة الحالية في GC.RES_STEPS
-var _res_base := Vector2i.ZERO     # حجم النافذة الأصلي
+# **دقة المشروع المرجعية، لا حجم نافذة الجهاز.** هذه هي المرجع الذي يقيس عليه
+# نظام التمدد كل شيء: تكبير الواجهة = حجم النافذة ÷ هذا المرجع. ووضعُ حجم
+# الجهاز هنا كان يجعل النسبة 1.0 على أي جوال، فتصغر الكتابة وتختل مطابقة
+# إحداثيات الشاشة. (هذا هو ما سبّب صِغَر الخط وتعليق طبقة الطقس معاً)
+var _res_base := Vector2i.ZERO
 
 func _refresh_res() -> void:
 	if not GC.RES_SCALE:
@@ -236,7 +240,9 @@ func _refresh_res() -> void:
 	if win == null:
 		return
 	if _res_base.x <= 0:
-		_res_base = win.size
+		_res_base = Vector2i(
+			int(ProjectSettings.get_setting("display/window/size/viewport_width", 1280)),
+			int(ProjectSettings.get_setting("display/window/size/viewport_height", 720)))
 	var z: float = cam.zoom.x
 	var want: int = res_step
 	# النزول يحتاج تجاوز الحدّ، والصعود يحتاج تجاوزه بهامش: هذا هو منع التذبذب

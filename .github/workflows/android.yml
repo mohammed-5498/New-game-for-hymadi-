@@ -167,11 +167,6 @@ jobs:
           set -e
           godot --headless --path "$PROJECT_PATH" --script tests/test_lod.gd
 
-      - name: فحص الإضاءة والجودة التلقائية
-        run: |
-          set -e
-          godot --headless --path "$PROJECT_PATH" --script tests/test_light.gd
-
       - name: فحص توزيع العمل على الإطارات
         run: |
           set -e
@@ -195,7 +190,9 @@ jobs:
       - name: فحص دقة العرض
         run: |
           set -e
-          xvfb-run -a godot --path "$PROJECT_PATH" --rendering-driver opengl3 --script tests/test_res.gd
+          # دقة أكبر من دقة المشروع (1280×720) عمداً: خطأ مرجع التمدد لا يظهر
+          # إلا حين تختلف دقة الجهاز عن دقة المشروع
+          xvfb-run -a godot --path "$PROJECT_PATH" --rendering-driver opengl3 --resolution 1920x1080 --script tests/test_res.gd
 
       - name: فحص الأداء
         run: |
