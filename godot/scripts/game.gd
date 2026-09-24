@@ -42,6 +42,7 @@ var fire_layer: DrawLayer = null
 var top_layer: DrawLayer = null
 var map_bands: Array = []        # (لم يعد يُستعمل، بقي للتوافق مع الفحوص)
 var map_segs: Array = []         # قطع المباني الثابتة، كل واحدة تُخفى وحدها (14)
+var ground_mm: GroundMesh = null # أرض الخريطة كلها في MultiMesh (14)
 var band_segs: Array = []        # قطع كل قطر
 var seg_rect: Array = []         # حدود كل قطعة في العالم (للفحص والتوثيق)
 var unit_bands: Array = []       # لوحة وحدات متحركة لكل قطر
@@ -659,10 +660,18 @@ func _build_layers() -> void:
 		node.queue_free()
 	for seg in map_segs:
 		seg.queue_free()
+	if ground_mm != null:
+		ground_mm.queue_free()
+		ground_mm = null
 	map_bands = []
 	map_segs = []
 	band_segs = []
 	unit_bands = []
+	# الأرض أول الجميع فتبقى تحت النار والمباني والوحدات (14)
+	if GC.GROUND_MM:
+		ground_mm = GroundMesh.new()
+		add_child(ground_mm)
+		move_child(ground_mm, 0)
 	fire_layer = _new_layer("fires", 0)
 	# لكل قطر: قطع مباني ثابتة (بحدود ضيقة تُخفى وحدها) ثم لوحة وحداته المتحركة
 	for s in range(0, 2 * n - 1):
@@ -697,6 +706,8 @@ func _build_layers() -> void:
 	# حدود الخريطة في العالم: من أقصى يسار إلى أقصى يمين ومن أعلى إلى أسفل (4.2)
 	cam_bounds = Rect2(Vector2(-float(n) * GC.TW, 0.0), Vector2(float(n) * GC.TW * 2.0, float(n) * GC.TH * 2.0))
 	cam_bounds = cam_bounds.grow(GC.CAM_MARGIN)
+	if ground_mm != null:
+		ground_mm.build(self)
 	redraw_map()
 
 # حدود قطعة من قطر في إحداثيات العالم. الارتفاع من أعلى مبنى فيها فعلاً، لا هامش
@@ -766,6 +777,8 @@ func _collect_live_tiles() -> void:
 
 # تُستدعى عند أي تغيّر يمس شكل الخريطة الثابت (استيلاء، طقس، خريطة جديدة)
 func redraw_map() -> void:
+	if ground_mm != null:
+		ground_mm.refresh(self)
 	for seg in map_segs:
 		seg.queue_redraw()
 
@@ -774,6 +787,8 @@ func redraw_district(d: int) -> void:
 	if d < 0 or d >= dist_bands.size():
 		redraw_map()
 		return
+	if ground_mm != null:
+		ground_mm.refresh_district(self, d)
 	var rng: Vector2i = dist_bands[d]
 	for s in range(rng.x, rng.y + 1):
 		if s >= 0 and s < band_segs.size():
@@ -796,27 +811,36 @@ func draw_layer(ci: CanvasItem, what: String, band: int, from_i: int = 0, to_i: 
 			_draw_top()
 	_ci = self
 
-# أرض قطر واحد: تُرسم قبل مبانيه، وكل مربع داخل معيّنه فلا يتداخل مع جاره
+# لون مربع أرض واحد: أرض حيّه، مخلوطة بلون مالكه، ثم أثر الطقس (10)
+func ground_color(k: int) -> Color:
+	var key: String = region[k]
+	var col: Color = GC.GROUND[key] if GC.GROUND.has(key) else GC.GROUND["neutral"]
+	col = _tinted(col, owner_dist[k], GC.TINT_GROUND)
+	return Weather.ground(col, bool(road[k]), weather)
+
+# أرض قطر واحد: تُرسم قبل مبانيه، وكل مربع داخل معيّنه فلا يتداخل مع جاره.
+# لا تعمل إلا إذا أُطفئ GC.GROUND_MM؛ وإلا فالأرض كلها في MultiMesh واحد (14).
 func _draw_ground_band(s: int, a: int, b: int) -> void:
+	if ground_mm != null:
+		return
 	for i in range(a, b + 1):
 		var j := s - i
 		var c := tile_to_world(Vector2(i, j))
-		var key: String = region[j * n + i]
-		var col: Color = GC.GROUND[key] if GC.GROUND.has(key) else GC.GROUND["neutral"]
-		col = _tinted(col, owner_dist[j * n + i], GC.TINT_GROUND)
-		col = Weather.ground(col, bool(road[j * n + i]), weather)   # ثلج أبيض أو مطر أغمق (10)
+		var col: Color = ground_color(j * n + i)
 		var quad := PackedVector2Array([
 			c + Vector2(-GC.TW, 0), c + Vector2(0, -GC.TH),
 			c + Vector2(GC.TW, 0), c + Vector2(0, GC.TH)])
 		_ci.draw_colored_polygon(quad, col)
 		# حدّ رفيع بنفس اللون يمنع خطوط الفراغ بين المربعات (كما في النموذج)
-		_ci.draw_polyline(quad + PackedVector2Array([quad[0]]), col, 0.6)
+		_ci.draw_polyline(quad + PackedVector2Array([quad[0]]), col, GC.GROUND_EDGE)
 		# علامة منتصف الشارع
 		var dm: int = int(dash[j * n + i])
 		if dm == 1:
-			_ci.draw_line(c + Vector2(-4, -2), c + Vector2(4, 2), Color("c9bd85"), 1.0)
+			_ci.draw_line(c + Vector2(-GC.DASH_DX, -GC.DASH_DY),
+				c + Vector2(GC.DASH_DX, GC.DASH_DY), GC.DASH_COL, GC.DASH_W)
 		elif dm == 2:
-			_ci.draw_line(c + Vector2(4, -2), c + Vector2(-4, 2), Color("c9bd85"), 1.0)
+			_ci.draw_line(c + Vector2(GC.DASH_DX, -GC.DASH_DY),
+				c + Vector2(-GC.DASH_DX, GC.DASH_DY), GC.DASH_COL, GC.DASH_W)
 
 # قطر واحد (i + j = s): أرضه ثم مبانيه، بترتيب العمق كما كان
 # مربعات القطر الواحد لا يغطي بعضها بعضاً (متجاورة أفقياً)، فترتيبها داخل القطعة حر

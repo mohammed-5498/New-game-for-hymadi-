@@ -187,6 +187,11 @@ jobs:
           set -e
           xvfb-run -a godot --path "$PROJECT_PATH" --rendering-driver opengl3 --script tests/test_cull.gd
 
+      - name: فحص أرض MultiMesh
+        run: |
+          set -e
+          xvfb-run -a godot --path "$PROJECT_PATH" --rendering-driver opengl3 --script tests/test_ground.gd
+
       - name: فحص دقة العرض
         run: |
           set -e
