@@ -68,6 +68,8 @@
       <h1 class="title">مدينة العصابات</h1>
       <p class="subtitle">عصابات تتقاتل للسيطرة على أحياء المدينة</p>
       <button id="btnPlay" class="wide">لعب</button>
+      <!-- زر الخروج: داخل التطبيق فقط، المتصفح لا يسمح بإغلاق الصفحة (القسم 2.1) -->
+      <button id="btnExit" class="wide ghost" hidden>خروج</button>
     </div>
   </div>
 
@@ -120,6 +122,16 @@
           <button id="btnBackToMain" class="wide ghost">رجوع</button>
         </div>
       </div>
+    </div>
+  </div>
+
+
+  <!-- سؤال الخروج: زر الرجوع في القائمة الرئيسية أو زر خروج (القسم 2.1) -->
+  <div id="exitDialog" hidden>
+    <div class="panel">
+      <h1>هل تريد الخروج؟</h1>
+      <button id="btnExitYes" class="wide">خروج</button>
+      <button id="btnExitNo" class="wide ghost">إلغاء</button>
     </div>
   </div>
 

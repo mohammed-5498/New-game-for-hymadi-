@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">مدينة العصابات</string>
+    <string name="title_activity_main">مدينة العصابات</string>
+    <string name="package_name">com.hymadi.gangcity</string>
+    <string name="custom_url_scheme">com.hymadi.gangcity</string>
+</resources>

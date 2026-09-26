@@ -6,10 +6,17 @@ import { updateMatch } from './game/loop.js';
 import { render, resizeCanvas, clampCamera } from './render/renderer.js';
 import { updateParticles, resetParticles } from './render/weather.js';
 import { setupInput } from './ui/input.js';
-import { setupHud, updateHud, reportFrame } from './ui/hud.js';
+import {
+  setupHud, updateHud, reportFrame,
+  openPause, closePause, isPauseOpen, isEndOpen, leaveToMain
+} from './ui/hud.js';
 import { setupPower, updatePower } from './ui/power.js';
-import { setupMenus, showScreen } from './ui/menus.js';
+import {
+  setupMenus, showScreen, currentScreen,
+  openExitDialog, closeExitDialog, isExitDialogOpen
+} from './ui/menus.js';
 import { initSound } from './audio/sound.js';
+import { onBackButton, keepScreenAwake } from './platform.js';
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
@@ -40,6 +47,22 @@ setupMenus({
 
 showScreen('main');
 
+// زر الرجوع في أندرويد: أثناء المباراة يفتح الإيقاف، وفي القوائم يرجع خطوة،
+// وفي القائمة الرئيسية يسأل "هل تريد الخروج؟" (القسم 2.1). في المتصفح لا يفعل شيئاً.
+onBackButton(() => {
+  if (isExitDialogOpen()) { closeExitDialog(); return; }
+
+  if (currentScreen() === 'game') {
+    if (isEndOpen()) { leaveToMain(state); return; }    // شاشة النهاية: رجوع للقائمة الرئيسية
+    if (isPauseOpen()) { closePause(state); return; }   // الإيقاف مفتوح: رجوع خطوة
+    openPause(state);                                   // أثناء المباراة: فتح الإيقاف
+    return;
+  }
+
+  if (currentScreen() === 'setup') { showScreen('main'); return; }
+  openExitDialog();                                     // القائمة الرئيسية
+});
+
 // تحديث منطقي واحد بخطوة ثابتة
 function update() {
   if (state.paused || state.matchResult) return;   // الإيقاف ونهاية المباراة يوقفان اللعب
@@ -52,6 +75,9 @@ let accumulator = 0;
 function loop(now) {
   const frameMs = Math.min(250, Math.max(0, now - lastTime));
   lastTime = now;
+
+  // الشاشة تبقى صاحية أثناء اللعب فقط، وتنام في القوائم وعند الإيقاف (القسم 2.1)
+  keepScreenAwake(state.running && !state.paused && !state.matchResult);
 
   if (!state.running) {          // داخل القوائم: لا تحديث ولا رسم
     accumulator = 0;

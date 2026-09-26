@@ -4,6 +4,7 @@ import {
   WEATHER, WEATHER_KEYS, UNITS, MATCH_DEFAULTS, AUDIO
 } from '../config.js';
 import { sound, audioSettings, setAudioSettings, startMusic } from '../audio/sound.js';
+import { isNativeApp, exitApp } from '../platform.js';
 
 const el = (id) => document.getElementById(id);
 
@@ -49,6 +50,12 @@ export function setupMenus(handlers) {
   el('btnBackToMain').addEventListener('click', () => { sound('ui_tap'); showScreen('main'); });
   el('btnStart').addEventListener('click', startPressed);
 
+  // زر الخروج وسؤاله: داخل التطبيق فقط (القسم 2.1)
+  el('btnExit').hidden = !isNativeApp();
+  el('btnExit').addEventListener('click', () => { sound('ui_tap'); openExitDialog(); });
+  el('btnExitYes').addEventListener('click', () => { sound('ui_tap'); exitApp(); });
+  el('btnExitNo').addEventListener('click', () => { sound('ui_tap'); closeExitDialog(); });
+
   buildOptions('optMapSize', MAP_SIZE_KEYS,
     key => MAP_SIZES[key].name + ' (' + MAP_SIZES[key].maxPlayers + ')',
     () => setup.mapSize, key => { setup.mapSize = key; refresh(); });
@@ -84,12 +91,22 @@ function buildAudioOptions() {
 }
 
 // --- تبديل الشاشات ---
+let screen = 'main';
+export const currentScreen = () => screen;
+
 export function showScreen(name) {
+  screen = name;
+  closeExitDialog();
   el('screenMain').hidden = name !== 'main';
   el('screenSetup').hidden = name !== 'setup';
   el('screenGame').hidden = name !== 'game';
   if (name === 'game' && onOpenGame) onOpenGame();
 }
+
+// --- سؤال الخروج (زر خروج أو زر الرجوع في القائمة الرئيسية) ---
+export function openExitDialog() { el('exitDialog').hidden = false; }
+export function closeExitDialog() { el('exitDialog').hidden = true; }
+export const isExitDialogOpen = () => !el('exitDialog').hidden;
 
 // --- صفوف الخيارات (حجم الخريطة، الحد الأقصى، الطقس) ---
 function buildOptions(containerId, values, label, getCurrent, onPick) {

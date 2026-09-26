@@ -49,20 +49,8 @@ export function setupHud(state) {
   el('btnClear').addEventListener('click', () => { sound('ui_tap'); clearSelection(state); });
 
   // --- قائمة الإيقاف: اللعبة تتوقف بالكامل أثناء فتحها ---
-  el('btnPause').addEventListener('click', () => {
-    if (state.matchResult) return;
-    sound('ui_tap');
-    stopMusic();                       // الموسيقى تصمت أثناء الإيقاف
-    state.paused = true;
-    el('pauseMenu').hidden = false;
-  });
-
-  el('btnResume').addEventListener('click', () => {
-    sound('ui_tap');
-    startMusic();
-    state.paused = false;
-    el('pauseMenu').hidden = true;
-  });
+  el('btnPause').addEventListener('click', () => openPause(state));
+  el('btnResume').addEventListener('click', () => closePause(state));
 
   el('btnRestartMatch').addEventListener('click', () => {
     sound('ui_tap');
@@ -84,13 +72,36 @@ export function setupHud(state) {
   el('btnEndToMain').addEventListener('click', () => leaveToMain(state));
 }
 
+// فتح وإغلاق قائمة الإيقاف: يستعملهما الزر وزر الرجوع في أندرويد (القسم 2.1)
+export function openPause(state) {
+  if (state.matchResult || !state.running) return false;
+  if (!el('pauseMenu').hidden) return false;
+  sound('ui_tap');
+  stopMusic();                         // الموسيقى تصمت أثناء الإيقاف
+  state.paused = true;
+  el('pauseMenu').hidden = false;
+  return true;
+}
+
+export function closePause(state) {
+  if (el('pauseMenu').hidden) return false;
+  sound('ui_tap');
+  startMusic();
+  state.paused = false;
+  el('pauseMenu').hidden = true;
+  return true;
+}
+
+export const isPauseOpen = () => !el('pauseMenu').hidden;
+export const isEndOpen = () => !el('endScreen').hidden;
+
 function closeOverlays() {
   el('pauseMenu').hidden = true;
   el('endScreen').hidden = true;
   last.result = null;
 }
 
-function leaveToMain(state) {
+export function leaveToMain(state) {
   sound('ui_tap');
   stopMusic();                        // لا موسيقى داخل القوائم
   state.running = false;

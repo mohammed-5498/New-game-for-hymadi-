@@ -1,0 +1,8 @@
+{
+  "appId": "com.hymadi.gangcity",
+  "appName": "مدينة العصابات",
+  "webDir": "www",
+  "android": {
+    "backgroundColor": "#34302b"
+  }
+}

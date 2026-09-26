@@ -98,7 +98,8 @@ html, body {
 #screenMain:not([hidden]),
 #screenSetup:not([hidden]),
 #pauseMenu:not([hidden]),
-#endScreen:not([hidden]) {
+#endScreen:not([hidden]),
+#exitDialog:not([hidden]) {
   position: absolute;
   inset: 0;
   display: flex;
@@ -115,7 +116,7 @@ html, body {
 
 #screenMain { background: #34302b; }
 #screenSetup { background: #34302b; }
-#pauseMenu, #endScreen { background: rgba(26, 24, 21, .72); }
+#pauseMenu, #endScreen, #exitDialog { background: rgba(26, 24, 21, .72); }
 
 .menu, .panel {
   background: #fffdf8;
