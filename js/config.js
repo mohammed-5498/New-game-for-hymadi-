@@ -216,10 +216,17 @@ export const COMBAT_REALISM = {
   moveTimeBase: 0.8,
   moves: {
     quick:  { wind: 0.18, strike: 0.08, hold: 0.05, rec: 0.25, dmg: 0.7, rangeAdd: 0,   arc: 100, sAmp: 0.85, lunge: 0.8 },
-    heavy:  { wind: 0.45, strike: 0.10, hold: 0.09, rec: 0.55, dmg: 1.6, rangeAdd: 0,   arc: 110, sAmp: 1.20, lunge: 1.25, stagger: 0.40, knock: 1.0 },
+    heavy:  { wind: 0.45, strike: 0.10, hold: 0.09, rec: 0.55, dmg: 1.6, rangeAdd: 0,   arc: 110, sAmp: 1.20, lunge: 1.25, stagger: 0.40, knock: 1.0, down: 0.3 },
     thrust: { wind: 0.30, strike: 0.07, hold: 0.06, rec: 0.35, dmg: 1.0, rangeAdd: 0.6, arc: 50,  sAmp: 0.60, lunge: 1.6 },
-    spin:   { wind: 0.50, strike: 0.15, hold: 0.05, rec: 0.60, dmg: 0.8, rangeAdd: 0.2, arc: 360, sAmp: 1.10, lunge: 0.4 }
+    spin:   { wind: 0.50, strike: 0.15, hold: 0.05, rec: 0.60, dmg: 0.8, rangeAdd: 0.2, arc: 360, sAmp: 1.10, lunge: 0.4 },
+    // اللكمات والركلات (القسم 5.4.7): unarmed = بلا سلاح. push يدفع الهدف ليصنع مسافة، down احتمال إسقاطه أرضاً
+    punch:      { wind: 0.12, strike: 0.06, hold: 0.04, rec: 0.20, dmg: 0.5, rangeAdd: -0.15, arc: 80, unarmed: true },
+    kick_front: { wind: 0.24, strike: 0.08, hold: 0.06, rec: 0.30, dmg: 0.9, rangeAdd: 0.3,   arc: 70, push: 1.1, unarmed: true },
+    kick_high:  { wind: 0.36, strike: 0.10, hold: 0.08, rec: 0.45, dmg: 1.3, rangeAdd: 0.2,   arc: 80, stagger: 0.35, knock: 0.9, down: 0.45, unarmed: true }
   },
+  downTime: 1.1,               // السقوط على الأرض ثم النهوض بالركوع: لا يهاجم ولا يتفادى
+  comboChance: 0.55,           // بعد لكمة أو ركلة أمامية: يُتبعها بضربة سلاح فوراً
+  comboPause: 0.04,
   primaryBonus: 1.0,           // مكافأة نقاط لحركة الوحدة الأساسية (طعنة حامل الرمح)
   pauseMin: 0.10,              // الفاصل بعد التعافي، مقسوماً على الجرأة
   pauseRandom: 0.25,
@@ -253,9 +260,13 @@ export const COMBAT_REALISM = {
   pops: {
     seconds: 1.1,
     max: 40,                   // أقصى عدد ظاهر معاً (الأقدم يُحذف)
-    colors: { dodge: '#b8f0a8', block: '#8fd0ff', back: '#ff8a7a', bump: '#ffd66e', clash: '#ffe08a' }
+    colors: { dodge: '#b8f0a8', block: '#8fd0ff', back: '#ff8a7a', bump: '#ffd66e', clash: '#ffe08a', down: '#ffffff' }
   },
   clashFxSeconds: 0.3,         // شرر التصادم
+  burstSeconds: 0.22,          // نجمة الانفجار عند الارتطام (القسم 5.4.7)
+  speedLinesAbove: 2.33,       // خطوط السرعة خلف كل وحدة أسرع من هذا (مربع/ث = 70 بكسل/ث في المرجع)
+  speedLinesSimple: true,      // خطوط السرعة في المستوى المبسّط أيضاً (أول ما يُلغى إن ثقل الأداء بعد أثر الأطراف)
+  pushFlinch: 1.4,             // الركلة الأمامية: ارتداد أطول من العادي
 
   // الرسم (القسم 5.4.6)
   // ساحة تجربة القتال (قائمة الإعداد): 7 غربان ضد 4 مطارق متقاربين
@@ -297,33 +308,36 @@ export const COMBAT_STYLE = {
     police:    { turn: 4, flank: 0.20 }
   },
   units: {
+    // من يملك ماذا (القسم 5.4.7): الغربان كل الحركات بما فيها الركلة العالية، والأبطال كل الحركات،
+    // المطارق العاديون لكمة وركلة أمامية، المصفّح والمحطِّم ركلة أمامية فقط، الأفاعي والشرطة لكمة وركلة أمامية،
+    // العقارب لكمة وركلتان.
     // الغربان: خفيفة سريعة الدوران، أكثر من يلتف
-    crow_common:    { moves: ['quick', 'heavy', 'thrust'] },
-    crow_spear:     { moves: ['thrust', 'quick', 'heavy'], primary: 'thrust' },
-    crow_dual:      { moves: ['quick', 'heavy'] },
-    crow_champion:  { moves: ['quick', 'heavy', 'thrust', 'spin'] },
+    crow_common:    { moves: ['quick', 'heavy', 'thrust', 'punch', 'kick_front', 'kick_high'] },
+    crow_spear:     { moves: ['thrust', 'quick', 'heavy', 'punch', 'kick_front', 'kick_high'], primary: 'thrust' },
+    crow_dual:      { moves: ['quick', 'heavy', 'punch', 'kick_front', 'kick_high'] },
+    crow_champion:  { moves: ['quick', 'heavy', 'thrust', 'spin', 'punch', 'kick_front', 'kick_high'] },
 
     // المطارق: ثقيلة بطيئة الدوران، والمصفّح والمحطِّم أبطأ (turn 3)
-    hammer_common:   { moves: ['quick', 'heavy', 'thrust'] },
-    hammer_armored:  { moves: ['quick', 'heavy'], block: true, turn: 3, flank: 0 },
-    hammer_smasher:  { moves: ['quick', 'heavy', 'spin'], turn: 3, flank: 0.1 },
-    hammer_champion: { moves: ['quick', 'heavy', 'spin'], block: true },
+    hammer_common:   { moves: ['quick', 'heavy', 'thrust', 'punch', 'kick_front'] },
+    hammer_armored:  { moves: ['quick', 'heavy', 'kick_front'], block: true, turn: 3, flank: 0 },
+    hammer_smasher:  { moves: ['quick', 'heavy', 'spin', 'kick_front'], turn: 3, flank: 0.1 },
+    hammer_champion: { moves: ['quick', 'heavy', 'thrust', 'spin', 'punch', 'kick_front', 'kick_high'], block: true },
 
-    // الأفاعي: رماة، وحركاتهم للقتال القريب فقط
-    viper_common:     { moves: ['quick', 'heavy'] },
-    viper_sniper:     { moves: ['quick', 'thrust'] },
-    viper_firebomber: { moves: ['quick'] },
-    viper_champion:   { moves: ['quick', 'heavy', 'spin'] },
+    // الأفاعي: رماة، وحركاتهم هذه للقتال القريب وحده
+    viper_common:     { moves: ['quick', 'heavy', 'punch', 'kick_front'] },
+    viper_sniper:     { moves: ['quick', 'thrust', 'punch', 'kick_front'] },
+    viper_firebomber: { moves: ['quick', 'punch', 'kick_front'] },
+    viper_champion:   { moves: ['quick', 'heavy', 'thrust', 'spin', 'punch', 'kick_front', 'kick_high'] },
 
     // العقارب
-    scorpion_common:    { moves: ['quick', 'heavy', 'thrust'] },
-    scorpion_boss:      { moves: ['quick', 'heavy'] },
-    scorpion_medic:     { moves: ['quick'] },
-    scorpion_champion:  { moves: ['quick', 'heavy', 'spin'] },
+    scorpion_common:    { moves: ['quick', 'heavy', 'thrust', 'punch', 'kick_front', 'kick_high'] },
+    scorpion_boss:      { moves: ['quick', 'heavy', 'punch', 'kick_front', 'kick_high'] },
+    scorpion_medic:     { moves: ['quick', 'punch', 'kick_front', 'kick_high'] },
+    scorpion_champion:  { moves: ['quick', 'heavy', 'thrust', 'spin', 'punch', 'kick_front', 'kick_high'] },
 
     // الشرطة: دروع تصدّ
-    police_common:  { moves: ['quick', 'heavy'], block: true },
-    police_captain: { moves: ['quick', 'heavy', 'thrust'], block: true }
+    police_common:  { moves: ['quick', 'heavy', 'punch', 'kick_front'], block: true },
+    police_captain: { moves: ['quick', 'heavy', 'thrust', 'punch', 'kick_front'], block: true }
   }
 };
 

@@ -12,12 +12,12 @@
 import { TAU, WOOD, STEEL, DARKW, Pf, dk, lt, limb, ell, rrect, tri, rot, add, wdir } from './anim.js';
 
 // ---------- أغطية الرأس (إحداثيات الرأس: المركز عند 0,0) ----------
-function hood(c, col) {                       // قلنسوة الغربان كما في U2
-  c.beginPath(); c.moveTo(-3.4, 0.9); c.quadraticCurveTo(-0.4, -5.4, 3.1, 0.1); c.lineTo(2.1, -0.7);
-  c.quadraticCurveTo(-0.3, -3.3, -2.5, 1); c.closePath(); Pf(c, dk(col, 0.45));
+function hood(c, col) {                       // قلنسوة الغربان كما في U2 (v3)
+  c.beginPath(); c.moveTo(-4, 1); c.quadraticCurveTo(-0.5, -6.4, 3.7, 0.1); c.lineTo(2.5, -0.8);
+  c.quadraticCurveTo(-0.4, -3.9, -3, 1.1); c.closePath(); Pf(c, dk(col, 0.45));
 }
-function helm(c, col) {                       // خوذة المطارق كما في U2
-  c.beginPath(); c.arc(0, -0.3, 3.4, Math.PI, 0); Pf(c, dk(col, 0.5)); rrect(c, -3.4, -0.8, 7, 1.2, 0.3, dk(col, 0.5));
+function helm(c, col) {                       // خوذة المطارق كما في U2 (v3)
+  c.beginPath(); c.arc(0, -0.3, 3.9, Math.PI, 0); Pf(c, dk(col, 0.5)); rrect(c, -3.9, -0.9, 8, 1.4, 0.3, dk(col, 0.5));
 }
 function mask(c, col) { rrect(c, -3.2, -0.8, 6.4, 1.8, 0.4, dk(col, 0.55)); }
 function band(c, col) { rrect(c, -3.3, -1.8, 6.6, 1.8, 0.5, dk(col, 0.5)); limb(c, -3.1, -1, -5.5, 1.4, 0.9, dk(col, 0.5)); }
@@ -127,12 +127,12 @@ function bottle(c, x, y) {
 
 export const BODIES = {
   // =============== الغربان: نحيفة وطويلة، قلنسوة وعباءة ===============
-  crow_common: { sx: 0.92, sy: 1.08, lw: 1.9, headR: 2.9, wlen: 3.8,
+  crow_common: { sx: 0.92, sy: 1.06, lw: 2.8, headR: 3.5, wlen: 4.2,
     head(c, p, col) { hood(c, col); },
     back(c, J, p, col) { cloak(c, J, p, col); },
-    weapon: blade(3.8, 1.4, STEEL) },
+    weapon: blade(4.2, 1.8, STEEL) },
 
-  crow_spear: { sx: 0.94, sy: 1.08, lw: 2.1, headR: 3, wlen: 12, twoH: true, tipLen: 16.6, butt: 7,
+  crow_spear: { sx: 0.94, sy: 1.08, lw: 2.8, headR: 3.5, wlen: 12, twoH: true, tipLen: 16.6, butt: 7,
     head(c, p, col) { hood(c, col); },
     weapon(c, J, p) {                         // رمح طويل باليدين
       const d = wdir(p.wa), h = J.handF, s = [h[0] - d[0] * 7, h[1] - d[1] * 7], e = [h[0] + d[0] * 12, h[1] + d[1] * 12];
@@ -142,7 +142,7 @@ export const BODIES = {
       c.restore();
     } },
 
-  crow_dual: { sx: 0.9, sy: 1.06, lw: 1.9, headR: 2.9, wlen: 5.4,
+  crow_dual: { sx: 0.9, sy: 1.06, lw: 2.8, headR: 3.5, wlen: 5.4,
     head(c, p, col) { hood(c, col); },
     back(c, J, p, col) {                      // العصا الثانية في اليد الخلفية
       const hb = J.handB, sb = J.Sb, a = Math.atan2(hb[1] - sb[1], hb[0] - sb[0]) - 0.9, d = wdir(a);
@@ -155,9 +155,9 @@ export const BODIES = {
       limb(c, h[0] + d[0] * 4.2, h[1] + d[1] * 4.2, h[0] + d[0] * 5.4, h[1] + d[1] * 5.4, 2.3, STEEL);
     } },
 
-  crow_hero: { sx: 1, sy: 1.14, lw: 2.3, headR: 3.1, wlen: 12.5, twoH: true, tipLen: 16.3, butt: 5,
+  crow_hero: { sx: 1, sy: 1.14, lw: 3.0, headR: 3.6, wlen: 12.5, twoH: true, tipLen: 16.3, butt: 5,
     ground(c) { heroRing(c); },
-    head(c, p, col) { hood(c, col); crown(c, -0.6); },
+    head(c, p, col) { hood(c, col); crown(c, -1.3); },
     back(c, J, p, col) { cloak(c, J, p, col, true); },
     weapon(c, J, p) {                         // عصا طويلة بنصل
       const d = wdir(p.wa), h = J.handF, s = [h[0] - d[0] * 5, h[1] - d[1] * 5], e = [h[0] + d[0] * 12.5, h[1] + d[1] * 12.5];
@@ -166,17 +166,17 @@ export const BODIES = {
     } },
 
   // =============== المطارق: عريضة وقصيرة، خوذة ودرع كتف ===============
-  hammer_common: { sx: 1.18, sy: 0.94, lw: 2.6, headR: 3.1, wlen: 4.8,
+  hammer_common: { sx: 1.14, sy: 0.95, lw: 3.3, headR: 3.6, wlen: 5.2,
     head(c, p, col) { helm(c, col); },
     chest: pads(4.4, 2.4),
     weapon(c, J, p) {
-      const d = wdir(p.wa), e = [J.handF[0] + d[0] * 4.8, J.handF[1] + d[1] * 4.8];
-      limb(c, J.handF[0], J.handF[1], e[0], e[1], 1.5, WOOD);
-      c.save(); c.translate(e[0], e[1]); c.rotate(p.wa); rrect(c, -1, -2, 3, 4, 0.7, STEEL); c.restore();
+      const d = wdir(p.wa), e = [J.handF[0] + d[0] * 5.2, J.handF[1] + d[1] * 5.2];
+      limb(c, J.handF[0], J.handF[1], e[0], e[1], 1.9, WOOD);
+      c.save(); c.translate(e[0], e[1]); c.rotate(p.wa); rrect(c, -1.2, -2.4, 3.6, 4.8, 0.8, STEEL); c.restore();
     } },
 
-  hammer_shield: { sx: 1.22, sy: 0.93, lw: 3, headR: 3.2, wlen: 3,
-    head(c, p, col) { c.beginPath(); c.arc(0, -0.3, 3.5, Math.PI, 0); Pf(c, dk(col, 0.5)); rrect(c, -3.5, -0.8, 7, 1.4, 0.3, '#5d6169'); },
+  hammer_shield: { sx: 1.18, sy: 0.94, lw: 3.5, headR: 3.7, wlen: 3,
+    head(c, p, col) { c.beginPath(); c.arc(0, -0.3, 4, Math.PI, 0); Pf(c, dk(col, 0.5)); rrect(c, -4, -0.9, 8, 1.6, 0.3, '#5d6169'); },
     chest: pads(4.8, 2.8),
     front(c, J, p, col) {
       c.save(); c.translate(J.handF[0] + 1.2, J.handF[1]); c.rotate(J.a2 * 0.6);
@@ -184,8 +184,8 @@ export const BODIES = {
       ell(c, 0.2, 0, 1.4, 1.4, lt(col, 0.55)); c.restore();
     } },
 
-  hammer_breaker: { sx: 1.22, sy: 0.94, lw: 3, headR: 3.2, wlen: 12, twoH: true,
-    head(c, p, col) { rrect(c, -3.4, -2, 6.8, 2, 0.5, dk(col, 0.5)); },
+  hammer_breaker: { sx: 1.18, sy: 0.95, lw: 3.5, headR: 3.7, wlen: 12, twoH: true,
+    head(c, p, col) { rrect(c, -3.9, -2.3, 7.8, 2.3, 0.5, dk(col, 0.5)); },
     chest: pads(4.8, 2.8),
     weapon(c, J, p) {
       const d = wdir(p.wa), s = [J.handF[0] - d[0] * 3.4, J.handF[1] - d[1] * 3.4], e = [J.handF[0] + d[0] * 8.6, J.handF[1] + d[1] * 8.6];
@@ -193,9 +193,9 @@ export const BODIES = {
       c.save(); c.translate(e[0], e[1]); c.rotate(p.wa); rrect(c, -2.4, -3.4, 5, 6.8, 1.1, DARKW); rrect(c, -2.4, -3.4, 1.8, 6.8, 0.9, '#9aa0a8'); c.restore();
     } },
 
-  hammer_hero: { sx: 1.42, sy: 1.12, lw: 3.2, headR: 3.3, wlen: 4.6, shadowW: 5,
+  hammer_hero: { sx: 1.42, sy: 1.12, lw: 3.5, headR: 3.7, wlen: 4.6, shadowW: 5,
     ground(c) { heroRing(c); },
-    head(c, p, col) {
+    head(c, p, col) { c.scale(1.12, 1.12);
       c.beginPath(); c.arc(0, -0.3, 3.6, Math.PI, 0); Pf(c, dk(col, 0.5)); rrect(c, -3.6, -0.7, 7.2, 1.3, 0.3, dk(col, 0.5));
       tri(c, [-0.9, -3.4], [0.1, -6.8], [1.1, -3.4], '#f0c04a'); crown(c, -0.8);
     },
@@ -208,56 +208,56 @@ export const BODIES = {
     } },
 
   // =============== الأفاعي: منحنية ونحيفة، قناع وجعبة ===============
-  viper_common: { sx: 0.93, sy: 0.96, lw: 1.9, headR: 2.9, wlen: 1.5,
-    head(c, p, col) { mask(c, col); },
+  viper_common: { sx: 0.93, sy: 0.96, lw: 2.8, headR: 3.5, wlen: 1.5,
+    head(c, p, col) { c.scale(1.207, 1.207); mask(c, col); },
     weapon(c, J, p) { if (!p.thrown) ell(c, J.handF[0] + 0.6, J.handF[1] - 0.3, 1.5, 1.4, '#9a948c'); } },
 
-  viper_sniper: { sx: 0.9, sy: 1, lw: 1.9, headR: 2.9, wlen: 2, bow: true,
-    head(c, p, col) { mask(c, col); },
+  viper_sniper: { sx: 0.9, sy: 1, lw: 2.8, headR: 3.5, wlen: 2, bow: true,
+    head(c, p, col) { c.scale(1.207, 1.207); mask(c, col); },
     back(c, J, p, col) { quiver(c, J, p, col, 3, 2.2); },
     weapon: bow(7.6, 1.4, 1) },
 
-  viper_firebomber: { sx: 0.94, sy: 0.96, lw: 1.9, headR: 2.9, wlen: 2,
-    head(c, p, col) { mask(c, col); },
+  viper_firebomber: { sx: 0.94, sy: 0.96, lw: 2.8, headR: 3.5, wlen: 2,
+    head(c, p, col) { c.scale(1.207, 1.207); mask(c, col); },
     chest(c, J, p) {                          // زجاجتان على الحزام
       const a = add(J.mid, rot(-1.6, 1.4, p.pl)), b = add(J.mid, rot(0.6, 1.4, p.pl));
       rrect(c, a[0] - 1, a[1] - 1.7, 2, 3.4, 0.6, '#5a8a6a'); rrect(c, b[0] - 1, b[1] - 1.7, 2, 3.4, 0.6, '#5a8a6a');
     },
     weapon(c, J, p) { if (!p.thrown) bottle(c, J.handF[0], J.handF[1]); } },
 
-  viper_hero: { sx: 1.06, sy: 1.12, lw: 2.3, headR: 3.1, wlen: 2, bow: true,
+  viper_hero: { sx: 1.06, sy: 1.12, lw: 3.0, headR: 3.6, wlen: 2, bow: true,
     ground(c) { heroRing(c); },
-    head(c, p, col) { mask(c, col); crown(c); },
+    head(c, p, col) { c.scale(1.161, 1.161); mask(c, col); crown(c); },
     back(c, J, p, col) { quiver(c, J, p, col, 4, 2.6); },
     weapon: bow(9, 1.6, 3) },
 
   // =============== العقارب: متوسطة، عصابة رأس وقبعة الزعيم ===============
-  scorp_common: { sx: 1.03, sy: 0.99, lw: 2.1, headR: 3, wlen: 4.4,
-    head(c, p, col) { band(c, col); },
+  scorp_common: { sx: 1.03, sy: 0.99, lw: 2.9, headR: 3.5, wlen: 4.4,
+    head(c, p, col) { c.scale(1.167, 1.167); band(c, col); },
     weapon: blade(4.4, 1.5, '#8e8880') },
 
-  scorp_boss: { sx: 1.1, sy: 1.05, lw: 2.3, headR: 3.1, wlen: 3.4,
+  scorp_boss: { sx: 1.1, sy: 1.05, lw: 3.0, headR: 3.6, wlen: 3.4,
     ground(c, col, t) { const k = 1 + Math.sin(t * 2.4) * 0.05; dashedRing(c, 10.5 * k, 4.2 * k, 'rgba(240,182,74,0.9)'); },
-    head(c, p, col) {
+    head(c, p, col) { c.scale(1.161, 1.161);
       ell(c, 0, -2.5, 5.6, 1.3, dk(col, 0.55)); rrect(c, -2.9, -6, 6, 3.8, 1.2, dk(col, 0.55)); rrect(c, -2.9, -3.5, 6, 1, 0.3, col);
     },
     back: cape,
     weapon: blade(3.4, 1.3, STEEL) },
 
-  scorp_medic: { sx: 1.01, sy: 0.99, lw: 2, headR: 3, wlen: 1.6,
-    head(c) { rrect(c, -3.3, -2.4, 6.6, 1.8, 0.4, '#efe6d2'); rrect(c, -0.6, -2.4, 1.1, 1.8, 0, '#c0392b'); },
+  scorp_medic: { sx: 1.01, sy: 0.99, lw: 2.9, headR: 3.5, wlen: 1.6,
+    head(c) { c.scale(1.167, 1.167); rrect(c, -3.3, -2.4, 6.6, 1.8, 0.4, '#efe6d2'); rrect(c, -0.6, -2.4, 1.1, 1.8, 0, '#c0392b'); },
     back(c, J, p) {
       const s1 = add(J.chest, rot(-1.5, 0.5, J.a2)), s2 = add(J.mid, rot(2.5, 1.5, p.pl)), k = add(J.mid, rot(-3.8, 0.4, p.pl));
       limb(c, s1[0], s1[1], s2[0], s2[1], 0.9, '#8a6a4a'); medkit(c, k[0], k[1]);
     },
     weapon(c, J) { medkit(c, J.handF[0] + 0.6, J.handF[1] - 0.6, 0.9); } },
 
-  scorp_hero: { sx: 1.14, sy: 1.1, lw: 2.4, headR: 3.2, wlen: 3.8,
+  scorp_hero: { sx: 1.14, sy: 1.1, lw: 3.1, headR: 3.7, wlen: 3.8,
     ground(c, col, t) {
       const k = 1 + Math.sin(t * 2.4) * 0.06;
       dashedRing(c, 11.5 * k, 4.6 * k, 'rgba(240,182,74,0.9)'); dashedRing(c, 8.4 * k, 3.4 * k, 'rgba(127,212,138,0.8)');
     },
-    head(c, p, col) {
+    head(c, p, col) { c.scale(1.156, 1.156);
       ell(c, 0, -2.7, 5.8, 1.4, dk(col, 0.55)); rrect(c, -3, -6.3, 6.2, 3.9, 1.2, dk(col, 0.55));
       rrect(c, -3, -3.7, 6.2, 1, 0.3, '#efe6d2'); rrect(c, -0.5, -3.7, 1, 1, 0, '#c0392b'); crown(c, -2.4);
     },
@@ -265,8 +265,8 @@ export const BODIES = {
     weapon: blade(3.8, 1.4, STEEL) },
 
   // =============== الشرطة (محايدة — لون ثابت) ===============
-  police_common: { sx: 1.05, sy: 1, lw: 2.2, headR: 3, wlen: 4,
-    head(c, p, col) { cap(c, col); },
+  police_common: { sx: 1.05, sy: 1, lw: 3.0, headR: 3.5, wlen: 4,
+    head(c, p, col) { c.scale(1.167, 1.167); cap(c, col); },
     chest(c, J, p, col) {                     // حزام مائل على الصدر
       const a = add(J.chest, rot(-2.2, 1.2, J.a2)), b = add(J.mid, rot(2.4, 0.5, p.pl));
       limb(c, a[0], a[1], b[0], b[1], 1.2, dk(col, 0.3));
@@ -274,9 +274,9 @@ export const BODIES = {
     ...sideShield(4.4, 10.4),
     weapon: blade(4, 1.7, '#2b2825') },
 
-  police_captain: { sx: 1.14, sy: 1.04, lw: 2.6, headR: 3.1, wlen: 4.4,
+  police_captain: { sx: 1.14, sy: 1.04, lw: 3.2, headR: 3.6, wlen: 4.4,
     ground(c) { dashedRing(c, 8.6, 3.4, 'rgba(120,170,230,0.75)'); },
-    head(c, p, col) { cap(c, col); rrect(c, -3.4, -6.4, 6.8, 1, 0.3, '#e8d47a'); },
+    head(c, p, col) { c.scale(1.161, 1.161); cap(c, col); rrect(c, -3.4, -6.4, 6.8, 1, 0.3, '#e8d47a'); },
     chest(c, J, p, col) {                     // سترة وكتفيّة وشارة
       limb(c, J.mid[0], J.mid[1], J.chest[0], J.chest[1], 5.2, dk(col, 0.25));
       const l = add(J.chest, rot(-4, 0.2, J.a2)), r = add(J.chest, rot(4.2, 0.2, J.a2)), s = add(J.chest, rot(2.2, 1.8, J.a2));

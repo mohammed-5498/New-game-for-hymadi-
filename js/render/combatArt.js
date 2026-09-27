@@ -3,14 +3,17 @@
 // ونجوم الترنّح، ووميض الإصابة، وحلقة الضربة الدائرية. شبحا التفادي يرسمهما units.js حول هذه الدالة.
 import { COMBAT, COMBAT_REALISM as CR } from '../config.js';
 import {
-  TAU, ease, limb, ell, tri, keyPose, ATK, DODGE, BLOCK,
-  poseIdle, poseWalk, poseStagger, addFlinch, poseDeath, drawBody, wdir
+  TAU, ease, limb, bone3, ell, tri, rot, add, keyPose, ATK, DODGE, BLOCK,
+  poseIdle, poseWalk, poseStagger, addFlinch, poseDeath, poseDown, downAngle, drawBody, wdir
 } from './anim.js';
 import { BODIES, tipOf } from './bodies.js';
 import { ultGlow } from './unitsArt.js';
 
-export const MOVE_AR = { quick: 'سريعة', heavy: 'قوية', thrust: 'طعنة', spin: 'دائرية', shoot: 'رمي بالقوس', throw: 'رمي' };
-export const ST_AR = { dodge: 'تفادٍ', block: 'صدّ', stagger: 'ترنّح' };
+export const MOVE_AR = {
+  quick: 'سريعة', heavy: 'قوية', thrust: 'طعنة', spin: 'دائرية',
+  punch: 'لكمة', kick_front: 'ركلة أمامية', kick_high: 'ركلة عالية', shoot: 'رمي بالقوس', throw: 'رمي'
+};
+export const ST_AR = { dodge: 'تفادٍ', block: 'صدّ', stagger: 'ترنّح', down: 'على الأرض' };
 
 // الضربة المميزة تستعمل مفاتيح أقرب حركة للوحدة (مع الوهج الذهبي الموجود)
 const ULT_MOVE = {
@@ -46,7 +49,8 @@ export function stateLabel(unit, time) {
   if (unit.state === 'dead') return '';
   if (unit.cState) return ST_AR[unit.cState] + (unit.cState === 'dodge' ? (unit.dodgeType === 'duck' ? ' بالانحناء' : ' بالقفز') : '');
   const sw = swingOf(unit, time);
-  if (sw) return (sw.ult ? 'مميزة: ' : '') + (MOVE_AR[sw.key] || ST_AR[sw.key] || sw.key);
+  if (sw) return (sw.ult ? 'مميزة: ' : '') + (unit.combo && !CR.moves[sw.key]?.unarmed ? 'تتابع: ' : '') +
+    (MOVE_AR[sw.key] || ST_AR[sw.key] || sw.key);
   return '';
 }
 
@@ -66,6 +70,8 @@ function poseOf(unit, time, animT, walking, sw) {
     if (im > 0) { p.cb -= 0.35 * im; p.px -= 1.6 * im; p.ht -= 0.2 * im; p.fh = [p.fh[0] - 1.8 * im, p.fh[1]]; }
   } else if (unit.cState === 'stagger') {
     p = poseStagger(animT, Math.min(1, Math.max(0, unit.cTimer) / 0.4));
+  } else if (unit.cState === 'down') {
+    p = poseDown(CR.downTime - unit.cTimer);           // على الأرض ثم النهوض بالركوع
   } else {
     const t = unit.target;
     const combat = !!t && t.state !== 'dead' && t.hp > 0 &&
@@ -91,9 +97,12 @@ export function drawOne(ctx, unit, key, x, y, scale, color, time, walking, ghost
   const animT = time + (unit.id % 17) * 0.13;
   const dead = unit.state === 'dead';
   const sw = dead ? null : swingOf(unit, time);
-  const p = twoHand(ud, dead ? poseDeath() : poseOf(unit, time, animT, walking, sw));
+  const pose = dead ? poseDeath() : poseOf(unit, time, animT, walking, sw);
+  // اللكمة باليد الحرة: لا تُثبَّت اليد الخلفية على مقبض السلاح ذي اليدين أثناءها
+  const p = sw && sw.key === 'punch' ? pose : twoHand(ud, pose);
   const a = sw ? sw.a : -1;
-  const melee = sw && !RANGED[sw.key] && sw.key !== 'block';
+  const un = !!sw && !!(CR.moves[sw.key] && CR.moves[sw.key].unarmed);     // لكمة أو ركلة
+  const melee = sw && !RANGED[sw.key] && sw.key !== 'block' && !un;
 
   let dir = unit.facing || 1;
   if (sw && sw.key === 'spin' && a > 0.35 && a < 0.42) dir = -dir;      // لفّة كاملة بصرياً
@@ -108,6 +117,10 @@ export function drawOne(ctx, unit, key, x, y, scale, color, time, walking, ghost
     ctx.globalAlpha *= deadT > 0.72 ? Math.max(0, 1 - (deadT - 0.72) / 0.28) : 1;
     ell(ctx, 0, 0.6, (ud.shadowW || 4) * (1 + k * 0.5), 1.6, 'rgba(0,0,0,0.3)');
     ctx.translate(-k * 3.4, 0); ctx.rotate(-k * 1.5708);
+  } else if (unit.cState === 'down') {                                  // يسقط على ظهره ثم ينهض
+    const an = downAngle(CR.downTime - unit.cTimer);
+    ell(ctx, -3, 0.6, 5.5, 1.8, 'rgba(0,0,0,0.3)');
+    ctx.translate(an * 2.2, 0); ctx.rotate(an);
   } else {
     if (ud.ground) ud.ground(ctx, color, animT);
     if (sw && sw.ult) ultGlow(ctx, { a });                             // الوهج الذهبي الموجود
@@ -121,6 +134,24 @@ export function drawOne(ctx, unit, key, x, y, scale, color, time, walking, ghost
     ctx.save(); ctx.globalAlpha *= Math.max(0, 1 - g) * 0.85;
     ctx.beginPath(); ctx.ellipse(0, -5, 13 + g * 7, 5.5 + g * 2.6, 0, 0, TAU);
     ctx.strokeStyle = '#ffe08a'; ctx.lineWidth = 1.8; ctx.stroke(); ctx.restore();
+  }
+
+  // أثر الذراع اللاكمة والرجل الراكلة (فرع un في المرجع)
+  if (ghosts > 0 && un && a >= 0.34 && a < 0.56) {
+    for (let i = ghosts; i >= 1; i--) {
+      const pa = keyPose(ATK[sw.key], a - i * 0.03);
+      ctx.save(); ctx.globalAlpha *= 0.16 * (4 - i);
+      if (sw.key === 'punch') {
+        const C = add(add([pa.px, pa.py], rot(0, -4.6, pa.pl)), rot(0, -4.6, pa.pl + pa.cb));
+        const Sb = add(C, rot(-0.9, 0.7, pa.pl + pa.cb));
+        limb(ctx, Sb[0], Sb[1], pa.bh[0], pa.bh[1], ud.lw * 1.1, color);
+      } else {
+        const hx = pa.px + 1.2, hy = pa.py, k = [hx + Math.sin(pa.tf) * 5.8, hy + Math.cos(pa.tf) * 5.8];
+        const f = [k[0] + Math.sin(pa.tf - pa.kf) * 6, k[1] + Math.cos(pa.tf - pa.kf) * 6];
+        bone3(ctx, [hx, hy], k, f, ud.lw * 1.1, color);
+      }
+      ctx.restore();
+    }
   }
 
   // أثر السلاح: أشباح متتابعة خلف الضربة (المستوى الكامل فقط)
@@ -192,5 +223,37 @@ export function drawClash(ctx, x, y, t) {
   }
   ctx.fillStyle = 'rgba(255,240,190,' + (g * 0.7) + ')';
   ctx.beginPath(); ctx.arc(x, y, 1 + (1 - g) * 2, 0, TAU); ctx.fill();
+  ctx.restore();
+}
+
+// نجمة انفجار الارتطام (burst في المرجع): بيضاء بإطار برتقالي، أكبر للركلات والضربة القوية
+// sc: مقياس الوحدة في العالم، g: تقدم النجمة من 0 إلى 1
+export function drawBurst(ctx, x, y, g, big, sc) {
+  const R = (big ? 10 : 6.5) * sc * (0.6 + g * 0.8), n = big ? 10 : 8;
+  ctx.save(); ctx.globalAlpha = Math.max(0, 1 - g);
+  ctx.beginPath();
+  for (let i = 0; i < n * 2; i++) {
+    const an = i * Math.PI / n + 0.2, r = i % 2 ? R * 0.45 : R;
+    ctx.lineTo(x + Math.cos(an) * r, y + Math.sin(an) * r);
+  }
+  ctx.closePath(); ctx.fillStyle = '#fffdf2'; ctx.fill();
+  ctx.lineWidth = Math.max(0.35, 0.7 * sc); ctx.strokeStyle = '#ffb02e'; ctx.stroke();
+  ctx.restore();
+}
+
+// خطوط سرعة خلف الوحدة المندفعة أو المقذوفة أو المتفادية (speedLines في المرجع)
+// vx, vy: اتجاه الحركة على الشاشة بوحدات العالم، speed: سرعتها بالمربعات في الثانية
+export function drawSpeedLines(ctx, x, y, vx, vy, speed, sc) {
+  if (speed < CR.speedLinesAbove) return;
+  const v = Math.hypot(vx, vy) || 1, nx = -vx / v, ny = -vy / v;
+  const k = Math.min(1, (speed - CR.speedLinesAbove) / 5.33);
+  ctx.save(); ctx.globalAlpha = 0.5 * k; ctx.strokeStyle = '#5b554c'; ctx.lineWidth = 1.2 * sc;
+  for (let i = 0; i < 3; i++) {
+    const oy = (i - 1) * 7 * sc, ox = -ny * oy, oyy = nx * oy, L = (10 + i * 4) * sc * k;
+    ctx.beginPath();
+    ctx.moveTo(x + ox + nx * 6 * sc, y - 14 * sc + oyy + ny * 6 * sc);
+    ctx.lineTo(x + ox + nx * (6 * sc + L), y - 14 * sc + oyy + ny * (6 * sc + L));
+    ctx.stroke();
+  }
   ctx.restore();
 }

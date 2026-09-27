@@ -59,9 +59,10 @@ export function createMatch(settings) {
     combatSeed: (Math.random() * 4294967295) >>> 0,   // بذرة المباراة: معركتان لا تتشابهان
     rollingCorpses: 0,         // عدد الجثث المتدحرجة الآن (سقفها في COMBAT_REALISM)
     lodAt: 0,                  // موعد إعادة حساب مستويات التفصيل
-    combatEvents: { dodge: 0, block: 0, stagger: 0, bump: 0, roll: 0, back: 0, side: 0, hits: 0, clash: 0 },
+    combatEvents: { dodge: 0, block: 0, stagger: 0, bump: 0, roll: 0, back: 0, side: 0, hits: 0, clash: 0, down: 0, kick: 0, punch: 0, combo: 0 },
     pops: [],                  // الكلمات الطائرة: تفادى! صدّ! من الخلف! اصطدام! تصادم!
     clashes: [],               // شرر تصادم الأسلحة
+    fx: [],                    // نجوم الانفجار عند الارتطام
     shakeAt: -99,              // زمن آخر ارتجاجة كاميرا (القسم 5.2)
     alerts: [],                // أسهم الحافة الظاهرة الآن (القسم 12.3)
     alertSeen: [],             // مناطق نُبّه عنها قريباً {kind, i, j, t}
@@ -176,6 +177,7 @@ export function resetMatch(state, settings = state.settings) {
   state.combatEvents = fresh.combatEvents;
   state.pops = [];
   state.clashes = [];
+  state.fx = [];
   state.alerts = [];
   state.alertSeen = [];
   state.shakeAt = -99;

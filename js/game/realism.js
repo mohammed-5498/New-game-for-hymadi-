@@ -72,6 +72,7 @@ export function initRealism(state, unit) {
   unit.dodgeType = 'leap';     // leap | duck
   unit.flinch = 0;             // ارتداد خفيف مرئي بعد الإصابة
   unit.flinchBack = false;     // الضربة جاءت من الخلف فيميل للأمام
+  unit.combo = false;          // أنهى لكمة أو ركلة ويكمل بالسلاح (القسم 5.4.7)
   unit.rolling = false;        // جثة متدحرجة
   unit.lod = 'full';
   unit.lodAt = 0;
@@ -102,7 +103,7 @@ export const zoneDamage = (zone) => CR.dmgMul[zone];
 
 // هل الوحدة في مرحلة التعافي من حركتها؟ (يحبّب على المهاجم الضربة القوية)
 function inRecovery(unit) {
-  if (unit.cState === 'stagger') return true;
+  if (unit.cState === 'stagger' || unit.cState === 'down') return true;
   if (!unit.cMove || !unit.cPhases) return false;
   const p = unit.cPhases;
   return unit.cMoveT > p.wind + p.strike + p.hold;
@@ -122,6 +123,10 @@ export function chooseMove(unit, target, dist, nearCount, range) {
     if (key === 'heavy')  score = 0.8 + (inRecovery(target) ? 2.0 : 0) + (unit.traits.aggr - 1) * 0.8 - (low ? 0.5 : 0);
     if (key === 'thrust') score = 0.6 + (dist > range * 0.8 ? 1.2 : 0);
     if (key === 'spin')   score = 0.2 + (nearCount >= 3 ? 2.5 : nearCount === 2 ? 0.6 : 0);
+    if (key === 'punch')      score = 0.9 + (dist < range * 0.7 ? 1.0 : 0);
+    if (key === 'kick_front') score = 0.7 + (dist < range * 0.6 ? 0.9 : 0);
+    if (key === 'kick_high')  score = 0.45 + (inRecovery(target) ? 1.4 : 0) + (unit.traits.aggr - 1) * 0.8;
+    if (unit.combo) score += m.unarmed ? -0.8 : 1.2;       // بعد لكمة أو ركلة: غالباً يكمل بالسلاح
     if (key === unit.style.primary) score += CR.primaryBonus;
 
     score *= 1 + (unit.rng() * 2 - 1) * CR.jitter;
@@ -145,7 +150,9 @@ export function registerSight(state, attacker, target, ranged = false) {
 // --- التفادي والصدّ ---
 function beginDodge(state, unit, attacker) {
   // نوع التفادي: الطعنة تُتفادى بالقفز للخلف، والتلويح والضربة القوية بالانحناء تحتها غالباً
-  unit.dodgeType = attacker.cMove === 'thrust' ? 'leap' : (unit.rng() < CR.duckChance ? 'duck' : 'leap');
+  const mv = attacker.cMove;
+  unit.dodgeType = (mv === 'thrust' || mv === 'kick_front') ? 'leap'
+    : mv === 'kick_high' ? 'duck' : (unit.rng() < CR.duckChance ? 'duck' : 'leap');
   const away = Math.atan2(unit.y - attacker.y, unit.x - attacker.x) + (unit.rng() * 2 - 1) * 1.2;
   const speed = CR.dodgeDist / CR.dodgeTime * (unit.dodgeType === 'duck' ? CR.duckSpeed : 1);
   cancelSwing(unit);
@@ -425,6 +432,10 @@ export function updatePops(state) {
     for (const pop of state.pops) pop.t += TICK_SEC;
     state.pops = state.pops.filter(pop => pop.t < CR.pops.seconds);
   }
+  if (state.fx.length) {
+    for (const fx of state.fx) fx.t += TICK_SEC;
+    state.fx = state.fx.filter(fx => fx.t < CR.burstSeconds);
+  }
   if (state.clashes.length) {
     for (const fx of state.clashes) fx.t += TICK_SEC;
     state.clashes = state.clashes.filter(fx => fx.t < CR.clashFxSeconds);
@@ -460,4 +471,27 @@ export function tryClash(state, unit, target) {
     if (state.pops.length > CR.pops.max) state.pops.shift();
   }
   return true;
+}
+
+// --- السقوط على الأرض (القسم 5.4.7): يسقط على ظهره ثم ينهض بالركوع، لا يهاجم ولا يتفادى، ويمكن ضربه ---
+export function knockDown(state, unit, fromX, fromY, tiles) {
+  if (unit.invulnUntil > state.time) return false;   // تصلّب: لا يسقط
+  cancelSwing(unit);
+  unit.sight = null;
+  unit.combo = false;
+  unit.cState = 'down';
+  unit.cTimer = CR.downTime;
+  knockback(unit, fromX, fromY, tiles);
+  state.combatEvents.down++;
+  addPop(state, unit, 'سقط!', 'down');
+  return true;
+}
+
+// --- نجمة انفجار في نقطة الارتطام: ثلثا المسافة نحو المصاب، وارتفاعها حسب الحركة ---
+const FX_HEIGHT = { kick_high: 22, kick_front: 12 };
+const FX_BIG = { heavy: true, kick_high: true, spin: true, kick_front: true };
+export function addBurst(state, attacker, target, move) {
+  if (attacker.lod === 'stat' && target.lod === 'stat') return;
+  state.fx.push({ x: (target.x * 2 + attacker.x) / 3, y: (target.y * 2 + attacker.y) / 3, t: 0,
+                  big: !!FX_BIG[move], h: FX_HEIGHT[move] || 16 });
 }

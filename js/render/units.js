@@ -1,7 +1,7 @@
 // رسم الوحدات: نظام الوضعيات v2 (anim.js + bodies.js + combatArt.js) مربوطاً بحالة الوحدة
 import { TILE_HALF_W, TILE_HALF_H, COMBAT, COMBAT_REALISM, PERFORMANCE, UNIT_ART, ULT } from '../config.js';
 import { UI_LIGHT } from './colors.js';
-import { drawOne, stateLabel } from './combatArt.js';
+import { drawOne, stateLabel, drawSpeedLines } from './combatArt.js';
 
 // الأفراد العاديون بلا ضربة مميزة، فلا نجمة ولا شريط شحن لهم
 const hasUlt = (unit) => !!unit.stats.ult;
@@ -55,6 +55,14 @@ export function drawUnit(ctx, unit, alpha, zoom = 99, time = 0, debug = false, c
   // نظام الوضعيات v2 لكل الوحدات (القسم 5.4.6). المستوى المبسّط بلا أثر السلاح وبلا شبحي التفادي
   const key = artKey(unit), scale = artScale(unit), color = artColor(unit), walking = isWalking(unit);
   const full = unit.lod === 'full';
+  // خطوط السرعة خلف المندفع والمقذوف والمتفادي (القسم 5.4.7)
+  if (!dead) {
+    const vi = unit.cState === 'dodge' ? unit.dvx : unit.vx, vj = unit.cState === 'dodge' ? unit.dvy : unit.vy;
+    const speed = Math.hypot(vi, vj);
+    if (speed > COMBAT_REALISM.speedLinesAbove && (full || COMBAT_REALISM.speedLinesSimple)) {
+      drawSpeedLines(ctx, x, y, (vi - vj) * TILE_HALF_W, (vi + vj) * TILE_HALF_H, speed, scale);
+    }
+  }
   if (full && unit.cState === 'dodge') {
     for (let g = 1; g <= 2; g++) {
       const di = unit.dvx * 0.035 * g, dj = unit.dvy * 0.035 * g;

@@ -1,12 +1,12 @@
 // الكاميرا وترتيب الرسم الكامل لإطار واحد
-import { TILE_HALF_W, TILE_HALF_H, TICK_SEC, CAMERA, CAPTURE, PERFORMANCE, ALERTS, COMBAT_REALISM } from '../config.js';
+import { TILE_HALF_W, TILE_HALF_H, TICK_SEC, CAMERA, CAPTURE, PERFORMANCE, ALERTS, COMBAT_REALISM, UNIT_ART } from '../config.js';
 import { mix, PALETTES, ROAD_COLOR, BACKGROUND, UI_LIGHT } from './colors.js';
 import { drawBuilding, setFrameContext } from './buildings.js';
 import { drawUnit, drawSelectionRing, drawProjectile, drawAura, drawFire } from './units.js';
 import { drawOverlay, drawLights, drawParticles } from './weather.js';
 import { worldToTile } from '../map/coords.js';
 import { tintAmount } from '../game/capture.js';
-import { drawClash } from './combatArt.js';
+import { drawClash, drawBurst } from './combatArt.js';
 import { getPref } from '../prefs.js';
 
 export function resizeCanvas(canvas, state) {
@@ -92,6 +92,12 @@ export function render(ctx, state, alpha) {
 // فوق طبقة الليل حتى تُقرأ، وبحجم ثابت على الشاشة مهما كان التقريب
 function drawCombatFx(ctx, state, visible) {
   if (state.camera.z < PERFORMANCE.unitDetailZoom) return;
+  // نجوم الانفجار عند الارتطام
+  const sc = UNIT_ART.scale * 1.15;
+  for (const fx of state.fx) {
+    const x = (fx.x - fx.y) * TILE_HALF_W, y = (fx.x + fx.y) * TILE_HALF_H - fx.h * sc;
+    if (visible(x, y)) drawBurst(ctx, x, y, fx.t / COMBAT_REALISM.burstSeconds, fx.big, sc);
+  }
   for (const fx of state.clashes) {
     const x = (fx.x - fx.y) * TILE_HALF_W, y = (fx.x + fx.y) * TILE_HALF_H - 14;
     if (visible(x, y)) drawClash(ctx, x, y, fx.t);

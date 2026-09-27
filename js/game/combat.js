@@ -6,7 +6,7 @@ import {
   updateRealism, updateBumps, updateLod, registerSight, chooseMove, moveTiming,
   zoneOf, zoneDamage, knockback, stagger, blockedBy, corpseKnock, turnToward,
   approachPoint, busyBonus, crowdCount, attackPause, statDamageFactor, wrapAngle, releaseRagdoll,
-  addPop, updatePops, flinch, tryClash
+  addPop, updatePops, flinch, tryClash, knockDown, addBurst
 } from './realism.js';
 import { createFire } from './abilities.js';
 import { chargeOverTime, chargeOnHit, chargeOnDamageTaken, tryCastUlt, resolveUlt, updateFlurry } from './ults.js';
@@ -78,9 +78,18 @@ export function updateCombat(state) {
     if (unit.cMove) {
       unit.cMoveT += TICK_SEC;
       if (unit.cMoveT >= unit.cPhases.total) {
+        const finished = unit.cMove;
         unit.cMove = null;
         unit.cPhases = null;
-        unit.attackCooldown = attackPause(unit);   // الفاصل بعد التعافي وحده
+        // التتابع (القسم 5.4.7): بعد لكمة أو ركلة أمامية، غالباً يُتبعها بضربة سلاح فوراً
+        if (CR.moves[finished].unarmed && finished !== 'kick_high' && unit.rng() < CR.comboChance) {
+          unit.combo = true;
+          unit.attackCooldown = CR.comboPause;
+          state.combatEvents.combo++;
+        } else {
+          unit.combo = false;
+          unit.attackCooldown = attackPause(unit);   // الفاصل بعد التعافي وحده
+        }
       }
     }
 
@@ -180,20 +189,29 @@ function resolveMove(state, unit, hit) {
     const amount = hit.damage * zoneDamage(zone) * lodFactor;
     if (zone === 'back') { state.combatEvents.back++; addPop(state, target, 'من الخلف!', 'back'); }
     else if (zone === 'side') state.combatEvents.side++;
+    if (m.unarmed) state.combatEvents[hit.move === 'punch' ? 'punch' : 'kick']++;
+    addBurst(state, unit, target, hit.move);
     state.combatEvents.hits++;
 
-    // الضربة المساحية للمحطِّم تبقى كما هي (القسم 6) على الأهداف المفردة
-    const died = hit.move === 'spin'
+    // الضربة المساحية للمحطِّم تبقى كما هي (القسم 6) على ضربات السلاح المفردة؛ الدائرية واللكمة والركلة لا
+    const died = (hit.move === 'spin' || m.unarmed)
       ? applyDamage(state, unit, target, amount)
       : strike(state, unit, target, amount);
     landed = true;
 
     if (died) corpseKnock(state, target, unit, hit.move);
-    else if (m.stagger && isAlive(target) && target.invulnUntil <= state.time) {
+    else if (!isAlive(target) || target.invulnUntil > state.time) { /* تصلّب: لا ترنّح ولا دفع */ }
+    else if (m.down && target.cState !== 'down' && unit.rng() < m.down) {
+      knockDown(state, target, unit.x, unit.y, (m.knock || 1) * 1.3);   // الركلة العالية والقوية قد تُسقطه
+    } else if (m.stagger) {
       stagger(state, target, m.stagger);                      // الضربة القوية تُترنّح وتدفع
       knockback(target, unit.x, unit.y, m.knock);
-    } else if (isAlive(target) && !target.hardened) {
-      flinch(target, unit.x, unit.y, zone === 'back');        // ارتداد خفيف مع كل ضربة عادية
+    } else if (m.push) {
+      flinch(target, unit.x, unit.y, zone === 'back', false); // الركلة الأمامية تدفعه ليصنع مسافة
+      target.flinch = CR.flinchTime * CR.pushFlinch;
+      knockback(target, unit.x, unit.y, m.push);
+    } else {
+      flinch(target, unit.x, unit.y, zone === 'back');        // ارتداد مع كل ضربة عادية
     }
   }
   if (landed) chargeOnHit(state, unit);
