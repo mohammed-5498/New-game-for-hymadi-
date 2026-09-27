@@ -5,6 +5,7 @@ import { isEnemy, applyDamage, spawnProjectile } from './combat.js';
 import { createFire } from './abilities.js';
 import { faceTowards } from './units.js';
 import { forEachNearby } from './spatialHash.js';
+import { registerSight } from './realism.js';
 import { soundAt } from '../audio/sound.js';
 import { onScreen } from './alerts.js';
 
@@ -137,7 +138,9 @@ export function resolveUlt(state, unit) {
     case 'flurry':  startFlurry(state, unit, ult, target); break;
     case 'buff':    buffAllies(state, unit, ult); break;
     case 'heal':    healAllies(state, unit, ult); break;
-    case 'shot':    if (target) spawnProjectile(state, unit, target, ultDamage(unit, ult.damage)); break;
+    // طلقة القناص البعيدة: الضربة المميزة الوحيدة التي تُتفادى، وبنصف الاحتمال (القسم 5.4)
+    case 'shot':    if (target) { spawnProjectile(state, unit, target, ultDamage(unit, ult.damage), 0, null, true);
+                      registerSight(state, unit, target, true); } break;
     case 'fire':    createFire(state, unit.playerId, (target || unit).x, (target || unit).y, ult.fire); break;
     case 'arrows':  fireArrows(state, unit, ult, target); break;
     case 'bash':    bash(state, unit, ult, target); break;
@@ -304,6 +307,6 @@ function fireArrows(state, unit, ult, target) {
 
   for (let k = 0; k < ult.arrows; k++) {
     const offset = (k - (ult.arrows - 1) / 2) * COMBAT.multiShotSpread;
-    spawnProjectile(state, unit, targets[k] || target, ultDamage(unit, ult.damage), offset, ult.fire);
+    spawnProjectile(state, unit, targets[k] || target, ultDamage(unit, ult.damage), offset, ult.fire, false);
   }
 }

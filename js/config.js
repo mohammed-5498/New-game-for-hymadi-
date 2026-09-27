@@ -174,6 +174,125 @@ export const HEROES = {
   }
 };
 
+// --- القتال الواقعي (القسم 5.4) ---
+// منقولة كما هي من CR في docs/combat-reference.html.
+// المسافات هناك بالبكسل (مربع = 30 بكسل)، وهنا كلها بالمربعات مباشرة.
+export const COMBAT_REALISM = {
+  dodgeBase: 0.18,             // احتمال التفادي الأساسي
+  blockBase: 0.35,             // احتمال الصدّ (لأصحاب الدروع وحدهم)
+  projectileDodge: 0.5,        // المقذوف يُتفادى بنصف الاحتمال ولا يُصَدّ
+
+  stMax: 100,                  // التحمّل
+  stRegen: 20,                 // تجدد التحمّل في الثانية
+  dodgeCost: 35,
+  blockCost: 25,
+  dodgeCd: 1.2,                // تبريد التفادي
+
+  frontHalf: 60 * Math.PI / 180,    // أمام: ±60° (قوس 120°)
+  sideHalf: 120 * Math.PI / 180,    // جانب: حتى ±120°، وما بعدها خلف
+  angleMul: { front: 1, side: 0.5, back: 0 },      // فرصة التفادي حسب الزاوية
+  dmgMul:   { front: 1, side: 1.10, back: 1.25 },  // الضرر حسب الزاوية
+
+  dodgeDist: 0.8,              // مربعات تقطعها القفزة الجانبية
+  dodgeTime: 0.25,
+  blockTime: 0.30,
+  staggerBump: 0.30,           // ترنّح الحليف الذي اصطدمت به وحدة مرتدة
+  staggerBlocked: 0.25,        // ترنّح المهاجم بعد أن يُصَدّ
+  jitter: 0.15,                // عشوائية نقاط اختيار الحركة
+
+  // بذرة الشخصية: لكل وحدة قيمة ثابتة بين هذين الحدين
+  traits: {
+    aggr: [0.7, 1.3],          // الجرأة: تقصّر الفاصل بين الضربات وتحبّب الضربة القوية
+    dodgeSkill: [0.7, 1.3],    // مهارة التفادي والصدّ
+    react: [0.10, 0.35],       // زمن رد الفعل بالثواني
+    spd: [0.93, 1.07],         // تنويع سرعة المشي
+    size: [0.96, 1.04]         // تنويع الحجم في الرسم
+  },
+
+  // الحركات الأربع. أزمنتها نسبية لا مطلقة:
+  // زمن الحركة = زمن ضربة الوحدة (القسم 6) × مجموع أزمنة الحركة ÷ moveTimeBase.
+  // moveTimeBase = 0.8 مختار حتى يبقى الضرر في الثانية كما كان قبل هذه المرحلة،
+  // فأرقام القسم 6 لم تتغير: الضربة السريعة أسرع وأضعف، والقوية أبطأ وأقوى، ومحصلتهما واحدة.
+  moveTimeBase: 0.8,
+  moves: {
+    quick:  { wind: 0.18, strike: 0.08, hold: 0.05, rec: 0.25, dmg: 0.7, rangeAdd: 0,   arc: 100, sAmp: 0.85, lunge: 0.8 },
+    heavy:  { wind: 0.45, strike: 0.10, hold: 0.09, rec: 0.55, dmg: 1.6, rangeAdd: 0,   arc: 110, sAmp: 1.20, lunge: 1.25, stagger: 0.40, knock: 1.0 },
+    thrust: { wind: 0.30, strike: 0.07, hold: 0.06, rec: 0.35, dmg: 1.0, rangeAdd: 0.6, arc: 50,  sAmp: 0.60, lunge: 1.6 },
+    spin:   { wind: 0.50, strike: 0.15, hold: 0.05, rec: 0.60, dmg: 0.8, rangeAdd: 0.2, arc: 360, sAmp: 1.10, lunge: 0.4 }
+  },
+  primaryBonus: 1.0,           // مكافأة نقاط لحركة الوحدة الأساسية (طعنة حامل الرمح)
+  pauseMin: 0.10,              // الفاصل بعد التعافي، مقسوماً على الجرأة
+  pauseRandom: 0.25,
+  strikeMoment: 0.6,           // لحظة الضرر داخل زمن الضرب
+  reachBonus: 0.33,            // تسامح مدى عند لحظة الضربة (مربعات)
+  arcTolerance: 0.35,          // تسامح زاوية القوس (راديان)
+  aimTolerance: 0.6,           // لا تبدأ الضربة قبل أن يقترب وجهها من الهدف (راديان)
+  turnWhileAttacking: 2,       // أثناء الضربة يدور الجميع ببطء واحد: من يضرب لا يتابعك
+
+  friction: 8,                 // تباطؤ الارتداد في الثانية
+  bumpSpeed: 2.0,              // أقل سرعة ارتداد تصطدم بالحليف (مربع/ثانية)
+  bumpCd: 0.4,                 // تبريد الاصطدام للوحدة نفسها
+  corpseBumpCd: 0.2,
+  corpseKnockBig: 1.4,         // دفع الجثة بضربة قوية أو دائرية (مربعات)
+  corpseKnockSmall: 0.6,
+  maxRagdolls: 20,             // أقصى عدد جثث متدحرجة في وقت واحد
+
+  busyBonus: 1.33,             // تفضيل الهدف المشغول بغيرنا (مربعات) × ميل الالتفاف
+  crowdRadius: 1.6,            // نصف قطر عدّ الأعداء المحيطين (يحبّب الضربة الدائرية)
+  nightReact: 0.10,            // ليلاً تتأخر كل الوحدات في رد الفعل (القسم 7)
+
+  // مستويات التفصيل (القسم 5.4.5)
+  lod: {
+    fullUnits: 60,             // أقرب 60 وحدة داخل الشاشة: النظام كامل
+    refreshSeconds: 0.5,       // إعادة حساب المستوى
+    offScreenDamage: 0.85      // الضرر الإحصائي خارج الشاشة
+  }
+};
+
+// --- الدوران والالتفاف والحركات لكل وحدة (القسمان 5.4.4ب و5.4) ---
+// turn: سرعة الدوران راديان/ثانية — البطيء في الدوران يُلتف عليه.
+// flank: ميل الالتفاف من 0 إلى 1.
+// moves: الحركات التي تملكها. block: هل تصدّ بالدرع. primary: حركتها الأساسية.
+// الرماة يُعرفون من stats.projectile: حركاتهم هذه للقتال القريب وحده.
+export const COMBAT_STYLE = {
+  gangs: {
+    crows:     { turn: 8, flank: 0.85 },
+    hammers:   { turn: 4, flank: 0.25 },
+    vipers:    { turn: 6, flank: 0.50 },
+    scorpions: { turn: 5, flank: 0.40 },
+    police:    { turn: 4, flank: 0.20 }
+  },
+  units: {
+    // الغربان: خفيفة سريعة الدوران، أكثر من يلتف
+    crow_common:    { moves: ['quick', 'heavy', 'thrust'] },
+    crow_spear:     { moves: ['thrust', 'quick', 'heavy'], primary: 'thrust' },
+    crow_dual:      { moves: ['quick', 'heavy'] },
+    crow_champion:  { moves: ['quick', 'heavy', 'thrust', 'spin'] },
+
+    // المطارق: ثقيلة بطيئة الدوران، والمصفّح والمحطِّم أبطأ (turn 3)
+    hammer_common:   { moves: ['quick', 'heavy', 'thrust'] },
+    hammer_armored:  { moves: ['quick', 'heavy'], block: true, turn: 3, flank: 0 },
+    hammer_smasher:  { moves: ['quick', 'heavy', 'spin'], turn: 3, flank: 0.1 },
+    hammer_champion: { moves: ['quick', 'heavy', 'spin'], block: true },
+
+    // الأفاعي: رماة، وحركاتهم للقتال القريب فقط
+    viper_common:     { moves: ['quick', 'heavy'] },
+    viper_sniper:     { moves: ['quick', 'thrust'] },
+    viper_firebomber: { moves: ['quick'] },
+    viper_champion:   { moves: ['quick', 'heavy', 'spin'] },
+
+    // العقارب
+    scorpion_common:    { moves: ['quick', 'heavy', 'thrust'] },
+    scorpion_boss:      { moves: ['quick', 'heavy'] },
+    scorpion_medic:     { moves: ['quick'] },
+    scorpion_champion:  { moves: ['quick', 'heavy', 'spin'] },
+
+    // الشرطة: دروع تصدّ
+    police_common:  { moves: ['quick', 'heavy'], block: true },
+    police_captain: { moves: ['quick', 'heavy', 'thrust'], block: true }
+  }
+};
+
 // --- الضربات المميزة: قواعد الشحن (القسم 6.7) ---
 // الأفراد العاديون لا يملكون ضربة مميزة، فلا شريط شحن لهم
 export const ULT = {
@@ -310,7 +429,8 @@ export const COMBAT = {
   maxArmor: 0.90,            // سقف الدرع بعد جمع المكافآت حتى لا تصير الوحدة حصينة
   hitFlashTime: 0.10,        // وميض أبيض خفيف على المُصاب عند كل ضربة تصيب
   deathTime: 1.0,            // زمن سقوط الوحدة الميتة واختفائها
-  hitMoment: 0.47            // لحظة الارتطام من زمن الضربة (تطابق أنميشن docs/units-art.js)
+  hitMoment: 0.47,           // لحظة الارتطام من زمن الضربة (تطابق أنميشن docs/units-art.js)
+  flankSteerTiles: 3         // داخل هذه المسافة تتقدم الوحدة مباشرة بلا A* (يلزم للالتفاف)
 };
 
 // --- الاستيلاء (تُستخدم في المرحلة 3) ---

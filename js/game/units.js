@@ -3,6 +3,7 @@ import { UNIT_BASE, GANGS, HEROES, CHAMPIONS, POLICE, UNITS, TICK_SEC, PERFORMAN
 import { findPath, findFreeTiles, nearestWalkable, buildFlowField, flowStep } from '../map/pathfinding.js';
 import { clearCombatOrders } from './combat.js';
 import { moveSpeed } from './weather.js';
+import { initRealism, faceAngleTo } from './realism.js';
 
 // إحصائيات الوحدة: الأساس + ميزة العصابة، أو الأساس + قيم الشخصية المميزة أو البطل
 // والشرطة المحايدة لها جدولها الخاص (القسم 3.8)
@@ -24,7 +25,7 @@ function unitName(gangId, heroId, champion) {
 // champion: بطل العصابة (القسم 6.6). رسمه جاهز، وقواعد ظهوره في المرحلة 4
 export function createUnit(state, player, i, j, heroId = null, champion = false) {
   const stats = unitStats(player.gang, heroId, champion);
-  return {
+  const unit = {
     id: state.nextUnitId++,
     playerId: player.id,
     gang: player.gang,
@@ -95,6 +96,10 @@ export function createUnit(state, player, i, j, heroId = null, champion = false)
     auraBonus: 0,           // أقوى مكافأة ضرر من الهالات المحيطة
     auraHeal: 0             // علاج هالة بطل العقارب
   };
+
+  // القتال الواقعي (القسم 5.4): بذرة الشخصية وأسلوب القتال والحالات الجديدة
+  initRealism(state, unit);
+  return unit;
 }
 
 // أمر حركة لمجموعة الوحدات المحددة
@@ -208,6 +213,7 @@ export function updateUnits(state) {
     unit.prevX = unit.x;
     unit.prevY = unit.y;
     if (unit.state === 'dead') continue;
+    if (unit.cState) continue;          // تفادٍ أو صدّ أو ترنّح: لا حركة على المسار
     moveAlongPath(state, unit);
   }
   applySeparation(state);
@@ -249,6 +255,7 @@ function moveAlongPath(state, unit) {
       remaining = 0;
     }
     faceTowards(unit, tx, ty);
+    if (unit.state !== 'attacking') faceAngleTo(unit, tx, ty);   // تمشي فتنظر حيث تمشي
   }
 
   // الوحدة المهاجمة تبقى في حالتها؛ وأمر الحركة ينتهي بالانتظار
@@ -264,6 +271,12 @@ function moveAlongPath(state, unit) {
 // (في الرسم المائل يكون يمين الشاشة باتجاه زيادة i ونقصان j)
 export function faceTowards(unit, targetI, targetJ) {
   const screenDx = (targetI - unit.x) - (targetJ - unit.y);
+  if (Math.abs(screenDx) > 0.01) unit.facing = screenDx >= 0 ? 1 : -1;
+}
+
+// اتجاه الرسم مشتق من وجه الوحدة في العالم (القتال الواقعي يدوّر الوجه لا الاتجاه)
+export function facingFromAngle(unit) {
+  const screenDx = Math.cos(unit.faceAngle) - Math.sin(unit.faceAngle);
   if (Math.abs(screenDx) > 0.01) unit.facing = screenDx >= 0 ? 1 : -1;
 }
 

@@ -2,6 +2,7 @@
 import { TILE_HALF_W, TILE_HALF_H, COMBAT, PERFORMANCE, UNIT_ART, ULT } from '../config.js';
 import { UI_LIGHT, mix } from './colors.js';
 import { drawUnit as drawUnitArt } from './unitsArt.js';
+import { drawCombatUnit, needsCombatArt } from './combatArt.js';
 
 // الأفراد العاديون بلا ضربة مميزة، فلا نجمة ولا شريط شحن لهم
 const hasUlt = (unit) => !!unit.stats.ult;
@@ -26,7 +27,8 @@ const artKey = (unit) => {
 };
 
 const artScale = (unit) => UNIT_ART.scale *
-  (unit.champion ? UNIT_ART.championScale : unit.hero ? UNIT_ART.heroScale : 1);
+  (unit.champion ? UNIT_ART.championScale : unit.hero ? UNIT_ART.heroScale : 1) *
+  (unit.traits ? unit.traits.size : 1);      // تنويع حجم بسيط بين الأفراد (القسم 5.4)
 
 // الشرطة تُرسم بلونها الثابت مهما كان اللاعب
 const artColor = (unit) => unit.gang === 'police' ? UNIT_ART.policeColor : unit.color;
@@ -58,7 +60,14 @@ export function drawUnit(ctx, unit, alpha, zoom = 99, time = 0) {
     return;
   }
 
-  drawUnitArt(ctx, artKey(unit), { x, y, ...artState(unit, time, dead) });
+  // حالات القتال الواقعي (تفادٍ، صدّ، ترنّح، والحركات الأربع) لها هيكلها الخاص
+  if (!dead && needsCombatArt(unit)) {
+    drawCombatUnit(ctx, unit, artKey(unit), x, y, artScale(unit),
+      unit.hitFlash > 0 ? mix(artColor(unit), '#ffffff', 0.5) : artColor(unit),
+      time + (unit.id % 17) * 0.13, isWalking(unit));
+  } else {
+    drawUnitArt(ctx, artKey(unit), { x, y, ...artState(unit, time, dead) });
+  }
   if (dead) return;
 
   // شريط الدم للوحدة المتضررة أو المحددة، وللبطل دائماً (القسم 6.6)
@@ -70,6 +79,10 @@ export function drawUnit(ctx, unit, alpha, zoom = 99, time = 0) {
   // نجمة ذهبية صغيرة فوق الوحدة عند الجاهزية
   if (ultReady(unit)) drawReadyStar(ctx, x, y, time);
 }
+
+const isWalking = (unit) =>
+  unit.state === 'moving' || unit.state === 'attackMove' ||
+  (unit.state === 'attacking' && unit.path.length > 0);
 
 // اختيار حالة الرسم وزمنها: الموت ثم الضربة ثم تلقي الضرر ثم الجري أو الوقوف
 function artState(unit, time, dead) {
@@ -99,8 +112,7 @@ function artState(unit, time, dead) {
     return { ...common, state: 'hurt', t: UNIT_ART.hurtSeconds - unit.hurtTimer };
   }
 
-  const walking = unit.state === 'moving' || unit.state === 'attackMove' ||
-                  (unit.state === 'attacking' && unit.path.length > 0);
+  const walking = isWalking(unit);
   // إزاحة صغيرة لكل وحدة حتى لا تتنفس كل الوحدات معاً
   return { ...common, state: walking ? 'walk' : 'idle', t: time + (unit.id % 17) * 0.13 };
 }

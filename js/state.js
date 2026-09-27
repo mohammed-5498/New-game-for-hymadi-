@@ -54,6 +54,11 @@ export function createMatch(settings) {
     heroTurn: [],
     fires: [],                 // مناطق نار رامي النار
     time: 0,                   // زمن المباراة بالثواني
+    // القتال الواقعي (القسم 5.4)
+    combatSeed: (Math.random() * 4294967295) >>> 0,   // بذرة المباراة: معركتان لا تتشابهان
+    rollingCorpses: 0,         // عدد الجثث المتدحرجة الآن (سقفها في COMBAT_REALISM)
+    lodAt: 0,                  // موعد إعادة حساب مستويات التفصيل
+    combatEvents: { dodge: 0, block: 0, stagger: 0, bump: 0, roll: 0, back: 0, side: 0, hits: 0 },
     shakeAt: -99,              // زمن آخر ارتجاجة كاميرا (القسم 5.2)
     alerts: [],                // أسهم الحافة الظاهرة الآن (القسم 12.3)
     alertSeen: [],             // مناطق نُبّه عنها قريباً {kind, i, j, t}
@@ -162,6 +167,10 @@ export function resetMatch(state, settings = state.settings) {
   state.notice = null;
   state.matchResult = null;
   state.time = 0;
+  state.combatSeed = fresh.combatSeed;      // بذرة جديدة: المباراة التالية تختلف
+  state.rollingCorpses = 0;
+  state.lodAt = 0;
+  state.combatEvents = fresh.combatEvents;
   state.alerts = [];
   state.alertSeen = [];
   state.shakeAt = -99;

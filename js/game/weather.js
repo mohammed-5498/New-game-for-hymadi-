@@ -8,7 +8,8 @@ export function visionRange(state, unit) {
 
 // سرعة الوحدة بعد تأثير الطقس (ثلجاً × 0.85) وبعد الإبطاء من الضربة الأرضية
 export function moveSpeed(state, unit) {
-  const speed = unit.stats.speed * WEATHER[state.weather].speedMul;
+  // traits.spd: تنويع بسيط بين الأفراد (القسم 5.4) فلا تسير الصفوف كآلة واحدة
+  const speed = unit.stats.speed * WEATHER[state.weather].speedMul * (unit.traits ? unit.traits.spd : 1);
   if (unit.slowUntil > state.time) return speed * (1 - unit.slowFactor);
   return speed;
 }
