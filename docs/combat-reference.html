@@ -1,10 +1,9 @@
 <!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><title>مرجع القتال الواقعي v2</title>
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>مرجع القتال الواقعي v3</title>
 <style>:root{--text-primary:#2b2825;--text-secondary:#6b665c;--surface-1:#fff;--surface-2:#fff;--border:#d6d2c8;--bg-accent:#dbe8fb;--text-accent:#1b4f9c}
 body{margin:0;padding:12px;font-family:system-ui,sans-serif;background:#f3f1ec}button{border:1px solid #cfc9bd;border-radius:8px}</style></head><body>
-<!-- مرجع القتال الواقعي v2 — نظام الوضعيات المفتاحية.
-     الأنميشن: anim2 (BASE/GUARD/ATK/DODGE/BLOCK/poseWalk/poseIdle/poseStagger/addFlinch/drawBody).
-     الوحدات: U2. الربط بحالة القتال: poseOf و drawOne. المنطق: قسم "القتال الواقعي — تنفيذ مرجعي". -->
+<!-- مرجع القتال الواقعي v3 — أسلوب رسوم Stickman: أطراف سميكة، وقفات مبالغ فيها، لكمات وركلات مع السلاح،
+     سقوط ونهوض، نجوم انفجار، خطوط سرعة، أثر للأطراف. الأنميشن: anim3. الوحدات: U2. الربط: poseOf و drawOne. -->
 <div dir="rtl" style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-bottom:6px">
 <button id="mShow" style="min-height:40px;padding:0 14px;font-size:13px">عرض الحركات</button>
 <button id="mBattle" style="min-height:40px;padding:0 14px;font-size:13px">معركة</button>
@@ -44,7 +43,7 @@ function ik2(o,t,L1,L2,flip){let dx=t[0]-o[0],dy=t[1]-o[1],d=Math.hypot(dx,dy)||
    px,py الحوض | pl ميل أسفل العمود | cb انحناء أعلى العمود | ht ميل الرأس | hdx,hdy إزاحة الرأس
    fh,bh اليد الأمامية والخلفية | wa زاوية السلاح (0 للأمام، سالب للأعلى) | tf,kf / tb,kb فخذ وركبة الساق الأمامية/الخلفية */
 const BASE={px:0,py:-11,pl:0.05,cb:0,ht:0,hdx:0,hdy:0,fh:[3.5,-6.5],bh:[-2.5,-6.5],wa:0.9,tf:0.13,kf:0.16,tb:-0.13,kb:0.16,air:0};
-const GUARD={px:0,py:-10.3,pl:0.12,cb:0.06,ht:0.05,fh:[5,-11],bh:[1.5,-9.5],wa:-1.05,tf:0.38,kf:0.5,tb:-0.5,kb:0.38};
+const GUARD={px:0,py:-9.8,pl:0.18,cb:0.1,ht:0.08,fh:[4.6,-15],bh:[3,-13.4],wa:-1.35,tf:0.58,kf:0.75,tb:-0.72,kb:0.48};
 function P(o){return Object.assign({},BASE,GUARD,o);}
 function mixPose(a,b,t){const r={};for(const k in a){const va=a[k],vb=b[k]===undefined?va:b[k];
   r[k]=Array.isArray(va)?[va[0]+(vb[0]-va[0])*t,va[1]+(vb[1]-va[1])*t]:va+(vb-va)*t;}return r;}
@@ -57,17 +56,29 @@ const G=P({});
 const ATK={
   quick:[[0,G],
     [0.34,P({pl:0.02,cb:-0.28,ht:-0.12,fh:[-2,-13.5],bh:[3,-10],wa:-2.6,tf:0.3,kf:0.5,tb:-0.5,kb:0.3})],
-    [0.44,P({px:1.6,pl:0.22,cb:0.38,ht:0.18,fh:[9,-10],bh:[-3.5,-8],wa:0.15,tf:0.62,kf:0.4,tb:-0.72,kb:0.25})],
-    [0.53,P({px:1.6,pl:0.22,cb:0.4,ht:0.2,fh:[9.4,-9.2],bh:[-3.5,-8],wa:0.35,tf:0.62,kf:0.4,tb:-0.72,kb:0.25})],[1,G]],
+    [0.44,P({px:2.6,pl:0.3,cb:0.5,ht:0.22,fh:[9.5,-10],bh:[-4.5,-9],wa:0.2,tf:0.85,kf:0.45,tb:-0.95,kb:0.25})],
+    [0.53,P({px:2.6,pl:0.3,cb:0.52,ht:0.24,fh:[9.8,-9.2],bh:[-4.5,-9],wa:0.4,tf:0.85,kf:0.45,tb:-0.95,kb:0.25})],[1,G]],
   heavy:[[0,G],
     [0.34,P({py:-11.8,pl:-0.14,cb:-0.4,ht:-0.35,fh:[-1,-26],bh:[-3,-21.5],wa:-2.05,tf:0.2,kf:0.3,tb:-0.4,kb:0.3})],
     [0.40,P({py:-11,pl:0.05,cb:0.1,ht:-0.1,fh:[5,-23.5],bh:[1,-19],wa:-1.0,tf:0.45,kf:0.45,tb:-0.6,kb:0.3})],
-    [0.44,P({px:2.4,py:-8.8,pl:0.32,cb:0.62,ht:0.38,fh:[10,-4.5],bh:[5,-6],wa:1.1,tf:0.85,kf:0.75,tb:-0.85,kb:0.3})],
-    [0.53,P({px:2.4,py:-8.8,pl:0.32,cb:0.64,ht:0.4,fh:[10.2,-4],bh:[5,-5.5],wa:1.2,tf:0.85,kf:0.75,tb:-0.85,kb:0.3})],[1,G]],
+    [0.44,P({px:3.4,py:-8.2,pl:0.4,cb:0.78,ht:0.45,fh:[10.5,-4],bh:[5.5,-5.5],wa:1.15,tf:1.0,kf:0.85,tb:-1.0,kb:0.3})],
+    [0.53,P({px:3.4,py:-8.2,pl:0.4,cb:0.8,ht:0.46,fh:[10.7,-3.6],bh:[5.5,-5],wa:1.25,tf:1.0,kf:0.85,tb:-1.0,kb:0.3})],[1,G]],
   thrust:[[0,G],
     [0.34,P({px:-1.2,pl:-0.02,cb:-0.12,ht:-0.05,fh:[-3.5,-10.5],bh:[2,-11],wa:0,tf:0.28,kf:0.62,tb:-0.3,kb:0.52})],
-    [0.44,P({px:3.4,pl:0.36,cb:0.26,ht:0.12,fh:[13,-11],bh:[-6.5,-8.5],wa:0,tf:0.9,kf:0.35,tb:-0.95,kb:0.2})],
-    [0.53,P({px:3.4,pl:0.36,cb:0.28,ht:0.12,fh:[13.6,-11],bh:[-6.5,-8.5],wa:0.02,tf:0.9,kf:0.35,tb:-0.95,kb:0.2})],[1,G]],
+    [0.44,P({px:4.6,pl:0.42,cb:0.3,ht:0.14,fh:[14,-11.5],bh:[-7,-9.5],wa:0,tf:1.1,kf:0.4,tb:-1.15,kb:0.2})],
+    [0.53,P({px:4.6,pl:0.42,cb:0.32,ht:0.14,fh:[14.5,-11.5],bh:[-7,-9.5],wa:0.02,tf:1.1,kf:0.4,tb:-1.15,kb:0.2})],[1,G]],
+  punch:[[0,G],     // لكمة باليد الحرة، والسلاح يُسحب للصدر
+    [0.34,P({pl:0.06,cb:-0.12,fh:[2.5,-15.5],bh:[-1.5,-11.5],wa:-1.7,tf:0.5,kf:0.8,tb:-0.78,kb:0.45})],
+    [0.44,P({px:3.2,pl:0.38,cb:0.4,ht:0.16,fh:[2,-12.5],bh:[12.5,-14.6],wa:-1.7,tf:0.85,kf:0.5,tb:-1.05,kb:0.22})],
+    [0.53,P({px:3.2,pl:0.38,cb:0.42,ht:0.16,fh:[2,-12.5],bh:[13,-14.6],wa:-1.7,tf:0.85,kf:0.5,tb:-1.05,kb:0.22})],[1,G]],
+  kick_front:[[0,G],  // ركلة أمامية: الركبة تُرفع ثم تمتد الرجل
+    [0.34,P({py:-10.6,pl:-0.2,cb:-0.2,ht:-0.1,fh:[4,-15.8],bh:[1,-13.6],tf:1.35,kf:1.95,tb:-0.1,kb:0.15})],
+    [0.44,P({px:0.6,py:-10.9,pl:-0.4,cb:-0.26,ht:-0.14,fh:[3,-16.2],bh:[-2.4,-12],tf:1.52,kf:0.1,tb:-0.26,kb:0.1})],
+    [0.53,P({px:0.6,py:-10.9,pl:-0.4,cb:-0.26,ht:-0.14,fh:[3,-16.2],bh:[-2.4,-12],tf:1.55,kf:0.08,tb:-0.26,kb:0.1})],[1,G]],
+  kick_high:[[0,G],   // ركلة جانبية عالية: الجسد يميل بعيداً والرجل بارتفاع الرأس
+    [0.34,P({py:-10.8,pl:-0.26,cb:-0.3,fh:[3,-15.6],bh:[-1,-12],tf:1.62,kf:2.2,tb:-0.1,kb:0.1})],
+    [0.44,P({px:-0.6,py:-11.1,pl:-0.64,cb:-0.36,ht:-0.22,fh:[1.4,-12],bh:[-7.4,-9],tf:2.18,kf:0.05,tb:-0.05,kb:0.05})],
+    [0.53,P({px:-0.6,py:-11.1,pl:-0.64,cb:-0.36,ht:-0.22,fh:[1.4,-12],bh:[-7.4,-9],tf:2.24,kf:0.04,tb:-0.05,kb:0.05})],[1,G]],
   spin:[[0,G],
     [0.34,P({py:-9.4,pl:-0.06,cb:-0.22,ht:-0.1,fh:[-8,-12],bh:[-5,-11],wa:3.0,tf:0.5,kf:0.85,tb:-0.5,kb:0.85})],
     [0.39,P({py:-9.6,pl:0.05,cb:0,fh:[0,-14],bh:[-2,-13],wa:-1.6,tf:0.5,kf:0.85,tb:-0.5,kb:0.85})],
@@ -98,10 +109,22 @@ function poseWalk(t,spd,combat){const p=t*2.55*spd*TAU,s=Math.sin(p),c2=Math.cos
   if(combat){r.fh=[5.5+s*-1.2,-11.5+c2*0.6];r.bh=[-1+s*3,-8.5];r.wa=-1.0+s*0.15;}
   else{r.fh=[1.5-s*4.5,-7+Math.abs(s)*1.2];r.bh=[-1.5+s*4.5,-7+Math.abs(s)*1.2];r.wa=0.9-s*0.5;}
   return r;}
-function poseStagger(t,d){return P({px:-1.8*d,py:-10.4,pl:-0.18-0.16*Math.sin(t*20)*d,cb:-0.48*d,ht:-0.58*d+Math.sin(t*14)*0.22*d,
-  fh:[6+Math.sin(t*11)*2.2,-15.5+Math.cos(t*9)*2],bh:[-6.5,-14+Math.sin(t*13)*2],wa:-2.2+Math.sin(t*10)*0.4,tf:0.1,kf:0.42,tb:-0.55,kb:0.42});}
+function poseStagger(t,d){return P({px:-2.6*d,py:-10.2,pl:-0.26-0.22*Math.sin(t*20)*d,cb:-0.7*d,ht:-0.85*d+Math.sin(t*14)*0.3*d,
+  fh:[6.5+Math.sin(t*11)*3,-16.5+Math.cos(t*9)*2.6],bh:[-7.5,-15+Math.sin(t*13)*2.6],wa:-2.3+Math.sin(t*10)*0.5,
+  tf:0.35+Math.max(0,Math.sin(t*9))*0.6*d,kf:0.7,tb:-0.6,kb:0.45});}
+/* السقوط على الأرض ثم النهوض: الوضعية + زاوية دوران الجسد كله */
+function poseDown(e){const T=CR.downTime;
+  if(e<T-0.36)return P({py:-9,pl:0.1,cb:0.22,ht:0.35,fh:[5.5,-6],bh:[-4.5,-12.5],wa:0.8,tf:0.65,kf:0.85,tb:-0.3,kb:0.6});
+  const g=ease((e-(T-0.36))/0.36);
+  return mixPose(P({py:-7,pl:0.48,cb:0.34,ht:0.22,fh:[4,-8],bh:[1,-7],tf:1.25,kf:1.95,tb:-0.3,kb:1.85}),P({}),g);}
+function downAngle(e){const T=CR.downTime;
+  if(e<0.26)return -1.5*ease(e/0.26);
+  if(e<T-0.36)return -1.5+Math.sin((e-0.26)*14)*0.06*Math.max(0,1-(e-0.26)*3);
+  return -1.5*(1-ease((e-(T-0.36))/0.36));}
 function addFlinch(p,f,fromBack){const s=fromBack?-1:1;p=Object.assign({},p);
-  p.cb-=0.38*f*s;p.ht-=0.55*f*s;p.px-=1.3*f*s;p.fh=[p.fh[0]-1.6*f,p.fh[1]-1.4*f];p.bh=[p.bh[0]-1.2*f,p.bh[1]-1.6*f];return p;}
+  p.cb-=0.72*f*s;p.pl-=0.2*f*s;p.ht-=0.95*f*s;p.px-=2.2*f*s;p.py+=0.4*f;
+  p.fh=[p.fh[0]-2.4*f,p.fh[1]-3*f];p.bh=[p.bh[0]-3.2*f,p.bh[1]-4*f];
+  p.tf+=0.75*f;p.kf+=0.95*f;return p;}
 function poseDeath(){return P({py:-9,pl:0.3,cb:0.55,ht:0.65,fh:[4,-3],bh:[-2,-3],wa:1.3,tf:0.55,kf:1.0,tb:-0.45,kb:1.0});}
 
 /* ---------- رسم الجسد من الوضعية ---------- */
@@ -134,27 +157,27 @@ function drawBody(c,p,col,o){
 /* ===================== الوحدات على نظام الوضعيات v2 ===================== */
 const wdir=a=>[Math.cos(a),Math.sin(a)];
 const U2={
-  crow_common:{sx:0.92,sy:1.08,lw:1.9,headR:2.9,wlen:3.8,
-    head(c,p,col){c.beginPath();c.moveTo(-3.4,0.9);c.quadraticCurveTo(-0.4,-5.4,3.1,0.1);c.lineTo(2.1,-0.7);
-      c.quadraticCurveTo(-0.3,-3.3,-2.5,1);c.closePath();Pf(c,dk(col,0.45));},
+  crow_common:{sx:0.92,sy:1.06,lw:2.8,headR:3.5,wlen:4.2,
+    head(c,p,col){c.beginPath();c.moveTo(-4,1);c.quadraticCurveTo(-0.5,-6.4,3.7,0.1);c.lineTo(2.5,-0.8);
+      c.quadraticCurveTo(-0.4,-3.9,-3,1.1);c.closePath();Pf(c,dk(col,0.45));},
     back(c,J,p,col){const fl=Math.sin((p.py+p.px)*2)*1.2;
       tri(c,add(J.chest,[-0.8,0.6]),add(J.hip,[-6.2+fl,2+(p.air||0)*-3]),add(J.hip,[-0.6,0.4]),dk(col,0.25));},
-    weapon(c,J,p){const d=wdir(p.wa),e=[J.handF[0]+d[0]*3.8,J.handF[1]+d[1]*3.8];
-      limb(c,J.handF[0],J.handF[1],e[0],e[1],1.4,STEEL);}},
-  hammer_common:{sx:1.18,sy:0.94,lw:2.6,headR:3.1,wlen:4.8,
-    head(c,p,col){c.beginPath();c.arc(0,-0.3,3.4,Math.PI,0);Pf(c,dk(col,0.5));rrect(c,-3.4,-0.8,7,1.2,0.3,dk(col,0.5));},
+    weapon(c,J,p){const d=wdir(p.wa),e=[J.handF[0]+d[0]*4.2,J.handF[1]+d[1]*4.2];
+      limb(c,J.handF[0],J.handF[1],e[0],e[1],1.8,STEEL);}},
+  hammer_common:{sx:1.14,sy:0.95,lw:3.3,headR:3.6,wlen:5.2,
+    head(c,p,col){c.beginPath();c.arc(0,-0.3,3.9,Math.PI,0);Pf(c,dk(col,0.5));rrect(c,-3.9,-0.9,8,1.4,0.3,dk(col,0.5));},
     chest(c,J,p,col){const l=add(J.chest,rot(-4.4,0.8,J.a2)),r=add(J.chest,rot(4.4,0.8,J.a2));limb(c,l[0],l[1],r[0],r[1],2.4,dk(col,0.2));},
-    weapon(c,J,p){const d=wdir(p.wa),e=[J.handF[0]+d[0]*4.8,J.handF[1]+d[1]*4.8];
-      limb(c,J.handF[0],J.handF[1],e[0],e[1],1.5,WOOD);
-      c.save();c.translate(e[0],e[1]);c.rotate(p.wa);rrect(c,-1,-2,3,4,0.7,STEEL);c.restore();}},
-  hammer_shield:{sx:1.22,sy:0.93,lw:3,headR:3.2,wlen:3,
-    head(c,p,col){c.beginPath();c.arc(0,-0.3,3.5,Math.PI,0);Pf(c,dk(col,0.5));rrect(c,-3.5,-0.8,7,1.4,0.3,'#5d6169');},
+    weapon(c,J,p){const d=wdir(p.wa),e=[J.handF[0]+d[0]*5.2,J.handF[1]+d[1]*5.2];
+      limb(c,J.handF[0],J.handF[1],e[0],e[1],1.9,WOOD);
+      c.save();c.translate(e[0],e[1]);c.rotate(p.wa);rrect(c,-1.2,-2.4,3.6,4.8,0.8,STEEL);c.restore();}},
+  hammer_shield:{sx:1.18,sy:0.94,lw:3.5,headR:3.7,wlen:3,
+    head(c,p,col){c.beginPath();c.arc(0,-0.3,4,Math.PI,0);Pf(c,dk(col,0.5));rrect(c,-4,-0.9,8,1.6,0.3,'#5d6169');},
     chest(c,J,p,col){const l=add(J.chest,rot(-4.8,0.8,J.a2)),r=add(J.chest,rot(4.8,0.8,J.a2));limb(c,l[0],l[1],r[0],r[1],2.8,dk(col,0.2));},
     front(c,J,p,col){c.save();c.translate(J.handF[0]+1.2,J.handF[1]);c.rotate(J.a2*0.6);
       rrect(c,-2.8,-7.6,5.6,15.2,1.8,lt(col,0.25));rrect(c,-1.6,-6,3.2,12,1,dk(col,0.15));
       ell(c,0.2,0,1.4,1.4,lt(col,0.55));c.restore();}},
-  hammer_breaker:{sx:1.22,sy:0.94,lw:3,headR:3.2,wlen:12,twoH:true,
-    head(c,p,col){rrect(c,-3.4,-2,6.8,2,0.5,dk(col,0.5));},
+  hammer_breaker:{sx:1.18,sy:0.95,lw:3.5,headR:3.7,wlen:12,twoH:true,
+    head(c,p,col){rrect(c,-3.9,-2.3,7.8,2.3,0.5,dk(col,0.5));},
     chest(c,J,p,col){const l=add(J.chest,rot(-4.8,0.8,J.a2)),r=add(J.chest,rot(4.8,0.8,J.a2));limb(c,l[0],l[1],r[0],r[1],2.8,dk(col,0.2));},
     weapon(c,J,p){const d=wdir(p.wa),s=[J.handF[0]-d[0]*3.4,J.handF[1]-d[1]*3.4],e=[J.handF[0]+d[0]*8.6,J.handF[1]+d[1]*8.6];
       limb(c,s[0],s[1],e[0],e[1],1.8,WOOD);
@@ -177,19 +200,23 @@ const CR={
   traits:{aggr:[0.7,1.3], dodgeSkill:[0.7,1.3], react:[0.10,0.35], spd:[0.93,1.07], size:[0.96,1.04]},
   moves:{
     quick :{wind:0.18,strike:0.08,hold:0.05,rec:0.25,dmg:0.7,rangeAdd:0,  arc:100,sAmp:0.85,lunge:0.8},
-    heavy :{wind:0.45,strike:0.10,hold:0.09,rec:0.55,dmg:1.6,rangeAdd:0,  arc:110,sAmp:1.20,lunge:1.25,stagger:0.40,knock:1.0},
+    heavy :{wind:0.45,strike:0.10,hold:0.09,rec:0.55,dmg:1.6,rangeAdd:0,  arc:110,sAmp:1.20,lunge:1.25,stagger:0.40,knock:1.0,down:0.3},
     thrust:{wind:0.30,strike:0.07,hold:0.06,rec:0.35,dmg:1.0,rangeAdd:0.6,arc:50, sAmp:0.60,lunge:1.6},
-    spin  :{wind:0.50,strike:0.15,hold:0.05,rec:0.60,dmg:0.8,rangeAdd:0.2,arc:360,sAmp:1.10,lunge:0.4}
+    spin  :{wind:0.50,strike:0.15,hold:0.05,rec:0.60,dmg:0.8,rangeAdd:0.2,arc:360,sAmp:1.10,lunge:0.4},
+    punch :{wind:0.12,strike:0.06,hold:0.04,rec:0.20,dmg:0.5,rangeAdd:-0.15,arc:80,unarmed:true},
+    kick_front:{wind:0.24,strike:0.08,hold:0.06,rec:0.30,dmg:0.9,rangeAdd:0.3,arc:70,push:1.1,unarmed:true},
+    kick_high :{wind:0.36,strike:0.10,hold:0.08,rec:0.45,dmg:1.3,rangeAdd:0.2,arc:80,stagger:0.35,knock:0.9,down:0.45,unarmed:true}
   },
+  downTime:1.1, comboChance:0.55,
   maxRagdolls:20,
   flinchTime:0.2, flinchKnock:0.15,          // ارتداد خفيف مرئي مع كل ضربة عادية
   clashChance:0.6, clashWindow:0.08, clashKnock:0.45, clashStagger:0.2   // تصادم الأسلحة
 };
 const DEFS={
-  crow_common   :{hp:100,armor:0,   dmg:10,range:1.0,speed:2.5,turn:8,flank:0.85,moves:['quick','heavy','thrust']},
-  hammer_common :{hp:120,armor:0.15,dmg:10,range:1.0,speed:2.2,turn:4,flank:0.25,moves:['quick','heavy','thrust']},
-  hammer_shield :{hp:320,armor:0.5, dmg:8, range:1.0,speed:1.6,turn:3,flank:0,   moves:['quick','heavy'],block:true},
-  hammer_breaker:{hp:200,armor:0.2, dmg:22,range:1.2,speed:1.8,turn:3,flank:0.1, moves:['quick','heavy','spin']}
+  crow_common   :{hp:100,armor:0,   dmg:10,range:1.0,speed:2.5,turn:8,flank:0.85,moves:['quick','heavy','thrust','punch','kick_front','kick_high']},
+  hammer_common :{hp:120,armor:0.15,dmg:10,range:1.0,speed:2.2,turn:4,flank:0.25,moves:['quick','heavy','thrust','punch','kick_front']},
+  hammer_shield :{hp:320,armor:0.5, dmg:8, range:1.0,speed:1.6,turn:3,flank:0,   moves:['quick','heavy','kick_front'],block:true},
+  hammer_breaker:{hp:200,armor:0.2, dmg:22,range:1.2,speed:1.8,turn:3,flank:0.1, moves:['quick','heavy','spin','kick_front']}
 };
 const wrapA=a=>{while(a>Math.PI)a-=2*Math.PI;while(a<-Math.PI)a+=2*Math.PI;return a;};
 function rng32(seed){let s=seed>>>0;return()=>{s|=0;s=s+0x6D2B79F5|0;let t=Math.imul(s^s>>>15,1|s);
@@ -206,7 +233,7 @@ function makeUnit(id,team,key,x,y,seed){
     vx:0,vy:0,dvx:0,dvy:0,dead:false,deadT:0,animT:r()*3,moving:false,flash:0,blockFlash:0,bumpCd:0,flinch:0,clashFx:0};
 }
 function createBattle(seed,W,H){
-  const b={units:[],pops:[],W,H,t:0,over:false,winner:-1,ev:{dodge:0,block:0,back:0,side:0,bump:0,stagger:0,roll:0,hits:0,clash:0}};
+  const b={units:[],pops:[],fx:[],W,H,t:0,over:false,winner:-1,ev:{dodge:0,block:0,back:0,side:0,bump:0,stagger:0,roll:0,hits:0,clash:0,down:0,kick:0,punch:0,combo:0}};
   let id=0,s=seed;
   const crows=7,ham=['hammer_common','hammer_shield','hammer_common','hammer_breaker'];
   for(let i=0;i<crows;i++)b.units.push(makeUnit(id++,0,'crow_common',W*0.14+(i%2)*22,H*0.18+i*(H*0.64/(crows-1)),s++*7919));
@@ -217,7 +244,7 @@ function pop(b,x,y,txt,col){b.pops.push({x,y,txt,col,t:0});}
 function zoneOf(t,fx,fy){const d=Math.abs(wrapA(Math.atan2(fy-t.y,fx-t.x)-t.face));
   return d<=CR.frontHalf?'front':d<=CR.sideHalf?'side':'back';}
 function moveTotal(m){return m.wind+m.strike+m.hold+m.rec;}
-function inRecovery(t){if(t.st==='stagger')return true;
+function inRecovery(t){if(t.st==='stagger'||t.st==='down')return true;
   if(t.st!=='attack')return false;const m=CR.moves[t.move];return t.moveT>m.wind+m.strike+m.hold;}
 function alive(b){return b.units.filter(u=>!u.dead);}
 
@@ -230,6 +257,10 @@ function chooseMove(u,t,dist,nearCount){
     if(k==='heavy')s=0.8+(inRecovery(t)?2.0:0)+(u.traits.aggr-1)*0.8-(low?0.5:0);
     if(k==='thrust')s=0.6+(dist>u.def.range*TILE*0.8?1.2:0);
     if(k==='spin')s=0.2+(nearCount>=3?2.5:nearCount===2?0.6:0);
+    if(k==='punch')s=0.9+(dist<u.def.range*TILE*0.7?1.0:0);
+    if(k==='kick_front')s=0.7+(dist<u.def.range*TILE*0.6?0.9:0);
+    if(k==='kick_high')s=0.45+(inRecovery(t)?1.4:0)+(u.traits.aggr-1)*0.8;
+    if(u.combo)s+=m.unarmed?-0.8:1.2;                 // بعد لكمة أو ركلة: غالباً يكمل بالسلاح
     s*=1+(u.rng()*2-1)*CR.jitter;
     if(s>bs){bs=s;best=k;}}
   return best;
@@ -237,20 +268,20 @@ function chooseMove(u,t,dist,nearCount){
 function startAttack(b,u,k){
   u.st='attack';u.move=k;u.moveT=0;u.hitDone=false;
   const t=u.target;
-  if(t&&!t.dead&&!t.react&&t.st!=='stagger'&&t.st!=='dodge'&&t.st!=='block')t.react={at:t.traits.react,from:u};
+  if(t&&!t.dead&&!t.react&&t.st!=='stagger'&&t.st!=='dodge'&&t.st!=='block'&&t.st!=='down')t.react={at:t.traits.react,from:u};
 }
 function tryReact(b,u,a){          // الوحدة رأت الاستعداد، هل تتفادى أو تصدّ؟
   if(a.dead||a.st!=='attack'||a.hitDone)return;
   // يتفادى من كان منتظراً، أو في أول نصف استعداده فيلغي ضربته. المترنّح ومن في التعافي لا يتفادى
   const earlyWind=u.st==='attack'&&u.moveT<CR.moves[u.move].wind*0.5;
-  if(u.st!=='idle'&&u.st!=='walk'&&!earlyWind)return;
+  if(u.st!=='idle'&&u.st!=='walk'&&!earlyWind)return;   // المُسقَط أرضاً لا يتفادى
   const zone=zoneOf(u,a.x,a.y),mul=CR.angleMul[zone];
   if(mul<=0)return;                                  // من الخلف: لا يرى ولا يتفادى
   if(u.def.block&&zone==='front'&&u.stam>=CR.blockCost&&u.rng()<CR.blockBase*u.traits.skill){
     u.st='block';u.stT=CR.blockTime;u.stam-=CR.blockCost;pop(b,u.x,u.y,'صدّ!','#8fd0ff');b.ev.block++;return;}
   if(u.stam>=CR.dodgeCost&&u.dodgeCd<=0&&u.rng()<CR.dodgeBase*u.traits.skill*mul){
     // نوع التفادي: الطعنة تُتفادى بالقفز للخلف، والتلويح والضربة القوية بالانحناء تحتها غالباً
-    u.dodgeType=a.move==='thrust'?'leap':(u.rng()<0.55?'duck':'leap');
+    u.dodgeType=(a.move==='thrust'||a.move==='kick_front')?'leap':a.move==='kick_high'?'duck':(u.rng()<0.55?'duck':'leap');
     const away=Math.atan2(u.y-a.y,u.x-a.x)+(u.rng()*2-1)*1.2;
     const sp=CR.dodgeDist*TILE/CR.dodgeTime*(u.dodgeType==='duck'?0.3:1);
     u.st='dodge';u.stT=CR.dodgeTime;u.dvx=Math.cos(away)*sp;u.dvy=Math.sin(away)*sp;
@@ -283,10 +314,16 @@ function resolveHit(b,a){
       t.blockFlash=0.2;a.st='stagger';a.stT=CR.staggerBlocked;knock(a,t.x,t.y,0.5);continue;}
     const dmg=a.def.dmg*m.dmg*CR.dmgMul[zone]*(1-t.def.armor)*(0.9+0.2*a.rng());
     t.hp-=dmg;t.flash=0.1;b.ev.hits++;
+    const big=a.move==='heavy'||a.move==='kick_high'||a.move==='spin'||a.move==='kick_front';
+    b.fx.push({x:(t.x*2+a.x)/3,y:(t.y*2+a.y)/3,t:0,big,h:a.move==='kick_high'?22:a.move==='kick_front'?12:16});
+    if(m.unarmed){if(a.move==='punch')b.ev.punch++;else b.ev.kick++;}
     if(zone==='back'){pop(b,t.x,t.y,'من الخلف!','#ff8a7a');b.ev.back++;}
     else if(zone==='side')b.ev.side++;
     if(t.hp<=0){die(b,t,a,a.move);continue;}
-    if(m.stagger){t.st='stagger';t.stT=m.stagger;t.react=null;knock(t,a.x,a.y,m.knock);b.ev.stagger++;}
+    if(m.down&&t.st!=='down'&&a.rng()<m.down){t.st='down';t.stT=CR.downTime;t.react=null;knock(t,a.x,a.y,(m.knock||1)*1.3);b.ev.down++;
+      pop(b,t.x,t.y,'سقط!','#ffffff');}
+    else if(m.stagger){t.st='stagger';t.stT=m.stagger;t.react=null;knock(t,a.x,a.y,m.knock);b.ev.stagger++;}
+    else if(m.push){t.flinch=CR.flinchTime*1.4;t.flinchBack=zone==='back';knock(t,a.x,a.y,m.push);}
     else{t.flinch=CR.flinchTime;t.flinchBack=zone==='back';knock(t,a.x,a.y,CR.flinchKnock);}
   }
 }
@@ -302,14 +339,16 @@ function step(b,dt){
     u.dodgeCd=Math.max(0,u.dodgeCd-dt);u.cooldown=Math.max(0,u.cooldown-dt);
     if(u.react){u.react.at-=dt;if(u.react.at<=0){const f=u.react.from;u.react=null;tryReact(b,u,f);}}
     u.moving=false;
-    if(u.st==='stagger'||u.st==='block'){u.stT-=dt;if(u.stT<=0)u.st='idle';continue;}
+    if(u.st==='stagger'||u.st==='block'||u.st==='down'){u.stT-=dt;if(u.stT<=0)u.st='idle';continue;}
     if(u.st==='dodge'){u.x+=u.dvx*dt;u.y+=u.dvy*dt;u.stT-=dt;if(u.stT<=0)u.st='idle';continue;}
     const t=u.target;
     if(u.st==='attack'){
       if(t&&!t.dead){const want=Math.atan2(t.y-u.y,t.x-u.x),dA=wrapA(want-u.face);u.face+=Math.max(-2*dt,Math.min(2*dt,dA));}
       u.moveT+=dt;const m=CR.moves[u.move];
       if(!u.hitDone&&u.moveT>=m.wind+m.strike*0.6)resolveHit(b,u);
-      if(u.moveT>=moveTotal(m)&&u.st==='attack'){u.st='idle';u.cooldown=(0.1+u.rng()*0.25)/u.traits.aggr;}
+      if(u.moveT>=moveTotal(m)&&u.st==='attack'){u.st='idle';
+        if(m.unarmed&&u.move!=='kick_high'&&u.rng()<CR.comboChance){u.combo=1;u.cooldown=0.04;b.ev.combo++;}
+        else{u.combo=0;u.cooldown=(0.1+u.rng()*0.25)/u.traits.aggr;}}
       continue;}
     // انتظار / حركة: اختيار الهدف (ثبات الهدف) والاقتراب أو الالتفاف
     if(!t||t.dead||Math.hypot(t.x-u.x,t.y-u.y)>TILE*9){
@@ -349,6 +388,7 @@ function step(b,dt){
         else if(p.dead){q.vx+=p.vx*0.4;q.vy+=p.vy*0.4;p.vx*=0.6;p.vy*=0.6;p.bumpCd=0.2;}}}
   }
   for(const p of b.pops)p.t+=dt;b.pops=b.pops.filter(p=>p.t<1.1);
+  for(const f of b.fx)f.t+=dt;b.fx=b.fx.filter(f=>f.t<0.22);
   b.units=b.units.filter(u=>!(u.dead&&u.deadT>1.3));
   const teams=new Set(alive(b).map(u=>u.team));
   if(teams.size<=1){b.over=true;b.winner=teams.size?[...teams][0]:-1;}
@@ -356,8 +396,8 @@ function step(b,dt){
 
 
 /* ===================== ربط حالة القتال بالوضعيات ورسمها ===================== */
-const MOVE_AR={quick:'سريعة',heavy:'قوية',thrust:'طعنة',spin:'دائرية'};
-const ST_AR={dodge:'تفادٍ',block:'صدّ',stagger:'ترنّح'};
+const MOVE_AR={quick:'سريعة',heavy:'قوية',thrust:'طعنة',spin:'دائرية',punch:'لكمة',kick_front:'ركلة أمامية',kick_high:'ركلة عالية'};
+const ST_AR={dodge:'تفادٍ',block:'صدّ',stagger:'ترنّح',down:'على الأرض'};
 function canonA(u){const m=CR.moves[u.move],T=u.moveT,w=m.wind,k=m.strike,h=m.hold,r=m.rec;
   if(T<w)return 0.34*T/w;if(T<w+k)return 0.34+0.10*(T-w)/k;if(T<w+k+h)return 0.44+0.09*(T-w-k)/h;
   return Math.min(1,0.53+0.47*(T-w-k-h)/r);}
@@ -369,6 +409,7 @@ function poseOf(u){
   else if(u.st==='block'){p=keyPose(BLOCK,1-u.stT/CR.blockTime);const im=u.blockFlash/0.2;
     if(im>0){p=Object.assign({},p);p.cb-=0.35*im;p.px-=1.6*im;p.ht-=0.2*im;p.fh=[p.fh[0]-1.8*im,p.fh[1]];}}
   else if(u.st==='stagger')p=poseStagger(u.animT,Math.min(1,Math.max(0,u.stT)/0.4));
+  else if(u.st==='down')p=poseDown(CR.downTime-u.stT);
   else p=u.moving?poseWalk(u.animT,u.def.speed/2.2,combat):poseIdle(u.animT,combat);
   if(u.flinch>0)p=addFlinch(p,Math.sin(Math.PI*u.flinch/CR.flinchTime),u.flinchBack);
   return p;}
@@ -382,14 +423,23 @@ function drawOne(c,u,sx,sy,sc,alpha){
   c.save();c.globalAlpha=alpha==null?1:alpha;c.translate(sx,sy);c.scale(sc*dir*ud.sx*sz,sc*ud.sy*sz);
   if(u.dead){const k=ease(Math.min(1,u.deadT*1.25));c.globalAlpha*=u.deadT>0.72?Math.max(0,1-(u.deadT-0.72)/0.28):1;
     ell(c,0,0.6,4*(1+k*0.5),1.6,'rgba(0,0,0,0.3)');c.translate(-k*3.4,0);c.rotate(-k*1.5708);}
+  else if(u.st==='down'){const e=CR.downTime-u.stT,an=downAngle(e);
+    ell(c,-3,0.6,5.5,1.8,'rgba(0,0,0,0.3)');c.translate(an*2.2,0);c.rotate(an);}
   else{const s=1-(p.air||0)*0.35;ell(c,0,0.6,(ud.twoH?4.6:3.8)*s,1.6*s,'rgba(0,0,0,'+(0.3*s)+')');}
   if(u.st==='attack'&&u.move==='spin'&&a>0.34&&a<0.62){const g=(a-0.34)/0.28;c.save();c.globalAlpha*=Math.max(0,1-g)*0.85;
     c.beginPath();c.ellipse(0,-5,13+g*7,5.5+g*2.6,0,0,TAU);c.strokeStyle='#ffe08a';c.lineWidth=1.8;c.stroke();c.restore();}
-  if(a>=0.34&&a<0.55){for(let i=3;i>=1;i--){const pa=twoHand(ud,keyPose(ATK[u.move],a-i*0.028));const d=wdir(pa.wa);
+  const mv=u.st==='attack'?u.move:null,un=mv&&CR.moves[mv].unarmed;
+  if(un&&a>=0.34&&a<0.56){for(let i=3;i>=1;i--){const pa=keyPose(ATK[mv],a-i*0.03);c.save();c.globalAlpha*=0.16*(4-i);
+      if(mv==='punch'){const C=add(add([pa.px,pa.py],rot(0,-4.6,pa.pl)),rot(0,-4.6,pa.pl+pa.cb));const Sb=add(C,rot(-0.9,0.7,pa.pl+pa.cb));
+        limb(c,Sb[0],Sb[1],pa.bh[0],pa.bh[1],ud.lw*1.1,col);}
+      else{const hx=pa.px+1.2,hy=pa.py,k=[hx+Math.sin(pa.tf)*5.8,hy+Math.cos(pa.tf)*5.8],f=[k[0]+Math.sin(pa.tf-pa.kf)*6,k[1]+Math.cos(pa.tf-pa.kf)*6];
+        bone3(c,[hx,hy],k,f,ud.lw*1.1,col);}
+      c.restore();}}
+  if(!un&&a>=0.34&&a<0.55){for(let i=3;i>=1;i--){const pa=twoHand(ud,keyPose(ATK[u.move],a-i*0.028));const d=wdir(pa.wa);
       const L=ud.twoH?8.6:ud.wlen,s0=ud.twoH?[pa.fh[0]-d[0]*3.4,pa.fh[1]-d[1]*3.4]:pa.fh;
       c.save();c.globalAlpha*=0.14*(4-i);limb(c,s0[0],s0[1],pa.fh[0]+d[0]*L,pa.fh[1]+d[1]*L,ud.twoH?2.2:1.6,'#f3eee2');c.restore();}}
   const J=drawBody(c,p,col,ud);
-  if(a>=0.42&&a<0.6&&ud.weapon){const g=1-(a-0.42)/0.18,t=tipOf(ud,J,p);c.save();c.globalAlpha*=g*0.95;
+  if(!un&&a>=0.42&&a<0.6&&ud.weapon){const g=1-(a-0.42)/0.18,t=tipOf(ud,J,p);c.save();c.globalAlpha*=g*0.95;
     for(let i=0;i<6;i++){const an=i*1.047+0.3;limb(c,t[0],t[1],t[0]+Math.cos(an)*(2+g*3.6),t[1]+Math.sin(an)*(2+g*3.6),0.9,'#ffe08a');}
     ell(c,t[0],t[1],1.2+g*2.2,1.2+g*2.2,'rgba(255,236,170,'+(g*0.7)+')');c.restore();}
   if(u.flash>0){c.save();c.globalAlpha*=Math.min(1,u.flash/0.1)*0.55;ell(c,J.chest[0],J.chest[1]-1,5.5,9,'#ffffff');
@@ -406,8 +456,9 @@ const TEAM_COL=['#8a5cc7','#d9463b'];
 const cv=document.getElementById('cv'),ctx=cv.getContext('2d');
 let W=0,H=0,dpr=1,slow=1,debug=false,bt=null,overT=0,mode='show',act='heavy',ukey='crow_common';
 const AW=400,AH=260;
-const ACTS=[['quick','ضربة سريعة'],['heavy','ضربة قوية'],['thrust','طعنة'],['spin','ضربة دائرية'],
-  ['leap','تفادٍ بالقفز'],['duck','تفادٍ بالانحناء'],['block','صدّ'],['stagger','ترنّح'],['flinch','ارتداد الإصابة']];
+const ACTS=[['quick','ضربة سريعة'],['heavy','ضربة قوية'],['thrust','طعنة'],['spin','دائرية'],
+  ['punch','لكمة'],['kick_front','ركلة أمامية'],['kick_high','ركلة عالية'],
+  ['leap','تفادٍ بالقفز'],['duck','تفادٍ بالانحناء'],['block','صدّ'],['stagger','ترنّح'],['flinch','ارتداد'],['down','سقوط ونهوض']];
 const UNITS=[['crow_common','غراب'],['hammer_common','مطرقة'],['hammer_shield','مصفّح'],['hammer_breaker','محطِّم']];
 function resize(){W=cv.clientWidth||360;H=cv.clientHeight||440;dpr=window.devicePixelRatio||1;cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr);}
 function chips(id,list,get,set){const box=document.getElementById(id);box.innerHTML='';
@@ -433,6 +484,16 @@ const css=getComputedStyle(document.documentElement);
 const CT=(css.getPropertyValue('--text-primary')||'#2b2825').trim(),CS=(css.getPropertyValue('--text-secondary')||'#6b665c').trim();
 const CB=(css.getPropertyValue('--border')||'#d6d2c8').trim(),CSF=(css.getPropertyValue('--surface-1')||'#f5f3ee').trim();
 newBattle();refresh();
+/* نجمة انفجار الارتطام: تنبثق وتختفي خلال جزء من الثانية */
+function burst(x,y,g,big,sc){const R=(big?10:6.5)*sc*(0.6+g*0.8),n=big?10:8;ctx.save();ctx.globalAlpha=Math.max(0,1-g);
+  ctx.beginPath();for(let i=0;i<n*2;i++){const an=i*Math.PI/n+0.2,r=i%2?R*0.45:R;ctx.lineTo(x+Math.cos(an)*r,y+Math.sin(an)*r);}
+  ctx.closePath();ctx.fillStyle='#fffdf2';ctx.fill();ctx.lineWidth=Math.max(1,1.4*sc/2);ctx.strokeStyle='#ffb02e';ctx.stroke();ctx.restore();}
+/* خطوط سرعة خلف الوحدة المندفعة أو المقذوفة */
+function speedLines(x,y,vx,vy,sc){const v=Math.hypot(vx,vy);if(v<70)return;const nx=-vx/v,ny=-vy/v,k=Math.min(1,(v-70)/160);
+  ctx.save();ctx.globalAlpha=0.5*k;ctx.strokeStyle='#5b554c';ctx.lineWidth=1.2;
+  for(let i=0;i<3;i++){const oy=(i-1)*7*sc,ox=-ny*oy,oyy=nx*oy,L=(10+i*4)*sc*k;
+    ctx.beginPath();ctx.moveTo(x+ox+nx*6*sc,y-14*sc+oyy+ny*6*sc);ctx.lineTo(x+ox+nx*(6*sc+L),y-14*sc+oyy+ny*(6*sc+L));ctx.stroke();}
+  ctx.restore();}
 /* ---- عرض الحركات: وحدة كبيرة تكرر الحركة المختارة ---- */
 const demo={};
 function demoUnit(key){if(!demo[key]){demo[key]=makeUnit(99,key==='crow_common'?0:1,key,0,0,4242);demo[key].face=0;}return demo[key];}
@@ -440,7 +501,7 @@ let st0=0;
 function showFrame(t){
   const u=demoUnit(ukey),team=u.team;u.dead=false;u.flash=0;u.blockFlash=0;u.flinch=0;u.moving=false;u.animT=t;u.target=null;
   let valid=true;
-  if(['quick','heavy','thrust','spin'].includes(act)){
+  if(['quick','heavy','thrust','spin','punch','kick_front','kick_high'].includes(act)){
     if(!u.def.moves.includes(act))valid=false;
     const m=CR.moves[act],tot=moveTotal(m)+0.5,lt=t%tot;
     u.st=lt<moveTotal(m)?'attack':'idle';u.move=act;u.moveT=lt;u.target=u;}
@@ -449,6 +510,8 @@ function showFrame(t){
   else if(act==='block'){if(!u.def.block)valid=false;const cyc=1.1,lt=t%cyc;
     u.st=lt<0.9?'block':'idle';u.stT=Math.max(0.05,CR.blockTime-lt*0.3);u.blockFlash=lt>0.25&&lt<0.45?0.2-(lt-0.25):0;u.target=u;}
   else if(act==='stagger'){const cyc=1.2,lt=t%cyc;u.st=lt<0.5?'stagger':'idle';u.stT=0.5-lt;u.target=u;}
+  else if(act==='down'){const cyc=CR.downTime+0.6,lt=t%cyc;u.st=lt<CR.downTime?'down':'idle';u.stT=CR.downTime-lt;u.target=u;
+    if(lt<0.1)u.flash=0.1-lt;}
   else if(act==='flinch'){const cyc=0.9,lt=t%cyc;u.st='idle';u.target=u;
     if(lt<CR.flinchTime){u.flinch=CR.flinchTime-lt;u.flash=Math.max(0,0.1-lt);}}
   ctx.fillStyle=CSF;ctx.strokeStyle=CB;ctx.lineWidth=0.5;ctx.beginPath();
@@ -458,6 +521,9 @@ function showFrame(t){
     ctx.fillText('هذه الحركة ليست من حركات هذه الوحدة',W/2,H/2);return;}
   const sc=Math.min(W,H)/62;
   drawOne(ctx,u,W*0.45,H*0.74,sc);
+  if(u.st==='attack'){const a=canonA(u);if(a>=0.44&&a<0.58){const m=CR.moves[u.move];
+    const big=['heavy','kick_high','spin','kick_front'].includes(u.move),hh=u.move==='kick_high'?22:u.move==='kick_front'?12:u.move==='punch'?15:11;
+    burst(W*0.45+14*sc,H*0.74-hh*sc,(a-0.44)/0.14,big,sc*1.1);}}
   if(u.st==='dodge'){const off=(act==='leap'?-1:0);}
   ctx.fillStyle=CS;ctx.font='12px system-ui,sans-serif';ctx.textAlign='center';ctx.direction='rtl';
   const lab=u.st==='attack'?(canonA(u)<0.34?'استعداد':canonA(u)<0.44?'ضرب':canonA(u)<0.53?'تجمّد الارتطام':'تعافٍ'):'';
@@ -479,8 +545,11 @@ function frame(now){resize();const real=Math.min(0.05,(now-last)/1000);last=now;
     ctx.fillStyle=u.team?'rgba(217,70,59,0.12)':'rgba(138,92,199,0.14)';
     ctx.beginPath();ctx.moveTo(x,y);ctx.arc(x,y,TILE*1.3*sc,u.face-CR.frontHalf,u.face+CR.frontHalf);ctx.closePath();ctx.fill();}
   for(const u of us){const [x,y]=Pp(u),s=1.15*sc;
-    if(u.st==='dodge'){for(let g=1;g<=2;g++)drawOne(ctx,u,x-u.dvx*0.035*g*sc,y-u.dvy*0.035*g*sc,s,0.18);}
+    if(u.st==='dodge'){for(let g=1;g<=2;g++)drawOne(ctx,u,x-u.dvx*0.035*g*sc,y-u.dvy*0.035*g*sc,s,0.18);
+      speedLines(x,y,u.dvx,u.dvy,s);}
+    else speedLines(x,y,u.vx,u.vy,s);
     drawOne(ctx,u,x,y,s);}
+  for(const f of bt.fx){const [x,y]=Pp(f);burst(x,y-f.h*sc*1.15,f.t/0.22,f.big,sc*1.15);}
   for(const u of us){if(!(u.clashFx>0))continue;const g=u.clashFx/0.3,x=ox+u.clashX*sc,y=oy+u.clashY*sc-14*sc;
     ctx.save();ctx.globalAlpha=g;ctx.strokeStyle='#fff3c0';ctx.lineWidth=1.6;
     for(let i=0;i<8;i++){const an=i*0.785,r1=3*sc,r2=(6+(1-g)*10)*sc;
