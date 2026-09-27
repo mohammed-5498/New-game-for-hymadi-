@@ -5,7 +5,8 @@ import { facingFromAngle } from './units.js';
 import {
   updateRealism, updateBumps, updateLod, registerSight, chooseMove, moveTiming,
   zoneOf, zoneDamage, knockback, stagger, blockedBy, corpseKnock, turnToward,
-  approachPoint, busyBonus, crowdCount, attackPause, statDamageFactor, wrapAngle, releaseRagdoll
+  approachPoint, busyBonus, crowdCount, attackPause, statDamageFactor, wrapAngle, releaseRagdoll,
+  addPop, updatePops, flinch, tryClash
 } from './realism.js';
 import { createFire } from './abilities.js';
 import { chargeOverTime, chargeOnHit, chargeOnDamageTaken, tryCastUlt, resolveUlt, updateFlurry } from './ults.js';
@@ -60,6 +61,7 @@ export function updateCombat(state) {
   const scanTicks = Math.max(1, Math.round(COMBAT.scanInterval / TICK_SEC));
 
   updateLod(state);         // مستويات التفصيل تُحسب كل نصف ثانية (القسم 5.4.5)
+  updatePops(state);        // الكلمات الطائرة وشرر التصادم
 
   for (const unit of state.units) {
     if (unit.hitFlash > 0) unit.hitFlash -= TICK_SEC;
@@ -160,6 +162,9 @@ function resolveMove(state, unit, hit) {
     if (distance(unit, target) <= reach && off <= m.arc * Math.PI / 360 + CR.arcTolerance) targets.push(target);
   }
 
+  // تصادم الأسلحة: الهدف يضربني في نفس اللحظة تقريباً ونحن متقابلان (القسم 5.4.4ب)
+  if (targets.length === 1 && hit.move !== 'spin' && unit.lod !== 'stat' && tryClash(state, unit, targets[0])) return;
+
   let landed = false;
   for (const target of targets) {
     if (target.cState === 'dodge') continue;                 // تفادى: الضربة في الهواء
@@ -173,7 +178,7 @@ function resolveMove(state, unit, hit) {
     // القتال الإحصائي خارج الشاشة: ضرر أقل بلا أنميشن (القسم 5.4.5)
     const lodFactor = unit.lod === 'stat' ? statDamageFactor : 1;
     const amount = hit.damage * zoneDamage(zone) * lodFactor;
-    if (zone === 'back') state.combatEvents.back++;
+    if (zone === 'back') { state.combatEvents.back++; addPop(state, target, 'من الخلف!', 'back'); }
     else if (zone === 'side') state.combatEvents.side++;
     state.combatEvents.hits++;
 
@@ -187,6 +192,8 @@ function resolveMove(state, unit, hit) {
     else if (m.stagger && isAlive(target) && target.invulnUntil <= state.time) {
       stagger(state, target, m.stagger);                      // الضربة القوية تُترنّح وتدفع
       knockback(target, unit.x, unit.y, m.knock);
+    } else if (isAlive(target) && !target.hardened) {
+      flinch(target, unit.x, unit.y, zone === 'back');        // ارتداد خفيف مع كل ضربة عادية
     }
   }
   if (landed) chargeOnHit(state, unit);
@@ -613,7 +620,11 @@ function updateProjectiles(state) {
       // المتفادي في لحظة السقوط تمر الرمية بجانبه
       const dodged = shot.dodgeable && isAlive(shot.target) && shot.target.cState === 'dodge';
       if (shot.damage > 0 && shot.hits && !dodged && isAlive(shot.target)) {
-        strike(state, shot.attacker, shot.target, shot.damage);
+        const target = shot.target;
+        strike(state, shot.attacker, target, shot.damage);
+        if (isAlive(target) && !target.cState) {
+          flinch(target, shot.startX, shot.startY, zoneOf(target, shot.startX, shot.startY) === 'back', false);
+        }
         chargeOnHit(state, shot.attacker);
       }
       continue;

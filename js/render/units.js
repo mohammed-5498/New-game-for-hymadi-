@@ -1,8 +1,7 @@
-// رسم الوحدات: يستعمل docs/units-art.js (منسوخ في unitsArt.js) مربوطاً بحالة الوحدة
-import { TILE_HALF_W, TILE_HALF_H, COMBAT, PERFORMANCE, UNIT_ART, ULT } from '../config.js';
-import { UI_LIGHT, mix } from './colors.js';
-import { drawUnit as drawUnitArt } from './unitsArt.js';
-import { drawCombatUnit, needsCombatArt } from './combatArt.js';
+// رسم الوحدات: نظام الوضعيات v2 (anim.js + bodies.js + combatArt.js) مربوطاً بحالة الوحدة
+import { TILE_HALF_W, TILE_HALF_H, COMBAT, COMBAT_REALISM, PERFORMANCE, UNIT_ART, ULT } from '../config.js';
+import { UI_LIGHT } from './colors.js';
+import { drawOne, stateLabel } from './combatArt.js';
 
 // الأفراد العاديون بلا ضربة مميزة، فلا نجمة ولا شريط شحن لهم
 const hasUlt = (unit) => !!unit.stats.ult;
@@ -40,14 +39,7 @@ export function unitWorldPos(unit, alpha) {
   return { x: (i - j) * TILE_HALF_W, y: (i + j) * TILE_HALF_H };
 }
 
-// هل الوحدة في منتصف ضربة؟ (الرسم يقرأ زمن بدايتها من حالة الوحدة)
-function swingProgress(unit, time) {
-  if (unit.attackStart === null || !unit.attackRate) return -1;
-  const elapsed = time - unit.attackStart;
-  return elapsed >= 0 && elapsed < unit.attackRate ? elapsed : -1;
-}
-
-export function drawUnit(ctx, unit, alpha, zoom = 99, time = 0) {
+export function drawUnit(ctx, unit, alpha, zoom = 99, time = 0, debug = false, crowded = false) {
   const { x, y } = unitWorldPos(unit, alpha);
   const dead = unit.state === 'dead';
 
@@ -60,15 +52,30 @@ export function drawUnit(ctx, unit, alpha, zoom = 99, time = 0) {
     return;
   }
 
-  // حالات القتال الواقعي (تفادٍ، صدّ، ترنّح، والحركات الأربع) لها هيكلها الخاص
-  if (!dead && needsCombatArt(unit)) {
-    drawCombatUnit(ctx, unit, artKey(unit), x, y, artScale(unit),
-      unit.hitFlash > 0 ? mix(artColor(unit), '#ffffff', 0.5) : artColor(unit),
-      time + (unit.id % 17) * 0.13, isWalking(unit));
-  } else {
-    drawUnitArt(ctx, artKey(unit), { x, y, ...artState(unit, time, dead) });
+  // نظام الوضعيات v2 لكل الوحدات (القسم 5.4.6). المستوى المبسّط بلا أثر السلاح وبلا شبحي التفادي
+  const key = artKey(unit), scale = artScale(unit), color = artColor(unit), walking = isWalking(unit);
+  const full = unit.lod === 'full';
+  if (full && unit.cState === 'dodge') {
+    for (let g = 1; g <= 2; g++) {
+      const di = unit.dvx * 0.035 * g, dj = unit.dvy * 0.035 * g;
+      drawOne(ctx, unit, key, x - (di - dj) * TILE_HALF_W, y - (di + dj) * TILE_HALF_H,
+              scale, color, time, walking, 0, 0.18);
+    }
   }
+  const ghosts = full ? (crowded ? COMBAT_REALISM.trailGhostsCrowded : COMBAT_REALISM.trailGhosts) : 0;
+  drawOne(ctx, unit, key, x, y, scale, color, time, walking, ghosts);
   if (dead) return;
+
+  // وضع التفاصيل (ثلاث لمسات على شريط المعلومات): اسم الحالة فوق الوحدة
+  if (debug) {
+    const label = stateLabel(unit, time);
+    if (label) {
+      ctx.font = '600 3px system-ui, sans-serif'; ctx.textAlign = 'center';
+      ctx.lineWidth = 0.9; ctx.strokeStyle = 'rgba(0,0,0,.7)'; ctx.fillStyle = '#fff';
+      const ly = y + UNIT_ART.healthBarY - 2.5 * (unit.champion ? 1.3 : 1);
+      ctx.strokeText(label, x, ly); ctx.fillText(label, x, ly);
+    }
+  }
 
   // شريط الدم للوحدة المتضررة أو المحددة، وللبطل دائماً (القسم 6.6)
   const bar = unit.hp < unit.maxHp || unit.selected || unit.champion;
@@ -83,39 +90,6 @@ export function drawUnit(ctx, unit, alpha, zoom = 99, time = 0) {
 const isWalking = (unit) =>
   unit.state === 'moving' || unit.state === 'attackMove' ||
   (unit.state === 'attacking' && unit.path.length > 0);
-
-// اختيار حالة الرسم وزمنها: الموت ثم الضربة ثم تلقي الضرر ثم الجري أو الوقوف
-function artState(unit, time, dead) {
-  const common = {
-    color: unit.hitFlash > 0 ? mix(artColor(unit), '#ffffff', 0.5) : artColor(unit),
-    dir: unit.facing || 1,
-    scale: artScale(unit),
-    rate: unit.attackRate || unit.stats.attackTime,
-    hurtDur: UNIT_ART.hurtSeconds,
-    deathDur: COMBAT.deathTime
-  };
-
-  // الموت: سقوط واختفاء خلال ثانية (الأنميشن نفسه يدير الدوران والشفافية)
-  if (dead) {
-    return { ...common, state: 'death', t: COMBAT.deathTime - unit.deathTimer };
-  }
-
-  // الضربة أولاً حتى تبقى لحظة الارتطام (47%) مطابقة للضرر الفعلي
-  const swing = swingProgress(unit, time);
-  if (swing >= 0) {
-    // الضربة المميزة: نفس الحركة مع وهج ذهبي ومؤثر خاص (القسم 6.7)
-    const ult = unit.ultStart !== null && time - unit.ultStart < unit.ultRate;
-    return { ...common, state: ult ? 'ult' : 'attack', t: swing };
-  }
-
-  if (unit.hurtTimer > 0) {
-    return { ...common, state: 'hurt', t: UNIT_ART.hurtSeconds - unit.hurtTimer };
-  }
-
-  const walking = isWalking(unit);
-  // إزاحة صغيرة لكل وحدة حتى لا تتنفس كل الوحدات معاً
-  return { ...common, state: walking ? 'walk' : 'idle', t: time + (unit.id % 17) * 0.13 };
-}
 
 function drawHealthBar(ctx, unit, x, y) {
   const w = unit.champion ? 8 : unit.hero ? 6.5 : 5, h = 1.1;

@@ -69,6 +69,9 @@ export function initRealism(state, unit) {
   unit.dvx = 0; unit.dvy = 0;  // قفزة التفادي
   unit.bumpCd = 0;
   unit.blockFlash = 0;
+  unit.dodgeType = 'leap';     // leap | duck
+  unit.flinch = 0;             // ارتداد خفيف مرئي بعد الإصابة
+  unit.flinchBack = false;     // الضربة جاءت من الخلف فيميل للأمام
   unit.rolling = false;        // جثة متدحرجة
   unit.lod = 'full';
   unit.lodAt = 0;
@@ -141,8 +144,10 @@ export function registerSight(state, attacker, target, ranged = false) {
 
 // --- التفادي والصدّ ---
 function beginDodge(state, unit, attacker) {
+  // نوع التفادي: الطعنة تُتفادى بالقفز للخلف، والتلويح والضربة القوية بالانحناء تحتها غالباً
+  unit.dodgeType = attacker.cMove === 'thrust' ? 'leap' : (unit.rng() < CR.duckChance ? 'duck' : 'leap');
   const away = Math.atan2(unit.y - attacker.y, unit.x - attacker.x) + (unit.rng() * 2 - 1) * 1.2;
-  const speed = CR.dodgeDist / CR.dodgeTime;
+  const speed = CR.dodgeDist / CR.dodgeTime * (unit.dodgeType === 'duck' ? CR.duckSpeed : 1);
   cancelSwing(unit);
   unit.cState = 'dodge';
   unit.cTimer = CR.dodgeTime;
@@ -151,6 +156,7 @@ function beginDodge(state, unit, attacker) {
   unit.stamina -= CR.dodgeCost;
   unit.dodgeCd = CR.dodgeCd;
   state.combatEvents.dodge++;
+  addPop(state, unit, 'تفادى!', 'dodge');
 }
 
 function beginBlock(state, unit) {
@@ -159,6 +165,7 @@ function beginBlock(state, unit) {
   unit.cTimer = CR.blockTime;
   unit.stamina -= CR.blockCost;
   state.combatEvents.block++;
+  addPop(state, unit, 'صدّ!', 'block');
 }
 
 // يُلغي ضربة في منتصفها (التفادي في أول نصف الاستعداد يلغي الضربة)
@@ -291,6 +298,7 @@ export function crowdCount(state, unit, isEnemyFn) {
 export function updateRealism(state, unit) {
   const map = state.map;
   unit.blockFlash = Math.max(0, unit.blockFlash - TICK_SEC);
+  unit.flinch = Math.max(0, unit.flinch - TICK_SEC);
   unit.bumpCd = Math.max(0, unit.bumpCd - TICK_SEC);
 
   // الارتداد: سرعة تتناقص بالاحتكاك، ولا تدفع الوحدة أبداً داخل مبنى
@@ -369,6 +377,7 @@ export function updateBumps(state, isEnemyFn) {
       unit.vx *= 0.5; unit.vy *= 0.5;
       unit.bumpCd = CR.bumpCd;
       state.combatEvents.bump++;
+      addPop(state, other, 'اصطدام!', 'bump');
     });
   }
 }
@@ -389,6 +398,7 @@ export function updateLod(state) {
     const dx = wx - cx, dy = wy - cy;
     visible.push({ unit, d: dx * dx + dy * dy });
   }
+  state.lodCrowded = visible.length > CR.lod.fullUnits;   // يقلل أشباح أثر السلاح عند الازدحام
   if (visible.length <= CR.lod.fullUnits) {
     for (const v of visible) v.unit.lod = 'full';
     return;
@@ -402,3 +412,52 @@ export const statDamageFactor = CR.lod.offScreenDamage;
 
 // الفاصل بعد التعافي: انتظار عشوائي مقسوم على الجرأة
 export const attackPause = (unit) => (CR.pauseMin + unit.rng() * CR.pauseRandom) / unit.traits.aggr;
+
+// --- الكلمات الطائرة (القسم 5.4.4ب): تُسجَّل هنا وتُرسم فوق الحدث ---
+export function addPop(state, unit, text, kind) {
+  if (unit.lod === 'stat') return;                     // خارج الشاشة: لا أحد يراها
+  state.pops.push({ x: unit.x, y: unit.y, text, color: CR.pops.colors[kind], t: 0 });
+  if (state.pops.length > CR.pops.max) state.pops.shift();
+}
+
+export function updatePops(state) {
+  if (state.pops.length) {
+    for (const pop of state.pops) pop.t += TICK_SEC;
+    state.pops = state.pops.filter(pop => pop.t < CR.pops.seconds);
+  }
+  if (state.clashes.length) {
+    for (const fx of state.clashes) fx.t += TICK_SEC;
+    state.clashes = state.clashes.filter(fx => fx.t < CR.clashFxSeconds);
+  }
+}
+
+// --- ارتداد خفيف مع كل ضربة عادية: ميلان 0.2 ث ودفع صغير، ولا يقطع هجوم المصاب ---
+export function flinch(unit, fromX, fromY, fromBack, push = true) {
+  unit.flinch = CR.flinchTime;
+  unit.flinchBack = fromBack;
+  if (push) knockback(unit, fromX, fromY, CR.flinchKnock);
+}
+
+// --- تصادم الأسلحة: متقابلان يضرب كل منهما الآخر في نفس اللحظة تقريباً ---
+// يعيد true إذا تصادمت الضربتان (لا ضرر على أحد)
+export function tryClash(state, unit, target) {
+  if (!target.cMove || !target.cPhases || !target.pendingHit) return false;
+  if (target.target !== unit) return false;
+  if (zoneOf(target, unit.x, unit.y) !== 'front' || zoneOf(unit, target.x, target.y) !== 'front') return false;
+  const hitAt = target.cPhases.wind + target.cPhases.strike * CR.strikeMoment;
+  if (Math.abs(target.cMoveT - hitAt) > CR.clashWindow) return false;
+  if (unit.rng() >= CR.clashChance) return false;
+
+  for (const [a, b] of [[unit, target], [target, unit]]) {
+    stagger(state, a, CR.clashStagger);                   // يُلغي ضربة الهدف أيضاً
+    knockback(a, b.x, b.y, CR.clashKnock);
+  }
+  const mx = (unit.x + target.x) / 2, my = (unit.y + target.y) / 2;
+  state.clashes.push({ x: mx, y: my, t: 0 });
+  state.combatEvents.clash++;
+  if (unit.lod !== 'stat') {
+    state.pops.push({ x: mx, y: my, text: 'تصادم!', color: CR.pops.colors.clash, t: 0 });
+    if (state.pops.length > CR.pops.max) state.pops.shift();
+  }
+  return true;
+}

@@ -499,6 +499,5 @@ function drawUnit(c,key,o){
   if(r.flinch){c.globalAlpha=r.flinch*0.6;
     for(let i=0;i<4;i++){const a=i*1.57+0.6;limb(c,2,-12,2+Math.cos(a)*(3+r.flinch*4),-12+Math.sin(a)*(3+r.flinch*4),1,'#e05a4a');}}
   c.globalAlpha=1;c.restore();}
-// التصدير وحده مختلف عن المرجع: يضيف لبنات الرسم التي يحتاجها القتال الواقعي
-// (js/render/combatArt.js يبني الهيكل الحركي للحالات الجديدة بها، بلا تعديل رسم أي وحدة)
-export { drawUnit, U, rig, shadow, ell, limb, tri, ease, TAU };
+// التصدير وحده مختلف عن المرجع: الوهج الذهبي للضربة المميزة يستعمله رسم الوضعيات v2 (combatArt.js)
+export { drawUnit, U, ultGlow };

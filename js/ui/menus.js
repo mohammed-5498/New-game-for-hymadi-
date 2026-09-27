@@ -5,6 +5,7 @@ import {
 } from '../config.js';
 import { sound, audioSettings, setAudioSettings, startMusic } from '../audio/sound.js';
 import { isNativeApp, exitApp } from '../platform.js';
+import { getPref, setPref } from '../prefs.js';
 
 const el = (id) => document.getElementById(id);
 
@@ -49,6 +50,7 @@ export function setupMenus(handlers) {
   el('btnPlay').addEventListener('click', () => { sound('ui_tap'); showScreen('setup'); });
   el('btnBackToMain').addEventListener('click', () => { sound('ui_tap'); showScreen('main'); });
   el('btnStart').addEventListener('click', startPressed);
+  el('btnArena').addEventListener('click', arenaPressed);
 
   // زر الخروج وسؤاله: داخل التطبيق فقط (القسم 2.1)
   el('btnExit').hidden = !isNativeApp();
@@ -68,6 +70,10 @@ export function setupMenus(handlers) {
     () => setup.weather, key => { setup.weather = key; refresh(); });
 
   buildAudioOptions();
+
+  // الكلمات الطائرة فوق أحداث القتال (القسم 5.4.4ب): مفعّلة افتراضياً
+  buildOptions('optPops', [true, false], v => v ? 'تظهر' : 'مخفية',
+    () => getPref('pops'), value => { setPref('pops', value); sound('ui_tap'); refresh(); });
   buildSlots();
   refresh();
 }
@@ -223,6 +229,7 @@ function refresh() {
   refreshOptions('optSfx');
   refreshOptions('optMusic');
   refreshOptions('optMute');
+  refreshOptions('optPops');
 
   const limit = MAP_SIZES[setup.mapSize].maxPlayers;
   el('slotsHint').textContent = 'الخانة الأولى أنت • الحد على هذه الخريطة ' + limit + ' لاعبين';
@@ -279,6 +286,19 @@ function startPressed() {
   errorNode.hidden = true;
   onStartMatch(buildMatchSettings());
   startMusic();                       // الموسيقى تبدأ مع المباراة لا في القوائم
+}
+
+// ساحة تجربة القتال: غربان اللاعب ضد مطارق ثابتة، بلا بوت ولا ظهور
+function arenaPressed() {
+  sound('ui_tap');
+  onStartMatch({
+    mapSize: 'small', maxUnits: UNITS.maxUnitsDefault, weather: 'day', arena: true,
+    players: [
+      { name: 'أنت', gang: 'crows', color: 'purple', isHuman: true, team: 0, difficulty: 'medium' },
+      { name: 'المطارق', gang: 'hammers', color: 'red', isHuman: false, team: 0, difficulty: 'medium' }
+    ]
+  });
+  startMusic();
 }
 
 // يحول خيارات القائمة إلى إعدادات مباراة

@@ -8,6 +8,7 @@ import { initSpawnTimers, spawnChampion } from './game/spawn.js';
 import { initBots } from './ai/bot.js';
 import { createPolicePlayer, initPolice } from './game/police.js';
 import { tileToWorld } from './map/coords.js';
+import { buildArena } from './game/arena.js';
 
 export function createMatch(settings) {
   const players = settings.players.map((p, index) => ({
@@ -58,7 +59,9 @@ export function createMatch(settings) {
     combatSeed: (Math.random() * 4294967295) >>> 0,   // بذرة المباراة: معركتان لا تتشابهان
     rollingCorpses: 0,         // عدد الجثث المتدحرجة الآن (سقفها في COMBAT_REALISM)
     lodAt: 0,                  // موعد إعادة حساب مستويات التفصيل
-    combatEvents: { dodge: 0, block: 0, stagger: 0, bump: 0, roll: 0, back: 0, side: 0, hits: 0 },
+    combatEvents: { dodge: 0, block: 0, stagger: 0, bump: 0, roll: 0, back: 0, side: 0, hits: 0, clash: 0 },
+    pops: [],                  // الكلمات الطائرة: تفادى! صدّ! من الخلف! اصطدام! تصادم!
+    clashes: [],               // شرر تصادم الأسلحة
     shakeAt: -99,              // زمن آخر ارتجاجة كاميرا (القسم 5.2)
     alerts: [],                // أسهم الحافة الظاهرة الآن (القسم 12.3)
     alertSeen: [],             // مناطق نُبّه عنها قريباً {kind, i, j, t}
@@ -171,8 +174,12 @@ export function resetMatch(state, settings = state.settings) {
   state.rollingCorpses = 0;
   state.lodAt = 0;
   state.combatEvents = fresh.combatEvents;
+  state.pops = [];
+  state.clashes = [];
   state.alerts = [];
   state.alertSeen = [];
   state.shakeAt = -99;
+  state.arena = null;
   centerCameraOnHome(state);
+  if (settings.arena) buildArena(state);     // ساحة تجربة القتال
 }

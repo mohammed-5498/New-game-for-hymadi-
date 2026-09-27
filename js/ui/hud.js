@@ -31,13 +31,14 @@ export function setInputMode(state, mode) {
 }
 
 export function setupHud(state) {
-  // لمس شريط المعلومات 3 مرات يُظهر مؤشر الإطارات أو يخفيه
+  // لمس شريط المعلومات 3 مرات: وضع التفاصيل (مؤشر الإطارات واسم حالة كل وحدة)
   el('info').addEventListener('click', () => {
     infoTaps++;
     if (infoTaps < PERFORMANCE.fpsTaps) return;
     infoTaps = 0;
     fpsVisible = !fpsVisible;
     el('fps').hidden = !fpsVisible;
+    state.debugView = fpsVisible;      // وضع التفاصيل: اسم الحالة فوق كل وحدة
   });
 
   el('btnMode').addEventListener('click', () => {

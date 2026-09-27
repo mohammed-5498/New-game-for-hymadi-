@@ -1,11 +1,13 @@
 // الكاميرا وترتيب الرسم الكامل لإطار واحد
-import { TILE_HALF_W, TILE_HALF_H, TICK_SEC, CAMERA, CAPTURE, PERFORMANCE, ALERTS } from '../config.js';
+import { TILE_HALF_W, TILE_HALF_H, TICK_SEC, CAMERA, CAPTURE, PERFORMANCE, ALERTS, COMBAT_REALISM } from '../config.js';
 import { mix, PALETTES, ROAD_COLOR, BACKGROUND, UI_LIGHT } from './colors.js';
 import { drawBuilding, setFrameContext } from './buildings.js';
 import { drawUnit, drawSelectionRing, drawProjectile, drawAura, drawFire } from './units.js';
 import { drawOverlay, drawLights, drawParticles } from './weather.js';
 import { worldToTile } from '../map/coords.js';
 import { tintAmount } from '../game/capture.js';
+import { drawClash } from './combatArt.js';
+import { getPref } from '../prefs.js';
 
 export function resizeCanvas(canvas, state) {
   const view = state.view;
@@ -77,12 +79,41 @@ export function render(ctx, state, alpha) {
     if (unit.selected) drawSelectionRing(ctx, unit, alpha);
   }
   drawMoveMarker(ctx, state);
+  drawCombatFx(ctx, state, visible);
 
   // جزيئات الطقس ومربع التحديد وأسهم التنبيه في إحداثيات الشاشة
   ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
   drawParticles(ctx, state.weather);
   drawSelectionBox(ctx, state);
   drawEdgeAlerts(ctx, state);
+}
+
+// --- شرر تصادم الأسلحة والكلمات الطائرة (القسم 5.4.4ب) ---
+// فوق طبقة الليل حتى تُقرأ، وبحجم ثابت على الشاشة مهما كان التقريب
+function drawCombatFx(ctx, state, visible) {
+  if (state.camera.z < PERFORMANCE.unitDetailZoom) return;
+  for (const fx of state.clashes) {
+    const x = (fx.x - fx.y) * TILE_HALF_W, y = (fx.x + fx.y) * TILE_HALF_H - 14;
+    if (visible(x, y)) drawClash(ctx, x, y, fx.t);
+  }
+  if (!state.pops.length || !getPref('pops')) return;
+  const z = state.camera.z;
+  ctx.font = '600 ' + (12 / z).toFixed(2) + 'px system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.direction = 'rtl';
+  ctx.lineWidth = 3 / z;
+  ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+  for (const pop of state.pops) {
+    const x = (pop.x - pop.y) * TILE_HALF_W;
+    const y = (pop.x + pop.y) * TILE_HALF_H - 30 - pop.t * 22 / z;
+    if (!visible(x, y)) continue;
+    ctx.globalAlpha = Math.max(0, 1 - pop.t / COMBAT_REALISM.pops.seconds);
+    ctx.fillStyle = pop.color;
+    ctx.strokeText(pop.text, x, y);
+    ctx.fillText(pop.text, x, y);
+  }
+  ctx.globalAlpha = 1;
+  ctx.direction = 'inherit';
 }
 
 // --- أسهم التنبيه على حافة الشاشة (القسم 12.3) ---
@@ -264,7 +295,7 @@ function drawBuildingsAndUnits(ctx, state, alpha, visible) {
     }
 
     const unitsHere = buckets.get(s);
-    if (unitsHere) for (const unit of unitsHere) drawUnit(ctx, unit, alpha, state.camera.z, state.time);
+    if (unitsHere) for (const unit of unitsHere) drawUnit(ctx, unit, alpha, state.camera.z, state.time, state.debugView, state.lodCrowded);
   }
 }
 
