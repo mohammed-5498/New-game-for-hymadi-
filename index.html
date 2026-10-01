@@ -76,11 +76,17 @@
         <p class="subtitle">عصابات تتقاتل للسيطرة على أحياء المدينة</p>
       </div>
       <div class="main-buttons">
+        <!-- مباراة محفوظة: تظهر فقط حين توجد (تُحفظ عند الإيقاف والخروج وإغلاق التطبيق) -->
+        <button id="btnContinue" class="wide gold" hidden>
+          <span>متابعة المباراة</span>
+          <span id="continueInfo" class="hint"></span>
+        </button>
         <button id="btnPlay" class="wide gold">لعب</button>
         <button id="btnSettings" class="wide">الإعدادات</button>
         <button id="btnStats" class="wide">الإحصائيات</button>
         <!-- زر الخروج: داخل التطبيق فقط، المتصفح لا يسمح بإغلاق الصفحة (القسم 2.1) -->
         <button id="btnExit" class="wide ghost" hidden>خروج</button>
+        <p id="mainNotice" class="hint" hidden></p>
       </div>
     </div>
   </div>
@@ -134,6 +140,7 @@
       <!-- شريط سفلي ثابت حتى يبقى زر "ابدأ" في متناول الإصبع دائماً -->
       <div class="setup-footer">
         <p id="setupError" class="error" hidden></p>
+        <p id="setupSaveHint" class="hint" hidden>بدء مباراة جديدة يحذف المباراة المحفوظة.</p>
         <div class="footer-row">
           <button id="btnStart" class="wide gold">ابدأ</button>
           <button id="btnBackToMain" class="wide ghost">رجوع</button>

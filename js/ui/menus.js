@@ -7,6 +7,7 @@ import { sound, audioSettings, setAudioSettings, startMusic } from '../audio/sou
 import { isNativeApp, exitApp } from '../platform.js';
 import { getPref, setPref } from '../prefs.js';
 import { loadStats, favoriteGang } from '../stats.js';
+import { savedMatchInfo } from '../matchSave.js';
 import { fadeIn, fadeOut, isShown } from './transition.js';
 import { showMenuScene, hideMenuScene } from './menuScene.js';
 
@@ -44,6 +45,7 @@ function defaultSlots() {
 
 let onStartMatch = null;
 let onOpenGame = null;
+let onContinueMatch = null;
 
 // زر مع صوت النقرة (القسم 12.0: صوت ui_tap لكل زر)
 function onTap(id, action) {
@@ -53,6 +55,7 @@ function onTap(id, action) {
 export function setupMenus(handlers) {
   onStartMatch = handlers.startMatch;
   onOpenGame = handlers.openGame;
+  onContinueMatch = handlers.continueMatch;
   setup.slots = defaultSlots();
   loadSetup();                         // آخر إعداد لعب به اللاعب
 
@@ -60,6 +63,7 @@ export function setupMenus(handlers) {
   document.addEventListener('touchstart', () => {}, { passive: true });
 
   // القائمة الرئيسية (القسم 12.1)
+  onTap('btnContinue', continuePressed);
   onTap('btnPlay', () => showScreen('setup'));
   onTap('btnSettings', () => showScreen('settings'));
   onTap('btnStats', () => showScreen('stats'));
@@ -103,6 +107,8 @@ export const currentScreen = () => screen;
 export function showScreen(name) {
   screen = name;
   closeExitDialog();
+  if (name === 'main') refreshContinue();
+  if (name === 'setup') el('setupSaveHint').hidden = !savedMatchInfo();
   if (name === 'settings') refreshSettings();
   if (name === 'stats') renderStats();
   for (const [key, id] of Object.entries(SCREENS)) {
@@ -116,6 +122,31 @@ export function showScreen(name) {
   } else {
     showMenuScene();
   }
+}
+
+// --- متابعة المباراة المحفوظة ---
+// الزر يظهر فقط حين يوجد حفظ، ويصبح هو الذهبي و"لعب" عادياً
+function refreshContinue() {
+  const info = savedMatchInfo();
+  el('btnContinue').hidden = !info;
+  el('btnPlay').classList.toggle('gold', !info);
+  if (info) el('continueInfo').textContent = info.gang + ' • ' + clock(info.time) + ' • أحياء: ' + info.districts;
+}
+
+function continuePressed() {
+  if (onContinueMatch && onContinueMatch()) return;
+  // حفظ تالف أو من نسخة أقدم من اللعبة: حُذف، ونخبر اللاعب بلطف
+  refreshContinue();
+  showMainNotice('تعذر فتح المباراة المحفوظة، فحُذفت. ابدأ مباراة جديدة من "لعب".');
+}
+
+// رسالة قصيرة تحت أزرار القائمة الرئيسية
+export function showMainNotice(text) {
+  const node = el('mainNotice');
+  node.textContent = text;
+  node.hidden = false;
+  clearTimeout(node.timer);
+  node.timer = setTimeout(() => { node.hidden = true; }, 5000);
 }
 
 // --- سؤال الخروج (زر خروج أو زر الرجوع في القائمة الرئيسية) ---

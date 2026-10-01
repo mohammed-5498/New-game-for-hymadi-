@@ -1,10 +1,11 @@
 // أزرار المباراة، شريط المعلومات، قائمة الإيقاف، وشاشة النهاية
-import { WEATHER, PERFORMANCE } from '../config.js';
+import { WEATHER, PERFORMANCE, UI } from '../config.js';
 import { clearSelection, selectAllUnitsOf, resetMatch, districtsOwnedBy } from '../state.js';
 import { sound, startMusic, stopMusic } from '../audio/sound.js';
 import { showScreen, buildMatchSettings, fillStatCards } from './menus.js';
 import { fadeIn, fadeOut, isShown } from './transition.js';
 import { recordMatch } from '../stats.js';
+import { saveMatch, clearSavedMatch } from '../matchSave.js';
 
 const el = (id) => document.getElementById(id);
 
@@ -57,6 +58,7 @@ export function setupHud(state) {
 
   el('btnRestartMatch').addEventListener('click', () => {
     sound('ui_tap');
+    clearSavedMatch();                 // البداية من جديد تحل محل المحفوظة
     resetMatch(state);                 // نفس الإعدادات
     startMusic();
     closeOverlays();
@@ -68,6 +70,7 @@ export function setupHud(state) {
   // "مباراة جديدة": نفس اختيارات قائمة الإعداد، و"عشوائي" يُسحب من جديد
   el('btnRestart').addEventListener('click', () => {
     sound('ui_tap');
+    clearSavedMatch();
     resetMatch(state, state.settings.arena ? state.settings : buildMatchSettings());
     startMusic();
     closeOverlays();
@@ -84,6 +87,8 @@ export function openPause(state) {
   stopMusic();                         // الموسيقى تصمت أثناء الإيقاف
   state.paused = true;
   fadeIn(el('pauseMenu'));
+  // نقطة حفظ: اللعبة متوقفة فلا يُلاحظ زمن الحفظ، وننتظر انتهاء ظهور القائمة حتى لا يتقطع
+  setTimeout(() => { if (state.paused) saveMatch(state); }, UI.fadeMs + 30);
   return true;
 }
 
@@ -107,6 +112,7 @@ function closeOverlays() {
 
 export function leaveToMain(state) {
   sound('ui_tap');
+  saveMatch(state);                   // المباراة الجارية تبقى للعودة إليها (المنتهية لا تُحفظ)
   stopMusic();                        // لا موسيقى داخل القوائم
   state.running = false;
   state.paused = false;
@@ -146,6 +152,7 @@ function updateEndScreen(state) {
   ]);
   fadeIn(screen);
 
+  clearSavedMatch();                  // انتهت: لا شيء لمتابعته
   // تُضاف للإحصائيات الدائمة مرة واحدة لكل مباراة (ساحة التجربة لا تُحسب)
   const human = state.players[state.humanId];
   if (human && !state.settings.arena) recordMatch(result, human.gang);

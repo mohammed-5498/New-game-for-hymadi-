@@ -264,6 +264,12 @@ button.wide.ghost { background: transparent; color: var(--text-dim); }
 .main-buttons button.wide:not(.gold) { background: rgba(58, 47, 39, .92); }
 .main-buttons button.wide.ghost { background: rgba(27, 22, 18, .6); }
 
+/* زر متابعة المباراة: سطران، الثاني ملخص المباراة المحفوظة */
+#btnContinue { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 6px 16px; }
+#btnContinue .hint { color: rgba(36, 26, 16, .8); font-weight: 600; }
+#mainNotice { margin: 0; text-align: center; text-shadow: 0 1px 4px rgba(0, 0, 0, .8); }
+#setupSaveHint { margin: 0 0 8px; text-align: center; }
+
 /* بالعرض على الجوال: العنوان في جهة والأزرار في الجهة الأخرى */
 @media (orientation: landscape) and (max-height: 540px) {
   .main-menu { max-width: 780px; flex-direction: row; align-items: center; gap: 28px; }

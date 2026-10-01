@@ -16,7 +16,8 @@ import {
   openExitDialog, closeExitDialog, isExitDialogOpen
 } from './ui/menus.js';
 import { setupMenuScene, menuSceneFrame } from './ui/menuScene.js';
-import { initSound } from './audio/sound.js';
+import { initSound, startMusic } from './audio/sound.js';
+import { saveMatch, loadMatch, clearSavedMatch, canSaveMatch } from './matchSave.js';
 import { onBackButton, keepScreenAwake } from './platform.js';
 
 const canvas = document.getElementById('game');
@@ -36,9 +37,19 @@ setupMenuScene(document.getElementById('menuBg'), document.getElementById('menuB
 setupMenus({
   // "ابدأ" من قائمة الإعداد
   startMatch(settings) {
+    // مباراة جديدة تحل محل المحفوظة؛ أما ساحة التجربة فلا تُحفظ ولا تمس المحفوظة
+    if (!settings.arena) clearSavedMatch();
     resetMatch(state, settings);
     state.running = true;
     showScreen('game');
+  },
+  // "متابعة المباراة": تعود من حيث توقفت (false إن كان الحفظ تالفاً)
+  continueMatch() {
+    if (!loadMatch(state)) return false;
+    state.running = true;
+    showScreen('game');
+    startMusic();
+    return true;
   },
   // تُستدعى عند ظهور شاشة المباراة: اللوحة تأخذ مقاسها الآن
   openGame() {
@@ -49,6 +60,13 @@ setupMenus({
 });
 
 showScreen('main');
+
+// تصغير التطبيق أو إغلاقه أو مغادرة الصفحة: تُحفظ المباراة الجارية للعودة إليها
+function saveOnLeave() {
+  if (document.visibilityState === 'hidden' && canSaveMatch(state)) saveMatch(state);
+}
+document.addEventListener('visibilitychange', saveOnLeave);
+window.addEventListener('pagehide', () => { if (canSaveMatch(state)) saveMatch(state); });
 
 // زر الرجوع في أندرويد: أثناء المباراة يفتح الإيقاف، وفي القوائم يرجع خطوة،
 // وفي القائمة الرئيسية يسأل "هل تريد الخروج؟" (القسم 2.1). في المتصفح لا يفعل شيئاً.

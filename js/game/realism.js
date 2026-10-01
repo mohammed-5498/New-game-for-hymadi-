@@ -26,6 +26,11 @@ function rng32(seed) {
 }
 const spread = (rng, [a, b]) => a + (b - a) * rng();
 
+// بعد تحميل مباراة محفوظة: مولّد جديد للوحدة (الدالة لا تُحفظ، وتتابع أرقامها لا يهم اللعب)
+export function restoreRng(state, unit) {
+  unit.rng = rng32(((unit.id * 2654435761) ^ (state.combatSeed || 0) ^ Math.floor(state.time * 1000)) >>> 0);
+}
+
 // مفتاح أسلوب القتال: بادئة العصابة + نوع الوحدة
 const STYLE_PREFIX = { crows: 'crow', hammers: 'hammer', vipers: 'viper', scorpions: 'scorpion', police: 'police' };
 

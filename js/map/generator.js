@@ -68,9 +68,35 @@ function buildMap(size, players) {
   return map;
 }
 
+// دوال الخريطة: منفصلة عن بياناتها حتى تُعاد إليها بعد تحميل مباراة محفوظة
+const MAP_METHODS = {
+  idx(i, j) { return j * this.n + i; },
+  inBounds(i, j) { return i >= 0 && j >= 0 && i < this.n && j < this.n; },
+  // الوحدات تمشي على الشوارع والأرض الفارغة وساحات العلم فقط
+  isWalkable(i, j) {
+    if (!this.inBounds(i, j)) return false;
+    const k = this.idx(i, j);
+    return this.road[k] === 1 || this.type[k] === '.' || this.type[k] === 'P';
+  },
+  // مربع موصول بشبكة الشوارع: الظهور وأوامر الحركة لا تستهدف غيره
+  isConnected(i, j) {
+    if (!this.isWalkable(i, j)) return false;
+    return !this.connected || this.connected[this.idx(i, j)] === 1;
+  },
+  districtOf(i, j) {
+    if (!this.inBounds(i, j)) return null;
+    const d = this.districtAt[this.idx(i, j)];
+    return d < 0 ? null : this.districts[d];
+  }
+};
+
+export function attachMapMethods(map) {
+  return Object.assign(map, MAP_METHODS);
+}
+
 function createEmptyMap(size) {
   const n = size.n;
-  return {
+  return attachMapMethods({
     size,
     n,
     road: new Uint8Array(n * n),
@@ -80,27 +106,8 @@ function createEmptyMap(size) {
     decor: {},                        // زينة فوق الشوارع (برميل نار، عمود إنارة)
     districtAt: new Int32Array(n * n).fill(-1),
     districts: [],
-    connected: null,                  // يملؤه إصلاح الفراغات المعزولة (القسم 3.4.1)
-
-    idx(i, j) { return j * this.n + i; },
-    inBounds(i, j) { return i >= 0 && j >= 0 && i < this.n && j < this.n; },
-    // الوحدات تمشي على الشوارع والأرض الفارغة وساحات العلم فقط
-    isWalkable(i, j) {
-      if (!this.inBounds(i, j)) return false;
-      const k = this.idx(i, j);
-      return this.road[k] === 1 || this.type[k] === '.' || this.type[k] === 'P';
-    },
-    // مربع موصول بشبكة الشوارع: الظهور وأوامر الحركة لا تستهدف غيره
-    isConnected(i, j) {
-      if (!this.isWalkable(i, j)) return false;
-      return !this.connected || this.connected[this.idx(i, j)] === 1;
-    },
-    districtOf(i, j) {
-      if (!this.inBounds(i, j)) return null;
-      const d = this.districtAt[this.idx(i, j)];
-      return d < 0 ? null : this.districts[d];
-    }
-  };
+    connected: null                   // يملؤه إصلاح الفراغات المعزولة (القسم 3.4.1)
+  });
 }
 
 // --- 1) الشوارع ---
