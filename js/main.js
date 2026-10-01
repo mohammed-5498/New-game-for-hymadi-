@@ -15,6 +15,7 @@ import {
   setupMenus, showScreen, currentScreen,
   openExitDialog, closeExitDialog, isExitDialogOpen
 } from './ui/menus.js';
+import { setupMenuScene, menuSceneFrame } from './ui/menuScene.js';
 import { initSound } from './audio/sound.js';
 import { onBackButton, keepScreenAwake } from './platform.js';
 
@@ -30,6 +31,8 @@ const state = createMatch(MATCH_DEFAULTS);
 setupInput(canvas, state);
 setupHud(state);
 setupPower(state);
+// الخلفية الحية للقوائم: مدينة مستقلة على لوحتها الخاصة (القسم 12.0)
+setupMenuScene(document.getElementById('menuBg'), document.getElementById('menuBack'));
 setupMenus({
   // "ابدأ" من قائمة الإعداد
   startMatch(settings) {
@@ -59,7 +62,7 @@ onBackButton(() => {
     return;
   }
 
-  if (currentScreen() === 'setup') { showScreen('main'); return; }
+  if (currentScreen() !== 'main') { showScreen('main'); return; }   // الإعداد والإعدادات والإحصائيات
   openExitDialog();                                     // القائمة الرئيسية
 });
 
@@ -79,8 +82,9 @@ function loop(now) {
   // الشاشة تبقى صاحية أثناء اللعب فقط، وتنام في القوائم وعند الإيقاف (القسم 2.1)
   keepScreenAwake(state.running && !state.paused && !state.matchResult);
 
-  if (!state.running) {          // داخل القوائم: لا تحديث ولا رسم
+  if (!state.running) {          // داخل القوائم: لا تحديث للمباراة، والخلفية الحية وحدها تتحرك
     accumulator = 0;
+    menuSceneFrame(now);
     requestAnimationFrame(loop);
     return;
   }

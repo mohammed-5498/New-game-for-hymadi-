@@ -2,7 +2,9 @@
 import { WEATHER, PERFORMANCE } from '../config.js';
 import { clearSelection, selectAllUnitsOf, resetMatch, districtsOwnedBy } from '../state.js';
 import { sound, startMusic, stopMusic } from '../audio/sound.js';
-import { showScreen } from './menus.js';
+import { showScreen, buildMatchSettings, fillStatCards } from './menus.js';
+import { fadeIn, fadeOut, isShown } from './transition.js';
+import { recordMatch } from '../stats.js';
 
 const el = (id) => document.getElementById(id);
 
@@ -63,9 +65,10 @@ export function setupHud(state) {
   el('btnQuitToMain').addEventListener('click', () => leaveToMain(state));
 
   // --- شاشة النهاية ---
+  // "مباراة جديدة": نفس اختيارات قائمة الإعداد، و"عشوائي" يُسحب من جديد
   el('btnRestart').addEventListener('click', () => {
     sound('ui_tap');
-    resetMatch(state);
+    resetMatch(state, state.settings.arena ? state.settings : buildMatchSettings());
     startMusic();
     closeOverlays();
   });
@@ -76,29 +79,29 @@ export function setupHud(state) {
 // فتح وإغلاق قائمة الإيقاف: يستعملهما الزر وزر الرجوع في أندرويد (القسم 2.1)
 export function openPause(state) {
   if (state.matchResult || !state.running) return false;
-  if (!el('pauseMenu').hidden) return false;
+  if (isPauseOpen()) return false;
   sound('ui_tap');
   stopMusic();                         // الموسيقى تصمت أثناء الإيقاف
   state.paused = true;
-  el('pauseMenu').hidden = false;
+  fadeIn(el('pauseMenu'));
   return true;
 }
 
 export function closePause(state) {
-  if (el('pauseMenu').hidden) return false;
+  if (!isPauseOpen()) return false;
   sound('ui_tap');
   startMusic();
   state.paused = false;
-  el('pauseMenu').hidden = true;
+  fadeOut(el('pauseMenu'));
   return true;
 }
 
-export const isPauseOpen = () => !el('pauseMenu').hidden;
-export const isEndOpen = () => !el('endScreen').hidden;
+export const isPauseOpen = () => isShown(el('pauseMenu'));
+export const isEndOpen = () => isShown(el('endScreen'));
 
 function closeOverlays() {
-  el('pauseMenu').hidden = true;
-  el('endScreen').hidden = true;
+  fadeOut(el('pauseMenu'));
+  fadeOut(el('endScreen'));
   last.result = null;
 }
 
@@ -122,29 +125,34 @@ function updateNoticeBox(state) {
   notice.classList.toggle('mine', !!(state.notice && state.notice.mine));
 }
 
-// شاشة النهاية: فزت أو خسرت مع الإحصائيات
+// شاشة النهاية: فزت أو خسرت مع إحصائيات المباراة (القسم 12.5)
 function updateEndScreen(state) {
   const result = state.matchResult;
   if (result === last.result) return;
   last.result = result;
 
   const screen = el('endScreen');
-  if (!result) { screen.hidden = true; return; }
+  if (!result) { fadeOut(screen); return; }
 
   const minutes = Math.floor(result.duration / 60);
   const seconds = Math.floor(result.duration % 60);
   el('endTitle').textContent = result.won ? 'فزت' : 'خسرت';
-  el('endStats').innerHTML = [
-    'مدة المباراة: ' + minutes + ':' + String(seconds).padStart(2, '0'),
-    'أكبر عدد أحياء: ' + result.maxDistricts,
-    'أعداء قتلتهم: ' + result.kills,
-    'وحداتك التي ماتت: ' + result.losses
-  ].map(line => '<li>' + line + '</li>').join('');
-  screen.hidden = false;
+  screen.classList.toggle('won', result.won);
+  fillStatCards(el('endStats'), [
+    ['مدة المباراة', minutes + ':' + String(seconds).padStart(2, '0')],
+    ['أكبر عدد أحياء', result.maxDistricts],
+    ['أعداء قتلتهم', result.kills],
+    ['وحداتك التي ماتت', result.losses]
+  ]);
+  fadeIn(screen);
+
+  // تُضاف للإحصائيات الدائمة مرة واحدة لكل مباراة (ساحة التجربة لا تُحسب)
+  const human = state.players[state.humanId];
+  if (human && !state.settings.arena) recordMatch(result, human.gang);
 }
 
 // تحديث شريط المعلومات (بدون لمس DOM إلا عند تغير القيم)
-const last = { sel: -1, units: -1, districts: -1, weather: '', notice: '', result: null };
+const last = { sel: -1, units: -1, max: -1, districts: -1, weather: '', notice: '', result: null };
 
 export function updateHud(state) {
   let selected = 0, playerUnitCount = 0;
@@ -159,8 +167,10 @@ export function updateHud(state) {
     last.sel = selected;
     el('infoSel').textContent = 'محدد: ' + selected;
   }
-  if (playerUnitCount !== last.units) {
+  // مباراة جديدة بحد أقصى مختلف تحدّث النص ولو تساوى عدد الوحدات
+  if (playerUnitCount !== last.units || state.maxUnits !== last.max) {
     last.units = playerUnitCount;
+    last.max = state.maxUnits;
     el('infoUnits').textContent = playerUnitCount + '/' + state.maxUnits;
   }
   if (districts !== last.districts) {

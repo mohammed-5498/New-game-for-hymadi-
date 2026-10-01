@@ -3,12 +3,18 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<meta name="theme-color" content="#34302b">
+<meta name="theme-color" content="#1b1612">
 <title>مدينة العصابات</title>
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 <div id="wrap">
+
+  <!-- الخلفية الحية للقوائم: المدينة نفسها والكاميرا تنجرف فوقها ببطء (القسم 12.0) -->
+  <div id="menuBack">
+    <canvas id="menuBg"></canvas>
+    <div id="menuShade"></div>
+  </div>
 
   <!-- شاشة المباراة -->
   <div id="screenGame" hidden>
@@ -41,106 +47,157 @@
     <div id="notice" hidden></div>
     <div id="fps" hidden></div>
 
-    <!-- قائمة الإيقاف -->
-    <div id="pauseMenu" hidden>
+    <!-- قائمة الإيقاف (القسم 12.4) -->
+    <div id="pauseMenu" class="overlay" hidden>
       <div class="panel">
         <h1>إيقاف مؤقت</h1>
-        <button id="btnResume" class="wide">متابعة</button>
-        <button id="btnRestartMatch" class="wide ghost">إعادة المباراة</button>
+        <button id="btnResume" class="wide gold">متابعة</button>
+        <button id="btnRestartMatch" class="wide">إعادة المباراة</button>
         <button id="btnQuitToMain" class="wide ghost">القائمة الرئيسية</button>
       </div>
     </div>
 
-    <!-- شاشة النهاية -->
-    <div id="endScreen" hidden>
+    <!-- شاشة النهاية (القسم 12.5) -->
+    <div id="endScreen" class="overlay" hidden>
       <div class="panel">
         <h1 id="endTitle"></h1>
-        <ul id="endStats"></ul>
-        <button id="btnRestart" class="wide">مباراة جديدة</button>
+        <ul id="endStats" class="stat-cards"></ul>
+        <button id="btnRestart" class="wide gold">مباراة جديدة</button>
         <button id="btnEndToMain" class="wide ghost">القائمة الرئيسية</button>
       </div>
     </div>
   </div>
 
-  <!-- القائمة الرئيسية -->
-  <div id="screenMain">
-    <div class="menu">
-      <h1 class="title">مدينة العصابات</h1>
-      <p class="subtitle">عصابات تتقاتل للسيطرة على أحياء المدينة</p>
-      <button id="btnPlay" class="wide">لعب</button>
-      <!-- زر الخروج: داخل التطبيق فقط، المتصفح لا يسمح بإغلاق الصفحة (القسم 2.1) -->
-      <button id="btnExit" class="wide ghost" hidden>خروج</button>
+  <!-- القائمة الرئيسية (القسم 12.1) -->
+  <div id="screenMain" class="screen">
+    <div class="main-menu">
+      <div class="brand">
+        <h1 class="title">مدينة العصابات</h1>
+        <p class="subtitle">عصابات تتقاتل للسيطرة على أحياء المدينة</p>
+      </div>
+      <div class="main-buttons">
+        <button id="btnPlay" class="wide gold">لعب</button>
+        <button id="btnSettings" class="wide">الإعدادات</button>
+        <button id="btnStats" class="wide">الإحصائيات</button>
+        <!-- زر الخروج: داخل التطبيق فقط، المتصفح لا يسمح بإغلاق الصفحة (القسم 2.1) -->
+        <button id="btnExit" class="wide ghost" hidden>خروج</button>
+      </div>
     </div>
   </div>
 
-  <!-- قائمة الإعداد -->
-  <div id="screenSetup" hidden>
+  <!-- قائمة الإعداد قبل المباراة (القسم 12.2) -->
+  <div id="screenSetup" class="screen" hidden>
     <div class="menu setup">
       <h2>إعداد المباراة</h2>
 
-      <div class="row">
-        <span class="label">حجم الخريطة</span>
-        <div id="optMapSize" class="options"></div>
-      </div>
+      <div class="setup-cols">
+        <div class="setup-options">
+          <div class="row">
+            <span class="label">حجم الخريطة</span>
+            <div id="optMapSize" class="options"></div>
+          </div>
 
-      <div class="row">
-        <span class="label">الحد الأقصى للوحدات</span>
-        <div id="optMaxUnits" class="options"></div>
-      </div>
+          <div class="row">
+            <span class="label">الحد الأقصى للوحدات</span>
+            <div id="optMaxUnits" class="options"></div>
+          </div>
 
-      <div class="row">
-        <span class="label">الطقس</span>
-        <div id="optWeather" class="options"></div>
-      </div>
+          <div class="row">
+            <span class="label">الطقس</span>
+            <div id="optWeather" class="options"></div>
+          </div>
 
-      <div class="row">
-        <span class="label">مؤثرات الصوت</span>
-        <div id="optSfx" class="options"></div>
-      </div>
+          <div class="row">
+            <span class="label">تجربة القتال</span>
+            <div class="options"><button id="btnArena" class="opt">ساحة: 7 غربان ضد 4 مطارق</button></div>
+          </div>
+        </div>
 
-      <div class="row">
-        <span class="label">الموسيقى</span>
-        <div id="optMusic" class="options"></div>
+        <div class="setup-players">
+          <div class="slots-head">
+            <span class="label">اللاعبون</span>
+            <span id="slotsHint" class="hint"></span>
+          </div>
+          <!-- عناوين الأعمدة حتى يعرف اللاعب ماذا تعني كل خانة -->
+          <div class="slot-cols" aria-hidden="true">
+            <span class="cell num"></span>
+            <span class="cell type">النوع</span>
+            <span class="cell gang">العصابة</span>
+            <span class="cell color">اللون</span>
+            <span class="cell team">الفريق</span>
+            <span class="cell difficulty">الصعوبة</span>
+          </div>
+          <div id="slots"></div>
+        </div>
       </div>
-
-      <div class="row">
-        <span class="label">كتم الصوت</span>
-        <div id="optMute" class="options"></div>
-      </div>
-
-      <div class="row">
-        <span class="label">الكلمات الطائرة</span>
-        <div id="optPops" class="options"></div>
-      </div>
-
-      <div class="row">
-        <span class="label">تجربة القتال</span>
-        <div class="options"><button id="btnArena" class="opt">ساحة: 7 غربان ضد 4 مطارق</button></div>
-      </div>
-
-      <div class="slots-head">
-        <span>اللاعبون</span>
-        <span id="slotsHint" class="hint"></span>
-      </div>
-      <div id="slots"></div>
 
       <!-- شريط سفلي ثابت حتى يبقى زر "ابدأ" في متناول الإصبع دائماً -->
       <div class="setup-footer">
         <p id="setupError" class="error" hidden></p>
         <div class="footer-row">
-          <button id="btnStart" class="wide">ابدأ</button>
+          <button id="btnStart" class="wide gold">ابدأ</button>
           <button id="btnBackToMain" class="wide ghost">رجوع</button>
         </div>
       </div>
     </div>
   </div>
 
+  <!-- الإعدادات: الصوت (القسم 13.5) والكلمات الطائرة (القسم 5.4.4ب) -->
+  <div id="screenSettings" class="screen" hidden>
+    <div class="menu">
+      <h2>الإعدادات</h2>
+
+      <div class="settings-grid">
+        <div>
+          <div class="setting">
+            <div class="setting-head">
+              <label for="rangeSfx">مؤثرات الصوت</label>
+              <output id="rangeSfxValue"></output>
+            </div>
+            <input id="rangeSfx" type="range">
+          </div>
+
+          <div class="setting">
+            <div class="setting-head">
+              <label for="rangeMusic">الموسيقى</label>
+              <output id="rangeMusicValue"></output>
+            </div>
+            <input id="rangeMusic" type="range">
+          </div>
+        </div>
+
+        <div>
+          <button id="tglMute" class="toggle" role="switch" aria-checked="false">
+            <span>كتم كل الأصوات</span>
+            <span class="switch"></span>
+          </button>
+
+          <button id="tglPops" class="toggle" role="switch" aria-checked="true">
+            <span>الكلمات الطائرة في القتال</span>
+            <span class="switch"></span>
+          </button>
+        </div>
+      </div>
+
+      <button id="btnSettingsBack" class="wide ghost">رجوع</button>
+    </div>
+  </div>
+
+  <!-- الإحصائيات: مجموع كل المباريات المنتهية، محفوظة على الجهاز -->
+  <div id="screenStats" class="screen" hidden>
+    <div class="menu">
+      <h2>الإحصائيات</h2>
+      <p id="statsEmpty" class="hint" hidden>لم تنتهِ أي مباراة بعد: العب حتى الفوز أو الخسارة.</p>
+      <ul id="statsList" class="stat-cards"></ul>
+      <button id="btnStatsBack" class="wide ghost">رجوع</button>
+    </div>
+  </div>
 
   <!-- سؤال الخروج: زر الرجوع في القائمة الرئيسية أو زر خروج (القسم 2.1) -->
-  <div id="exitDialog" hidden>
+  <div id="exitDialog" class="overlay" hidden>
     <div class="panel">
       <h1>هل تريد الخروج؟</h1>
-      <button id="btnExitYes" class="wide">خروج</button>
+      <button id="btnExitYes" class="wide gold">خروج</button>
       <button id="btnExitNo" class="wide ghost">إلغاء</button>
     </div>
   </div>

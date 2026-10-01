@@ -1,11 +1,14 @@
-// القائمة الرئيسية وقائمة الإعداد وقائمة الإيقاف وتبديل الشاشات
+// القوائم (القسم 12): الرئيسية، الإعداد، الإعدادات، الإحصائيات، سؤال الخروج، وتبديل الشاشات
 import {
   MAP_SIZES, PLAYER_COLORS, GANGS, GANG_IDS, BOT, BOT_LEVELS,
-  WEATHER, WEATHER_KEYS, UNITS, MATCH_DEFAULTS, AUDIO
+  WEATHER, WEATHER_KEYS, UNITS, MATCH_DEFAULTS, AUDIO, UI
 } from '../config.js';
 import { sound, audioSettings, setAudioSettings, startMusic } from '../audio/sound.js';
 import { isNativeApp, exitApp } from '../platform.js';
 import { getPref, setPref } from '../prefs.js';
+import { loadStats, favoriteGang } from '../stats.js';
+import { fadeIn, fadeOut, isShown } from './transition.js';
+import { showMenuScene, hideMenuScene } from './menuScene.js';
 
 const el = (id) => document.getElementById(id);
 
@@ -42,21 +45,35 @@ function defaultSlots() {
 let onStartMatch = null;
 let onOpenGame = null;
 
+// زر مع صوت النقرة (القسم 12.0: صوت ui_tap لكل زر)
+function onTap(id, action) {
+  el(id).addEventListener('click', () => { sound('ui_tap'); action(); });
+}
+
 export function setupMenus(handlers) {
   onStartMatch = handlers.startMatch;
   onOpenGame = handlers.openGame;
   setup.slots = defaultSlots();
+  loadSetup();                         // آخر إعداد لعب به اللاعب
 
-  el('btnPlay').addEventListener('click', () => { sound('ui_tap'); showScreen('setup'); });
-  el('btnBackToMain').addEventListener('click', () => { sound('ui_tap'); showScreen('main'); });
+  // حالة الضغط (:active) على أجهزة iOS تحتاج مستمع لمس واحداً على الصفحة
+  document.addEventListener('touchstart', () => {}, { passive: true });
+
+  // القائمة الرئيسية (القسم 12.1)
+  onTap('btnPlay', () => showScreen('setup'));
+  onTap('btnSettings', () => showScreen('settings'));
+  onTap('btnStats', () => showScreen('stats'));
+  onTap('btnBackToMain', () => showScreen('main'));
+  onTap('btnSettingsBack', () => showScreen('main'));
+  onTap('btnStatsBack', () => showScreen('main'));
   el('btnStart').addEventListener('click', startPressed);
   el('btnArena').addEventListener('click', arenaPressed);
 
   // زر الخروج وسؤاله: داخل التطبيق فقط (القسم 2.1)
   el('btnExit').hidden = !isNativeApp();
-  el('btnExit').addEventListener('click', () => { sound('ui_tap'); openExitDialog(); });
-  el('btnExitYes').addEventListener('click', () => { sound('ui_tap'); exitApp(); });
-  el('btnExitNo').addEventListener('click', () => { sound('ui_tap'); closeExitDialog(); });
+  onTap('btnExit', openExitDialog);
+  onTap('btnExitYes', exitApp);
+  onTap('btnExitNo', closeExitDialog);
 
   buildOptions('optMapSize', MAP_SIZE_KEYS,
     key => MAP_SIZES[key].name + ' (' + MAP_SIZES[key].maxPlayers + ')',
@@ -69,50 +86,165 @@ export function setupMenus(handlers) {
     key => key === 'random' ? 'عشوائي' : WEATHER[key].name,
     () => setup.weather, key => { setup.weather = key; refresh(); });
 
-  buildAudioOptions();
-
-  // الكلمات الطائرة فوق أحداث القتال (القسم 5.4.4ب): مفعّلة افتراضياً
-  buildOptions('optPops', [true, false], v => v ? 'تظهر' : 'مخفية',
-    () => getPref('pops'), value => { setPref('pops', value); sound('ui_tap'); refresh(); });
   buildSlots();
   refresh();
+  setupSettings();
 }
 
-// --- إعدادات الصوت (القسم 13.5): تُحفظ في localStorage ---
-// تنسيق الأزرار مشترك مع بقية الصفوف (.opt)، فتلتف الدرجات الخمس في سطرين مثل صف الطقس
-const percent = (v) => Math.round(v * 100) + '%';
+// --- تبديل الشاشات بتلاشٍ قصير (القسم 12.0) ---
+const SCREENS = {
+  main: 'screenMain', setup: 'screenSetup', settings: 'screenSettings',
+  stats: 'screenStats', game: 'screenGame'
+};
 
-function buildAudioOptions() {
-  buildOptions('optSfx', AUDIO.volumeSteps, percent,
-    () => audioSettings().sfx,
-    value => { setAudioSettings({ sfx: value }); sound('ui_tap'); refresh(); });
-
-  buildOptions('optMusic', AUDIO.volumeSteps, percent,
-    () => audioSettings().music,
-    value => { setAudioSettings({ music: value }); refresh(); });
-
-  buildOptions('optMute', [false, true], v => v ? 'مكتوم' : 'يعمل',
-    () => audioSettings().muted,
-    value => { setAudioSettings({ muted: value }); sound('ui_tap'); refresh(); });
-}
-
-// --- تبديل الشاشات ---
 let screen = 'main';
 export const currentScreen = () => screen;
 
 export function showScreen(name) {
   screen = name;
   closeExitDialog();
-  el('screenMain').hidden = name !== 'main';
-  el('screenSetup').hidden = name !== 'setup';
-  el('screenGame').hidden = name !== 'game';
-  if (name === 'game' && onOpenGame) onOpenGame();
+  if (name === 'settings') refreshSettings();
+  if (name === 'stats') renderStats();
+  for (const [key, id] of Object.entries(SCREENS)) {
+    if (key === name) fadeIn(el(id));
+    else fadeOut(el(id));
+  }
+  // الخلفية الحية لكل القوائم، وتتوقف تماماً أثناء المباراة
+  if (name === 'game') {
+    hideMenuScene();
+    if (onOpenGame) onOpenGame();
+  } else {
+    showMenuScene();
+  }
 }
 
 // --- سؤال الخروج (زر خروج أو زر الرجوع في القائمة الرئيسية) ---
-export function openExitDialog() { el('exitDialog').hidden = false; }
-export function closeExitDialog() { el('exitDialog').hidden = true; }
-export const isExitDialogOpen = () => !el('exitDialog').hidden;
+export function openExitDialog() { fadeIn(el('exitDialog')); }
+export function closeExitDialog() { fadeOut(el('exitDialog')); }
+export const isExitDialogOpen = () => isShown(el('exitDialog'));
+
+// --- الإعدادات (القسم 13.5): مؤشران للصوت وزر كتم عام، والكلمات الطائرة (5.4.4ب) ---
+// كلها تُحفظ في localStorage فور تغييرها وتُقرأ عند بدء اللعبة
+const percent = (v) => Math.round(v * 100) + '%';
+
+function setupSettings() {
+  for (const [id, key] of [['rangeSfx', 'sfx'], ['rangeMusic', 'music']]) {
+    const range = el(id);
+    range.min = '0';
+    range.max = '1';
+    range.step = String(AUDIO.volumeStep);
+    // أثناء السحب: المستوى يتغير فوراً
+    range.addEventListener('input', () => {
+      setAudioSettings({ [key]: Number(range.value) });
+      refreshSettings();
+    });
+    // عند الإفلات: نقرة بالمستوى الجديد حتى يسمعه اللاعب
+    range.addEventListener('change', () => sound('ui_tap'));
+  }
+
+  el('tglMute').addEventListener('click', () => {
+    setAudioSettings({ muted: !audioSettings().muted });
+    sound('ui_tap');                   // بعد التغيير: تُسمع عند فك الكتم فقط
+    refreshSettings();
+  });
+
+  el('tglPops').addEventListener('click', () => {
+    sound('ui_tap');
+    setPref('pops', !getPref('pops'));
+    refreshSettings();
+  });
+  refreshSettings();
+}
+
+function refreshSettings() {
+  const audio = audioSettings();
+  for (const [id, key] of [['rangeSfx', 'sfx'], ['rangeMusic', 'music']]) {
+    const range = el(id);
+    range.value = String(audio[key]);
+    range.style.setProperty('--fill', percent(audio[key]));   // الجزء الممتلئ من المسار
+    el(id + 'Value').textContent = percent(audio[key]);
+    // الكتم العام يُطفئ المؤشرين بصرياً دون أن يضيّع مستواهما
+    range.classList.toggle('muted', audio.muted);
+  }
+  setSwitch('tglMute', audio.muted);
+  setSwitch('tglPops', !!getPref('pops'));
+}
+
+function setSwitch(id, on) {
+  el(id).setAttribute('aria-checked', on ? 'true' : 'false');
+}
+
+// --- الإحصائيات: مجموع كل المباريات المنتهية ---
+function clock(seconds) {
+  const s = Math.round(seconds);
+  return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+}
+
+function playTime(seconds) {
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return minutes + ' د';
+  return Math.floor(minutes / 60) + ' س ' + (minutes % 60) + ' د';
+}
+
+function renderStats() {
+  const stats = loadStats();
+  const gang = favoriteGang(stats);
+  const items = [
+    ['المباريات', stats.played],
+    ['فوز', stats.wins],
+    ['خسارة', stats.losses],
+    ['نسبة الفوز', stats.played ? Math.round(100 * stats.wins / stats.played) + '%' : '—'],
+    ['أعداء قتلتهم', stats.kills],
+    ['وحدات خسرتها', stats.unitsLost],
+    ['أكبر عدد أحياء', stats.bestDistricts],
+    ['أسرع فوز', stats.fastestWin ? clock(stats.fastestWin) : '—'],
+    ['وقت اللعب', playTime(stats.totalSeconds)],
+    ['عصابتك المفضلة', gang && GANGS[gang] ? GANGS[gang].name : '—']
+  ];
+  el('statsEmpty').hidden = stats.played > 0;
+  fillStatCards(el('statsList'), items);
+}
+
+// بطاقات رقم وعنوان (تستعملها الإحصائيات وشاشة النهاية)
+export function fillStatCards(list, items) {
+  list.innerHTML = '';
+  for (const [label, value] of items) {
+    const card = document.createElement('li');
+    const number = document.createElement('b');
+    const caption = document.createElement('span');
+    number.textContent = String(value);
+    caption.textContent = label;
+    card.append(number, caption);
+    list.appendChild(card);
+  }
+}
+
+// --- حفظ آخر إعداد مباراة: يجد اللاعب اختياراته كما تركها ---
+function loadSetup() {
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(UI.setupKey) || 'null'); } catch { return; }
+  if (!saved || typeof saved !== 'object') return;
+
+  // نقبل القيم الصالحة فقط، فلا تكسر بيانات قديمة أو تالفة القائمة
+  if (MAP_SIZES[saved.mapSize]) setup.mapSize = saved.mapSize;
+  if (MAX_UNIT_CHOICES.includes(saved.maxUnits)) setup.maxUnits = saved.maxUnits;
+  if (WEATHER_CHOICES.includes(saved.weather)) setup.weather = saved.weather;
+  if (!Array.isArray(saved.slots)) return;
+
+  saved.slots.slice(0, MAX_SLOTS).forEach((s, k) => {
+    if (!s || typeof s !== 'object') return;
+    const slot = setup.slots[k];
+    if (k > 0 && (s.type === 'bot' || s.type === 'closed')) slot.type = s.type;
+    if (GANG_CHOICES.includes(s.gang)) slot.gang = s.gang;
+    if (PLAYER_COLORS.some(c => c.id === s.color)) slot.color = s.color;
+    if (TEAM_CHOICES.includes(s.team)) slot.team = s.team;
+    if (BOT_LEVELS.includes(s.difficulty)) slot.difficulty = s.difficulty;
+  });
+}
+
+function saveSetup() {
+  try { localStorage.setItem(UI.setupKey, JSON.stringify(setup)); } catch { /* لا تخزين: يبقى للجلسة */ }
+}
 
 // --- صفوف الخيارات (حجم الخريطة، الحد الأقصى، الطقس) ---
 function buildOptions(containerId, values, label, getCurrent, onPick) {
@@ -123,16 +255,15 @@ function buildOptions(containerId, values, label, getCurrent, onPick) {
     button.className = 'opt';
     button.textContent = label(value);
     button.dataset.value = String(value);
-    button.addEventListener('click', () => onPick(value));
+    button.addEventListener('click', () => { sound('ui_tap'); onPick(value); });
     container.appendChild(button);
   }
-  container.dataset.getter = containerId;
-  container._getCurrent = getCurrent;
+  container.getCurrent = getCurrent;
 }
 
 function refreshOptions(containerId) {
   const container = el(containerId);
-  const current = String(container._getCurrent());
+  const current = String(container.getCurrent());
   for (const button of container.children) {
     button.classList.toggle('selected', button.dataset.value === current);
   }
@@ -148,7 +279,7 @@ function buildSlots() {
     row.className = 'slot';
     row.dataset.index = String(index);
 
-    row.appendChild(cell('name', index === 0 ? 'أنت' : 'خانة ' + (index + 1), null));
+    row.appendChild(cell('num', String(index + 1), null));
 
     // نوع الخانة: الخانة الأولى دائماً أنت
     const type = cell('type', '', () => {
@@ -200,7 +331,7 @@ function cell(className, text, onClick) {
   const node = document.createElement(onClick ? 'button' : 'div');
   node.className = 'cell ' + className;
   node.textContent = text;
-  if (onClick) node.addEventListener('click', onClick);
+  if (onClick) node.addEventListener('click', () => { sound('ui_tap'); onClick(); });
   return node;
 }
 
@@ -226,10 +357,6 @@ function refresh() {
   refreshOptions('optMapSize');
   refreshOptions('optMaxUnits');
   refreshOptions('optWeather');
-  refreshOptions('optSfx');
-  refreshOptions('optMusic');
-  refreshOptions('optMute');
-  refreshOptions('optPops');
 
   const limit = MAP_SIZES[setup.mapSize].maxPlayers;
   el('slotsHint').textContent = 'الخانة الأولى أنت • الحد على هذه الخريطة ' + limit + ' لاعبين';
@@ -284,6 +411,7 @@ function startPressed() {
     return;
   }
   errorNode.hidden = true;
+  saveSetup();
   onStartMatch(buildMatchSettings());
   startMusic();                       // الموسيقى تبدأ مع المباراة لا في القوائم
 }

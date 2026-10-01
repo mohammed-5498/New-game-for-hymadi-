@@ -1,18 +1,46 @@
 /* واجهة اللعبة: كلها بالعربية ومن اليمين لليسار */
+
+/* لوحة ألوان موحدة (القسم 12.0): خلفيات داكنة دافئة، نص فاتح، ولون تمييز ذهبي */
+:root {
+  --bg: #1b1612;
+  --panel: rgba(36, 29, 24, .95);
+  --panel-solid: #241d18;
+  --btn: #3a2f27;
+  --line: #5a4a3c;
+  --text: #f3ece0;
+  --text-dim: #c4b49c;
+  --gold: #e0b04a;
+  --gold-dark: #241a10;          /* نص فوق الذهبي */
+  --danger: #ef8a6e;
+  --fade: 200ms;                 /* تُضبط من config.js عبر transition.js */
+  --font: "Noto Sans Arabic", "Noto Naskh Arabic", "Segoe UI", Tahoma, "Geeza Pro", system-ui, sans-serif;
+}
+
 html, body {
   margin: 0;
   height: 100%;
   overflow: hidden;
-  background: #34302b;
-  font-family: system-ui, "Segoe UI", sans-serif;
+  background: var(--bg);
+  font-family: var(--font);
+  font-size: 16px;
   overscroll-behavior: none;
   -webkit-user-select: none;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
-  color: #2b2825;
+  color: var(--text);
 }
 
 #wrap { position: fixed; inset: 0; }
+
+/* خاصية hidden تُخفي دائماً، مهما كانت قاعدة display للعنصر */
+[hidden] { display: none !important; }
+
+button { font: inherit; color: inherit; cursor: pointer; }
+
+/* حالة ضغط واضحة لكل زر: يصغر قليلاً ويغمق (القسم 12.0)
+   الأنماط المكتوبة داخل الزر نفسه (مثل توسيط زر الإيقاف) تتقدم على هذا التصغير */
+button { transition: transform .1s ease, filter .1s ease; }
+button:active { transform: scale(.96); filter: brightness(.8); }
 
 /* ملاحظة: لكل عنصر يُخفى بخاصية hidden نستخدم :not([hidden])
    وإلا تغلّبت قاعدة display على الإخفاء وظل العنصر ظاهراً */
@@ -25,32 +53,63 @@ html, body {
   touch-action: none;   /* نتحكم باللمس بأنفسنا */
 }
 
+/* --- الخلفية الحية للقوائم (القسم 12.0) --- */
+#menuBack:not([hidden]) { position: absolute; inset: 0; background: var(--bg); }
+
+#menuBg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  opacity: 0;                    /* تظهر بتلاشٍ بعد أول رسم */
+  transition: opacity .6s ease;
+}
+#menuBg.ready { opacity: 1; }
+
+/* طبقة داكنة خفيفة فوق المدينة، أغمق قليلاً عند الأطراف */
+#menuShade {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 45%,
+    rgba(20, 15, 11, .30) 0%, rgba(20, 15, 11, .55) 60%, rgba(12, 9, 7, .82) 100%);
+}
+
+/* --- الانتقالات بين الشاشات: تلاشٍ وانزلاق خفيف (القسم 12.0) --- */
+.entering { animation: ui-in var(--fade) ease-out both; }
+.leaving { animation: ui-out var(--fade) ease-in both; pointer-events: none; }
+.entering > .menu, .entering > .panel, .entering > .main-menu { animation: ui-rise var(--fade) ease-out both; }
+
+@keyframes ui-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes ui-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes ui-rise { from { transform: translateY(16px); } to { transform: none; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .entering, .leaving, .entering > * { animation-duration: 1ms !important; }
+}
+
 /* --- أزرار المباراة --- */
 .btn {
   position: absolute;
-  background: #ffffff;
-  color: #2b2825;
-  border: 1px solid #cfc9bd;
+  background: rgba(27, 22, 18, .84);
+  color: var(--text);
+  border: 1px solid rgba(224, 176, 74, .3);
   border-radius: 8px;
   min-height: 42px;
   padding: 0 12px;
   font-size: 14px;
-  font-family: inherit;
   display: flex;
   align-items: center;
   gap: 6px;
 }
 
-.btn:active { background: #efeae1; }
-.btn.on { background: #dbe8fb; color: #1b4f9c; }
+.btn.on { background: var(--gold); border-color: var(--gold); color: var(--gold-dark); }
 
 #info {
   position: absolute;
   top: 10px;
   left: 10px;
-  background: #ffffff;
-  color: #5f5a52;
-  border: 1px solid #cfc9bd;
+  background: rgba(27, 22, 18, .8);
+  color: var(--text-dim);
+  border: 1px solid rgba(224, 176, 74, .25);
   border-radius: 8px;
   padding: 5px 8px;
   font-size: 12px;
@@ -75,7 +134,7 @@ html, body {
   #info .sep { display: none; }
 }
 
-#info .sep { color: #cfc9bd; }
+#info .sep { color: #6b5a49; }
 
 /* إشعار قصير أعلى الشاشة */
 #notice {
@@ -94,163 +153,6 @@ html, body {
 
 #notice.mine { background: rgba(27, 79, 156, .92); }
 
-/* --- الشاشات والقوائم --- */
-#screenMain:not([hidden]),
-#screenSetup:not([hidden]),
-#pauseMenu:not([hidden]),
-#endScreen:not([hidden]),
-#exitDialog:not([hidden]) {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  /* flex-start مع margin:auto على اللوحة = توسيط رأسي بدون قص أعلى المحتوى الطويل */
-  align-items: flex-start;
-  justify-content: center;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior: contain;
-  touch-action: pan-y;          /* التمرير بالإصبع داخل القائمة */
-  padding: 12px;
-  box-sizing: border-box;
-}
-
-#screenMain { background: #34302b; }
-#screenSetup { background: #34302b; }
-#pauseMenu, #endScreen, #exitDialog { background: rgba(26, 24, 21, .72); }
-
-.menu, .panel {
-  background: #fffdf8;
-  border: 1px solid #cfc9bd;
-  border-radius: 14px;
-  padding: 18px 16px;
-  width: 100%;
-  max-width: 460px;
-  box-sizing: border-box;
-  text-align: center;
-  margin: auto 0;               /* يوسّط رأسياً عند وجود مساحة، وبلا قص عند الطول */
-}
-
-.menu.setup { text-align: right; padding-bottom: 14px; }
-
-.title { margin: 6px 0 4px; font-size: 30px; }
-.subtitle { margin: 0 0 22px; color: #6b665c; font-size: 14px; }
-h1 { margin: 0 0 14px; font-size: 26px; }
-h2 { margin: 0 0 12px; font-size: 19px; text-align: center; }
-
-button.wide {
-  background: #3b7dd8;
-  color: #ffffff;
-  border: 0;
-  border-radius: 8px;
-  min-height: 44px;
-  width: 100%;
-  font-size: 16px;
-  font-family: inherit;
-  margin-top: 8px;
-}
-
-button.wide:active { background: #2f66b0; }
-button.wide.ghost { background: #efeae1; color: #2b2825; }
-button.wide.ghost:active { background: #e2dccf; }
-
-/* صفوف الخيارات */
-.row { margin-bottom: 10px; }
-.label { display: block; font-size: 13px; color: #5f5a52; margin-bottom: 4px; }
-
-.options { display: flex; flex-wrap: wrap; gap: 6px; }
-
-.opt {
-  background: #efeae1;
-  border: 1px solid #d8d2c6;
-  border-radius: 8px;
-  min-height: 34px;
-  padding: 0 8px;
-  font-size: 13px;
-  font-family: inherit;
-  color: #2b2825;
-  flex: 1 1 28%;
-}
-
-.opt.selected { background: #3b7dd8; border-color: #3b7dd8; color: #ffffff; }
-
-/* خانات اللاعبين */
-.slots-head {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2px 10px;
-  justify-content: space-between;
-  align-items: baseline;
-  font-size: 13px;
-  color: #5f5a52;
-  margin: 12px 0 6px;
-}
-
-.hint { font-size: 12px; color: #8c857a; }
-
-.slot {
-  display: flex;
-  gap: 4px;
-  align-items: center;
-  margin-bottom: 4px;
-}
-
-.slot > * { flex: 1 1 0; min-width: 0; }
-
-.slot .cell {
-  background: #efeae1;
-  border: 1px solid #d8d2c6;
-  border-radius: 7px;
-  min-height: 36px;
-  font-size: 12px;
-  font-family: inherit;
-  color: #2b2825;
-  padding: 0 2px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* الأعمدة: الاسم واللون بعرض ثابت، والباقي يتقاسم ما تبقى */
-.slot .cell.name { background: transparent; border: 0; text-align: right; font-size: 12px; flex: 0 0 42px; }
-.slot .cell.color { flex: 0 0 32px; border: 2px solid #d8d2c6; }
-.slot .cell.gang { flex: 1.3 1 0; }
-.slot.closed .cell:not(.type) { opacity: .35; }
-
-/* شريط أزرار سفلي ثابت داخل قائمة الإعداد */
-.setup-footer {
-  position: sticky;
-  bottom: 0;
-  background: #fffdf8;
-  padding-top: 8px;
-  margin-top: 6px;
-  box-shadow: 0 -8px 10px -6px rgba(43, 40, 37, .15);
-}
-
-/* "ابدأ" و"رجوع" في صف واحد حتى لا يأكل الشريط السفلي مساحة الخانات */
-.footer-row { display: flex; gap: 8px; }
-.footer-row .wide { margin-top: 0; }
-.footer-row #btnStart { flex: 2 1 0; }
-.footer-row #btnBackToMain { flex: 1 1 0; }
-
-/* أزرار الحد الأقصى قصيرة: كلها في صف واحد */
-#optMaxUnits .opt { flex: 1 1 12%; padding: 0 4px; }
-
-.error {
-  color: #c0392b;
-  font-size: 14px;
-  margin: 10px 0 0;
-  text-align: center;
-}
-
-#endScreen ul {
-  list-style: none;
-  margin: 0 0 8px;
-  padding: 0;
-  font-size: 15px;
-  line-height: 1.9;
-  color: #5f5a52;
-}
-
 /* مؤشر الإطارات (للاختبار): يظهر عند لمس شريط المعلومات 3 مرات */
 #fps {
   position: absolute;
@@ -265,6 +167,394 @@ button.wide.ghost:active { background: #e2dccf; }
   pointer-events: none;
 }
 
+/* --- الشاشات والقوائم --- */
+.screen:not([hidden]),
+.overlay:not([hidden]) {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  /* flex-start مع margin:auto على اللوحة = توسيط رأسي بدون قص أعلى المحتوى الطويل */
+  align-items: flex-start;
+  justify-content: center;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;          /* التمرير بالإصبع داخل القائمة */
+  box-sizing: border-box;
+  /* هامش يحترم حواف الشاشات ذات النتوء */
+  padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right))
+           max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+}
+
+.overlay { background: rgba(14, 11, 9, .62); }
+
+.menu, .panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, .45);
+  padding: 20px 18px;
+  width: 100%;
+  max-width: 480px;
+  box-sizing: border-box;
+  text-align: center;
+  margin: auto 0;               /* يوسّط رأسياً عند وجود مساحة، وبلا قص عند الطول */
+}
+
+.overlay .panel { max-width: 400px; }
+
+h1 { margin: 0 0 14px; font-size: 28px; }
+h2 { margin: 0 0 14px; font-size: 22px; text-align: center; color: var(--gold); }
+
+/* --- الأزرار الكبيرة: 52 بكسل على الأقل بزوايا مستديرة --- */
+button.wide {
+  display: block;
+  width: 100%;
+  min-height: 52px;
+  margin-top: 10px;
+  padding: 0 16px;
+  background: var(--btn);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+/* الذهبي للفعل الأهم في كل شاشة */
+button.wide.gold {
+  background: linear-gradient(#ebc165, #c99632);
+  border-color: #f1cf7e;
+  color: var(--gold-dark);
+  box-shadow: 0 4px 14px rgba(224, 176, 74, .25);
+}
+
+button.wide.ghost { background: transparent; color: var(--text-dim); }
+
+/* --- القائمة الرئيسية (القسم 12.1): العنوان فوق الخلفية الحية مباشرة --- */
+.main-menu {
+  width: 100%;
+  max-width: 420px;
+  margin: auto 0;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.title {
+  margin: 0;
+  font-size: clamp(38px, 10vw, 58px);
+  font-weight: 800;
+  line-height: 1.25;
+  color: var(--gold);
+  text-shadow: 0 3px 0 rgba(0, 0, 0, .45), 0 0 28px rgba(224, 176, 74, .3);
+}
+
+.subtitle {
+  margin: 8px 0 0;
+  font-size: 17px;
+  color: var(--text);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, .8);
+}
+
+.main-buttons { display: flex; flex-direction: column; gap: 12px; }
+.main-buttons button.wide { margin: 0; }
+.main-buttons button.wide:not(.gold) { background: rgba(58, 47, 39, .92); }
+.main-buttons button.wide.ghost { background: rgba(27, 22, 18, .6); }
+
+/* بالعرض على الجوال: العنوان في جهة والأزرار في الجهة الأخرى */
+@media (orientation: landscape) and (max-height: 540px) {
+  .main-menu { max-width: 780px; flex-direction: row; align-items: center; gap: 28px; }
+  .brand, .main-buttons { flex: 1 1 0; min-width: 0; }
+  .title { font-size: clamp(30px, 5.6vw, 50px); }
+}
+
+/* --- قائمة الإعداد (القسم 12.2) --- */
+.menu.setup { max-width: 520px; text-align: right; padding-bottom: 0; }
+
+.row { margin-bottom: 12px; }
+.label { display: block; font-size: 16px; font-weight: 700; color: var(--text-dim); margin-bottom: 6px; }
+
+.options { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.opt {
+  background: var(--btn);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  min-height: 52px;
+  padding: 0 6px;
+  font-size: 16px;
+  color: var(--text);
+  white-space: nowrap;           /* النص في سطر واحد: يلتف الزر كله لا كلماته */
+  flex: 1 1 28%;
+}
+
+.opt.selected { background: var(--gold); border-color: var(--gold); color: var(--gold-dark); }
+
+/* أزرار الحد الأقصى قصيرة: كلها في صف واحد */
+#optMaxUnits .opt { flex: 1 1 12%; padding: 0 4px; }
+
+/* بالعرض على شاشة كافية: الخيارات في عمود والخانات في عمود */
+@media (orientation: landscape) and (min-width: 700px) {
+  .menu.setup { max-width: 980px; }
+  .setup-cols {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+    gap: 0 22px;
+    align-items: start;
+  }
+  .setup-players .slots-head { margin-top: 0; }
+}
+
+/* خانات اللاعبين */
+.slots-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 14px 0 6px;
+}
+.slots-head .label { margin: 0; }
+
+.hint { font-size: 14px; color: var(--text-dim); }
+
+.slot, .slot-cols {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.slot > *, .slot-cols > * { flex: 1 1 0; min-width: 0; }
+
+.slot .cell {
+  background: var(--btn);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  min-height: 52px;
+  font-size: 16px;
+  color: var(--text);
+  padding: 0 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* الأعمدة: الرقم واللون بعرض ثابت، والباقي يتقاسم ما تبقى (والعناوين بنفس العرض) */
+.slot .cell.num, .slot-cols .cell.num { flex: 0 0 20px; }
+.slot .cell.color, .slot-cols .cell.color { flex: 0 0 34px; }
+.slot .cell.gang, .slot-cols .cell.gang { flex: 1.35 1 0; }
+
+.slot .cell.num {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font-weight: 700;
+  color: var(--text-dim);
+  text-align: center;
+  line-height: 52px;
+}
+.slot .cell.color { border: 2px solid rgba(243, 236, 224, .35); }
+.slot.closed .cell:not(.type):not(.num) { opacity: .35; }
+
+/* سطر عناوين الأعمدة */
+.slot-cols { margin-bottom: 2px; }
+.slot-cols .cell {
+  font-size: 14px;
+  color: var(--text-dim);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/* شريط أزرار سفلي ثابت داخل قائمة الإعداد: يلتصق بأسفل الشاشة تماماً
+   (بلا هامش سفلي للشاشة، وإلا ظهر طرف الخانات تحته) */
+#screenSetup:not([hidden]) { padding-bottom: 0; }
+.setup-footer {
+  position: sticky;
+  bottom: 0;
+  background: var(--panel-solid);
+  padding: 8px 0 max(12px, env(safe-area-inset-bottom));
+  margin-top: 8px;
+  box-shadow: 0 -10px 12px -8px rgba(0, 0, 0, .55);
+}
+
+/* "ابدأ" و"رجوع" في صف واحد حتى لا يأكل الشريط السفلي مساحة الخانات */
+.footer-row { display: flex; gap: 8px; }
+.footer-row button.wide { margin-top: 0; }
+.footer-row #btnStart { flex: 2 1 0; }
+.footer-row #btnBackToMain { flex: 1 1 0; }
+
+.error {
+  color: var(--danger);
+  font-size: 16px;
+  margin: 4px 0 8px;
+  text-align: center;
+}
+
+/* --- الإعدادات (القسم 13.5) --- */
+.setting { text-align: right; margin: 4px 0 8px; }
+
+.setting-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 17px;
+  font-weight: 700;
+}
+.setting-head output { color: var(--gold); font-variant-numeric: tabular-nums; }
+
+/* مؤشر المستوى: مسار سميك ومقبض كبير يسهل سحبه بالإصبع.
+   المؤشر يتبع اتجاه الصفحة: الصفر يمين والأقصى يسار، فيمتلئ المسار من اليمين */
+input[type=range] {
+  --fill: 50%;
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 52px;
+  margin: 0;
+  background: transparent;
+  touch-action: pan-y;
+  cursor: pointer;
+}
+input[type=range]:focus { outline: none; }
+input[type=range]::-webkit-slider-runnable-track {
+  height: 10px;
+  border-radius: 5px;
+  background: linear-gradient(to left, var(--gold) var(--fill), #4a3d33 var(--fill));
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 30px;
+  height: 30px;
+  margin-top: -10px;
+  border-radius: 50%;
+  background: var(--text);
+  border: 3px solid var(--gold);
+  box-sizing: border-box;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .5);
+}
+input[type=range]::-moz-range-track { height: 10px; border-radius: 5px; background: #4a3d33; }
+input[type=range]::-moz-range-progress { height: 10px; border-radius: 5px; background: var(--gold); }
+input[type=range]::-moz-range-thumb {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--text);
+  border: 3px solid var(--gold);
+}
+/* الكتم العام يُطفئ المؤشرين بصرياً ويبقي مستواهما */
+input[type=range].muted { opacity: .4; }
+
+/* بالعرض: المؤشران في عمود والمفتاحان في عمود، فتتسع الشاشة كلها بلا تمرير */
+@media (orientation: landscape) and (min-width: 600px) {
+  #screenSettings .menu { max-width: 760px; }
+  .settings-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 0 22px;
+    align-items: center;
+  }
+}
+
+/* مفتاح تشغيل وإطفاء: السطر كله زر كبير */
+.toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 56px;
+  margin: 0 0 10px;
+  padding: 0 14px;
+  background: var(--btn);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  font-size: 17px;
+  text-align: right;
+}
+
+/* بالعربية يبدأ المقبض يميناً (مطفأ) وينتقل يساراً (مفعّل) */
+.switch {
+  position: relative;
+  flex: 0 0 52px;
+  height: 30px;
+  border-radius: 15px;
+  background: #5a4a3c;
+  transition: background var(--fade);
+}
+.switch::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--text);
+  transition: right var(--fade) ease;
+}
+.toggle[aria-checked="true"] .switch { background: var(--gold); }
+.toggle[aria-checked="true"] .switch::after { right: 25px; }
+
+/* --- بطاقات الأرقام: الإحصائيات وشاشة النهاية --- */
+.stat-cards {
+  list-style: none;
+  margin: 4px 0 12px;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.stat-cards li {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  min-height: 70px;
+  padding: 8px 6px;
+  box-sizing: border-box;
+  background: rgba(243, 236, 224, .05);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.stat-cards b { font-size: 24px; color: var(--gold); font-variant-numeric: tabular-nums; }
+.stat-cards span { font-size: 16px; color: var(--text-dim); line-height: 1.3; }
+
+#statsEmpty { margin: 0 0 12px; font-size: 16px; line-height: 1.6; }
+
+/* بالعرض: بطاقات الإحصائيات العشر في صفين، وبطاقات النهاية الأربع في صف واحد */
+@media (orientation: landscape) and (min-width: 600px) {
+  #screenStats .menu { max-width: 820px; }
+  #statsList { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  #endScreen .panel { max-width: 600px; }
+  #endStats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+/* شاشة النهاية: "فزت" بالذهبي و"خسرت" بلون أحمر هادئ */
+#endTitle { font-size: 40px; color: var(--danger); }
+#endScreen.won #endTitle { color: var(--gold); }
+
+/* شاشات قصيرة بالعرض (جوال صغير): مسافات رأسية أقل حتى تتسع القوائم بلا تمرير */
+@media (orientation: landscape) and (max-height: 420px) {
+  .menu, .panel { padding-top: 12px; padding-bottom: 12px; }
+  h2 { margin-bottom: 8px; }
+  .stat-cards li { min-height: 0; padding: 5px 4px; }
+  #statsEmpty { margin-bottom: 6px; line-height: 1.4; }
+}
+
+/* شاشات ضيقة جداً: هوامش أصغر حتى تتسع خانات اللاعبين */
+@media (max-width: 379px) {
+  .menu, .panel { padding: 16px 10px; }
+  .screen:not([hidden]), .overlay:not([hidden]) { padding-left: 8px; padding-right: 8px; }
+}
+
 
 /* --- شريط القوة: لوحة اللاعبين (القسم 12.3) --- */
 #power {
@@ -275,12 +565,12 @@ button.wide.ghost:active { background: #e2dccf; }
   max-height: 33vh;              /* لا تغطي أكثر من ثلث ارتفاع الشاشة */
   display: flex;
   flex-direction: column;
-  background: rgba(255, 255, 255, .92);
-  border: 1px solid #cfc9bd;
+  background: rgba(27, 22, 18, .88);
+  border: 1px solid rgba(224, 176, 74, .25);
   border-radius: 8px;
   overflow: hidden;
   font-size: 11px;
-  color: #3d3a36;
+  color: var(--text);
 }
 
 #powerHead {
@@ -290,13 +580,12 @@ button.wide.ghost:active { background: #e2dccf; }
   gap: 6px;
   width: 100%;
   padding: 3px 7px;
-  background: #efeae1;
+  background: rgba(58, 47, 39, .95);
   border: 0;
-  border-bottom: 1px solid #ddd7ca;
+  border-bottom: 1px solid rgba(224, 176, 74, .2);
   font: inherit;
   font-weight: 700;
-  color: #3d3a36;
-  cursor: pointer;
+  color: var(--text);
 }
 
 #powerRows { overflow-y: auto; -webkit-overflow-scrolling: touch; }
@@ -308,22 +597,22 @@ button.wide.ghost:active { background: #e2dccf; }
   gap: 5px;
   height: 18px;                  /* سطر صغير: ثمانية لاعبين تسع الشاشة */
   padding: 0 6px;
-  border-top: 1px solid #f0ece3;
+  border-top: 1px solid rgba(243, 236, 224, .07);
   white-space: nowrap;
 }
 .power-row:first-child { border-top: 0; }
 
 .power-dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
 .power-name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; }
-.power-team { color: #8a8378; font-size: 10px; }
+.power-team { color: var(--text-dim); font-size: 10px; }
 .power-num { font-variant-numeric: tabular-nums; }
 .power-num.districts { font-weight: 700; }
-.power-num.units { color: #8a8378; }
+.power-num.units { color: var(--text-dim); }
 
 /* سطر اللاعب نفسه مميز بإطار خفيف */
-.power-row.me { border: 1px solid #3b7dd8; border-radius: 5px; }
+.power-row.me { border: 1px solid var(--gold); border-radius: 5px; }
 /* حلفاؤه تحتهم خط سفلي خفيف */
-.power-row.ally .power-name { border-bottom: 1px solid #9ab7e0; }
+.power-row.ally .power-name { border-bottom: 1px solid rgba(224, 176, 74, .55); }
 /* المهزوم: اسمه مشطوب ووضوحه منخفض */
 .power-row.out { opacity: .4; }
 .power-row.out .power-name { text-decoration: line-through; }
