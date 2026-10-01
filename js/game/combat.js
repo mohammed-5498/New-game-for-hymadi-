@@ -361,7 +361,9 @@ function fightTarget(state, unit, budget) {
   const ranged = !melee && !!unit.stats.projectile;
 
   // المدى الفعلي للحركة القريبة يمتد بامتداد الحركة (الطعنة أطول)
-  const reachAdd = ranged ? 0 : longestReachAdd(unit);
+  // المستويان المبسّط والإحصائي يضربان الضربة السريعة وحدها (القسم 5.4.5)،
+  // فيقتربان إلى مداها؛ وإلا وقفا على مدى الطعنة وضربا الهواء بلا نهاية
+  const reachAdd = ranged || unit.lod !== 'full' ? 0 : longestReachAdd(unit);
   if (dist <= range + reachAdd + COMBAT.rangeTolerance) {
     unit.path = [];                       // وصلت للمدى: تتوقف وتضرب
     if (unit.attackCooldown <= 0 && !unit.cMove) {
