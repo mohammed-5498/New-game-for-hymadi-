@@ -79,6 +79,7 @@ export function render(ctx, state, alpha) {
     if (unit.selected) drawSelectionRing(ctx, unit, alpha);
   }
   drawMoveMarker(ctx, state);
+  drawHillCrown(ctx, state, visible);
   drawGroupTags(ctx, state, alpha, visible);
   drawCombatFx(ctx, state, visible);
 
@@ -121,6 +122,42 @@ function drawCombatFx(ctx, state, visible) {
   }
   ctx.globalAlpha = 1;
   ctx.direction = 'inherit';
+}
+
+// --- تاج التلة الذهبي فوق علمها في ملك الحي (القسم 9.5.4) ---
+// فوق طبقة الليل، ولا يصغر على الشاشة عن حد أدنى: ظاهر من بعيد
+function drawHillCrown(ctx, state, visible) {
+  if (state.mode !== 'king' || !state.modeState) return;
+  const hill = state.map.districts[state.modeState.hillId];
+  if (!hill || !hill.capture) return;
+  const { i, j } = hill.capture;
+  const x = (i - j) * TILE_HALF_W, y = (i + j) * TILE_HALF_H;
+  if (!visible(x, y)) return;
+
+  const s = Math.max(7, 13 / state.camera.z);             // نصف عرض التاج
+  const bob = Math.sin(state.time * 2.2) * s * 0.08;      // حركة خفيفة تلفت النظر
+  const base = y - 25 + bob, top = base - s * 1.1;        // فوق رأس عمود العلم (22) مباشرة
+  ctx.beginPath();
+  ctx.moveTo(x - s, base);
+  ctx.lineTo(x - s, top + s * 0.35);
+  ctx.lineTo(x - s * 0.5, top + s * 0.75);
+  ctx.lineTo(x, top);
+  ctx.lineTo(x + s * 0.5, top + s * 0.75);
+  ctx.lineTo(x + s, top + s * 0.35);
+  ctx.lineTo(x + s, base);
+  ctx.closePath();
+  ctx.fillStyle = '#f2c14e';
+  ctx.fill();
+  ctx.lineWidth = Math.max(0.6, 1.4 / state.camera.z);
+  ctx.strokeStyle = '#6b4a12';
+  ctx.stroke();
+  // جواهر صغيرة على رؤوس التاج
+  ctx.fillStyle = '#d9463b';
+  for (const [jx, jy] of [[-s, top + s * 0.35], [0, top], [s, top + s * 0.35]]) {
+    ctx.beginPath();
+    ctx.arc(x + jx, y + (jy - y), s * 0.16, 0, 6.2832);
+    ctx.fill();
+  }
 }
 
 // --- رقم مجموعة التحكم فوق رأس الجندي المحدد فقط (القسم 4.4) ---

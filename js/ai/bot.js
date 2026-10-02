@@ -1,7 +1,7 @@
 // البوتات: دفاع ثم توسع ثم هجوم، بثلاث درجات صعوبة، مع احترام التحالفات
 import { TICK_SEC, BOT, SNOWBALL, MAP_GEN, gameModes as GM } from '../config.js';
-import { isFinalMinute, sideTotals, sideKey } from '../game/modes.js';
-import { commandMove } from '../game/units.js';
+import { isFinalMinute, sideTotals, sideKey, hillOf } from '../game/modes.js';
+import { commandMove, commandAttackMove } from '../game/units.js';
 import { isEnemy } from '../game/combat.js';
 import { ownedDistricts } from '../game/spawn.js';
 import { forEachNearby } from '../game/spatialHash.js';
@@ -60,6 +60,8 @@ function decide(state, player, config) {
   const owned = ownedDistricts(state, player.id);
 
   if (config.retreatWounded) retreatWounded(state, player, config, pool, owned);
+  // ملك الحي: التلة أولويتها القصوى، قبل الدفاع عن بقية الأحياء
+  if (state.mode === 'king') kingPlan(state, player, config, pool, units.length);
   defend(state, player, config, pool, owned);
   // الوقت بالنقاط: في الدقيقة الأخيرة كل الباقين على أضعف حي للمتصدر
   if (isFinalMinute(state)) strikeLeader(state, player, config, pool);
@@ -87,6 +89,9 @@ function taskStillValid(state, unit) {
   if (task.type === 'heal') {
     return unit.hp < unit.maxHp && district.owner === unit.playerId;
   }
+  // ملك الحي: من وصل التلة يبقى فيها يقاتل ويحميها، والحرس يبقى في حيه
+  if (task.type === 'hill') return state.mode === 'king';
+  if (task.type === 'guard') return district.owner === unit.playerId;
   return false;
 }
 
@@ -137,6 +142,30 @@ function expand(state, player, config, pool) {
     const group = takeNearest(pool, district, size, config, false);
     if (group.length) sendGroup(state, group, district, config, 'expand');
   }
+}
+
+// --- ملك الحي: حرس صغير للحي المنزلي، وأغلب الباقين إلى التلة بهجوم متحرك ---
+function kingPlan(state, player, config, pool, armySize) {
+  const hill = hillOf(state);
+  if (!hill || !pool.units.length) return;
+  const K = GM.king;
+
+  // الحرس: الأقرب للحي المنزلي، قوة صغيرة لا تزيد على 20% من الجيش
+  const home = state.map.districts[player.homeDistrictId];
+  const wanted = Math.min(K.botHomeGuard, Math.floor(armySize * K.botHomeGuardShare));
+  const guarding = state.units.filter(u => u.playerId === player.id && u.state !== 'dead' && u.botTask && u.botTask.type === 'guard').length;
+  if (home && home.owner === player.id && guarding < wanted) {
+    const guards = takeNearest(pool, home, wanted - guarding, config, false);
+    for (const unit of guards) unit.botTask = { type: 'guard', districtId: home.id };
+    if (guards.length) commandMove(state, home.capture.i, home.capture.j, guards, false);
+  }
+
+  // التلة: نسبة كبيرة من المتاح، بهجوم متحرك حتى يقاتلوا من يعترضهم
+  const count = Math.ceil(pool.units.length * K.botHillShare);
+  const group = takeNearest(pool, hill, count, config, true);
+  if (!group.length) return;
+  for (const unit of group) unit.botTask = { type: 'hill', districtId: hill.id };
+  commandAttackMove(state, hill.capture.i, hill.capture.j, group, false);
 }
 
 // --- الدقيقة الأخيرة في الوقت بالنقاط: أضعف حي يملكه المتصدر (أقل مدافعين) ---

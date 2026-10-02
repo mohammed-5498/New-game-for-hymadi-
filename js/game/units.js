@@ -161,9 +161,9 @@ function beginOrder(unit) {
 
 // أمر الهجوم المتحرك: تتقدم المجموعة نحو المكان، وتتوقف لقتال من يعترضها
 // ثم تواصل تقدمها (عكس أمر الحركة العادي الذي يتجاهل الأعداء)
-export function commandAttackMove(state, targetI, targetJ, units) {
+export function commandAttackMove(state, targetI, targetJ, units, showMarker = true) {
   const map = state.map;
-  const ordered = commandMove(state, targetI, targetJ, units);
+  const ordered = commandMove(state, targetI, targetJ, units, false);
   if (!ordered) return 0;
 
   const clampedI = Math.max(0, Math.min(map.n - 1, Math.round(targetI)));
@@ -176,7 +176,7 @@ export function commandAttackMove(state, targetI, targetJ, units) {
     unit.attackMove = { i: destination[0], j: destination[1] };
     if (unit.state === 'moving') unit.state = 'attackMove';
   }
-  state.moveMarker = { i: clampedI, j: clampedJ, t: 0, attack: true };   // حلقة حمراء
+  if (showMarker) state.moveMarker = { i: clampedI, j: clampedJ, t: 0, attack: true };   // حلقة حمراء
   return ordered;
 }
 
