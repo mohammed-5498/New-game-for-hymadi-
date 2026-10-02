@@ -9,7 +9,7 @@ import { initBots } from './ai/bot.js';
 import { createPolicePlayer, initPolice } from './game/police.js';
 import { tileToWorld } from './map/coords.js';
 import { buildArena } from './game/arena.js';
-import { initMode } from './game/modes.js';
+import { initMode, prepareModeUnits } from './game/modes.js';
 
 export function createMatch(settings) {
   const players = settings.players.map((p, index) => ({
@@ -79,6 +79,7 @@ export function createMatch(settings) {
   buildCaptureZones(state);
   snapDistrictTints(state);      // الأحياء المنزلية ملوّنة من البداية
   spawnStartingUnits(state);
+  prepareModeUnits(state);       // ما يخص الطور في الوحدات الأولى (دم الزعيم مثلاً)
   initSpawnTimers(state);
   initPolice(state);
   initBots(state);

@@ -2,8 +2,8 @@
 import { TICK_SEC, BOT, SNOWBALL, MAP_GEN, gameModes as GM } from '../config.js';
 import { isFinalMinute, sideTotals, sideKey, hillOf } from '../game/modes.js';
 import { commandMove, commandAttackMove } from '../game/units.js';
-import { isEnemy } from '../game/combat.js';
-import { ownedDistricts } from '../game/spawn.js';
+import { isEnemy, commandAttack } from '../game/combat.js';
+import { ownedDistricts, championOf } from '../game/spawn.js';
 import { forEachNearby } from '../game/spatialHash.js';
 
 export function initBots(state) {
@@ -59,6 +59,9 @@ function decide(state, player, config) {
   const pool = { units: free };
   const owned = ownedDistricts(state, player.id);
 
+  // حماية الزعيم: الزعيم خلف الجيش، ومطاردة زعيم العدو المعزول أو الضعيف
+  if (state.mode === 'regicide') regicidePlan(state, player, config, pool, units);
+
   if (config.retreatWounded) retreatWounded(state, player, config, pool, owned);
   // ملك الحي: التلة أولويتها القصوى، قبل الدفاع عن بقية الأحياء
   if (state.mode === 'king') kingPlan(state, player, config, pool, units.length);
@@ -73,6 +76,10 @@ function decide(state, player, config) {
 function taskStillValid(state, unit) {
   const task = unit.botTask;
   if (!task) return false;
+  // مطاردة زعيم عدو: ما دام حياً
+  if (task.type === 'hunt') return state.mode === 'regicide' && isAlive(task.leader);
+  // موقع الزعيم خلف جيشه: يُراجع في كل قرار، ولا يُعاد الأمر إلا إذا تغيّر المكان
+  if (task.type === 'leader') return state.mode === 'regicide';
   const district = state.map.districts[task.districtId];
   if (!district) return false;
 
@@ -141,6 +148,65 @@ function expand(state, player, config, pool) {
     if (pool.units.length < size) return;
     const group = takeNearest(pool, district, size, config, false);
     if (group.length) sendGroup(state, group, district, config, 'expand');
+  }
+}
+
+// --- حماية الزعيم: الزعيم خلف جيشه نحو حيه، والصيد حين يظهر زعيم عدو ضعيف أو معزول ---
+function regicidePlan(state, player, config, pool, units) {
+  const R = GM.regicide;
+  const leader = units.find(u => u.champion);
+  if (leader) {
+    const at = pool.units.indexOf(leader);
+    if (at >= 0) pool.units.splice(at, 1);               // لا يُرسل مع أي مجموعة
+    if (leader.state !== 'attacking') guardLeader(state, player, leader, units, R);
+  }
+  huntLeaders(state, player, config, pool, units, R);
+}
+
+function guardLeader(state, player, leader, units, R) {
+  const home = state.map.districts[player.homeDistrictId];
+  const homeOwned = home && home.capture && home.owner === player.id;
+  const army = units.filter(u => u !== leader);
+  let ti, tj;
+  // جريح: يعود لحيه المنزلي ليتعالج
+  if (homeOwned && (leader.hp < leader.maxHp * 0.5 || !army.length)) {
+    ti = home.capture.i; tj = home.capture.j;
+  } else if (army.length) {
+    // خلف مركز الجيش بمسافة ثابتة في اتجاه الحي المنزلي
+    const c = groupCenter(army);
+    const back = homeOwned ? { i: home.capture.i, j: home.capture.j } : { i: leader.x, j: leader.y };
+    const dx = back.i - c.i, dy = back.j - c.j, len = Math.hypot(dx, dy);
+    ti = len > 0.01 ? c.i + dx / len * Math.min(R.botGuardDistance, len) : c.i;
+    tj = len > 0.01 ? c.j + dy / len * Math.min(R.botGuardDistance, len) : c.j;
+  } else return;
+  // لا نعيد الأمر إلا إذا تغيّر المكان المطلوب فعلاً (لا ارتجاف في الحركة)
+  const last = leader.botTask && leader.botTask.point;
+  if (last && Math.hypot(last.i - ti, last.j - tj) < 1.5) return;
+  leader.botTask = { type: 'leader', point: { i: ti, j: tj } };
+  commandMove(state, ti, tj, [leader], false);
+}
+
+function huntLeaders(state, player, config, pool, units, R) {
+  if (!pool.units.length || !units.length) return;
+  for (const other of state.players) {
+    if (other.neutral || other.fallen || other.id === player.id) continue;
+    if (!isEnemy(state, { playerId: player.id }, { playerId: other.id })) continue;
+    const target = championOf(state, other.id);
+    if (!target) continue;
+    // نراه؟ أي وحدة لنا قريبة منه
+    if (!units.some(u => Math.hypot(u.x - target.x, u.y - target.y) <= R.botHuntRange)) continue;
+    let guards = 0;
+    forEachNearby(state, target.x, target.y, 3, (u) => {
+      if (u !== target && u.playerId === other.id && isAlive(u)) guards++;
+    });
+    const weak = target.hp < target.maxHp * R.botHuntHpRatio;
+    if (!weak && guards >= R.botHuntIsolation) continue;
+
+    const spot = { capture: { i: target.x, j: target.y } };
+    const group = takeNearest(pool, spot, Math.max(config.groupSize, 4), config, true);
+    if (!group.length) return;
+    for (const unit of group) unit.botTask = { type: 'hunt', leader: target };
+    commandAttack(state, group, target);
   }
 }
 

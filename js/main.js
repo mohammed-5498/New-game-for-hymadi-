@@ -11,7 +11,7 @@ import {
   openPause, closePause, isPauseOpen, isEndOpen, leaveToMain
 } from './ui/hud.js';
 import { setupPower, updatePower } from './ui/power.js';
-import { setupGroups, updateGroups, groupsRect } from './ui/groups.js';
+import { setupGroups, updateGroups, hudRects } from './ui/groups.js';
 import {
   setupMenus, showScreen, currentScreen,
   openExitDialog, closeExitDialog, isExitDialogOpen
@@ -56,7 +56,7 @@ setupMenus({
   // تُستدعى عند ظهور شاشة المباراة: اللوحة تأخذ مقاسها الآن
   openGame() {
     resizeCanvas(canvas, state);
-    state.hudAvoid = groupsRect();   // أسهم التحذير تتجنب عمود المجموعات
+    state.hudAvoid = hudRects();     // أسهم التحذير تتجنب عناصر الواجهة
     clampCamera(state);
     resetParticles(state.weather, state.view);
   }
@@ -94,6 +94,7 @@ function update() {
 }
 
 let lastTime = performance.now();
+let hudMeasuredAt = 0;
 let accumulator = 0;
 
 function loop(now) {
@@ -115,8 +116,9 @@ function loop(now) {
     resizeCanvas(canvas, state);
     resetParticles(state.weather, state.view);
     clampCamera(state);
-    state.hudAvoid = groupsRect();
   }
+  // عناصر الواجهة تتغير (شريط الطور، طي شريط القوة): نعيد قياسها مرتين في الثانية
+  if (now - hudMeasuredAt > 500) { state.hudAvoid = hudRects(); hudMeasuredAt = now; }
 
   accumulator += frameMs;
   let steps = 0;

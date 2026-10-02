@@ -1,8 +1,10 @@
 // أطوار اللعب (القسم 9.5): ما يخص كل طور من عدّاد ونقاط وشروط فوز وواجهة
 // السيطرة الكاملة (الافتراضي) لا تمر بشيء هنا: قواعدها كما كانت في victory.js.
-import { TICK_SEC, gameModes as GM } from '../config.js';
+import { TICK_SEC, ALERTS, COMBAT, gameModes as GM } from '../config.js';
 import { isPlayerAlive, finish } from './victory.js';
 import { isEnemy } from './combat.js';
+import { championOf } from './spawn.js';
+import { onScreen } from './alerts.js';
 import { sound } from '../audio/sound.js';
 
 export const modeOf = (state) => (state.mode && GM[state.mode]) ? state.mode : 'conquest';
@@ -35,7 +37,26 @@ export function initMode(state) {
     modeState.warned = {};                          // تنبيه "يقترب من الفوز" مرة لكل جانب
     modeState.blocked = false;                      // عدو داخل منطقة التلة الآن
   }
+
+  if (state.mode === 'regicide') {
+    modeState.leaderKills = 0;          // زعماء أسقطهم جانبك
+    modeState.lastHp = null;            // دم زعيمك في التحديث السابق: لكشف الضرب
+    modeState.alertAt = -99;            // آخر صوت تنبيه لضرب زعيمك
+  }
   state.modeState = modeState;
+}
+
+// بعد ظهور الوحدات الأولى: ما يخص الطور فيها
+export function prepareModeUnits(state) {
+  if (state.mode !== 'regicide') return;
+  // الزعيم أقوى لأنه لا يعود: دم +50% (القسم 9.5.3)
+  for (const unit of state.units) {
+    if (!unit.champion) continue;
+    const factor = 1 + GM.regicide.hpBonus;
+    unit.stats = { ...unit.stats, hp: unit.stats.hp * factor };
+    unit.maxHp = unit.stats.hp;
+    unit.hp = unit.maxHp;
+  }
 }
 
 // --- كل تحديث ---
@@ -43,6 +64,7 @@ export function updateMode(state) {
   if (state.matchResult) return;
   if (state.mode === 'points') updatePoints(state);
   else if (state.mode === 'king') updateKing(state);
+  else if (state.mode === 'regicide') updateRegicide(state);
 }
 
 // ================= 9.5.2 الوقت بالنقاط =================
@@ -192,6 +214,109 @@ export function kingSides(state) {
 
 const isHumanSide = (state, side) => side.players.some(p => p.id === state.humanId);
 
+// ================= 9.5.3 حماية الزعيم =================
+function updateRegicide(state) {
+  const R = GM.regicide;
+  const ms = state.modeState;
+
+  for (const player of gangPlayers(state)) {
+    if (player.fallen) continue;
+    const leader = championOf(state, player.id);
+    if (!leader) { fallLeader(state, player); continue; }
+
+    // يتعالج داخل حيه المنزلي (مربعاته، أو الشوارع حول علمه: الوحدات تقف في الشوارع غالباً)
+    const home = state.map.districts[player.homeDistrictId];
+    const district = state.map.districtOf(Math.round(leader.x), Math.round(leader.y));
+    const atHome = home && (district === home ||
+      (home.capture && Math.hypot(leader.x - home.capture.i, leader.y - home.capture.j) <= R.homeHealRadius));
+    if (atHome && leader.hp < leader.maxHp) {
+      leader.hp = Math.min(leader.maxHp, leader.hp + R.homeHealPerSecond * TICK_SEC);
+    }
+  }
+
+  // زعيمك يُضرب: سهم أحمر نابض على الحافة (إن كان خارج الشاشة) وصوت تنبيه
+  const mine = championOf(state, state.humanId);
+  if (mine) {
+    if (ms.lastHp !== null && mine.hp < ms.lastHp - 1e-6) leaderHit(state, mine);
+    ms.lastHp = mine.hp;
+  }
+  // السهم يتبع الزعيم ما دام قائماً
+  const arrow = state.alerts.find(a => a.kind === 'leader');
+  if (arrow && mine) { arrow.i = mine.x; arrow.j = mine.y; }
+}
+
+function leaderHit(state, leader) {
+  const R = GM.regicide;
+  const ms = state.modeState;
+  if (state.time - ms.alertAt >= R.hitAlertSeconds) {
+    ms.alertAt = state.time;
+    sound('alert');
+  }
+  if (onScreen(state, leader.x, leader.y)) return;
+  const arrow = state.alerts.find(a => a.kind === 'leader');
+  if (arrow) { arrow.life = R.hitAlertSeconds; return; }
+  // سهم الزعيم أهم من غيره: يحل محل أقدم سهم إن امتلأت الأسهم
+  if (state.alerts.length >= ALERTS.maxArrows) {
+    state.alerts.sort((a, b) => a.life - b.life);
+    state.alerts.shift();
+  }
+  state.alerts.push({ kind: 'leader', i: leader.x, j: leader.y, life: R.hitAlertSeconds, screen: null });
+}
+
+// سقط الزعيم: يخرج صاحبه فوراً، وتتلاشى وحداته خلال ثانية، وتصبح أحياؤه محايدة
+function fallLeader(state, player) {
+  const R = GM.regicide;
+  const ms = state.modeState;
+  player.fallen = true;
+
+  // من أسقطه؟ آخر من ضربه (يُحسب لجانبك إن كان أنت أو حليفك)
+  const human = state.players[state.humanId];
+  const body = state.units.find(u => u.playerId === player.id && u.champion);
+  const killer = body && body.lastHitBy !== undefined ? state.players[body.lastHitBy] : null;
+  if (human && killer && player.id !== state.humanId && sideKey(killer) === sideKey(human)) ms.leaderKills++;
+
+  for (const unit of state.units) {
+    if (unit.playerId !== player.id || unit.state === 'dead') continue;
+    unit.fadeAt = state.time + Math.random() * R.fadeSeconds;
+  }
+  for (const district of state.map.districts) {
+    if (district.owner !== player.id) continue;
+    district.owner = null;
+    district.progress = 0;
+    district.progressOwner = null;
+  }
+  if (player.id !== state.humanId) {
+    state.notice = { text: 'سقط زعيم ' + player.gangName, mine: false, t: 3 };
+  }
+}
+
+// التلاشي: تموت الوحدات في لحظاتها المحددة بلا قاتل (لا تُحسب قتلى لأحد)
+export function updateFades(state) {
+  for (const unit of state.units) {
+    if (unit.fadeAt === undefined || unit.state === 'dead' || state.time < unit.fadeAt) continue;
+    unit.hp = 0;
+    unit.state = 'dead';
+    unit.deathTimer = COMBAT.deathTime;
+    unit.target = null;
+    unit.path = [];
+    unit.selected = false;
+  }
+}
+
+// زعماء الأعداء الأحياء: تشير إليهم أسهم ذهبية على الحافة
+export function enemyLeaders(state) {
+  if (state.mode !== 'regicide') return [];
+  const human = state.players[state.humanId];
+  const list = [];
+  for (const player of gangPlayers(state)) {
+    if (player.fallen || player.id === state.humanId) continue;
+    if (human && sideKey(player) === sideKey(human)) continue;     // حليفك ليس عدواً
+    const leader = championOf(state, player.id);
+    if (leader) list.push({ unit: leader, color: player.color });
+  }
+  return list;
+}
+
 // ================= الواجهة =================
 const clock = (seconds) => {
   const s = Math.max(0, Math.ceil(seconds));
@@ -228,6 +353,22 @@ export function powerColumn(state) {
       folded: 'نقاطي: ' + Math.floor(scores[state.humanId] || 0)
     };
   }
+  if (state.mode === 'regicide') {
+    // دم كل زعيم شريطاً صغيراً، والرقم عدد الأحياء كالمعتاد
+    const counts = state.players.map(() => 0);
+    for (const d of state.map.districts) if (d.owner !== null) counts[d.owner]++;
+    const ratio = (playerId) => {
+      const leader = championOf(state, playerId);
+      return leader ? leader.hp / leader.maxHp : 0;
+    };
+    const mine = championOf(state, state.humanId);
+    return {
+      value: (playerId) => counts[playerId],
+      sortValue: (playerId) => counts[playerId],
+      bar: ratio,
+      folded: 'زعيمي: ' + (mine ? Math.round(100 * mine.hp / mine.maxHp) + '%' : 'سقط')
+    };
+  }
   if (state.mode === 'king') {
     const held = state.modeState.held;
     return {
@@ -249,6 +390,9 @@ export function modeExtras(state) {
   if (state.mode === 'king') {
     const mine = kingSides(state).find(s => isHumanSide(state, s));
     return [['زمنك على التلة', clock(mine ? mine.held : 0)]];
+  }
+  if (state.mode === 'regicide') {
+    return [['زعماء أسقطتهم', state.modeState.leaderKills]];
   }
   return [];
 }

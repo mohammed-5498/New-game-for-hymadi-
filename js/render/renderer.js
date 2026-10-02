@@ -1,5 +1,7 @@
 // الكاميرا وترتيب الرسم الكامل لإطار واحد
-import { TILE_HALF_W, TILE_HALF_H, TICK_SEC, CAMERA, CAPTURE, PERFORMANCE, ALERTS, COMBAT_REALISM, UNIT_ART } from '../config.js';
+import { TILE_HALF_W, TILE_HALF_H, TICK_SEC, CAMERA, CAPTURE, PERFORMANCE, ALERTS, COMBAT_REALISM, UNIT_ART, gameModes as GM } from '../config.js';
+import { enemyLeaders } from '../game/modes.js';
+import { onScreen } from '../game/alerts.js';
 import { mix, PALETTES, ROAD_COLOR, BACKGROUND, UI_LIGHT } from './colors.js';
 import { drawBuilding, setFrameContext } from './buildings.js';
 import { drawUnit, drawSelectionRing, drawProjectile, drawAura, drawFire, unitWorldPos } from './units.js';
@@ -189,55 +191,84 @@ function drawGroupTags(ctx, state, alpha, visible) {
 // --- أسهم التنبيه على حافة الشاشة (القسم 12.3) ---
 // السهم يقف عند حافة الشاشة في اتجاه الحدث، ويخزّن موقعه ليُلمس في input.js
 function drawEdgeAlerts(ctx, state) {
+  drawLeaderArrows(ctx, state);                  // حماية الزعيم: أسهم ذهبية نحو زعماء الأعداء
   if (!state.alerts.length) return;
-  const { camera, view } = state;
-  const m = ALERTS.edgeMargin;
 
   for (const alert of state.alerts) {
-    const wx = (alert.i - alert.j) * TILE_HALF_W, wy = (alert.i + alert.j) * TILE_HALF_H;
-    const dx = (wx - camera.x) * camera.z, dy = (wy - camera.y) * camera.z;
-    const angle = Math.atan2(dy, dx);
-
-    // نحصر النقطة داخل مستطيل الشاشة بعد طرح الهامش
-    const halfW = Math.max(1, view.w / 2 - m), halfH = Math.max(1, view.h / 2 - m);
-    const scale = Math.min(halfW / Math.max(1e-3, Math.abs(dx)), halfH / Math.max(1e-3, Math.abs(dy)));
-    let x = view.w / 2 + dx * scale, y = view.h / 2 + dy * scale;
-    // عمود مجموعات التحكم على حافة الشاشة: السهم يقف بجانبه لا تحته (القسم 4.4)
-    const avoid = state.hudAvoid;
-    if (avoid && x + ALERTS.size > avoid.x0 && x - ALERTS.size < avoid.x1 &&
-        y + ALERTS.size > avoid.y0 && y - ALERTS.size < avoid.y1) {
-      // يبتعد عن العمود نحو داخل الشاشة، أياً كانت الحافة التي عليها
-      x = avoid.x0 > view.w / 2 ? avoid.x0 - ALERTS.size - 6 : avoid.x1 + ALERTS.size + 6;
-    }
+    const { x, y, angle } = edgePoint(state, alert.i, alert.j, ALERTS.size);
     alert.screen = { x, y };
 
     const fade = Math.min(1, alert.life);          // يخفت في آخر ثانية
-    const pulse = 0.85 + 0.15 * Math.sin(state.time * 7);
-    const r = ALERTS.size * pulse;
+    // سهم زعيمك أوضح نبضاً من غيره (القسم 9.5.3)
+    const leader = alert.kind === 'leader';
+    const pulse = leader ? 0.8 + 0.3 * Math.sin(state.time * 11) : 0.85 + 0.15 * Math.sin(state.time * 7);
     const color = alert.kind === 'capture' ? ALERTS.captureColor : ALERTS.attackColor;
+    drawArrow(ctx, x, y, angle, ALERTS.size * pulse, color, UI_LIGHT, fade);
+  }
+}
 
-    ctx.save();
-    ctx.globalAlpha = fade;
-    ctx.translate(x, y);
-    ctx.rotate(angle);
-    // قرص خلفي ليبقى السهم واضحاً فوق أي مشهد
-    ctx.beginPath();
-    ctx.arc(0, 0, r + 3, 0, 6.2832);
-    ctx.fillStyle = 'rgba(20,18,16,.55)';
-    ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(r, 0);
-    ctx.lineTo(-r * 0.6, r * 0.7);
-    ctx.lineTo(-r * 0.2, 0);
-    ctx.lineTo(-r * 0.6, -r * 0.7);
-    ctx.closePath();
-    ctx.fillStyle = color;
-    ctx.fill();
-    ctx.strokeStyle = UI_LIGHT;
-    ctx.lineWidth = 1;
-    ctx.stroke();
-    ctx.restore();
-    ctx.globalAlpha = 1;
+// موقع السهم على حافة الشاشة في اتجاه المربع (i, j)، بعيداً عن عمود مجموعات التحكم
+function edgePoint(state, i, j, size) {
+  const { camera, view } = state;
+  const m = ALERTS.edgeMargin;
+  const wx = (i - j) * TILE_HALF_W, wy = (i + j) * TILE_HALF_H;
+  const dx = (wx - camera.x) * camera.z, dy = (wy - camera.y) * camera.z;
+  const angle = Math.atan2(dy, dx);
+
+  // نحصر النقطة داخل مستطيل الشاشة بعد طرح الهامش
+  const halfW = Math.max(1, view.w / 2 - m), halfH = Math.max(1, view.h / 2 - m);
+  const scale = Math.min(halfW / Math.max(1e-3, Math.abs(dx)), halfH / Math.max(1e-3, Math.abs(dy)));
+  let x = view.w / 2 + dx * scale, y = view.h / 2 + dy * scale;
+  // عناصر الواجهة على الحواف (الأزرار وشريط المعلومات والمجموعات وشريط القوة):
+  // السهم يقف بجانبها لا تحتها، حتى يُرى ويُلمس. يتنحّى نحو وسط الشاشة بأقصر مسافة
+  for (let pass = 0; pass < 2; pass++) {
+    for (const r of state.hudAvoid || []) {
+      if (x + size <= r.x0 || x - size >= r.x1 || y + size <= r.y0 || y - size >= r.y1) continue;
+      const options = [
+        { x: r.x0 - size - 6, y }, { x: r.x1 + size + 6, y },
+        { x, y: r.y0 - size - 6 }, { x, y: r.y1 + size + 6 }
+      ].filter(p => p.x > size && p.x < view.w - size && p.y > size && p.y < view.h - size);
+      if (!options.length) continue;
+      const best = options.reduce((a, b) => Math.hypot(a.x - x, a.y - y) <= Math.hypot(b.x - x, b.y - y) ? a : b);
+      x = best.x; y = best.y;
+    }
+  }
+  return { x, y, angle };
+}
+
+function drawArrow(ctx, x, y, angle, r, fill, outline, alpha, lineWidth = 1) {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+  // قرص خلفي ليبقى السهم واضحاً فوق أي مشهد
+  ctx.beginPath();
+  ctx.arc(0, 0, r + 3, 0, 6.2832);
+  ctx.fillStyle = 'rgba(20,18,16,.55)';
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(r, 0);
+  ctx.lineTo(-r * 0.6, r * 0.7);
+  ctx.lineTo(-r * 0.2, 0);
+  ctx.lineTo(-r * 0.6, -r * 0.7);
+  ctx.closePath();
+  ctx.fillStyle = fill;
+  ctx.fill();
+  ctx.strokeStyle = outline;
+  ctx.lineWidth = lineWidth;
+  ctx.stroke();
+  ctx.restore();
+  ctx.globalAlpha = 1;
+}
+
+// تاج الزعيم مرئي للجميع دائماً (القسم 9.5.3): سهم ذهبي صغير بحدّ بلون صاحبه
+// يشير لكل زعيم عدو خارج الشاشة
+function drawLeaderArrows(ctx, state) {
+  const size = GM.regicide.leaderArrowSize;
+  for (const { unit, color } of enemyLeaders(state)) {
+    if (onScreen(state, unit.x, unit.y)) continue;
+    const { x, y, angle } = edgePoint(state, unit.x, unit.y, size);
+    drawArrow(ctx, x, y, angle, size, '#f2c14e', color, 0.95, 2);
   }
 }
 

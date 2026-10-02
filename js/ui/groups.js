@@ -146,10 +146,16 @@ export function updateGroups(state, frameMs) {
   });
 }
 
-// مستطيل عمود الأزرار على الشاشة: أسهم التحذير تتجنبه (القسم 12.3)
-export function groupsRect() {
-  const box = el('groups');
-  if (!box || !box.offsetParent) return null;
-  const r = box.getBoundingClientRect();
-  return { x0: r.left, y0: r.top, x1: r.right, y1: r.bottom };
+// مستطيلات عناصر الواجهة الظاهرة على الشاشة: أسهم التحذير تتجنبها (القسم 12.3)
+const HUD_IDS = ['groups', 'info', 'btnMode', 'btnPause', 'modeBar', 'btnAll', 'btnClear', 'power'];
+
+export function hudRects() {
+  const rects = [];
+  for (const id of HUD_IDS) {
+    const node = el(id);
+    if (!node || node.hidden || !node.offsetParent) continue;
+    const r = node.getBoundingClientRect();
+    if (r.width) rects.push({ x0: r.left, y0: r.top, x1: r.right, y1: r.bottom });
+  }
+  return rects;
 }

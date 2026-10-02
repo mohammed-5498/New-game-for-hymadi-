@@ -558,6 +558,7 @@ export function applyDamage(state, attacker, target, amount) {
   const armor = Math.min(COMBAT.maxArmor, target.stats.armor + target.armorBonus);
   const taken = amount * (1 - armor);
   target.hp -= taken;
+  target.lastHitBy = attacker.playerId;            // من أسقط الزعيم (حماية الزعيم، القسم 9.5.3)
   chargeOnDamageTaken(state, target, taken);       // شحن عن كل 50 ضرراً
   target.hitFlash = COMBAT.hitFlashTime;
   target.hurtTimer = UNIT_ART.hurtSeconds;   // أنميشن تلقي الضرر (القسم 13)

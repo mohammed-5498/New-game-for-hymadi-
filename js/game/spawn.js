@@ -136,6 +136,7 @@ export function spawnChampion(state, player, district) {
 // مات البطل: يعود بعد 60 ثانية، والمؤقت لا يجري إلا وصاحبه يملك 5 أحياء فأكثر
 function updateChampion(state, player, districts) {
   if (championOf(state, player.id)) { state.championTimers[player.id] = null; return; }
+  if (state.mode === 'regicide') return;      // حماية الزعيم: الزعيم لا يعود (القسم 9.5.3)
 
   // أول تحديث بعد موته: نبدأ المؤقت
   if (state.championTimers[player.id] === null) {

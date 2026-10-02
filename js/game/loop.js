@@ -13,7 +13,7 @@ import { updateBots } from '../ai/bot.js';
 import { updateMusicIntensity } from '../audio/sound.js';
 import { updateAlerts } from './alerts.js';
 import { updateArena } from './arena.js';
-import { updateMode } from './modes.js';
+import { updateMode, updateFades } from './modes.js';
 
 export function updateMatch(state) {
   state.time += TICK_SEC;
@@ -33,6 +33,7 @@ export function updateMatch(state) {
     updatePolice(state);      // إنتاج الشرطة واختفاؤها بعد الاستيلاء
     updateBots(state);
     updateMode(state);        // عدّادات الطور ونقاطه وشروط فوزه (القسم 9.5)
+    updateFades(state);       // تلاشي وحدات من سقط زعيمه
     updateVictory(state);
   }
   updateNotice(state);
