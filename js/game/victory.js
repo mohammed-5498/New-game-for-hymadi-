@@ -18,13 +18,8 @@ export function updateVictory(state) {
   const owned = ownedDistricts(state, state.humanId).length;
   if (owned > state.stats.maxDistricts) state.stats.maxDistricts = owned;
 
-  // الصمود ضد الشرطة: لا خصوم من العصابات، والنهاية حين تسقط أنت فقط
-  if (state.mode === 'survival') {
-    if (state.humanId >= 0 && !isPlayerAlive(state, state.humanId)) {
-      finish(state, false, 'خسرت كل جنودك وأحيائك أمام الشرطة');
-    }
-    return;
-  }
+  // الصمود ضد الشرطة: لا خصوم من العصابات، ونهايته ورقمه القياسي في modes.js
+  if (state.mode === 'survival') return;
 
   // الشرطة المحايدة خارج حساب الفوز والخسارة
   const alivePlayers = state.players.filter(p => !p.neutral && isPlayerAlive(state, p.id));

@@ -192,7 +192,8 @@ function updateEndScreen(state) {
   clearSavedMatch();                  // انتهت: لا شيء لمتابعته
   // تُضاف للإحصائيات الدائمة مرة واحدة لكل مباراة (ساحة التجربة لا تُحسب)
   const human = state.players[state.humanId];
-  if (human && !state.settings.arena) recordMatch(result, human.gang);
+  // (والصمود ضد الشرطة له رقمه القياسي الخاص: لا يُحسب خسارة في الإحصائيات)
+  if (human && !state.settings.arena && state.mode !== 'survival') recordMatch(result, human.gang);
 }
 
 // تحديث شريط المعلومات (بدون لمس DOM إلا عند تغير القيم)

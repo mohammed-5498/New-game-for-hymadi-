@@ -32,6 +32,9 @@ export function initPolice(state) {
   const player = policePlayer(state);
   if (!player) return;
 
+  // الصمود ضد الشرطة: لا إنتاج عادي، المراكز مصدر للموجات فقط (القسم 9.5.5)
+  if (state.mode === 'survival') return;
+
   for (const station of policeStations(state)) {
     state.policeTimers[station.id] = { produce: POLICE.produceSeconds, captain: 0 };
     spawnPolice(state, station, true);        // الضابط يظهر مع بداية المباراة
@@ -40,7 +43,7 @@ export function initPolice(state) {
 
 export function updatePolice(state) {
   const player = policePlayer(state);
-  if (!player) return;
+  if (!player || state.mode === 'survival') return;
 
   for (const station of policeStations(state)) {
     // أول استيلاء يوقف الإنتاج نهائياً، ولا يعود المركز ينتج أبداً

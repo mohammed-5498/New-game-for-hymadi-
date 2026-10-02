@@ -46,6 +46,7 @@ export function updatePower(state, force = false) {
   nextUpdate = now + POWER_PANEL.updateSeconds * 1000;
 
   const column = powerColumn(state);              // عمود الطور: نقاط أو زمن أو دم الزعيم (القسم 9.5)
+  if (column && column.summary) { renderSummary(column, force); return; }
   const rows = collectRows(state, column);
   const signature = rows.map(r => r.id + ':' + r.value + ':' + r.units + ':' + r.out + ':' + (r.bar ?? '')).join('|') + (folded ? 'f' : '');
   if (!force && signature === lastSignature) return;
@@ -85,6 +86,30 @@ function collectRows(state, column) {
       bar: column && column.bar ? column.bar(p.id) : null
     }))
     .sort((a, b) => (a.out - b.out) || (b.sortValue - a.sortValue) || (b.units - a.units));
+}
+
+// الصمود ضد الشرطة: رقم الموجة وعدد الشرطة الأحياء بدل قائمة اللاعبين
+function renderSummary(column, force) {
+  const signature = 's:' + column.summary.map(([, v]) => v).join(',') + (folded ? 'f' : '');
+  if (!force && signature === lastSignature) return;
+  lastSignature = signature;
+  el('powerTitle').textContent = folded ? column.folded : 'القوة';
+  const container = el('powerRows');
+  container.innerHTML = '';
+  if (folded) return;
+  for (const [label, value] of column.summary) {
+    const line = document.createElement('div');
+    line.className = 'power-row';
+    const name = document.createElement('span');
+    name.className = 'power-name';
+    name.textContent = label;
+    line.appendChild(name);
+    const num = document.createElement('span');
+    num.className = 'power-num districts';
+    num.textContent = value;
+    line.appendChild(num);
+    container.appendChild(line);
+  }
 }
 
 function render(state, rows) {

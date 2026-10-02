@@ -37,6 +37,10 @@ function modeConfig(state, config) {
       attackArmy: Math.ceil(config.attackArmy * P.botAttackArmyFactor)
     };
   }
+  if (state.mode === 'survival') {
+    // الحليف يسترجع أحياء الشرطة بسرعة بدل انتظار جيش كبير
+    return { ...config, attackArmy: Math.ceil(config.attackArmy * GM.survival.botAttackArmyFactor) };
+  }
   return config;
 }
 
@@ -66,6 +70,8 @@ function decide(state, player, config) {
   // ملك الحي: التلة أولويتها القصوى، قبل الدفاع عن بقية الأحياء
   if (state.mode === 'king') kingPlan(state, player, config, pool, units.length);
   defend(state, player, config, pool, owned);
+  // الصمود ضد الشرطة: نجدة أحياء الحلفاء (وأنت منهم) حين تهاجمها الموجة
+  if (state.mode === 'survival') helpAllies(state, player, config, pool);
   // الوقت بالنقاط: في الدقيقة الأخيرة كل الباقين على أضعف حي للمتصدر
   if (isFinalMinute(state)) strikeLeader(state, player, config, pool);
   expand(state, player, config, pool);
@@ -99,6 +105,10 @@ function taskStillValid(state, unit) {
   // ملك الحي: من وصل التلة يبقى فيها يقاتل ويحميها، والحرس يبقى في حيه
   if (task.type === 'hill') return state.mode === 'king';
   if (task.type === 'guard') return district.owner === unit.playerId;
+  if (task.type === 'help') {
+    return district.owner !== null && district.owner !== unit.playerId &&
+           !isEnemy(state, unit, { playerId: district.owner }) && districtThreat(state, district, district.owner) > 0;
+  }
   return false;
 }
 
@@ -134,8 +144,10 @@ function expand(state, player, config, pool) {
   if (!pool.units.length) return;
   const center = groupCenter(pool.units);
 
+  // مراكز الشرطة لا تُحتل في الصمود: لا فائدة من الوقوف فيها
+  const survival = state.mode === 'survival';
   const targets = state.map.districts
-    .filter(d => d.capture && d.owner === null)
+    .filter(d => d.capture && d.owner === null && !(survival && d.police))
     .sort((a, b) => {
       const special = (b.special ? 1 : 0) - (a.special ? 1 : 0);
       if (special) return special;
@@ -148,6 +160,22 @@ function expand(state, player, config, pool) {
     if (pool.units.length < size) return;
     const group = takeNearest(pool, district, size, config, false);
     if (group.length) sendGroup(state, group, district, config, 'expand');
+  }
+}
+
+// --- الصمود: أقرب مجموعة صغيرة إلى حي حليف تهاجمه الشرطة ---
+function helpAllies(state, player, config, pool) {
+  const threatened = state.map.districts
+    .filter(d => d.capture && d.owner !== null && d.owner !== player.id &&
+                 !state.players[d.owner].neutral && !isEnemy(state, { playerId: player.id }, { playerId: d.owner }))
+    .map(d => ({ district: d, threat: districtThreat(state, d, d.owner) }))
+    .filter(entry => entry.threat > 0)
+    .sort((a, b) => b.threat - a.threat);
+
+  for (const { district } of threatened) {
+    if (pool.units.length < GM.survival.botHelpGroup) return;
+    const group = takeNearest(pool, district, GM.survival.botHelpGroup, config, false);
+    if (group.length) sendGroup(state, group, district, config, 'help');
   }
 }
 

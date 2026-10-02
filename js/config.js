@@ -711,6 +711,14 @@ export const gameModes = {
     twoCaptainsFromWave: 6,     // ضابطان من الموجة 6
     growth: { easy: 0.04, medium: 0.06, hard: 0.09 },   // دم وضرر الشرطة مع كل موجة
     capturePower: 1,            // الشرطة تستولي على الأحياء في هذا الطور
+    sourcesPerWave: 3,          // الموجة تتوزع على هذا العدد من المصادر (حواف ومراكز)
+    edgeSearchTiles: 12,        // البحث عن شارع قرب حافة الخريطة لظهور الموجة
+    spawnSpread: 8,             // مربعات الظهور حول كل مصدر
+    retargetSeconds: 2,         // شرطة الموجة الواقفة تختار هدفاً جديداً كل هذه المدة
+    alarmSeconds: 5,            // العدّاد يحمرّ قبل الموجة بهذه المدة
+    noticeSeconds: 3,           // إشعار "الموجة N قادمة!"
+    botHelpGroup: 3,            // الحليف البوت يرسل هذا العدد لنجدة حي حليف مهدد
+    botAttackArmyFactor: 0.5,   // الحليف يسترجع أحياء الشرطة بجيش أصغر من المعتاد
     recordKey: 'gangcity.survivalBest'
   }
 };
