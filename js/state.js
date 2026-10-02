@@ -64,6 +64,7 @@ export function createMatch(settings) {
     clashes: [],               // شرر تصادم الأسلحة
     fx: [],                    // نجوم الانفجار عند الارتطام
     shakeAt: -99,              // زمن آخر ارتجاجة كاميرا (القسم 5.2)
+    cameraTween: null,         // انتقال الكاميرا الناعم إلى مجموعة تحكم (القسم 4.4)
     alerts: [],                // أسهم الحافة الظاهرة الآن (القسم 12.3)
     alertSeen: [],             // مناطق نُبّه عنها قريباً {kind, i, j, t}
     stats: {
@@ -181,6 +182,7 @@ export function resetMatch(state, settings = state.settings) {
   state.alerts = [];
   state.alertSeen = [];
   state.shakeAt = -99;
+  state.cameraTween = null;
   state.arena = null;
   centerCameraOnHome(state);
   if (settings.arena) buildArena(state);     // ساحة تجربة القتال

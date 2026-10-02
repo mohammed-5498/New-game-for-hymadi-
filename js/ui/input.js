@@ -25,6 +25,7 @@ export function setupInput(canvas, state) {
 
   function onDown(id, p) {
     pointers.set(id, p);
+    state.cameraTween = null;          // لمس الخريطة يوقف انتقال الكاميرا إلى مجموعة
     if (pointers.size === 1) {
       dragStart = { x: p.x, y: p.y, camX: state.camera.x, camY: state.camera.y };
       moved = false;

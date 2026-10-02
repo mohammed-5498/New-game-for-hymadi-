@@ -586,6 +586,16 @@ export const POWER_PANEL = {
   maxHeightPct: 0.33             // لا تغطي أكثر من ثلث ارتفاع الشاشة
 };
 
+// --- مجموعات التحكم (القسم 4.4): تحفظ جنوداً برقم ثم تحددهم بلمسة ---
+// المدتان من INPUT نفسها: نفس إيماءات اللعبة في كل مكان
+export const controlGroups = {
+  count: 5,                       // عدد الأزرار المرقّمة
+  holdMs: INPUT.longPressMs,      // ضغطة مطوّلة = حفظ المحددين في الرقم
+  doubleTapMs: INPUT.doubleTapMs, // لمستان سريعتان = تحديد ونقل الكاميرا
+  cameraSeconds: 0.3,             // مدة انتقال الكاميرا الناعم إلى مركز المجموعة
+  emptyOpacity: 0.4               // وضوح الزر الفارغ
+};
+
 export const ALERTS = {
   maxArrows: 2,          // لا يظهر أكثر من سهمين في وقت واحد
   repeatSeconds: 5,      // لا يتكرر التنبيه لنفس المنطقة قبل هذه المدة

@@ -11,7 +11,7 @@ import { restoreRng } from './game/realism.js';
 import { districtsOwnedBy } from './state.js';
 
 // حقول لا تُحفظ: تخص الشاشة الحالية، أو تُبنى من جديد في كل تحديث
-const SKIP_STATE_KEYS = new Set(['view', 'inputMode', 'debugView', 'selectionBox', 'running', 'paused', 'unitHash']);
+const SKIP_STATE_KEYS = new Set(['view', 'inputMode', 'debugView', 'selectionBox', 'running', 'paused', 'unitHash', 'cameraTween', 'hudAvoid']);
 
 const TYPED = {
   Uint8Array, Int8Array, Uint8ClampedArray, Uint16Array, Int16Array,
@@ -240,6 +240,6 @@ export function loadMatch(state) {
 
   const keep = { view: state.view, inputMode: state.inputMode, debugView: state.debugView };
   for (const key of Object.keys(state)) delete state[key];
-  Object.assign(state, saved, keep, { running: false, paused: false, selectionBox: null });
+  Object.assign(state, saved, keep, { running: false, paused: false, selectionBox: null, cameraTween: null });
   return true;
 }

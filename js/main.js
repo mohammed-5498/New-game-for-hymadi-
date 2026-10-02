@@ -11,6 +11,7 @@ import {
   openPause, closePause, isPauseOpen, isEndOpen, leaveToMain
 } from './ui/hud.js';
 import { setupPower, updatePower } from './ui/power.js';
+import { setupGroups, updateGroups, groupsRect } from './ui/groups.js';
 import {
   setupMenus, showScreen, currentScreen,
   openExitDialog, closeExitDialog, isExitDialogOpen
@@ -32,6 +33,7 @@ const state = createMatch(MATCH_DEFAULTS);
 setupInput(canvas, state);
 setupHud(state);
 setupPower(state);
+setupGroups(state);
 // الخلفية الحية للقوائم: مدينة مستقلة على لوحتها الخاصة (القسم 12.0)
 setupMenuScene(document.getElementById('menuBg'), document.getElementById('menuBack'));
 setupMenus({
@@ -54,6 +56,7 @@ setupMenus({
   // تُستدعى عند ظهور شاشة المباراة: اللوحة تأخذ مقاسها الآن
   openGame() {
     resizeCanvas(canvas, state);
+    state.hudAvoid = groupsRect();   // أسهم التحذير تتجنب عمود المجموعات
     clampCamera(state);
     resetParticles(state.weather, state.view);
   }
@@ -112,6 +115,7 @@ function loop(now) {
     resizeCanvas(canvas, state);
     resetParticles(state.weather, state.view);
     clampCamera(state);
+    state.hudAvoid = groupsRect();
   }
 
   accumulator += frameMs;
@@ -127,6 +131,7 @@ function loop(now) {
   render(ctx, state, accumulator / TICK_MS);
   updateHud(state);
   updatePower(state);          // شريط القوة يتحدث كل ثانية لا كل إطار
+  updateGroups(state, frameMs); // أعداد المجموعات وانتقال الكاميرا إليها
   reportFrame(frameMs);
 
   requestAnimationFrame(loop);
