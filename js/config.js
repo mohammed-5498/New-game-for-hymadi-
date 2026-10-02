@@ -637,6 +637,82 @@ export const PERFORMANCE = {
   fpsTaps: 3              // لمسات شريط المعلومات لإظهار مؤشر الإطارات
 };
 
+// --- أطوار اللعب (القسم 9.5) ---
+export const gameModes = {
+  order: ['conquest', 'points', 'regicide', 'king', 'survival'],
+  defaultMode: 'conquest',
+
+  // 9.5.1 الطور الأصلي: بلا تغيير
+  conquest: {
+    name: 'السيطرة الكاملة',
+    desc: 'آخر عصابة تبقى في المدينة تفوز.'
+  },
+
+  // 9.5.2 الوقت بالنقاط
+  points: {
+    name: 'الوقت بالنقاط',
+    desc: 'كل حي تملكه يعطيك نقطة كل ثانية، والمميز نقطتين. الأعلى نقاطاً عند انتهاء الوقت يفوز.',
+    minutes: [5, 10, 15, 20],
+    defaultMinutes: 10,
+    pointPerDistrict: 1,        // نقطة في الثانية لكل حي
+    pointPerSpecial: 2,         // والحي المميز نقطتان
+    finalSeconds: 60,           // الدقيقة الأخيرة
+    finalMultiplier: 2,         // النقاط مضاعفة فيها
+    armyWeights: { unit: 1, hero: 3, champion: 5 },   // حسم التعادل: الأكبر جيشاً
+    // البوتات: توسع مبكر وقوي، ودفاع أكثر من الهجوم، وفي الدقيقة الأخيرة أضعف حي للمتصدر
+    botExpandGroup: 2,          // مجموعات توسع أصغر = أحياء أكثر في وقت واحد
+    botDefenseBoost: 1.5,       // مدافعون أكثر لكل مهاجم
+    botAttackArmyFactor: 1.6    // جيش أكبر قبل مهاجمة الخصوم
+  },
+
+  // 9.5.3 حماية الزعيم
+  regicide: {
+    name: 'حماية الزعيم',
+    desc: 'بطلك هو زعيمك: إن مات خسرت فوراً. آخر من يبقى زعيمه حياً يفوز.',
+    hpBonus: 0.5,               // دم الزعيم +50%
+    homeHealPerSecond: 2,       // علاجه داخل حيه المنزلي
+    fadeSeconds: 1,             // تلاشي وحدات من سقط زعيمه
+    hitAlertSeconds: 2.5,       // عمر السهم الأحمر حين يُضرب زعيمك
+    leaderArrowSize: 9,         // نصف قطر السهم الذهبي نحو زعماء الأعداء
+    // البوتات: الزعيم خلف الجيش، ومطاردة الزعيم المعادي المعزول أو الضعيف
+    botGuardDistance: 3,        // كم مربعاً يبقى الزعيم خلف مجموعته
+    botHuntHpRatio: 0.5,        // زعيم عدو دمه أقل من هذا = هدف
+    botHuntIsolation: 3,        // أو حوله أقل من هذا العدد من حراسه
+    botHuntRange: 14            // أبعد مسافة يطارد منها
+  },
+
+  // 9.5.4 ملك الحي
+  king: {
+    name: 'ملك الحي',
+    desc: 'سيطر على حي التلة في وسط المدينة. أول من يجمع الزمن المطلوب يفوز.',
+    holdMinutes: [2, 3, 5],
+    defaultHoldMinutes: 3,
+    hillMinTiles: 6,            // التلة: الأقرب للمركز من الأحياء بهذا الحجم فأكثر
+    warnSeconds: 20,            // تنبيه حين يقترب أحد من الفوز
+    botHillShare: 0.75,         // نسبة الجيش المرسلة للتلة
+    botHomeGuard: 2             // قوة صغيرة تبقى للدفاع عن الحي المنزلي
+  },
+
+  // 9.5.5 الصمود ضد الشرطة
+  survival: {
+    name: 'الصمود ضد الشرطة',
+    desc: 'أنت وحلفاؤك ضد موجات شرطة تزداد قوة كل 45 ثانية. اصمد أطول ما يمكن.',
+    allies: [0, 1, 2, 3],
+    defaultAllies: 0,
+    levels: ['easy', 'medium', 'hard'],
+    defaultLevel: 'medium',
+    waveSeconds: 45,            // موجة كل 45 ثانية
+    firstWaveSeconds: 45,       // الموجة الأولى بعد هذه المدة
+    baseSize: 4,                // حجم الموجة n = 4 + 2n
+    perWave: 2,
+    captainFromWave: 3,         // ضابط من الموجة 3
+    twoCaptainsFromWave: 6,     // ضابطان من الموجة 6
+    growth: { easy: 0.04, medium: 0.06, hard: 0.09 },   // دم وضرر الشرطة مع كل موجة
+    capturePower: 1,            // الشرطة تستولي على الأحياء في هذا الطور
+    recordKey: 'gangcity.survivalBest'
+  }
+};
+
 // --- القوائم (القسم 12.0) ---
 export const UI = {
   fadeMs: 200,                   // مدة التلاشي بين الشاشات

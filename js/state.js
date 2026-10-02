@@ -9,6 +9,7 @@ import { initBots } from './ai/bot.js';
 import { createPolicePlayer, initPolice } from './game/police.js';
 import { tileToWorld } from './map/coords.js';
 import { buildArena } from './game/arena.js';
+import { initMode } from './game/modes.js';
 
 export function createMatch(settings) {
   const players = settings.players.map((p, index) => ({
@@ -74,6 +75,7 @@ export function createMatch(settings) {
     }
   };
 
+  initMode(state);               // الطور وخياراته (القسم 9.5)
   buildCaptureZones(state);
   snapDistrictTints(state);      // الأحياء المنزلية ملوّنة من البداية
   spawnStartingUnits(state);
@@ -184,6 +186,8 @@ export function resetMatch(state, settings = state.settings) {
   state.shakeAt = -99;
   state.cameraTween = null;
   state.arena = null;
+  state.mode = fresh.mode;
+  state.modeState = fresh.modeState;
   centerCameraOnHome(state);
   if (settings.arena) buildArena(state);     // ساحة تجربة القتال
 }

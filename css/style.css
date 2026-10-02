@@ -153,6 +153,34 @@ button:active { transform: scale(.96); filter: brightness(.8); }
 
 #notice.mine { background: rgba(27, 79, 156, .92); }
 
+/* --- شريط الطور (القسم 9.5): تحت زر الإيقاف في أعلى الوسط --- */
+#modeBar {
+  position: absolute;
+  top: 52px;
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 96px;
+  max-width: 46vw;
+  padding: 4px 12px;
+  box-sizing: border-box;
+  background: rgba(27, 22, 18, .84);
+  border: 1px solid rgba(224, 176, 74, .3);
+  border-radius: 10px;
+  color: var(--text);
+  text-align: center;
+  pointer-events: none;
+}
+#modeText { font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+#modeBar.alarm { border-color: var(--danger); }
+#modeBar.alarm #modeText { color: #ff5a4a; animation: mode-pulse 1s ease-in-out infinite; }
+@keyframes mode-pulse { 50% { opacity: .55; } }
+/* تقدم كل لاعب نحو الزمن المطلوب بلونه (ملك الحي) */
+#modeBars:empty { display: none; }
+#modeBars { display: flex; flex-direction: column; gap: 3px; margin: 4px 0 2px; min-width: 150px; }
+.mode-track { height: 5px; border-radius: 3px; background: rgba(243, 236, 224, .12); overflow: hidden; }
+.mode-fill { height: 100%; border-radius: 3px; }
+.mode-track.me { outline: 1px solid var(--gold); }
+
 /* مؤشر الإطارات (للاختبار): يظهر عند لمس شريط المعلومات 3 مرات */
 #fps {
   position: absolute;
@@ -338,6 +366,14 @@ button.wide.ghost { background: transparent; color: var(--text-dim); }
 }
 
 .opt.selected { background: var(--gold); border-color: var(--gold); color: var(--gold-dark); }
+
+/* طور اللعب: سطر الشرح تحت الأزرار، وخيارات الطور المختار فقط */
+.mode-desc { margin: 6px 0 0; line-height: 1.5; }
+.row[data-mode][hidden] { display: none; }
+/* الصمود: خانة اللاعب وحدها (الحلفاء من الخانات التالية بعددهم) بلا فريق ولا صعوبة */
+.menu.setup.survival #slots .slot:not(:first-child) { display: none; }
+.menu.setup.survival .slot .team, .menu.setup.survival .slot .difficulty,
+.menu.setup.survival .slot-cols .team, .menu.setup.survival .slot-cols .difficulty { visibility: hidden; }
 
 /* أزرار الحد الأقصى قصيرة: كلها في صف واحد */
 #optMaxUnits .opt { flex: 1 1 12%; padding: 0 4px; }
@@ -580,8 +616,13 @@ input[type=range].muted { opacity: .4; }
   #screenStats .menu { max-width: 820px; }
   #statsList { grid-template-columns: repeat(5, minmax(0, 1fr)); }
   #endScreen .panel { max-width: 600px; }
-  #endStats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  /* كل بطاقات النهاية في صف واحد مهما كان عددها (بطاقات الطور تُضاف) */
+  #endStats { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
 }
+
+/* سبب النهاية بجملة واضحة (القسم 9.5.0) */
+#endReason { margin: -6px 0 12px; font-size: 17px; color: var(--text); }
+#endReason:empty { display: none; }
 
 /* شاشة النهاية: "فزت" بالذهبي و"خسرت" بلون أحمر هادئ */
 #endTitle { font-size: 40px; color: var(--danger); }
@@ -654,6 +695,8 @@ input[type=range].muted { opacity: .4; }
 .power-num { font-variant-numeric: tabular-nums; }
 .power-num.districts { font-weight: 700; }
 .power-num.units { color: var(--text-dim); }
+.power-bar { flex: 0 0 28px; height: 4px; border-radius: 2px; background: rgba(243, 236, 224, .15); overflow: hidden; }
+.power-bar > span { display: block; height: 100%; }
 
 /* سطر اللاعب نفسه مميز بإطار خفيف */
 .power-row.me { border: 1px solid var(--gold); border-radius: 5px; }

@@ -2,6 +2,7 @@
 import { POWER_PANEL } from '../config.js';
 import { sound } from '../audio/sound.js';
 import { isPlayerAlive } from '../game/victory.js';
+import { powerColumn } from '../game/modes.js';
 
 const el = (id) => document.getElementById(id);
 
@@ -44,15 +45,16 @@ export function updatePower(state, force = false) {
   if (!force && now < nextUpdate) return;
   nextUpdate = now + POWER_PANEL.updateSeconds * 1000;
 
-  const rows = collectRows(state);
-  const signature = rows.map(r => r.id + ':' + r.districts + ':' + r.units + ':' + r.out).join('|') + (folded ? 'f' : '');
+  const column = powerColumn(state);              // عمود الطور: نقاط أو زمن أو دم الزعيم (القسم 9.5)
+  const rows = collectRows(state, column);
+  const signature = rows.map(r => r.id + ':' + r.value + ':' + r.units + ':' + r.out + ':' + (r.bar ?? '')).join('|') + (folded ? 'f' : '');
   if (!force && signature === lastSignature) return;
   lastSignature = signature;
 
   // مطوية: سطر واحد فيه عدد أحياء اللاعب فقط
   const mine = rows.find(r => r.id === state.humanId);
   el('powerTitle').textContent = folded
-    ? 'أحيائي: ' + (mine ? mine.districts : 0)
+    ? (column ? column.folded : 'أحيائي: ' + (mine ? mine.districts : 0))
     : 'القوة';
 
   if (folded) { el('powerRows').innerHTML = ''; return; }
@@ -60,7 +62,7 @@ export function updatePower(state, force = false) {
 }
 
 // سطر لكل لاعب: عدد أحيائه ووحداته، مرتبة تنازلياً، والمهزوم في الأسفل
-function collectRows(state) {
+function collectRows(state, column) {
   const districts = state.players.map(() => 0);
   const units = state.players.map(() => 0);
 
@@ -76,9 +78,13 @@ function collectRows(state) {
       color: p.color,
       districts: districts[p.id],
       units: units[p.id],
-      out: !isPlayerAlive(state, p.id)
+      out: !isPlayerAlive(state, p.id),
+      // الرقم الأبرز في السطر: الأحياء، أو ما يخص الطور
+      value: column ? column.value(p.id) : districts[p.id],
+      sortValue: column ? column.sortValue(p.id) : districts[p.id],
+      bar: column && column.bar ? column.bar(p.id) : null
     }))
-    .sort((a, b) => (a.out - b.out) || (b.districts - a.districts) || (b.units - a.units));
+    .sort((a, b) => (a.out - b.out) || (b.sortValue - a.sortValue) || (b.units - a.units));
 }
 
 function render(state, rows) {
@@ -112,8 +118,19 @@ function render(state, rows) {
 
     const districts = document.createElement('span');
     districts.className = 'power-num districts';
-    districts.textContent = row.districts;
+    districts.textContent = row.value;
     line.appendChild(districts);
+
+    // شريط صغير (دم الزعيم في حماية الزعيم)
+    if (row.bar !== null) {
+      const track = document.createElement('span');
+      track.className = 'power-bar';
+      const fill = document.createElement('span');
+      fill.style.width = Math.round(Math.max(0, Math.min(1, row.bar)) * 100) + '%';
+      fill.style.background = row.color;
+      track.appendChild(fill);
+      line.appendChild(track);
+    }
 
     const units = document.createElement('span');
     units.className = 'power-num units';

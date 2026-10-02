@@ -1,5 +1,6 @@
 // البوتات: دفاع ثم توسع ثم هجوم، بثلاث درجات صعوبة، مع احترام التحالفات
-import { TICK_SEC, BOT, SNOWBALL, MAP_GEN } from '../config.js';
+import { TICK_SEC, BOT, SNOWBALL, MAP_GEN, gameModes as GM } from '../config.js';
+import { isFinalMinute, sideTotals, sideKey } from '../game/modes.js';
 import { commandMove } from '../game/units.js';
 import { isEnemy } from '../game/combat.js';
 import { ownedDistricts } from '../game/spawn.js';
@@ -20,8 +21,23 @@ export function updateBots(state) {
     if (state.botTimers[player.id] > 0) continue;
     state.botTimers[player.id] = config.decisionInterval;
 
-    decide(state, player, config);
+    decide(state, player, modeConfig(state, config));
   }
+}
+
+// أولويات البوت حسب الطور (القسم 9.5): لا يبقى بسلوك السيطرة الكاملة في كل طور
+function modeConfig(state, config) {
+  if (state.mode === 'points') {
+    // توسع مبكر وقوي، ودفاع عن الأحياء أكثر من مهاجمة الخصوم
+    const P = GM.points;
+    return {
+      ...config,
+      expandGroup: Math.min(config.groupSize, P.botExpandGroup),
+      defenseFactor: config.defenseFactor * P.botDefenseBoost,
+      attackArmy: Math.ceil(config.attackArmy * P.botAttackArmyFactor)
+    };
+  }
+  return config;
 }
 
 const isAlive = (unit) => unit.state !== 'dead' && unit.hp > 0;
@@ -45,6 +61,8 @@ function decide(state, player, config) {
 
   if (config.retreatWounded) retreatWounded(state, player, config, pool, owned);
   defend(state, player, config, pool, owned);
+  // الوقت بالنقاط: في الدقيقة الأخيرة كل الباقين على أضعف حي للمتصدر
+  if (isFinalMinute(state)) strikeLeader(state, player, config, pool);
   expand(state, player, config, pool);
   attack(state, player, config, pool, units.length);
 }
@@ -113,10 +131,38 @@ function expand(state, player, config, pool) {
              Math.hypot(b.capture.i - center.i, b.capture.j - center.j);
     });
 
+  const size = config.expandGroup || config.groupSize;
   for (const district of targets) {
-    if (pool.units.length < config.groupSize) return;
-    const group = takeNearest(pool, district, config.groupSize, config, false);
+    if (pool.units.length < size) return;
+    const group = takeNearest(pool, district, size, config, false);
     if (group.length) sendGroup(state, group, district, config, 'expand');
+  }
+}
+
+// --- الدقيقة الأخيرة في الوقت بالنقاط: أضعف حي يملكه المتصدر (أقل مدافعين) ---
+function strikeLeader(state, player, config, pool) {
+  if (!pool.units.length) return;
+  const mySide = sideKey(player);
+  const leader = sideTotals(state)
+    .filter(s => s.alive && s.key !== mySide)
+    .sort((a, b) => b.points - a.points)[0];
+  if (!leader) return;
+  const ids = new Set(leader.players.map(p => p.id));
+
+  let best = null, fewest = Infinity;
+  for (const district of state.map.districts) {
+    if (!district.capture || !ids.has(district.owner)) continue;
+    let defenders = 0;
+    forEachNearby(state, district.capture.i, district.capture.j, MAP_GEN.captureRadius * 2, (unit) => {
+      if (ids.has(unit.playerId) && isAlive(unit)) defenders++;
+    });
+    if (defenders < fewest) { fewest = defenders; best = district; }
+  }
+  if (!best) return;
+  while (pool.units.length) {
+    const group = takeNearest(pool, best, config.groupSize, config, true);
+    if (!group.length) break;
+    sendGroup(state, group, best, config, 'attack');
   }
 }
 

@@ -1,7 +1,7 @@
 // القوائم (القسم 12): الرئيسية، الإعداد، الإعدادات، الإحصائيات، سؤال الخروج، وتبديل الشاشات
 import {
   MAP_SIZES, PLAYER_COLORS, GANGS, GANG_IDS, BOT, BOT_LEVELS,
-  WEATHER, WEATHER_KEYS, UNITS, MATCH_DEFAULTS, AUDIO, UI
+  WEATHER, WEATHER_KEYS, UNITS, MATCH_DEFAULTS, AUDIO, UI, gameModes as GM
 } from '../config.js';
 import { sound, audioSettings, setAudioSettings, startMusic } from '../audio/sound.js';
 import { isNativeApp, exitApp } from '../platform.js';
@@ -23,6 +23,11 @@ const MAX_SLOTS = 8;
 
 // إعدادات قائمة الإعداد (تتحول إلى إعدادات مباراة عند الضغط على "ابدأ")
 const setup = {
+  mode: GM.defaultMode,                       // طور اللعب (القسم 9.5)
+  pointsMinutes: GM.points.defaultMinutes,
+  kingMinutes: GM.king.defaultHoldMinutes,
+  allies: GM.survival.defaultAllies,
+  survivalLevel: GM.survival.defaultLevel,
   mapSize: MATCH_DEFAULTS.mapSize,
   maxUnits: UNITS.maxUnitsDefault,
   weather: 'day',
@@ -78,6 +83,18 @@ export function setupMenus(handlers) {
   onTap('btnExit', openExitDialog);
   onTap('btnExitYes', exitApp);
   onTap('btnExitNo', closeExitDialog);
+
+  // طور اللعب وخياراته: تظهر خيارات الطور المختار فقط
+  buildOptions('optMode', GM.order, key => GM[key].name,
+    () => setup.mode, key => { setup.mode = key; refresh(); });
+  buildOptions('optPointsMinutes', GM.points.minutes, v => String(v),
+    () => setup.pointsMinutes, v => { setup.pointsMinutes = v; refresh(); });
+  buildOptions('optKingMinutes', GM.king.holdMinutes, v => String(v),
+    () => setup.kingMinutes, v => { setup.kingMinutes = v; refresh(); });
+  buildOptions('optAllies', GM.survival.allies, v => String(v),
+    () => setup.allies, v => { setup.allies = v; refresh(); });
+  buildOptions('optSurvivalLevel', GM.survival.levels, key => BOT[key].name,
+    () => setup.survivalLevel, key => { setup.survivalLevel = key; refresh(); });
 
   buildOptions('optMapSize', MAP_SIZE_KEYS,
     key => MAP_SIZES[key].name + ' (' + MAP_SIZES[key].maxPlayers + ')',
@@ -257,6 +274,11 @@ function loadSetup() {
   if (!saved || typeof saved !== 'object') return;
 
   // نقبل القيم الصالحة فقط، فلا تكسر بيانات قديمة أو تالفة القائمة
+  if (GM.order.includes(saved.mode)) setup.mode = saved.mode;
+  if (GM.points.minutes.includes(saved.pointsMinutes)) setup.pointsMinutes = saved.pointsMinutes;
+  if (GM.king.holdMinutes.includes(saved.kingMinutes)) setup.kingMinutes = saved.kingMinutes;
+  if (GM.survival.allies.includes(saved.allies)) setup.allies = saved.allies;
+  if (GM.survival.levels.includes(saved.survivalLevel)) setup.survivalLevel = saved.survivalLevel;
   if (MAP_SIZES[saved.mapSize]) setup.mapSize = saved.mapSize;
   if (MAX_UNIT_CHOICES.includes(saved.maxUnits)) setup.maxUnits = saved.maxUnits;
   if (WEATHER_CHOICES.includes(saved.weather)) setup.weather = saved.weather;
@@ -385,12 +407,23 @@ function firstFreeColor(index) {
 
 // --- تحديث كل الواجهة بعد أي تغيير ---
 function refresh() {
+  for (const id of ['optMode', 'optPointsMinutes', 'optKingMinutes', 'optAllies', 'optSurvivalLevel']) refreshOptions(id);
   refreshOptions('optMapSize');
   refreshOptions('optMaxUnits');
   refreshOptions('optWeather');
 
+  // سطر يشرح الطور المختار، وخياراته وحدها ظاهرة
+  el('modeDesc').textContent = GM[setup.mode].desc;
+  for (const row of document.querySelectorAll('#screenSetup .row[data-mode]')) {
+    row.hidden = row.dataset.mode !== setup.mode;
+  }
+  const survival = setup.mode === 'survival';
+  el('screenSetup').querySelector('.menu.setup').classList.toggle('survival', survival);
+
   const limit = MAP_SIZES[setup.mapSize].maxPlayers;
-  el('slotsHint').textContent = 'الخانة الأولى أنت • الحد على هذه الخريطة ' + limit + ' لاعبين';
+  el('slotsHint').textContent = survival
+    ? 'اختر عصابتك ولونك • الحلفاء من الخانات التالية'
+    : 'الخانة الأولى أنت • الحد على هذه الخريطة ' + limit + ' لاعبين';
 
   for (const row of el('slots').children) {
     const index = Number(row.dataset.index);
@@ -413,8 +446,20 @@ function refresh() {
 
 // --- التحقق قبل بدء المباراة ---
 function validate() {
-  const active = setup.slots.filter(s => s.type !== 'closed');
   const limit = MAP_SIZES[setup.mapSize].maxPlayers;
+
+  // الصمود: أنت وحلفاؤك في فريق واحد ضد الشرطة، فلا شرط للجانبين المتعاديين
+  if (setup.mode === 'survival') {
+    if (1 + setup.allies > limit) {
+      return 'أنت و' + setup.allies + ' حلفاء أكثر من حد الخريطة ' + MAP_SIZES[setup.mapSize].name +
+             ' (' + limit + '). قلّل الحلفاء أو كبّر الخريطة.';
+    }
+    const colors = survivalSlots().map(s => s.color);
+    if (new Set(colors).size !== colors.length) return 'لا يمكن أن يتكرر اللون بين لاعبين.';
+    return null;
+  }
+
+  const active = setup.slots.filter(s => s.type !== 'closed');
 
   if (active.length < 2) return 'تحتاج لاعبَين على الأقل: افتح خانة بوت واحدة على الأقل.';
   if (active.length > limit) {
@@ -461,19 +506,31 @@ function arenaPressed() {
 }
 
 // يحول خيارات القائمة إلى إعدادات مباراة
+// الصمود: خانتك ثم الحلفاء من الخانات التالية بعددهم (مفتوحة أو مغلقة)
+function survivalSlots() {
+  return setup.slots.slice(0, 1 + setup.allies);
+}
+
 export function buildMatchSettings() {
-  const players = setup.slots
-    .filter(s => s.type !== 'closed')
-    .map((slot, index) => ({
-      name: slot.type === 'human' ? 'أنت' : 'بوت ' + index,
-      gang: slot.gang === 'random' ? GANG_IDS[Math.floor(Math.random() * GANG_IDS.length)] : slot.gang,
-      color: slot.color,
-      isHuman: slot.type === 'human',
-      team: slot.team,
-      difficulty: slot.difficulty
-    }));
+  const survival = setup.mode === 'survival';
+  const slots = survival ? survivalSlots() : setup.slots.filter(s => s.type !== 'closed');
+  const players = slots.map((slot, index) => ({
+    name: index === 0 ? 'أنت' : 'بوت ' + index,
+    gang: slot.gang === 'random' ? GANG_IDS[Math.floor(Math.random() * GANG_IDS.length)] : slot.gang,
+    color: slot.color,
+    isHuman: index === 0,
+    team: survival ? 1 : slot.team,              // الصمود: الجميع فريق واحد
+    difficulty: slot.difficulty
+  }));
 
   return {
+    mode: setup.mode,
+    modeOptions: {
+      minutes: setup.pointsMinutes,
+      holdMinutes: setup.kingMinutes,
+      allies: setup.allies,
+      level: setup.survivalLevel
+    },
     mapSize: setup.mapSize,
     maxUnits: setup.maxUnits,
     weather: setup.weather === 'random'

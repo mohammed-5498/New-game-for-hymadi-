@@ -47,6 +47,12 @@
       <div id="powerRows"></div>
     </div>
 
+    <!-- شريط الطور أعلى الوسط: المؤقت أو تقدم التلة أو الموجة (القسم 9.5) -->
+    <div id="modeBar" hidden>
+      <div id="modeText"></div>
+      <div id="modeBars"></div>
+    </div>
+
     <div id="notice" hidden></div>
     <div id="fps" hidden></div>
 
@@ -64,6 +70,7 @@
     <div id="endScreen" class="overlay" hidden>
       <div class="panel">
         <h1 id="endTitle"></h1>
+        <p id="endReason"></p>
         <ul id="endStats" class="stat-cards"></ul>
         <button id="btnRestart" class="wide gold">مباراة جديدة</button>
         <button id="btnEndToMain" class="wide ghost">القائمة الرئيسية</button>
@@ -101,6 +108,33 @@
 
       <div class="setup-cols">
         <div class="setup-options">
+          <!-- طور اللعب أول خيار (القسم 9.5)، وتحته سطر يشرحه، ثم خيارات الطور المختار فقط -->
+          <div class="row">
+            <span class="label">طور اللعب</span>
+            <div id="optMode" class="options"></div>
+            <p id="modeDesc" class="hint mode-desc"></p>
+          </div>
+
+          <div class="row" data-mode="points">
+            <span class="label">مدة المباراة (دقيقة)</span>
+            <div id="optPointsMinutes" class="options"></div>
+          </div>
+
+          <div class="row" data-mode="king">
+            <span class="label">زمن السيطرة على التلة للفوز (دقيقة)</span>
+            <div id="optKingMinutes" class="options"></div>
+          </div>
+
+          <div class="row" data-mode="survival">
+            <span class="label">عدد الحلفاء من البوتات</span>
+            <div id="optAllies" class="options"></div>
+          </div>
+
+          <div class="row" data-mode="survival">
+            <span class="label">صعوبة الشرطة</span>
+            <div id="optSurvivalLevel" class="options"></div>
+          </div>
+
           <div class="row">
             <span class="label">حجم الخريطة</span>
             <div id="optMapSize" class="options"></div>

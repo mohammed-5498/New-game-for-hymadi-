@@ -6,6 +6,7 @@ import { showScreen, buildMatchSettings, fillStatCards } from './menus.js';
 import { fadeIn, fadeOut, isShown } from './transition.js';
 import { recordMatch } from '../stats.js';
 import { saveMatch, clearSavedMatch } from '../matchSave.js';
+import { modeBar, modeExtras } from '../game/modes.js';
 
 const el = (id) => document.getElementById(id);
 
@@ -120,6 +121,40 @@ export function leaveToMain(state) {
   showScreen('main');
 }
 
+// شريط الطور أعلى الوسط (القسم 9.5): لا نلمس DOM إلا حين يتغير ما فيه
+function updateModeBar(state) {
+  const bar = state.matchResult ? null : modeBar(state);
+  const signature = bar ? bar.text + '|' + !!bar.alarm + '|' + (bar.bars || []).map(b => b.color + b.ratio.toFixed(3) + b.me).join(',') : '';
+  if (signature === last.modeBar) return;
+  last.modeBar = signature;
+
+  const node = el('modeBar');
+  node.hidden = !bar;
+  if (!bar) { el('notice').style.top = ''; return; }
+  el('modeText').textContent = bar.text;
+  node.classList.toggle('alarm', !!bar.alarm);
+
+  const tracks = el('modeBars');
+  const list = bar.bars || [];
+  if (tracks.children.length !== list.length) {
+    tracks.innerHTML = '';
+    for (let k = 0; k < list.length; k++) {
+      const track = document.createElement('div');
+      track.className = 'mode-track';
+      track.appendChild(document.createElement('div')).className = 'mode-fill';
+      tracks.appendChild(track);
+    }
+  }
+  list.forEach((b, k) => {
+    const track = tracks.children[k];
+    track.classList.toggle('me', !!b.me);
+    track.firstChild.style.background = b.color;
+    track.firstChild.style.width = (Math.min(1, b.ratio) * 100).toFixed(1) + '%';
+  });
+  // الإشعار القصير ينزل تحت الشريط حتى لا يتداخلا
+  el('notice').style.top = (node.offsetTop + node.offsetHeight + 8) + 'px';
+}
+
 // إشعار قصير عند الاستيلاء على حي
 function updateNoticeBox(state) {
   const notice = el('notice');
@@ -143,12 +178,14 @@ function updateEndScreen(state) {
   const minutes = Math.floor(result.duration / 60);
   const seconds = Math.floor(result.duration % 60);
   el('endTitle').textContent = result.won ? 'فزت' : 'خسرت';
+  el('endReason').textContent = result.reason || '';          // سبب النهاية (القسم 9.5.0)
   screen.classList.toggle('won', result.won);
   fillStatCards(el('endStats'), [
     ['مدة المباراة', minutes + ':' + String(seconds).padStart(2, '0')],
     ['أكبر عدد أحياء', result.maxDistricts],
     ['أعداء قتلتهم', result.kills],
-    ['وحداتك التي ماتت', result.losses]
+    ['وحداتك التي ماتت', result.losses],
+    ...modeExtras(state)                                        // إحصائيات الطور
   ]);
   fadeIn(screen);
 
@@ -159,7 +196,7 @@ function updateEndScreen(state) {
 }
 
 // تحديث شريط المعلومات (بدون لمس DOM إلا عند تغير القيم)
-const last = { sel: -1, units: -1, max: -1, districts: -1, weather: '', notice: '', result: null };
+const last = { sel: -1, units: -1, max: -1, districts: -1, weather: '', notice: '', result: null, modeBar: null };
 
 export function updateHud(state) {
   let selected = 0, playerUnitCount = 0;
@@ -189,6 +226,7 @@ export function updateHud(state) {
     el('infoWeather').textContent = WEATHER[state.weather].name;
   }
 
+  updateModeBar(state);
   updateNoticeBox(state);
   updateEndScreen(state);
 }
