@@ -10,6 +10,7 @@ import { loadStats, favoriteGang } from '../stats.js';
 import { savedMatchInfo } from '../matchSave.js';
 import { fadeIn, fadeOut, isShown } from './transition.js';
 import { showMenuScene, hideMenuScene } from './menuScene.js';
+import { setupBattleScreen } from './battleScreen.js';
 
 const el = (id) => document.getElementById(id);
 
@@ -110,12 +111,13 @@ export function setupMenus(handlers) {
   buildSlots();
   refresh();
   setupSettings();
+  setupBattleScreen();               // أداة قياس البوتات الخفية (القسم 11.4)
 }
 
 // --- تبديل الشاشات بتلاشٍ قصير (القسم 12.0) ---
 const SCREENS = {
   main: 'screenMain', setup: 'screenSetup', settings: 'screenSettings',
-  stats: 'screenStats', game: 'screenGame'
+  stats: 'screenStats', game: 'screenGame', battle: 'screenBattle'
 };
 
 let screen = 'main';
@@ -300,7 +302,7 @@ function saveSetup() {
 }
 
 // --- صفوف الخيارات (حجم الخريطة، الحد الأقصى، الطقس) ---
-function buildOptions(containerId, values, label, getCurrent, onPick) {
+export function buildOptions(containerId, values, label, getCurrent, onPick) {
   const container = el(containerId);
   container.innerHTML = '';
   for (const value of values) {
@@ -314,7 +316,7 @@ function buildOptions(containerId, values, label, getCurrent, onPick) {
   container.getCurrent = getCurrent;
 }
 
-function refreshOptions(containerId) {
+export function refreshOptions(containerId) {
   const container = el(containerId);
   const current = String(container.getCurrent());
   for (const button of container.children) {

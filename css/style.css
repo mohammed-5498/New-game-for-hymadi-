@@ -370,6 +370,11 @@ button.wide.ghost { background: transparent; color: var(--text-dim); }
 /* طور اللعب: سطر الشرح تحت الأزرار، وخيارات الطور المختار فقط */
 .mode-desc { margin: 6px 0 0; line-height: 1.5; }
 .row[data-mode][hidden] { display: none; }
+
+/* معركة البوتات (القسم 11.4): أداة قياس خفية */
+.menu.battle { max-width: 560px; text-align: right; }
+#optBattleCount .opt { flex: 1 1 20%; }
+.battle-status { min-height: 24px; margin: 4px 0 10px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
 /* الصمود: خانة اللاعب وحدها (الحلفاء من الخانات التالية بعددهم) بلا فريق ولا صعوبة */
 .menu.setup.survival #slots .slot:not(:first-child) { display: none; }
 .menu.setup.survival .slot .team, .menu.setup.survival .slot .difficulty,

@@ -560,6 +560,19 @@ export const BOT = {
 
 export const BOT_LEVELS = ['easy', 'medium', 'hard'];
 
+// --- ذكاء البوتات v2 (القسم 11) ---
+export const ai = {
+  // أداة القياس (11.4): مباراة بوتات فقط بلا رسم
+  battle: {
+    speed: 8,                 // ×8 من سرعة اللعب العادية
+    maxMinutes: 40,           // حد أقصى لزمن المباراة؛ بعده يفوز صاحب الأحياء الأكثر
+    mapSize: 'medium',
+    matchOptions: [5, 10, 20, 40],
+    defaultMatches: 10,
+    tapsToOpen: 3             // ثلاث لمسات على عنوان اللعبة تفتح الأداة
+  }
+};
+
 // منع الاكتساح: من يملك هذه النسبة من الأحياء يصير هدف كل البوتات غير المتحالفة معه
 export const SNOWBALL = { districtShare: 0.40 };
 
