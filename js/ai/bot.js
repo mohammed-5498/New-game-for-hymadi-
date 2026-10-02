@@ -164,7 +164,7 @@ function retreatWounded(state, player, config, pool, owned) {
   for (const unit of wounded) {
     pool.units.splice(pool.units.indexOf(unit), 1);
     unit.botTask = { type: 'heal', districtId: hospital.id };
-    commandMove(state, hospital.capture.i, hospital.capture.j, [unit]);
+    commandMove(state, hospital.capture.i, hospital.capture.j, [unit], false);   // أوامر البوت بلا حلقة
   }
 }
 
@@ -189,7 +189,7 @@ function sendGroup(state, group, district, config, taskType) {
   const front = config.rangedBehind ? group.filter(u => !u.stats.projectile) : group;
   const back = config.rangedBehind ? group.filter(u => u.stats.projectile) : [];
 
-  if (front.length) commandMove(state, district.capture.i, district.capture.j, front);
+  if (front.length) commandMove(state, district.capture.i, district.capture.j, front, false);
 
   if (back.length) {
     const center = groupCenter(back);
@@ -197,7 +197,7 @@ function sendGroup(state, group, district, config, taskType) {
     const length = Math.hypot(dx, dy) || 1;
     const i = district.capture.i + (dx / length) * config.rangedOffset;
     const j = district.capture.j + (dy / length) * config.rangedOffset;
-    commandMove(state, i, j, back);
+    commandMove(state, i, j, back, false);
   }
 }
 

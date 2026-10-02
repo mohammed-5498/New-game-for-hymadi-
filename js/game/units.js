@@ -104,7 +104,8 @@ export function createUnit(state, player, i, j, heroId = null, champion = false)
 
 // أمر حركة لمجموعة الوحدات المحددة
 // المجموعات الكبيرة تستخدم حقل تدفق واحد، والصغيرة A* عبر طابور محدود
-export function commandMove(state, targetI, targetJ, units) {
+// showMarker: حلقة مكان الأمر للاعب وحده؛ أوامر البوتات والخلفية الحية بلا حلقة
+export function commandMove(state, targetI, targetJ, units, showMarker = true) {
   const map = state.map;
   const group = units.filter(u => u.state !== 'dead');
   if (!group.length) return 0;
@@ -114,7 +115,7 @@ export function commandMove(state, targetI, targetJ, units) {
   const start = nearestWalkable(map, clampedI, clampedJ);
   if (!start) return 0;
 
-  state.moveMarker = { i: clampedI, j: clampedJ, t: 0 };
+  if (showMarker) state.moveMarker = { i: clampedI, j: clampedJ, t: 0 };
 
   // مجموعة كبيرة: حقل تدفق واحد من الهدف بدل A* لكل وحدة
   if (group.length > PERFORMANCE.flowFieldMinGroup) {

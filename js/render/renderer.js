@@ -165,10 +165,12 @@ function drawEdgeAlerts(ctx, state) {
     const halfW = Math.max(1, view.w / 2 - m), halfH = Math.max(1, view.h / 2 - m);
     const scale = Math.min(halfW / Math.max(1e-3, Math.abs(dx)), halfH / Math.max(1e-3, Math.abs(dy)));
     let x = view.w / 2 + dx * scale, y = view.h / 2 + dy * scale;
-    // عمود مجموعات التحكم على الحافة اليسرى: السهم يقف بجانبه لا تحته (القسم 4.4)
+    // عمود مجموعات التحكم على حافة الشاشة: السهم يقف بجانبه لا تحته (القسم 4.4)
     const avoid = state.hudAvoid;
-    if (avoid && x - ALERTS.size < avoid.x1 && y + ALERTS.size > avoid.y0 && y - ALERTS.size < avoid.y1) {
-      x = avoid.x1 + ALERTS.size + 6;
+    if (avoid && x + ALERTS.size > avoid.x0 && x - ALERTS.size < avoid.x1 &&
+        y + ALERTS.size > avoid.y0 && y - ALERTS.size < avoid.y1) {
+      // يبتعد عن العمود نحو داخل الشاشة، أياً كانت الحافة التي عليها
+      x = avoid.x0 > view.w / 2 ? avoid.x0 - ALERTS.size - 6 : avoid.x1 + ALERTS.size + 6;
     }
     alert.screen = { x, y };
 

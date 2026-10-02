@@ -118,9 +118,8 @@ function roam(state) {
     if (state.time < unit.restUntil) continue;
     unit.restUntil = null;
     const target = nearbyStreet(state.map, unit);
-    if (target) commandMove(state, target[0], target[1], [unit]);
+    if (target) commandMove(state, target[0], target[1], [unit], false);   // بلا حلقة أمر
   }
-  state.moveMarker = null;                // لا حلقة أمر حركة في الخلفية
 }
 
 function nearbyStreet(map, unit) {
