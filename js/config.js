@@ -610,6 +610,7 @@ export const ai = {
   expandAwayWeight: 0.5,      // التوسع يفضّل الأحياء البعيدة عن العدو (نقاتل قرب أحيائنا)
   reinforce: true,            // نجدة الفرق المشتبكة (يمكن تعطيلها لمستوى بعينه)
   stage: true,                // الالتئام قبل الاقتحام
+  groupExpand: true,          // المتجمعون قبل اكتمال فرقة الهجوم يتوسعون معاً
   reinforceRange: 14,         // الوحدات الحرة ضمن هذا البعد تنجد فرقة مشتبكة لا تتفوق
   stageDistance: 5,           // فرقة الهجوم تلتئم أولاً عند نقطة قبل الهدف بهذا البعد
   stageRadius: 3,
@@ -652,6 +653,15 @@ export const ai = {
     mapSize: 'medium',
     matchOptions: [5, 10, 20, 40],
     defaultMatches: 10,
+    // الصيغة القياسية: 4 لاعبين الكل ضد الكل (2 من كل مستوى) مثل المباراة العادية؛
+    // 1 ضد 1 تحسمه فوضى البداية، والفرق تزيل حسابات الكل ضد الكل
+    formats: {
+      ffa4:  { name: '4 لاعبين', perSide: 2, teams: false },
+      duel:  { name: '1 ضد 1',   perSide: 1, teams: false },
+      teams: { name: 'فريقان',   perSide: 2, teams: true }
+    },
+    defaultFormat: 'ffa4',
+    defaultMirror: true,      // نفس العصابة للجانبين: العصابات غير متكافئة بين البوتات
     tapsToOpen: 3             // ثلاث لمسات على عنوان اللعبة تفتح الأداة
   }
 };

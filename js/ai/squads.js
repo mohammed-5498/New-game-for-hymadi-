@@ -73,8 +73,23 @@ function sidePowers(state, player, district) {
   return { enemy, mine };
 }
 
-// قوة الأعداء حول نقطة (للانسحاب)
+// قوة الأعداء حول نقطة (للانسحاب والتوسع والهجوم)، محفوظة طوال التحديث الواحد:
+// نفس السؤال يتكرر كثيراً بين الأهداف والفرق، والجواب لا يتغير داخل التحديث
+let aroundCache = { state: null, time: -1, map: new Map() };
+
 function enemyPowerAround(state, player, point, radius) {
+  if (aroundCache.state !== state || aroundCache.time !== state.time) {
+    aroundCache = { state, time: state.time, map: new Map() };
+  }
+  const key = player.id + '|' + Math.round(point.i * 2) + ',' + Math.round(point.j * 2) + '|' + radius;
+  const hit = aroundCache.map.get(key);
+  if (hit !== undefined) return hit;
+  const value = enemyPowerAroundNow(state, player, point, radius);
+  aroundCache.map.set(key, value);
+  return value;
+}
+
+function enemyPowerAroundNow(state, player, point, radius) {
   let total = 0;
   forEachNearby(state, point.i, point.j, radius, (unit) => {
     if (!isAlive(unit) || !isEnemy(state, { playerId: player.id }, unit)) return;
@@ -168,7 +183,7 @@ export function decideSquads(state, player, config, pool, units, owned, helpers)
   const capped = units.length >= state.maxUnits * 0.9;      // بلغ الحد الأقصى: لا فائدة من الانتظار
   if (gathered.length < Math.min(minSquad, capped ? 1 : minSquad)) {
     // لم يكتمل الحد الأدنى للهجوم: المتجمعون يتوسعون معاً كمجموعة واحدة (لا فرادى) إلى أقرب حي آمن
-    if (gathered.length >= ai.expandSize) groupExpand(state, player, lvl, brain, gathered, pool, targets, rally);
+    if (param(lvl, 'groupExpand') && gathered.length >= ai.expandSize) groupExpand(state, player, lvl, brain, gathered, pool, targets, rally);
     return;
   }
   const power = powerOf(gathered);
@@ -422,9 +437,13 @@ function targetList(state, player, lvl, armySize, helpers) {
   const avoidPolice = !lvl.policeEarly && armySize < (lvl.policeArmy || Infinity);
   const stations = state.map.districts.filter(d => d.police && !d.policeDisabled && d.capture);
   // الصعب فما فوق: الأضعف من الخصوم أولاً (إقصاؤه يضم أحياءه ويقلل الأعداء)
+  // القوة = الأحياء + نصف عدد الجنود
   const counts = new Map();
   if (param(lvl, 'preferWeak')) {
     for (const d of state.map.districts) if (d.owner !== null) counts.set(d.owner, (counts.get(d.owner) || 0) + 1);
+    if (param(lvl, 'weakByArmy')) {
+      for (const u of state.units) if (u.state !== 'dead') counts.set(u.playerId, (counts.get(u.playerId) || 0) + 0.5);
+    }
   }
   const most = Math.max(1, ...[...counts.entries()]
     .filter(([id]) => id !== player.id && !state.players[id].neutral).map(([, n]) => n));

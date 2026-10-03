@@ -6,7 +6,7 @@ import { buildOptions, refreshOptions, fillStatCards, showScreen, currentScreen 
 import { sound } from '../audio/sound.js';
 
 const el = (id) => document.getElementById(id);
-const options = { a: 'hard', b: 'medium', count: ai.battle.defaultMatches };
+const options = { a: 'hard', b: 'medium', count: ai.battle.defaultMatches, format: ai.battle.defaultFormat, mirror: ai.battle.defaultMirror };
 let run = null;              // القياس الجاري: { results, state, k, timer }
 
 export function setupBattleScreen() {
@@ -22,6 +22,10 @@ export function setupBattleScreen() {
   buildOptions('optBattleA', BOT_LEVELS, key => BOT[key].name, () => options.a, key => { options.a = key; refresh(); });
   buildOptions('optBattleB', BOT_LEVELS, key => BOT[key].name, () => options.b, key => { options.b = key; refresh(); });
   buildOptions('optBattleCount', ai.battle.matchOptions, v => String(v), () => options.count, v => { options.count = v; refresh(); });
+  buildOptions('optBattleFormat', Object.keys(ai.battle.formats), key => ai.battle.formats[key].name,
+    () => options.format, key => { options.format = key; refresh(); });
+  buildOptions('optBattleGangs', [true, false], v => v ? 'متماثلة' : 'عشوائية',
+    () => options.mirror, v => { options.mirror = v; refresh(); });
 
   el('btnBattleRun').addEventListener('click', () => { sound('ui_tap'); run ? stop() : start(); });
   el('btnBattleBack').addEventListener('click', () => { sound('ui_tap'); stop(); showScreen('main'); });
@@ -29,7 +33,7 @@ export function setupBattleScreen() {
 }
 
 function refresh() {
-  for (const id of ['optBattleA', 'optBattleB', 'optBattleCount']) refreshOptions(id);
+  for (const id of ['optBattleA', 'optBattleB', 'optBattleCount', 'optBattleFormat', 'optBattleGangs']) refreshOptions(id);
   el('btnBattleRun').textContent = run ? 'إيقاف' : 'ابدأ القياس';
 }
 
@@ -55,7 +59,10 @@ function loop() {
   const elapsed = Math.min(250, now - run.last);           // تبويب مخفي ثم عاد: لا قفزة كبيرة
   run.last = now;
 
-  if (!run.state) run.state = createBattle({ a: options.a, b: options.b });
+  if (!run.state) {
+    const f = ai.battle.formats[options.format];
+    run.state = createBattle({ a: options.a, b: options.b, perSide: f.perSide, teams: f.teams, mirror: options.mirror });
+  }
   const ticks = Math.max(1, Math.round(ai.battle.speed * elapsed / 1000 / TICK_SEC));
   if (stepBattle(run.state, ticks)) {
     run.results.push(battleResult(run.state));

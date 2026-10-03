@@ -435,7 +435,16 @@ function refresh() {
     row.querySelector('.type').textContent = SLOT_TYPES[slot.type];
     row.querySelector('.gang').textContent = slot.gang === 'random' ? 'عشوائي' : GANGS[slot.gang].name;
     row.querySelector('.team').textContent = slot.team === 0 ? 'بدون' : 'فريق ' + slot.team;
-    row.querySelector('.difficulty').textContent = slot.type === 'bot' ? BOT[slot.difficulty].name : '—';
+    // المجنون: سطر صغير تحته "يحصل على مزايا إضافية" حتى يعرف اللاعب أنه ليس عادلاً (11.3)
+    const level = slot.type === 'bot' ? BOT[slot.difficulty] : null;
+    const cellNode = row.querySelector('.difficulty');
+    cellNode.textContent = level ? level.name : '—';
+    if (level && level.note) {
+      const note = document.createElement('small');
+      note.className = 'cell-note';
+      note.textContent = level.note;
+      cellNode.appendChild(note);
+    }
 
     const colorCell = row.querySelector('.color');
     const color = PLAYER_COLORS.find(c => c.id === slot.color);

@@ -113,17 +113,17 @@ function countAround(state, unit, spot, radius, enemies) {
 // --- كل 0.25 ث لكل فرقة مشتبكة: الرماة والمصابون والبطل (صعب فما فوق للأولين) ---
 export function updateTactics(state) {
   if (!state.botBrains) return;
+  // كل 0.25 ث مرة واحدة لكل الفرق المشتبكة (لا لكل وحدة في كل تحديث)
   const tickN = Math.round(state.time / 0.05);
   const every = Math.max(1, Math.round(ai.tacticSeconds / 0.05));
-  let byId = null;                    // يُبنى مرة واحدة في التحديث، وفقط إن حان دور فرقة
+  if (tickN % every !== 0) return;
+  let byId = null;
   for (const key of Object.keys(state.botBrains)) {
     const player = state.players[key];
     if (!player) continue;
     const lvl = levelOf(player);
     if (!lvl.squads) continue;
-    const brain = state.botBrains[key];
-    for (const squad of brain.squads) {
-      if ((tickN + squad.id) % every !== 0) continue;      // الفرق موزعة على التحديثات
+    for (const squad of state.botBrains[key].squads) {
       if (!byId) byId = new Map(state.units.map(u => [u.id, u]));
       const members = [];
       for (const id of squad.units) {

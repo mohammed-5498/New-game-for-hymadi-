@@ -373,7 +373,9 @@ button.wide.ghost { background: transparent; color: var(--text-dim); }
 
 /* معركة البوتات (القسم 11.4): أداة قياس خفية */
 .menu.battle { max-width: 560px; text-align: right; }
-#optBattleCount .opt { flex: 1 1 20%; }
+#optBattleCount .opt, #optBattleA .opt, #optBattleB .opt { flex: 1 1 20%; }
+/* سطر صغير تحت "مجنون" في خانة الصعوبة */
+.cell-note { display: block; font-size: 10px; line-height: 1.2; color: var(--text-dim); font-weight: 400; white-space: normal; }
 .battle-status { min-height: 24px; margin: 4px 0 10px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
 /* الصمود: خانة اللاعب وحدها (الحلفاء من الخانات التالية بعددهم) بلا فريق ولا صعوبة */
 .menu.setup.survival #slots .slot:not(:first-child) { display: none; }
