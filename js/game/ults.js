@@ -1,6 +1,6 @@
 // الضربات المميزة (القسم 6.7): الشحن، شرط الإطلاق، والتأثير الفعلي
 // الأفراد العاديون لا يملكون ضربة مميزة، فلا شحن لهم.
-import { TICK_SEC, COMBAT, ULT, CAMERA } from '../config.js';
+import { TICK_SEC, COMBAT, ULT, CAMERA, ai } from '../config.js';
 import { isEnemy, applyDamage, spawnProjectile } from './combat.js';
 import { createFire } from './abilities.js';
 import { faceTowards } from './units.js';
@@ -19,6 +19,14 @@ const distanceSq = (a, b) => {
 export const hasUlt = (unit) => !!unit.stats.ult;
 export const ultReady = (unit) => hasUlt(unit) && unit.ultCharge >= ULT.max;
 // --- الشحن ---
+// البوت المجنون يشحن أسرع 25% (مزية إضافية معلنة، القسم 11.3)
+function chargeFactor(state, unit) {
+  const player = state.players[unit.playerId];
+  if (!player || player.isHuman || player.neutral) return 1;
+  const lvl = ai.levels[player.difficulty];
+  return (lvl && lvl.chargeFactor) || 1;
+}
+
 // نغمة اكتمال الشحن تُسمع مرة واحدة عند امتلاء الشريط لا في كل تحديث
 function announceReady(state, unit) {
   if (unit.ultCharge < ULT.max || unit.ultAnnounced) return;
@@ -29,7 +37,7 @@ function announceReady(state, unit) {
 export function chargeOverTime(state, unit) {
   if (!hasUlt(unit) || unit.ultCharge >= ULT.max) return;
   const rate = unit.champion ? ULT.championPerSecond : ULT.perSecond;
-  unit.ultCharge = Math.min(ULT.max, unit.ultCharge + rate * TICK_SEC);
+  unit.ultCharge = Math.min(ULT.max, unit.ultCharge + rate * TICK_SEC * chargeFactor(state, unit));
   announceReady(state, unit);
 }
 
@@ -37,7 +45,7 @@ export function chargeOverTime(state, unit) {
 export function chargeOnHit(state, unit) {
   if (!unit || !unit.stats || !hasUlt(unit)) return;
   const amount = unit.champion ? ULT.championPerHit : ULT.perHit;
-  unit.ultCharge = Math.min(ULT.max, unit.ultCharge + amount);
+  unit.ultCharge = Math.min(ULT.max, unit.ultCharge + amount * chargeFactor(state, unit));
   announceReady(state, unit);
 }
 
@@ -47,7 +55,7 @@ export function chargeOnDamageTaken(state, unit, taken) {
   unit.damageTaken += taken;
   while (unit.damageTaken >= ULT.damageChunk) {
     unit.damageTaken -= ULT.damageChunk;
-    unit.ultCharge = Math.min(ULT.max, unit.ultCharge + ULT.perDamageChunk);
+    unit.ultCharge = Math.min(ULT.max, unit.ultCharge + ULT.perDamageChunk * chargeFactor(state, unit));
   }
   announceReady(state, unit);
 }
@@ -95,12 +103,17 @@ function ultTarget(state, unit, ult) {
 }
 
 // تبدأ حركة الضربة الآن، ويقع تأثيرها عند لحظة الارتطام (47%) مثل الضربة العادية
+// بوابة الضربات الذكية للبوتات (القسم 11.2): تُسجَّل من ai/bot.js
+let ultGate = null;
+export function setUltGate(fn) { ultGate = fn; }
+
 export function tryCastUlt(state, unit) {
   if (!ultReady(unit) || unit.pendingUlt || unit.attackCooldown > 0) return false;
 
   const ult = unit.stats.ult;
   const target = ultTarget(state, unit, ult);
   if (!target) return false;
+  if (ultGate && !ultGate(state, unit, ult, target)) return false;   // تُمسك حتى يستحق الموقف
 
   const rate = ULT.castSeconds;
   unit.ultCharge = 0;

@@ -1,5 +1,5 @@
 // ظهور الأفراد عند ساحات أعلام الأحياء المملوكة
-import { TICK_SEC, SPAWN, GANGS, MAP_GEN, SPECIAL_BONUS } from '../config.js';
+import { TICK_SEC, SPAWN, GANGS, MAP_GEN, SPECIAL_BONUS, ai } from '../config.js';
 import { createUnit } from './units.js';
 import { findFreeTiles } from '../map/pathfinding.js';
 import { isEnemy } from './combat.js';
@@ -22,6 +22,13 @@ export function ownsSpecial(state, playerId, type) {
 const clockFactor = (state, playerId) =>
   ownsSpecial(state, playerId, 'clock') ? SPECIAL_BONUS.clock.spawnMultiplier : 1;
 
+// البوت المجنون يظهر أسرع 25% (مزية إضافية معلنة، القسم 11.3)
+function botSpawnFactor(player) {
+  if (player.isHuman || player.neutral) return 1;
+  const lvl = ai.levels[player.difficulty];
+  return (lvl && lvl.spawnFactor) || 1;
+}
+
 // زمن ظهور الفرد العادي: max(4, 14 - (D-1)) ثانية، مضروباً بمعدل العصابة وبرج الساعة
 export function normalInterval(state, player) {
   const owned = ownedDistricts(state, player.id).length;
@@ -31,7 +38,7 @@ export function normalInterval(state, player) {
   );
   const gang = GANGS[player.gang];
   const multiplier = (gang && gang.unit.spawnMultiplier) || 1;   // العقارب × 0.8
-  return seconds * multiplier * clockFactor(state, player.id);
+  return seconds * multiplier * clockFactor(state, player.id) * botSpawnFactor(player);
 }
 
 // زمن ظهور الشخصية المميزة: max(30, 75 - (D-1)×3) ثانية
@@ -41,7 +48,7 @@ export function heroInterval(state, player) {
     SPAWN.heroMin,
     SPAWN.heroBase - Math.max(0, owned - 1) * SPAWN.heroPerDistrict
   );
-  return seconds * clockFactor(state, player.id);
+  return seconds * clockFactor(state, player.id) * botSpawnFactor(player);
 }
 
 export function updateSpawn(state) {

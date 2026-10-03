@@ -15,6 +15,19 @@ import { forEachNearby } from './spatialHash.js';
 import { soundAt, soundAlert } from '../audio/sound.js';
 import { raiseAlert } from './alerts.js';
 
+// اختيار الهدف للبوتات (القسم 11.2): يُسجَّل من ai/bot.js، ولا يغيّر قواعد القتال
+// يُستدعى فقط حين تحتاج الوحدة هدفاً جديداً، ويعيد undefined ليبقى الاختيار العادي
+let targetPicker = null;
+export function setTargetPicker(fn) { targetPicker = fn; }
+
+function chooseTarget(state, unit) {
+  if (targetPicker) {
+    const picked = targetPicker(state, unit, visionRange(state, unit));
+    if (picked !== undefined) return picked;
+  }
+  return findNearestEnemy(state, unit);
+}
+
 // لا ضرر على وحدات نفس اللاعب ولا على الحلفاء (فريق 0 يعني بدون فريق: عدو للجميع)
 export function isEnemy(state, a, b) {
   if (a.playerId === b.playerId) return false;
@@ -110,7 +123,7 @@ export function updateCombat(state) {
     if (unit.state === 'attacking' && !isAlive(unit.target)) {
       // مات الهدف: تبحث فوراً عن عدو آخر في المدى
       unit.commandedTarget = false;
-      const next = findNearestEnemy(state, unit);
+      const next = chooseTarget(state, unit);
       if (next) startAttack(unit, next, state);
       else finishFight(state, unit);
     }
@@ -119,7 +132,7 @@ export function updateCombat(state) {
     if (unit.state === 'idle' || unit.state === 'attackMove') {
       // بحث موزع على التحديثات: كل وحدة تبحث كل 0.25 ثانية
       if ((tick + unit.id) % scanTicks === 0) {
-        const target = findNearestEnemy(state, unit);
+        const target = chooseTarget(state, unit);
         if (target) startAttack(unit, target, state);
       }
     }

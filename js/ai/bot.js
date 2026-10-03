@@ -1,10 +1,19 @@
-// البوتات: دفاع ثم توسع ثم هجوم، بثلاث درجات صعوبة، مع احترام التحالفات
+// البوتات (القسم 11): السهل أفراد بلا فرق (دفاع ثم توسع ثم هجوم)،
+// والمتوسط فما فوق بطبقتين: استراتيجية بالفرق (squads.js) وتكتيكية لكل اشتباك (tactics.js)
 import { TICK_SEC, BOT, SNOWBALL, MAP_GEN, gameModes as GM } from '../config.js';
 import { isFinalMinute, sideTotals, sideKey, hillOf } from '../game/modes.js';
 import { commandMove, commandAttackMove } from '../game/units.js';
 import { isEnemy, commandAttack } from '../game/combat.js';
 import { ownedDistricts, championOf } from '../game/spawn.js';
 import { forEachNearby } from '../game/spatialHash.js';
+import { setTargetPicker } from '../game/combat.js';
+import { setUltGate } from '../game/ults.js';
+import { decideSquads, levelOf, squadOf } from './squads.js';
+import { pickTarget, ultAllowed, updateTactics } from './tactics.js';
+
+// الطبقة التكتيكية تختار الأهداف وتمسك الضربات المميزة عبر بوابتين في كود القتال
+setTargetPicker(pickTarget);
+setUltGate(ultAllowed);
 
 export function initBots(state) {
   // نوزّع أوقات القرار حتى لا تفكر كل البوتات في نفس اللحظة
@@ -23,6 +32,7 @@ export function updateBots(state) {
 
     decide(state, player, modeConfig(state, config));
   }
+  updateTactics(state);      // كل 0.25 ث لكل فرقة مشتبكة فقط
 }
 
 // أولويات البوت حسب الطور (القسم 9.5): لا يبقى بسلوك السيطرة الكاملة في كل طور
@@ -69,6 +79,15 @@ function decide(state, player, config) {
   if (config.retreatWounded) retreatWounded(state, player, config, pool, owned);
   // ملك الحي: التلة أولويتها القصوى، قبل الدفاع عن بقية الأحياء
   if (state.mode === 'king') kingPlan(state, player, config, pool, units.length);
+
+  // المتوسط فما فوق: الفرق ونقطة التجمع (11.1) بعد أولويات الطور
+  if (levelOf(player).squads) {
+    if (state.mode === 'survival') helpAllies(state, player, config, pool);
+    if (isFinalMinute(state)) strikeLeader(state, player, config, pool);
+    decideSquads(state, player, config, pool.units, units, owned, { strongestPlayer });
+    return;
+  }
+
   defend(state, player, config, pool, owned);
   // الصمود ضد الشرطة: نجدة أحياء الحلفاء (وأنت منهم) حين تهاجمها الموجة
   if (state.mode === 'survival') helpAllies(state, player, config, pool);
@@ -82,6 +101,9 @@ function decide(state, player, config) {
 function taskStillValid(state, unit) {
   const task = unit.botTask;
   if (!task) return false;
+  // عضو في فرقة قائمة، أو منسحب يعيد التجمع (11.1)
+  if (task.type === 'squad') return !!squadOf(state, unit);
+  if (task.type === 'regroup') return state.time < task.until;
   // مطاردة زعيم عدو: ما دام حياً
   if (task.type === 'hunt') return state.mode === 'regicide' && isAlive(task.leader);
   // موقع الزعيم خلف جيشه: يُراجع في كل قرار، ولا يُعاد الأمر إلا إذا تغيّر المكان
@@ -146,8 +168,10 @@ function expand(state, player, config, pool) {
 
   // مراكز الشرطة لا تُحتل في الصمود: لا فائدة من الوقوف فيها
   const survival = state.mode === 'survival';
+  // السهل يتجنب مراكز الشرطة العاملة (11.3)، ولا تُحتل في الصمود
+  const avoidStations = survival || player.difficulty === 'easy';
   const targets = state.map.districts
-    .filter(d => d.capture && d.owner === null && !(survival && d.police))
+    .filter(d => d.capture && d.owner === null && !(d.police && avoidStations && (survival || !d.policeDisabled)))
     .sort((a, b) => {
       const special = (b.special ? 1 : 0) - (a.special ? 1 : 0);
       if (special) return special;

@@ -558,10 +558,85 @@ export const BOT = {
   }
 };
 
-export const BOT_LEVELS = ['easy', 'medium', 'hard'];
+// المجنون (11.3): مثل الصعب وأسرع قراراً، ومعه مزايا إضافية غير عادلة
+BOT.insane = {
+  ...BOT.hard,
+  key: 'insane', name: 'مجنون',
+  decisionInterval: 0.5,
+  note: 'يحصل على مزايا إضافية'
+};
+
+export const BOT_LEVELS = ['easy', 'medium', 'hard', 'insane'];
 
 // --- ذكاء البوتات v2 (القسم 11) ---
 export const ai = {
+  // ما يملكه كل مستوى من الطبقتين (11.3). السهل يبقى بسلوكه القديم: أفراد بلا فرق.
+  levels: {
+    easy:   { squads: false },
+    // retreat: الانسحاب، twoFronts: الجبهتان، raids: الإغارة على أحياء العدو الخالية،
+    // protectRanged: حماية الرماة وتراجعهم، pullWounded: سحب المصابين (11.3: صعب فما فوق)
+    medium: { squads: true, minSquad: 6,  focus: true, flank: true, smartUlts: 'partial',
+              policeArmy: 8 },
+    hard:   { squads: true, minSquad: 8,  focus: true, flank: true, smartUlts: 'full',
+              retreat: true, twoFronts: true, raids: true, protectRanged: true, pullWounded: true,
+              policeEarly: true },
+    insane: { squads: true, minSquad: 10, focus: true, flank: true, smartUlts: 'full',
+              retreat: true, twoFronts: true, raids: true, protectRanged: true, pullWounded: true,
+              policeEarly: true,
+              spawnFactor: 0.75,       // ظهور أسرع 25% (زمن الظهور × 0.75)
+              chargeFactor: 1.25 }     // شحن الضربات أسرع 25%
+  },
+
+  // الطبقة الاستراتيجية (11.1)
+  powerRadius: 5,             // نصف قطر خريطة القوى حول كل حي
+  unitValue: { unit: 1, hero: 3, champion: 5 },   // × نسبة الدم الحالية
+  attackRatio: 1.3,           // لا يُهاجَم حي إلا بقوة ≥ 1.3 × قوة المدافعين
+  retreatRatio: 0.6,          // تنسحب الفرقة إن نقصت قوتها عن 0.6 × قوة الأعداء حولها
+  defenseRatio: 1.2,          // الدفاع بلا إفراط: 1.2 × قوة المهاجم
+  specialValue: 2,            // قيمة الحي المميز
+  stationValue: 1.5,          // قيمة مركز الشرطة (صعب فما فوق)
+  snowballValue: 3,           // أحياء صاحب 40% تتضاعف قيمتها (القسم 9)
+  enemyDistrictValue: 1.5,    // حي يملكه عدو أثمن من محايد: انتزاعه يقوّيك ويضعفه
+  expandSize: 2,              // فرقة التوسع لحي محايد خالٍ (الهدف السهل)
+  dangerRadius: 8,            // الأعداء الجائلون قرب الهدف السهل: الفرقة تكبر حتى تفوقهم
+  responseRadius: 12,         // أعداء ضمن هذا البعد عن الهدف يلحقون للدفاع عنه: يُحسبون مدافعين
+  soloSafeRadius: 14,         // وحدة واحدة تكفي لحي خالٍ فقط إن لم يكن عدو ضمن هذا البعد
+  maxSmallSquads: 3,          // أقصى عدد لفرق التوسع والإغارة الصغيرة في وقت واحد
+  reinforceRange: 14,         // الوحدات الحرة ضمن هذا البعد تنجد فرقة مشتبكة لا تتفوق
+  stageDistance: 5,           // فرقة الهجوم تلتئم أولاً عند نقطة قبل الهدف بهذا البعد
+  stageRadius: 3,
+  stageShare: 0.75,           // تقتحم حين يصل 75% منها
+  stageMaxSeconds: 12,        // أو بعد هذه المدة على أي حال
+  policeAvoidRadius: 9,       // قبل مهاجمة الشرطة: تجنّب الأحياء ضمن مدى مطاردتها حول مراكزها
+  rallyRadius: 4,             // من كان ضمن هذا البعد عن نقطة التجمع يُعد متجمعاً
+  rallySwitchGain: 3,         // لا تتغير نقطة التجمع إلا إن صارت الجديدة أقرب للجبهة بهذا القدر
+  twoFrontChance: 0.35,       // احتمال تقسيم الهجوم لجبهتين (صعب فما فوق)
+  twoFrontMinDistance: 10,    // الحيان المستهدفان متباعدان بهذا القدر على الأقل
+  raidAwayDistance: 12,       // جيش العدو الرئيسي بعيد عن أحيائه بهذا القدر: إغارة معاكسة
+  raidSize: 3,
+  raidMinSpeed: 2.3,          // الوحدات السريعة أولاً في الإغارة
+
+  // الطبقة التكتيكية (11.2): كل 0.25 ث لكل فرقة مشتبكة
+  tacticSeconds: 0.25,
+  maxAttackersPerTarget: 3,
+  priorityBonus: 3,           // الطبيب والقناص والبطل المصاب: كأنهم أقرب بهذا القدر
+  woundedHero: 0.5,           // "البطل المصاب": دمه تحت هذه النسبة
+  ehpScale: 60,               // كل 60 دم فعلي = مربع واحد إضافي في تفضيل الهدف
+  kiteDistance: 1.6,          // عدو أقرب من هذا للرامي: يتراجع خطوة
+  kiteStep: 1.5,
+  kiteCooldown: 1.5,
+  woundedRatio: 0.3,          // تحت 30% دم: تتراجع نحو الطبيب أو المستشفى
+  flankMinSpeed: 2.3,         // الوحدات السريعة تلتف
+  flankOffset: 2.5,
+  flankMinSquad: 6,           // الالتفاف في الفرق الكبيرة فقط (الصغيرة تتفكك)
+  heroBehind: 1.5,            // البطل يتقدم خلف مركز فرقته بهذا القدر (إلا ذو الدرع)
+  armoredHero: 0.45,          // درع بهذا القدر فأكثر: يتقدم في المقدمة
+  aoeMinEnemies: 3,           // الضربات الدائرية والأرضية والحريق
+  healMinWounded: 2,          // العلاج الجماعي
+  hardenMinAttackers: 2,      // التصلّب
+  ultHoldSeconds: 4,          // أقصى انتظار للحظة الأفضل، ثم تُطلق على أي حال
+  focusReach: 1,              // تركيز الضرب يختار من داخل مدى الضرب + هذا القدر
+
   // أداة القياس (11.4): مباراة بوتات فقط بلا رسم
   battle: {
     speed: 8,                 // ×8 من سرعة اللعب العادية

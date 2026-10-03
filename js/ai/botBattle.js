@@ -15,9 +15,12 @@ const shuffle = (list) => {
   return list;
 };
 
-// بوت "أ" ضد بوت "ب" (perSide لكل جانب، كل واحد بلا فريق)، بعصابات وأماكن عشوائية حتى لا تُحسم بالحظ
-export function createBattle({ a, b, perSide = 1, mapSize = ai.battle.mapSize, maxUnits = MATCH_DEFAULTS.maxUnits }) {
+// بوت "أ" ضد بوت "ب" (perSide لكل جانب، كل واحد بلا فريق)، بأماكن وألوان عشوائية.
+// mirror: نفس العصابة للجانبين (الافتراضي) فلا يفرق بينهما إلا الذكاء، لأن العصابات غير متكافئة
+// بين البوتات (الغربان تفوز 15% فقط ضد غيرها). وبدونه عصابة عشوائية لكل لاعب.
+export function createBattle({ a, b, perSide = 1, mapSize = ai.battle.mapSize, maxUnits = MATCH_DEFAULTS.maxUnits, mirror = true }) {
   const gangs = shuffle([...GANG_IDS]);
+  if (mirror) gangs.fill(gangs[0]);
   const colors = shuffle(PLAYER_COLORS.map(c => c.id));
   const sides = shuffle([...Array(perSide).fill('a'), ...Array(perSide).fill('b')]);
   const players = sides.map((side, k) => ({
@@ -66,14 +69,16 @@ export function battleResult(state) {
   else if (score.b.alive && !score.a.alive) winner = 'b';
   else if (score.a.districts !== score.b.districts) winner = score.a.districts > score.b.districts ? 'a' : 'b';
   else if (score.a.units !== score.b.units) winner = score.a.units > score.b.units ? 'a' : 'b';
-  return { winner, timeout, seconds: state.time, score };
+  const gangs = {};
+  for (const p of state.players) if (p.battleSide) gangs[p.battleSide] = p.gang;
+  return { winner, timeout, seconds: state.time, score, gangs };
 }
 
 // عدة مباريات متتالية (للقياس في Node: بأقصى سرعة بلا انتظار)
-export function runBattles({ a, b, matches, perSide, mapSize, onMatch }) {
+export function runBattles({ a, b, matches, perSide, mapSize, mirror, onMatch }) {
   const results = [];
   for (let k = 0; k < matches; k++) {
-    const state = createBattle({ a, b, perSide, mapSize });
+    const state = createBattle({ a, b, perSide, mapSize, mirror });
     while (!stepBattle(state, 2000)) { /* حتى النهاية */ }
     const result = battleResult(state);
     results.push(result);
