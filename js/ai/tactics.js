@@ -6,7 +6,7 @@ import { ai, MAP_GEN } from '../config.js';
 import { commandMove } from '../game/units.js';
 import { isEnemy } from '../game/combat.js';
 import { forEachNearby } from '../game/spatialHash.js';
-import { levelOf } from './squads.js';
+import { levelOf, note } from './squads.js';
 
 const isAlive = (unit) => unit && unit.state !== 'dead' && unit.hp > 0;
 
@@ -147,6 +147,7 @@ function engage(state, player, lvl, members) {
       const spot = healSpot(state, player, unit);
       if (spot) {
         unit.botTask = { type: 'regroup', until: state.time + 8 };
+        note(state, player, 'wounded');
         commandMove(state, spot.i, spot.j, [unit], false);
         continue;
       }
@@ -158,6 +159,7 @@ function engage(state, player, lvl, members) {
         const dx = unit.x - threat.x, dy = unit.y - threat.y;
         const len = Math.hypot(dx, dy) || 1;
         unit.kiteAt = state.time;
+        note(state, player, 'kite');
         commandMove(state, unit.x + dx / len * ai.kiteStep, unit.y + dy / len * ai.kiteStep, [unit], false);
         continue;
       }

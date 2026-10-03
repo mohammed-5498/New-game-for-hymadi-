@@ -15,6 +15,8 @@ const dist = (a, b) => Math.hypot(a.i - b.i, a.j - b.j);
 const at = (unit) => ({ i: unit.x, j: unit.y });
 
 export const levelOf = (player) => ai.levels[player.difficulty] || ai.levels.medium;
+// رقم خاص بالمستوى إن وُجد في ai.levels، وإلا الرقم العام في ai
+const param = (lvl, key) => lvl[key] ?? ai[key];
 
 // قيمة الوحدة في خريطة القوى: الفرد 1، المميز 3، البطل 5، مضروبة في نسبة دمها
 export function unitValue(unit) {
@@ -25,7 +27,7 @@ export function unitValue(unit) {
 
 function brainOf(state, player) {
   if (!state.botBrains) state.botBrains = {};
-  if (!state.botBrains[player.id]) state.botBrains[player.id] = { squads: [], nextId: 1, rallyId: -1 };
+  if (!state.botBrains[player.id]) state.botBrains[player.id] = { playerId: player.id, squads: [], nextId: 1, rallyId: -1 };
   return state.botBrains[player.id];
 }
 
@@ -81,6 +83,13 @@ function enemyPowerAround(state, player, point, radius) {
   return total;
 }
 
+// عدّاد أحداث الذكاء لكل لاعب (للقياس والاختبارات): انسحاب، إغارة، جبهتان...
+export function note(state, player, key) {
+  if (!state.aiEvents) state.aiEvents = {};
+  const row = state.aiEvents[player.id] || (state.aiEvents[player.id] = {});
+  row[key] = (row[key] || 0) + 1;
+}
+
 const powerOf = (units) => units.reduce((sum, u) => sum + unitValue(u), 0);
 
 function center(units) {
@@ -98,7 +107,7 @@ export function decideSquads(state, player, config, pool, units, owned, helpers)
 
   updateSquads(state, player, lvl, brain, byId, owned, pool);
   defend(state, player, lvl, brain, pool, owned);
-  reinforce(state, player, lvl, brain, byId, pool);
+  if (param(lvl, 'reinforce')) reinforce(state, player, lvl, brain, byId, pool);
 
   const rally = rallyPoint(state, player, brain, owned);
   if (!rally) return;
@@ -109,9 +118,11 @@ export function decideSquads(state, player, config, pool, units, owned, helpers)
   // - حي آمن (لا عدو في نطاق واسع): وحدة واحدة، من أي مكان، وبلا حد (توسع متوازٍ سريع)
   // - حي فيه خطر: فرقة تكبر حتى تفوق الأعداء الجائلين قربه، من غير المتجمعين، وبعدد فرق محدود
   let small = brain.squads.filter(s => (s.type === 'expand' || s.type === 'raid') && s.units.length > 1).length;
+  // الأقرب أولاً، مع تفضيل ما يبعد عن العدو: نتوسع إلى الخلف ونقاتل قرب أحيائنا
+  const away = awayScore(state, player, lvl, rally);
   const easyTargets = targets.filter(t => t.enemy === 0 && t.easy &&
       !brain.squads.some(s => s.targetId === t.district.id))
-    .sort((a, b) => dist(a.district.capture, rally.capture) - dist(b.district.capture, rally.capture));
+    .sort((a, b) => away(a.district) - away(b.district));
   for (const t of easyTargets) {
     if (!pool.length) break;
     const raid = t.district.owner !== null;
@@ -119,22 +130,23 @@ export function decideSquads(state, player, config, pool, units, owned, helpers)
     const order = (list) => [...list].sort((a, b) =>
       (dist(at(a), capture) + (raid ? fastFirst(a) : 0)) - (dist(at(b), capture) + (raid ? fastFirst(b) : 0)));
 
-    if (enemyPowerAround(state, player, capture, ai.soloSafeRadius) === 0) {
+    if (!raid && enemyPowerAround(state, player, capture, param(lvl, 'soloSafeRadius')) === 0) {
       const [unit] = order(pool);
       removeFrom(pool, [unit]);
       launch(state, brain, [unit], t.district, raid ? 'raid' : 'expand', lvl, false);
       continue;
     }
-    if (small >= ai.maxSmallSquads) continue;
+    if (small >= param(lvl, 'maxSmallSquads')) continue;
     const danger = enemyPowerAround(state, player, capture, ai.dangerRadius);
+    const size = raid ? ai.raidSize : ai.expandSize;      // الإغارة فرقة سريعة لا وحدة وحيدة
     const group = [];
     let power = 0;
     for (const unit of order(pool.filter(u => dist(at(u), rally.capture) > ai.rallyRadius))) {
-      if (group.length >= ai.expandSize && power >= ai.attackRatio * danger) break;
+      if (group.length >= size && power >= ai.attackRatio * danger) break;
       group.push(unit);
       power += unitValue(unit);
     }
-    if (group.length < ai.expandSize || power < ai.attackRatio * danger) continue;
+    if (group.length < size || power < ai.attackRatio * danger) continue;
     removeFrom(pool, group);
     small++;
     launch(state, brain, group, t.district, raid ? 'raid' : 'expand', lvl, true);
@@ -179,6 +191,7 @@ export function decideSquads(state, player, config, pool, units, owned, helpers)
     if (second) {
       const share = chosen.enemy / (chosen.enemy + second.enemy);
       const first = takeNearest(gathered, chosen.district.capture, Math.max(1, Math.round(gathered.length * share)));
+      note(state, player, 'twoFronts');
       launch(state, brain, first, chosen.district, 'attack', lvl, true);
       launch(state, brain, gathered.splice(0), second.district, 'attack', lvl, true);
       removeFrom(pool, first);
@@ -190,13 +203,29 @@ export function decideSquads(state, player, config, pool, units, owned, helpers)
   launch(state, brain, group, chosen.district, 'attack', lvl, chosen.enemy > 0);
 }
 
+// ترتيب التوسع: المسافة من نقطة التجمع ناقص جزء من البعد عن أقرب حي للعدو (أو حيه المنزلي)
+function awayScore(state, player, lvl, rally) {
+  const hostile = [];
+  for (const d of state.map.districts) {
+    if (!d.capture || d.owner === null) continue;
+    const owner = state.players[d.owner];
+    if (!owner.neutral && isEnemy(state, { playerId: player.id }, { playerId: d.owner })) hostile.push(d.capture);
+  }
+  return (district) => {
+    let near = Infinity;
+    for (const h of hostile) near = Math.min(near, dist(h, district.capture));
+    return dist(rally.capture, district.capture) - (hostile.length ? param(lvl, 'expandAwayWeight') * Math.min(near, 30) : 0);
+  };
+}
+
 function groupExpand(state, player, lvl, brain, gathered, pool, targets, rally) {
   const power = powerOf(gathered);
+  const away = awayScore(state, player, lvl, rally);
   let best = null, bestD = Infinity;
   for (const t of targets) {
     if (t.enemy > 0 || !t.easy) continue;
     if (brain.squads.some(s => s.targetId === t.district.id)) continue;
-    const d = dist(rally.capture, t.district.capture);
+    const d = away(t.district);
     if (d >= bestD) continue;
     if (power < ai.attackRatio * enemyPowerAround(state, player, t.district.capture, ai.dangerRadius)) continue;
     bestD = d; best = t;
@@ -226,6 +255,7 @@ function updateSquads(state, player, lvl, brain, byId, owned, pool) {
         disband(members);
         if (home) {
           for (const u of members) u.botTask = { type: 'regroup', until: state.time + 8 };
+          note(state, player, 'retreat');
           commandMove(state, home.capture.i, home.capture.j, members, false);
         }
         continue;
@@ -240,7 +270,11 @@ function updateSquads(state, player, lvl, brain, byId, owned, pool) {
                (district.owner !== null && !isEnemy(state, { playerId: player.id }, { playerId: district.owner }))) {
       // احتلت هدفها: تكمل لهدف قريب تقدر عليه، وإلا تتحرر وتعود للتجمع
       const next = nextTarget(state, player, lvl, members, c, squad.type);
-      if (!next) { disband(members); pool.push(...members.filter(u => u.state !== 'attacking')); continue; }
+      if (!next) {
+        disband(members);
+        pool.push(...members.filter(u => u.state !== 'attacking'));
+        continue;
+      }
       squad.targetId = next.district.id;
       orderSquad(state, members, next.district, lvl, next.enemy > 0);
       keep.push(squad);
@@ -248,7 +282,7 @@ function updateSquads(state, player, lvl, brain, byId, owned, pool) {
     }
 
     // فرقة توسع صغيرة لم تشتبك بعد، وصار هدفها خطراً (أعداء أقوى منها حوله): تعود ولا تموت فرادى
-    if ((squad.type === 'expand' || squad.type === 'raid') && !members.some(u => u.state === 'attacking')) {
+    if (lvl.abortExpand && (squad.type === 'expand' || squad.type === 'raid') && !members.some(u => u.state === 'attacking')) {
       const danger = enemyPowerAround(state, player, district.capture, ai.dangerRadius) +
                      enemyPowerAround(state, player, c, ai.dangerRadius / 2);
       if (danger > 0 && powerOf(members) < ai.attackRatio * danger) {
@@ -294,7 +328,7 @@ function reinforce(state, player, lvl, brain, byId, pool) {
     const enemy = enemyPowerAround(state, player, c, ai.powerRadius);
     let deficit = ai.attackRatio * enemy - powerOf(members);
     if (deficit <= 0) continue;
-    const near = pool.filter(u => dist(at(u), c) <= ai.reinforceRange)
+    const near = pool.filter(u => dist(at(u), c) <= param(lvl, 'reinforceRange'))
       .sort((a, b) => dist(at(a), c) - dist(at(b), c));
     const group = [];
     for (const unit of near) {
@@ -324,7 +358,7 @@ function nextTarget(state, player, lvl, members, c, type) {
       if (!t.easy) continue;
       const danger = enemyPowerAround(state, player, t.district.capture, ai.dangerRadius);
       if (power < ai.attackRatio * danger) continue;
-      if (members.length === 1 && enemyPowerAround(state, player, t.district.capture, ai.soloSafeRadius) > 0) continue;
+      if (members.length === 1 && enemyPowerAround(state, player, t.district.capture, param(lvl, 'soloSafeRadius')) > 0) continue;
     }
     const score = t.value / (d + 5);
     if (score > bestScore) { bestScore = score; best = t; }
@@ -351,8 +385,8 @@ function defend(state, player, lvl, brain, pool, owned) {
       group.push(unit);
       deficit -= unitValue(unit);
     }
-    // لا ترسل دفعة أضعف من المطلوب: تموت فرادى. يُترك الحي ويُسترجع لاحقاً بفرقة كاملة
-    if (!group.length || deficit > 0) continue;
+    // الصعب فما فوق لا يرسل دفعة أضعف من المطلوب (تموت فرادى): يترك الحي ويسترجعه لاحقاً بفرقة كاملة
+    if (!group.length || (lvl.strictDefense && deficit > 0)) continue;
     removeFrom(pool, group);
     const squad = launch(state, brain, group, district, 'defend', lvl, false);
     squad.power = powerOf(group);
@@ -383,10 +417,17 @@ function rallyPoint(state, player, brain, owned) {
 function targetList(state, player, lvl, armySize, helpers) {
   const survival = state.mode === 'survival';
   const leader = helpers ? helpers.strongestPlayer(state, player) : null;   // قاعدة ملاحقة الأقوى
-  // من لا يهاجم الشرطة بعد يتجنب أيضاً الأحياء القريبة من مراكزها العاملة (مدى مطاردتها)
+  // الأحياء ضمن مدى مطاردة الشرطة حول مراكزها العاملة: من لا يهاجم الشرطة بعد يتجنبها تماماً،
+  // والباقون لا يرسلون إليها توسعاً صغيراً (فرقة كاملة فقط)
   const avoidPolice = !lvl.policeEarly && armySize < (lvl.policeArmy || Infinity);
-  const stations = avoidPolice
-    ? state.map.districts.filter(d => d.police && !d.policeDisabled && d.capture) : [];
+  const stations = state.map.districts.filter(d => d.police && !d.policeDisabled && d.capture);
+  // الصعب فما فوق: الأضعف من الخصوم أولاً (إقصاؤه يضم أحياءه ويقلل الأعداء)
+  const counts = new Map();
+  if (param(lvl, 'preferWeak')) {
+    for (const d of state.map.districts) if (d.owner !== null) counts.set(d.owner, (counts.get(d.owner) || 0) + 1);
+  }
+  const most = Math.max(1, ...[...counts.entries()]
+    .filter(([id]) => id !== player.id && !state.players[id].neutral).map(([, n]) => n));
   const list = [];
   for (const d of state.map.districts) {
     if (!d.capture || d.owner === player.id) continue;
@@ -397,24 +438,32 @@ function targetList(state, player, lvl, armySize, helpers) {
       // مع الشرطة (11.3): المتوسط حين يصير جيشه 8 فأكثر، والصعب فما فوق مبكراً
       if (!d.policeDisabled && !lvl.policeEarly && armySize < (lvl.policeArmy || Infinity)) continue;
     }
-    if (stations.some(st => dist(st.capture, d.capture) <= ai.policeAvoidRadius)) continue;
+    const nearPolice = !d.police && stations.some(st => dist(st.capture, d.capture) <= ai.policeAvoidRadius);
+    if (nearPolice && avoidPolice) continue;
     // المدافعون: من حول الحي (خريطة القوى، 5 مربعات) ومن يستطيع النجدة من حوله (نصف قطر أوسع)
     const near = sidePowers(state, player, d).enemy;
-    const enemy = Math.max(near, enemyPowerAround(state, player, d.capture, ai.responseRadius));
+    const reach = lvl.responseRadius ?? ai.responseRadius;
+    const enemy = reach ? Math.max(near, enemyPowerAround(state, player, d.capture, reach)) : near;
     let value = 1;
-    if (d.special) value *= ai.specialValue;
+    if (d.special) value *= param(lvl, 'specialValue');
     if (d.police && lvl.policeEarly) value *= ai.stationValue;
     if (leader !== null && d.owner === leader) value *= ai.snowballValue;
-    if (owner && !owner.neutral) value *= ai.enemyDistrictValue;   // انتزاعه من العدو مكسب مضاعف
+    if (owner && !owner.neutral) {
+      value *= ai.enemyDistrictValue;                               // انتزاعه من العدو مكسب مضاعف
+      if (counts.size) value *= 1 + param(lvl, 'preferWeak') * (1 - (counts.get(d.owner) || 0) / most);
+    }
     // هدف سهل: محايد خالٍ (توسع)، أو حي عدو خالٍ للصعب فما فوق (إغارة معاكسة)
-    const easy = enemy === 0 && (d.owner === null || lvl.raids);
-    list.push({ district: d, enemy, value, easy });
+    // السهولة بخريطة القوى وحدها (5 مربعات)؛ للتوسع فحوص خطره الخاصة، والنصف قطر الأوسع للهجوم فقط
+    const easy = near === 0 && !nearPolice && (d.owner === null || lvl.raids);
+    list.push({ district: d, enemy: easy ? 0 : enemy, value, easy });
   }
   return list;
 }
 
 // --- إطلاق فرقة وأوامرها ---
 function launch(state, brain, units, district, type, lvl, defended) {
+  const owner = state.players[brain.playerId];
+  if (owner) note(state, owner, type);
   const squad = { id: brain.nextId++, type, units: units.map(u => u.id), targetId: district.id };
   brain.squads.push(squad);
   for (const unit of units) {
@@ -422,7 +471,7 @@ function launch(state, brain, units, district, type, lvl, defended) {
     unit.gatherRally = -1;
   }
   // هجوم على حي مُدافَع عنه: تتقدم الفرقة أولاً إلى نقطة قبله وتلتئم، ثم تقتحم معاً
-  if (type === 'attack' && defended && units.length > 1) stage(state, squad, units, district);
+  if (param(lvl, 'stage') && type === 'attack' && defended && units.length > 1) stage(state, squad, units, district);
   else orderSquad(state, units, district, lvl, defended);
   return squad;
 }

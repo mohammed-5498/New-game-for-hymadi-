@@ -18,7 +18,8 @@ const shuffle = (list) => {
 // بوت "أ" ضد بوت "ب" (perSide لكل جانب، كل واحد بلا فريق)، بأماكن وألوان عشوائية.
 // mirror: نفس العصابة للجانبين (الافتراضي) فلا يفرق بينهما إلا الذكاء، لأن العصابات غير متكافئة
 // بين البوتات (الغربان تفوز 15% فقط ضد غيرها). وبدونه عصابة عشوائية لكل لاعب.
-export function createBattle({ a, b, perSide = 1, mapSize = ai.battle.mapSize, maxUnits = MATCH_DEFAULTS.maxUnits, mirror = true }) {
+// teams: كل جانب فريق واحد (حلفاء)، وإلا فالكل ضد الكل
+export function createBattle({ a, b, perSide = 1, mapSize = ai.battle.mapSize, maxUnits = MATCH_DEFAULTS.maxUnits, mirror = true, teams = false }) {
   const gangs = shuffle([...GANG_IDS]);
   if (mirror) gangs.fill(gangs[0]);
   const colors = shuffle(PLAYER_COLORS.map(c => c.id));
@@ -28,7 +29,7 @@ export function createBattle({ a, b, perSide = 1, mapSize = ai.battle.mapSize, m
     gang: gangs[k % gangs.length],
     color: colors[k % colors.length],
     isHuman: false,
-    team: 0,
+    team: teams ? (side === 'a' ? 1 : 2) : 0,
     difficulty: side === 'a' ? a : b
   }));
   const state = createMatch({ mapSize, maxUnits, weather: 'day', mode: 'conquest', players });
@@ -75,10 +76,10 @@ export function battleResult(state) {
 }
 
 // عدة مباريات متتالية (للقياس في Node: بأقصى سرعة بلا انتظار)
-export function runBattles({ a, b, matches, perSide, mapSize, mirror, onMatch }) {
+export function runBattles({ a, b, matches, perSide, mapSize, mirror, teams, onMatch }) {
   const results = [];
   for (let k = 0; k < matches; k++) {
-    const state = createBattle({ a, b, perSide, mapSize, mirror });
+    const state = createBattle({ a, b, perSide, mapSize, mirror, teams });
     while (!stepBattle(state, 2000)) { /* حتى النهاية */ }
     const result = battleResult(state);
     results.push(result);

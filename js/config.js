@@ -576,13 +576,17 @@ export const ai = {
     // retreat: الانسحاب، twoFronts: الجبهتان، raids: الإغارة على أحياء العدو الخالية،
     // protectRanged: حماية الرماة وتراجعهم، pullWounded: سحب المصابين (11.3: صعب فما فوق)
     medium: { squads: true, minSquad: 6,  focus: true, flank: true, smartUlts: 'partial',
-              policeArmy: 8 },
+              policeArmy: 8,
+              responseRadius: 0,      // المتوسط يرى خريطة القوى وحدها (5 مربعات)، لا من يلحق للنجدة
+              reinforce: false, stage: false },   // ولا ينجد فرقه المشتبكة ولا يلتئم قبل الاقتحام
     hard:   { squads: true, minSquad: 8,  focus: true, flank: true, smartUlts: 'full',
               retreat: true, twoFronts: true, raids: true, protectRanged: true, pullWounded: true,
-              policeEarly: true },
+              policeEarly: true,
+              strictDefense: true, preferWeak: 3 },
     insane: { squads: true, minSquad: 10, focus: true, flank: true, smartUlts: 'full',
               retreat: true, twoFronts: true, raids: true, protectRanged: true, pullWounded: true,
               policeEarly: true,
+              strictDefense: true, preferWeak: 3,
               spawnFactor: 0.75,       // ظهور أسرع 25% (زمن الظهور × 0.75)
               chargeFactor: 1.25 }     // شحن الضربات أسرع 25%
   },
@@ -597,11 +601,15 @@ export const ai = {
   stationValue: 1.5,          // قيمة مركز الشرطة (صعب فما فوق)
   snowballValue: 3,           // أحياء صاحب 40% تتضاعف قيمتها (القسم 9)
   enemyDistrictValue: 1.5,    // حي يملكه عدو أثمن من محايد: انتزاعه يقوّيك ويضعفه
+  preferWeak: 0,              // وزن تفضيل أضعف الخصوم (0 = بلا تفضيل؛ يُرفع للصعب في levels)
   expandSize: 2,              // فرقة التوسع لحي محايد خالٍ (الهدف السهل)
   dangerRadius: 8,            // الأعداء الجائلون قرب الهدف السهل: الفرقة تكبر حتى تفوقهم
   responseRadius: 12,         // أعداء ضمن هذا البعد عن الهدف يلحقون للدفاع عنه: يُحسبون مدافعين
   soloSafeRadius: 14,         // وحدة واحدة تكفي لحي خالٍ فقط إن لم يكن عدو ضمن هذا البعد
   maxSmallSquads: 3,          // أقصى عدد لفرق التوسع والإغارة الصغيرة في وقت واحد
+  expandAwayWeight: 0.5,      // التوسع يفضّل الأحياء البعيدة عن العدو (نقاتل قرب أحيائنا)
+  reinforce: true,            // نجدة الفرق المشتبكة (يمكن تعطيلها لمستوى بعينه)
+  stage: true,                // الالتئام قبل الاقتحام
   reinforceRange: 14,         // الوحدات الحرة ضمن هذا البعد تنجد فرقة مشتبكة لا تتفوق
   stageDistance: 5,           // فرقة الهجوم تلتئم أولاً عند نقطة قبل الهدف بهذا البعد
   stageRadius: 3,
