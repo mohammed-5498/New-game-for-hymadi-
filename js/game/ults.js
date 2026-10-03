@@ -103,6 +103,10 @@ function ultTarget(state, unit, ult) {
 }
 
 // تبدأ حركة الضربة الآن، ويقع تأثيرها عند لحظة الارتطام (47%) مثل الضربة العادية
+// نداء التعزيز لقائد الشرطة في الصمود: يُسجَّل من game/modes.js (يستدعي شرطة فوراً)
+let summonHook = null;
+export function setSummonHook(fn) { summonHook = fn; }
+
 // بوابة الضربات الذكية للبوتات (القسم 11.2): تُسجَّل من ai/bot.js
 let ultGate = null;
 export function setUltGate(fn) { ultGate = fn; }
@@ -157,6 +161,7 @@ export function resolveUlt(state, unit) {
     case 'fire':    createFire(state, unit.playerId, (target || unit).x, (target || unit).y, ult.fire); break;
     case 'arrows':  fireArrows(state, unit, ult, target); break;
     case 'bash':    bash(state, unit, ult, target); break;
+    case 'summon':  if (summonHook) summonHook(state, unit, ult); break;
   }
 }
 

@@ -204,8 +204,9 @@ export function tryReact(state, unit, attacker, ranged) {
   if (mul <= 0) return;                                 // من الخلف: لا يرى ولا يتفادى
 
   // الدرع يصدّ الضربات القريبة من الأمام فقط، والمقذوف لا يُصَدّ
-  if (!ranged && unit.style.block && zone === 'front' &&
-      unit.stamina >= CR.blockCost && unit.rng() < CR.blockBase * unit.traits.skill) {
+  // (وحدة التدخل في الصمود تصدّ دائماً ما دام معها تحمّل: alwaysBlock)
+  if (!ranged && unit.style.block && zone === 'front' && unit.stamina >= CR.blockCost &&
+      (unit.alwaysBlock || unit.rng() < CR.blockBase * unit.traits.skill)) {
     beginBlock(state, unit);
     return;
   }

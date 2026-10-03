@@ -27,10 +27,12 @@ const artKey = (unit) => {
 
 const artScale = (unit) => UNIT_ART.scale *
   (unit.champion ? UNIT_ART.championScale : unit.hero ? UNIT_ART.heroScale : 1) *
-  (unit.traits ? unit.traits.size : 1);      // تنويع حجم بسيط بين الأفراد (القسم 5.4)
+  (unit.traits ? unit.traits.size : 1) *     // تنويع حجم بسيط بين الأفراد (القسم 5.4)
+  (unit.artScale || 1);                      // قائد الشرطة في الصمود أكبر ×1.3
 
 // الشرطة تُرسم بلونها الثابت مهما كان اللاعب
-const artColor = (unit) => unit.gang === 'police' ? UNIT_ART.policeColor : unit.color;
+// (ووحدة التدخل في الصمود بلونها الأغمق الخاص)
+const artColor = (unit) => unit.artColor || (unit.gang === 'police' ? UNIT_ART.policeColor : unit.color);
 
 // موقع الوحدة في العالم مع تنعيم بين تحديثين (alpha من 0 إلى 1)
 export function unitWorldPos(unit, alpha) {

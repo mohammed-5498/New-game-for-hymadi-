@@ -101,3 +101,35 @@ export function summarize(results) {
     avgMinutes: results.reduce((s, r) => s + r.seconds, 0) / n / 60
   };
 }
+
+// --- قياس الصمود (9.5.5): بوت يلعب بدل اللاعب حتى يسقط، والنتيجة الموجة التي وصل إليها ---
+export function createSurvivalRun({ level, bot = 'hard', allies = 0, mapSize = ai.battle.mapSize }) {
+  const gangs = shuffle([...GANG_IDS]);
+  const colors = shuffle(PLAYER_COLORS.map(c => c.id));
+  const players = [];
+  for (let k = 0; k <= allies; k++) {
+    players.push({ name: k ? 'حليف ' + k : 'البوت', gang: gangs[k % gangs.length], color: colors[k],
+                   isHuman: false, team: 1, difficulty: bot });
+  }
+  const state = createMatch({
+    mapSize, maxUnits: MATCH_DEFAULTS.maxUnits, weather: 'day', mode: 'survival',
+    modeOptions: { level, allies }, players, protagonistId: 0
+  });
+  state.running = true;
+  state.battle = { maxSeconds: ai.battle.maxMinutes * 60 * 3 };
+  return state;
+}
+
+export function runSurvival({ level, bot, matches, onMatch }) {
+  const waves = [];
+  for (let k = 0; k < matches; k++) {
+    const state = createSurvivalRun({ level, bot });
+    while (!stepBattle(state, 2000)) { /* حتى يسقط */ }
+    waves.push(state.modeState.wave);
+    if (onMatch) onMatch(state.modeState.wave, state.time, k);
+  }
+  waves.sort((x, y) => x - y);
+  return { level, bot, runs: matches, waves, median: waves[Math.floor(waves.length / 2)],
+           avg: waves.reduce((x, y) => x + y, 0) / waves.length };
+}
+

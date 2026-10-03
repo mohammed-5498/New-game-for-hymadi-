@@ -807,17 +807,41 @@ export const gameModes = {
     desc: 'أنت وحلفاؤك ضد موجات شرطة تزداد قوة كل 45 ثانية. اصمد أطول ما يمكن.',
     allies: [0, 1, 2, 3],
     defaultAllies: 0,
-    levels: ['easy', 'medium', 'hard'],
+    levels: ['easy', 'medium', 'hard', 'insane'],
     defaultLevel: 'medium',
-    waveSeconds: 45,            // موجة كل 45 ثانية
-    firstWaveSeconds: 45,       // الموجة الأولى بعد هذه المدة
-    baseSize: 4,                // حجم الموجة n = 4 + 2n
-    perWave: 2,
-    captainFromWave: 3,         // ضابط من الموجة 3
-    twoCaptainsFromWave: 6,     // ضابطان من الموجة 6
-    growth: { easy: 0.04, medium: 0.06, hard: 0.09 },   // دم وضرر الشرطة مع كل موجة
-    capturePower: 1,            // الشرطة تستولي على الأحياء في هذا الطور
-    sourcesPerWave: 3,          // الموجة تتوزع على هذا العدد من المصادر (حواف ومراكز)
+    // الإيقاع (9.5.5 v2): 45 ث، ثم ينقص ثانيتين مع كل موجة حتى حد أدنى
+    waveSeconds: 45,
+    firstWaveSeconds: 45,
+    waveSpeedup: 2,
+    minWaveSeconds: { easy: 25, medium: 25, hard: 25, insane: 18 },
+    // الحجم والقوة ينموان أُسّياً: عدد الموجة n = base + per×n، والدم والضرر × growth^n
+    size: {
+      easy:   { base: 3, per: 2, growth: 1.05 },
+      medium: { base: 4, per: 3, growth: 1.08 },
+      hard:   { base: 5, per: 4, growth: 1.11 },
+      insane: { base: 6, per: 5, growth: 1.14 }
+    },
+    // التكوين والتكتيك حسب رقم الموجة، ولكل مرحلة اسم يُعلَن
+    // captainsPer: ضابط لكل هذا العدد (0 = بلا ضباط)، riotShare: نسبة وحدات التدخل،
+    // fronts: عدد الجبهات، weakest: إحدى الجبهات على أضعف حي، focusHeroes: الضرب على الأبطال أولاً
+    phases: [
+      { from: 1,  name: 'دورية',       captainsPer: 0, riotShare: 0,    fronts: 1 },
+      { from: 4,  name: 'تعزيزات',     captainsPer: 6, riotShare: 0,    fronts: 2 },
+      { from: 7,  name: 'قوات التدخل', captainsPer: 6, riotShare: 0.25, fronts: 3, weakest: true },
+      { from: 10, name: 'الطوارئ',     captainsPer: 5, riotShare: 0.5,  fronts: 3, weakest: true, focusHeroes: true }
+    ],
+    // وحدة التدخل: رسم الشرطي بلون أغمق، دم ×1.6، درع 35%، تصدّ دائماً من الأمام ما دام معها تحمّل
+    riot: { name: 'وحدة تدخل', color: '#1f2f46', hpFactor: 1.6, armor: 0.35 },
+    // كل موجة خامسة: قائد الشرطة (رسم الضابط ×1.3، دم ×5، هالة +30% ضرر، نداء يستدعي 4 شرطة)
+    boss: {
+      every: 5, name: 'قائد الشرطة', scale: 1.3, hpFactor: 5,
+      aura: { radius: 3, damageBonus: 0.30 },
+      summon: 4, summonRadius: 3
+    },
+    captainsBehind: 2,          // الضباط يتقدمون خلف الصفوف بهذا البعد (من الموجة 10)
+    // الشرطة تستولي على الأحياء في هذا الطور؛ قوة استيلاء كل شرطي حسب الصعوبة
+    // (مضبوطة بأداة القياس حتى يصل بوت صعب إلى: سهل 12-15، متوسط 8-10، صعب 6-8، مجنون 4-5)
+    capturePower: { easy: 0.25, medium: 0.25, hard: 0.25, insane: 1 },
     edgeSearchTiles: 12,        // البحث عن شارع قرب حافة الخريطة لظهور الموجة
     spawnSpread: 8,             // مربعات الظهور حول كل مصدر
     retargetSeconds: 2,         // شرطة الموجة الواقفة تختار هدفاً جديداً كل هذه المدة
@@ -825,7 +849,7 @@ export const gameModes = {
     noticeSeconds: 3,           // إشعار "الموجة N قادمة!"
     botHelpGroup: 3,            // الحليف البوت يرسل هذا العدد لنجدة حي حليف مهدد
     botAttackArmyFactor: 0.5,   // الحليف يسترجع أحياء الشرطة بجيش أصغر من المعتاد
-    recordKey: 'gangcity.survivalBest'
+    recordKey: 'gangcity.survivalBest'   // أفضل نتيجة لكل صعوبة: gangcity.survivalBest.hard ...
   }
 };
 

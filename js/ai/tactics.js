@@ -26,6 +26,7 @@ const priority = (target) =>
 // وبحد أقصى 3 مهاجمين من نفس اللاعب على الهدف الواحد ---
 // يعيد undefined حين لا ينطبق (فيبقى الاختيار العادي: الأقرب)
 export function pickTarget(state, unit, vision) {
+  if (unit.focusHeroes) return heroFirst(state, unit, vision);
   const lvl = tacticsFor(state, unit);
   if (!lvl || !lvl.focus) return undefined;
 
@@ -47,6 +48,19 @@ export function pickTarget(state, unit, vision) {
     if (score < bestScore) { bestScore = score; best = other; }
   });
   return best || crowded || undefined;
+}
+
+// شرطة الصمود من الموجة 10: الأبطال والمميزون أولاً داخل الرؤية، ثم الأقرب
+function heroFirst(state, unit, vision) {
+  let best = null, bestScore = Infinity;
+  forEachNearby(state, unit.x, unit.y, vision, (other) => {
+    if (other === unit || !isAlive(other) || !isEnemy(state, unit, other)) return;
+    const d = Math.hypot(other.x - unit.x, other.y - unit.y);
+    if (d >= vision) return;
+    const score = d - (other.champion ? 6 : other.hero ? 4 : 0);
+    if (score < bestScore) { bestScore = score; best = other; }
+  });
+  return best || undefined;
 }
 
 // كم وحدة من نفس اللاعب تضرب هذا الهدف الآن (بحث محلي حوله فقط)

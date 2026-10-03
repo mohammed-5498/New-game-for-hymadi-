@@ -1,6 +1,6 @@
 // أطوار اللعب (القسم 9.5): ما يخص كل طور من عدّاد ونقاط وشروط فوز وواجهة
 // السيطرة الكاملة (الافتراضي) لا تمر بشيء هنا: قواعدها كما كانت في victory.js.
-import { TICK_SEC, ALERTS, COMBAT, gameModes as GM } from '../config.js';
+import { TICK_SEC, ALERTS, COMBAT, BOT, gameModes as GM } from '../config.js';
 import { isPlayerAlive, finish } from './victory.js';
 import { isEnemy } from './combat.js';
 import { championOf } from './spawn.js';
@@ -8,6 +8,7 @@ import { onScreen } from './alerts.js';
 import { createUnit, commandAttackMove } from './units.js';
 import { policePlayer, policeStations } from './police.js';
 import { findFreeTiles } from '../map/pathfinding.js';
+import { setSummonHook } from './ults.js';
 import { sound } from '../audio/sound.js';
 
 export const modeOf = (state) => (state.mode && GM[state.mode]) ? state.mode : 'conquest';
@@ -50,9 +51,8 @@ export function initMode(state) {
   if (state.mode === 'survival') {
     const S = GM.survival;
     modeState.level = S.levels.includes(options.level) ? options.level : S.defaultLevel;
-    modeState.wave = 0;                       // آخر موجة وصلت
+    modeState.wave = 0;                       // آخر موجة وصلت (هي النتيجة)
     modeState.nextWaveAt = S.firstWaveSeconds;
-    modeState.survived = 0;                   // موجات صمدت أمامها
     modeState.retargetAt = 0;
     modeState.record = null;                  // يُملأ عند النهاية: { best, newRecord }
   }
@@ -331,24 +331,44 @@ export function enemyLeaders(state) {
   return list;
 }
 
-// ================= 9.5.5 الصمود ضد الشرطة =================
+// ================= 9.5.5 الصمود ضد الشرطة (v2) =================
+// كل موجة تختلف عن التي قبلها: العدد والقوة ينموان أُسّياً، والتكوين والتكتيك يتغيران بالمراحل
 export const nextWaveIn = (state) => Math.max(0, state.modeState.nextWaveAt - state.time);
 const isWaveUnit = (unit) => unit.wave > 0 && unit.state !== 'dead';
+
+// صاحب المباراة: اللاعب، أو البوت الذي يلعب بدله في أداة القياس
+export const survivorId = (state) =>
+  state.humanId >= 0 ? state.humanId : (state.settings.protagonistId ?? -1);
+
+// مرحلة الموجة n: الاسم والتكوين والتكتيك
+export function wavePhase(n) {
+  const phases = GM.survival.phases;
+  let phase = phases[0];
+  for (const p of phases) if (n >= p.from) phase = p;
+  return phase;
+}
+
+export const isBossWave = (n) => n % GM.survival.boss.every === 0;
+
+// حجم الموجة ومعامل قوتها حسب الصعوبة
+export function waveSize(level, n) {
+  const z = GM.survival.size[level] || GM.survival.size.medium;
+  return { count: z.base + z.per * n, factor: Math.pow(z.growth, n) };
+}
+
+// الفاصل بعد الموجة n: 45 ث ينقص ثانيتين مع كل موجة حتى حد أدنى
+export function waveGap(level, n) {
+  const S = GM.survival;
+  return Math.max(S.minWaveSeconds[level] || S.minWaveSeconds.medium, S.waveSeconds - S.waveSpeedup * n);
+}
 
 function updateSurvival(state) {
   const S = GM.survival;
   const ms = state.modeState;
 
-  // انتهت موجتك الحالية كلها: صمدت أمامها
-  if (ms.wave > ms.survived && !state.units.some(u => isWaveUnit(u) && u.wave === ms.wave)) {
-    ms.survived = ms.wave;
-  }
-
   if (state.time >= ms.nextWaveAt) {
-    // وصول موجة جديدة وأنت قائم يعني أنك صمدت أمام التي قبلها
-    ms.survived = Math.max(ms.survived, ms.wave);
     ms.wave++;
-    ms.nextWaveAt += S.waveSeconds;
+    ms.nextWaveAt = state.time + waveGap(ms.level, ms.wave);
     spawnWave(state, ms.wave);
   }
 
@@ -358,68 +378,129 @@ function updateSurvival(state) {
   }
 
   // الخسارة: فقدت كل جنودك وكل أحيائك (الحلفاء لا يُبقونك في المباراة)
-  if (state.humanId >= 0 && !isPlayerAlive(state, state.humanId)) endSurvival(state);
+  const me = survivorId(state);
+  if (me >= 0 && !isPlayerAlive(state, me)) endSurvival(state);
 }
 
-// حجم الموجة n = 4 + 2n، ومن الموجة 3 ضابط ومن 6 ضابطان؛ والدم والضرر يزيدان مع كل موجة
-function spawnWave(state, n) {
+// تكوين الموجة: شرطة عاديون، وضباط (واحد لكل 6)، ووحدات تدخل، وقائد الشرطة كل خمس موجات
+function waveKinds(n, count) {
+  const phase = wavePhase(n);
+  const captains = phase.captainsPer ? Math.max(1, Math.floor(count / phase.captainsPer)) : 0;
+  const riot = Math.round((count - captains) * phase.riotShare);
+  const kinds = [];
+  for (let k = 0; k < count; k++) {
+    kinds.push(k < captains ? 'captain' : k < captains + riot ? 'riot' : 'common');
+  }
+  if (isBossWave(n)) kinds.unshift('boss');
+  return kinds;
+}
+
+// وحدة شرطة للموجة بكل تعديلاتها (تُستعمل أيضاً لنداء التعزيز عند قائد الشرطة)
+export function makeWaveUnit(state, kind, i, j, n, factor) {
   const S = GM.survival;
   const police = policePlayer(state);
-  if (!police) return;
-  const count = S.baseSize + S.perWave * n;
-  const captains = n >= S.twoCaptainsFromWave ? 2 : n >= S.captainFromWave ? 1 : 0;
-  const factor = 1 + S.growth[state.modeState.level] * (n - 1);
+  const unit = createUnit(state, police, i, j, kind === 'captain' || kind === 'boss' ? 'captain' : null);
+  const stats = { ...unit.stats, capturePower: S.capturePower[state.modeState.level] ?? S.capturePower.medium };
+  let hp = stats.hp * factor;
+  if (kind === 'riot') {
+    hp *= S.riot.hpFactor;
+    stats.armor = S.riot.armor;
+    unit.name = S.riot.name;
+    unit.artColor = S.riot.color;
+    unit.riot = true;
+    unit.style = { ...unit.style, block: true };   // تصدّ من الأمام دائماً ما دام معها تحمّل
+    unit.alwaysBlock = true;
+  }
+  if (kind === 'boss') {
+    hp *= S.boss.hpFactor;
+    stats.aura = S.boss.aura;
+    stats.ult = { kind: 'summon', needs: 'enemy', radius: S.boss.summonRadius, count: S.boss.summon };
+    unit.name = S.boss.name;
+    unit.artScale = S.boss.scale;
+    unit.boss = true;
+  }
+  stats.hp = hp;
+  stats.damage = stats.damage * factor;
+  unit.stats = stats;
+  unit.maxHp = hp;
+  unit.hp = hp;
+  unit.wave = n;                // بلا مركز ولا قيد مسافة: تزحف حتى تجد هدفها
+  unit.waveFactor = factor;
+  if (wavePhase(n).focusHeroes) unit.focusHeroes = true;   // من الموجة 10: الأبطال والمميزون أولاً
+  state.units.push(unit);
+  return unit;
+}
 
-  const sources = waveSources(state);
+// نداء تعزيز قائد الشرطة: 4 شرطة فوراً حوله بنفس قوة موجته
+setSummonHook((state, boss, ult) => {
+  const spots = findFreeTiles(state.map, Math.round(boss.x), Math.round(boss.y), ult.count * 2, ult.radius + 2);
+  for (let k = 0; k < ult.count && k < spots.length; k++) {
+    makeWaveUnit(state, 'common', spots[k][0], spots[k][1], boss.wave || 1, boss.waveFactor || 1);
+  }
+});
+
+function spawnWave(state, n) {
+  const S = GM.survival;
+  if (!policePlayer(state)) return;
+  const { count, factor } = waveSize(state.modeState.level, n);
+  const phase = wavePhase(n);
+
+  // الجبهات: 1 ثم 2 ثم 3 من اتجاهات مختلفة
+  const sources = waveSources(state, phase.fronts);
   if (!sources.length) return;
-  const kinds = [...Array(captains).fill('captain'), ...Array(count).fill(null)];
   const groups = sources.map(() => []);
-  kinds.forEach((kind, k) => groups[k % sources.length].push(kind));
+  waveKinds(n, count).forEach((kind, k) => groups[k % sources.length].push(kind));
 
   sources.forEach((source, s) => {
-    const spots = findFreeTiles(state.map, source.i, source.j, S.spawnSpread);
+    const spots = findFreeTiles(state.map, source.i, source.j, Math.max(S.spawnSpread, groups[s].length));
     if (!spots.length) return;
-    const units = [];
-    groups[s].forEach((kind, k) => {
+    const units = groups[s].map((kind, k) => {
       const [i, j] = spots[k % spots.length];
-      const unit = createUnit(state, police, i, j, kind);
-      unit.stats = { ...unit.stats, hp: unit.stats.hp * factor, damage: unit.stats.damage * factor, capturePower: S.capturePower };
-      unit.maxHp = unit.stats.hp;
-      unit.hp = unit.maxHp;
-      unit.wave = n;            // بلا مركز ولا قيد مسافة: تزحف حتى تجد هدفها
-      state.units.push(unit);
-      units.push(unit);
+      return makeWaveUnit(state, kind, i, j, n, factor);
     });
-    const target = waveTarget(state, source.i, source.j);
-    if (target && units.length) commandAttackMove(state, target.i, target.j, units, false);
+    // من الموجة 7: إحدى الجبهات (الأخيرة) على أضعف حي لك لا الأقرب
+    const weakest = phase.weakest && s === sources.length - 1;
+    const target = weakest ? weakestTarget(state) : waveTarget(state, source.i, source.j);
+    if (!target || !units.length) return;
+    // من الموجة 10: الضباط خلف الصفوف
+    const behind = phase.focusHeroes ? units.filter(u => u.hero === 'captain' && !u.boss) : [];
+    const front = units.filter(u => !behind.includes(u));
+    if (front.length) commandAttackMove(state, target.i, target.j, front, false);
+    if (behind.length) {
+      const dx = target.i - source.i, dy = target.j - source.j, len = Math.hypot(dx, dy) || 1;
+      commandAttackMove(state, target.i - dx / len * S.captainsBehind, target.j - dy / len * S.captainsBehind, behind, false);
+    }
   });
 
-  state.notice = { text: 'الموجة ' + n + ' قادمة!', mine: false, t: S.noticeSeconds };
+  state.notice = {
+    text: isBossWave(n) ? 'الموجة ' + n + ': ' + S.boss.name + '!' : 'الموجة ' + n + ': ' + phase.name,
+    mine: false, t: S.noticeSeconds
+  };
   sound('alert');
 }
 
-// المصادر: مراكز الشرطة وحواف الخريطة، نختار منها عدداً عشوائياً لكل موجة
-// (مركز واحد على الأقل إن وُجد: الموجات تأتي من الحواف ومن المراكز معاً)
-function waveSources(state) {
+// المصادر: مراكز الشرطة وحواف الخريطة؛ الجبهات من اتجاهات متباعدة قدر الإمكان
+function waveSources(state, fronts) {
   const S = GM.survival;
   const map = state.map;
-  const shuffle = (list) => {
-    for (let k = list.length - 1; k > 0; k--) {
-      const r = Math.floor(Math.random() * (k + 1));
-      [list[k], list[r]] = [list[r], list[k]];
-    }
-    return list;
-  };
-  const stations = shuffle(policeStations(state).filter(d => d.capture)
-    .map(d => ({ i: d.capture.i, j: d.capture.j })));
+  const all = policeStations(state).filter(d => d.capture).map(d => ({ i: d.capture.i, j: d.capture.j }));
   const last = map.n - 1, mid = Math.floor(map.n / 2);
-  const edges = [];
   for (const [ei, ej] of [[mid, 0], [mid, last], [0, mid], [last, mid], [0, 0], [last, last], [0, last], [last, 0]]) {
     const spot = findFreeTiles(map, ei, ej, 1, S.edgeSearchTiles)[0];
-    if (spot) edges.push({ i: spot[0], j: spot[1] });
+    if (spot) all.push({ i: spot[0], j: spot[1] });
   }
-  const rest = shuffle([...stations.slice(1), ...edges]);
-  return [...stations.slice(0, 1), ...rest].slice(0, S.sourcesPerWave);
+  if (!all.length) return [];
+  const chosen = [all[Math.floor(Math.random() * all.length)]];
+  while (chosen.length < fronts && chosen.length < all.length) {
+    let best = null, bestD = -1;
+    for (const c of all) {
+      if (chosen.includes(c)) continue;
+      const d = Math.min(...chosen.map(x => Math.hypot(x.i - c.i, x.j - c.j)));
+      if (d > bestD) { bestD = d; best = c; }
+    }
+    chosen.push(best);
+  }
+  return chosen;
 }
 
 // أقرب حي تملكه العصابات (لا مراكز الشرطة)، وإلا أقرب وحدة منها
@@ -437,6 +518,21 @@ function waveTarget(state, i, j) {
     if (dist < bestDist) { bestDist = dist; best = { i: Math.round(unit.x), j: Math.round(unit.y) }; }
   }
   return best;
+}
+
+// أضعف حي للعصابات: أقل مدافعين حوله
+function weakestTarget(state) {
+  let best = null, fewest = Infinity;
+  for (const d of state.map.districts) {
+    if (!d.capture || d.police || d.owner === null || state.players[d.owner].neutral) continue;
+    let defenders = 0;
+    for (const u of state.units) {
+      if (u.state === 'dead' || state.players[u.playerId].neutral) continue;
+      if (Math.hypot(u.x - d.capture.i, u.y - d.capture.j) <= 5) defenders++;
+    }
+    if (defenders < fewest) { fewest = defenders; best = { i: d.capture.i, j: d.capture.j }; }
+  }
+  return best || waveTarget(state, state.map.n / 2, state.map.n / 2);
 }
 
 // شرطة الموجة الواقفة: تبقى إن كانت تستولي على حي، وإلا تزحف نحو هدف جديد
@@ -464,27 +560,29 @@ function retargetWave(state) {
   }
 }
 
-// النتيجة: الموجات التي صمدت أمامها والزمن، وأفضل نتيجة تُحفظ في localStorage
+// النتيجة: الموجة التي وصلت إليها والزمن، وأفضل نتيجة تُحفظ لكل صعوبة على حدة
 function endSurvival(state) {
   const ms = state.modeState;
-  const best = loadSurvivalBest();
-  const mine = { waves: ms.survived, seconds: Math.floor(state.time) };
+  const best = loadSurvivalBest(ms.level);
+  const mine = { waves: ms.wave, seconds: Math.floor(state.time) };
   const newRecord = !best || mine.waves > best.waves || (mine.waves === best.waves && mine.seconds > best.seconds);
-  if (newRecord) saveSurvivalBest(mine);
+  if (newRecord) saveSurvivalBest(ms.level, mine);
   ms.record = { best: newRecord ? mine : best, newRecord };
   const record = newRecord ? 'رقم قياسي جديد: الموجة ' + mine.waves + '!' : 'رقمك القياسي: الموجة ' + best.waves;
   finish(state, false, 'خسرت كل جنودك وأحيائك أمام الشرطة • ' + record);
 }
 
-export function loadSurvivalBest() {
+const recordKey = (level) => GM.survival.recordKey + '.' + level;
+
+export function loadSurvivalBest(level) {
   try {
-    const data = JSON.parse(localStorage.getItem(GM.survival.recordKey));
+    const data = JSON.parse(localStorage.getItem(recordKey(level)));
     return data && Number.isFinite(data.waves) ? data : null;
   } catch { return null; }
 }
 
-function saveSurvivalBest(record) {
-  try { localStorage.setItem(GM.survival.recordKey, JSON.stringify(record)); } catch { /* لا تخزين */ }
+function saveSurvivalBest(level, record) {
+  try { localStorage.setItem(recordKey(level), JSON.stringify(record)); } catch { /* لا تخزين */ }
 }
 
 const policeAlive = (state) => state.units.filter(u => u.state !== 'dead' && state.players[u.playerId].neutral).length;
@@ -516,7 +614,8 @@ export function modeBar(state) {
     const ms = state.modeState;
     const left = nextWaveIn(state);
     return {
-      text: ms.wave ? 'الموجة ' + ms.wave + ' • التالية بعد ' + clock(left) : 'الموجة الأولى بعد ' + clock(left),
+      text: ms.wave ? 'الموجة ' + ms.wave + ' (' + wavePhase(ms.wave).name + ') • التالية بعد ' + clock(left)
+                    : 'الموجة الأولى بعد ' + clock(left),
       alarm: left <= GM.survival.alarmSeconds
     };
   }
@@ -584,10 +683,10 @@ export function modeExtras(state) {
   }
   if (state.mode === 'survival') {
     const ms = state.modeState;
-    const best = ms.record ? ms.record.best : loadSurvivalBest();
+    const best = ms.record ? ms.record.best : loadSurvivalBest(ms.level);
     return [
-      ['موجات صمدت أمامها', ms.survived],
-      ['رقمك القياسي (موجات)', best ? best.waves : ms.survived]
+      ['وصلت إلى الموجة', ms.wave],
+      ['رقمك القياسي (' + BOT[ms.level].name + ')', best ? best.waves : ms.wave]
     ];
   }
   return [];
