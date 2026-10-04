@@ -24,6 +24,11 @@ export function groundColor(state, i, j) {
   const k = map.idx(i, j);
   const isRoad = map.road[k] === 1;
   let color;
+  if (map.type[k] === '~') {
+    // ماء المضيق (النرويجية): لا يُصبغ، والثلج يجمّده قليلاً
+    color = T.waterCol || '#34566e';
+    return state.weather === 'snow' ? mix(color, '#dfe8ee', 0.3) : color;
+  }
   if (isRoad) color = (i + j) % 2 ? T.road : T.road2;
   else if (map.type[k] === 'P') color = T.plaza;
   else {
@@ -86,6 +91,7 @@ export function drawCityTile(state, i, j, x, y) {
     return true;
   }
   if (type === 'R') { ruinTile(x, y, i, j, T); return true; }
+  if (type === '~') { if (T.draw.water) T.draw.water(x, y, i, j); return true; }
   if (type === 'H') {
     let kind = map.kind[k];
     if (!kind || typeof T.draw[kind] !== 'function') kind = firstBuilding(T);

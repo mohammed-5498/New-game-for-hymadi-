@@ -50,6 +50,10 @@ function buildMap(size, players, cityKey) {
   const map = createEmptyMap(size);
   map.city = cityKey;
   map.seed = ri(1e9);                // بذرة الرسم: نفس الخريطة تُرسم دائماً بنفس الشكل
+  // ماء على حافة الخريطة (النرويجية): خارج الشوارع والأحياء، فلا علم ولا مقر ولا تلة عليه
+  const water = (CITIES.water[cityKey] || {})[size.key] || 0;
+  map.land = map.n - water;          // أول عمود ماء (i >= land)
+  for (let j = 0; j < map.n; j++) for (let i = map.land; i < map.n; i++) map.type[map.idx(i, j)] = '~';
   carveStreets(map);
   if (!roadsConnected(map)) return null;          // شرط إلزامي: الشوارع كلها متصلة
 
@@ -59,6 +63,7 @@ function buildMap(size, players, cityKey) {
   assignPoliceDistricts(map, districts, size);
   fillDistricts(map, districts);
   map.districts = districts;
+  if (map.land < map.n) placeRorbu(map);
   repairIsolatedPockets(map);     // القسم 3.4.1: لا يبقى فراغ محاصر بالمباني
   decorateRoads(map);
   return map;
@@ -109,16 +114,16 @@ function createEmptyMap(size) {
 
 // --- 1) الشوارع ---
 function carveStreets(map) {
-  const n = map.n;
+  const n = map.n, land = map.land;
   const spacing = () => MAP_GEN.streetSpacingMin + ri(MAP_GEN.streetSpacingMax - MAP_GEN.streetSpacingMin + 1);
-  const lines = () => {
+  const lines = (limit) => {
     const arr = [];
     let p = 1 + ri(2);
-    while (p < n - 1) { arr.push(p); p += spacing(); }
+    while (p < limit - 1) { arr.push(p); p += spacing(); }
     return arr;
   };
 
-  const cols = lines(), rows = lines();
+  const cols = lines(land), rows = lines(n);
   const near = (arr, v) => arr.some(a => Math.abs(a - v) <= 1);
 
   // شوارع طولية مع انحراف بسيط بعيداً عن التقاطعات
@@ -127,7 +132,7 @@ function carveStreets(map) {
     for (let j = 0; j < n; j++) {
       if (!near(rows, j) && rnd() < MAP_GEN.bendChance) {
         map.road[map.idx(cc, j)] = 1;
-        cc = Math.max(1, Math.min(n - 2, cc + (rnd() < 0.5 ? -1 : 1)));
+        cc = Math.max(1, Math.min(land - 2, cc + (rnd() < 0.5 ? -1 : 1)));
       }
       map.road[map.idx(cc, j)] = 1;
     }
@@ -135,7 +140,7 @@ function carveStreets(map) {
   // شوارع عرضية
   for (const r of rows) {
     let rr = r;
-    for (let i = 0; i < n; i++) {
+    for (let i = 0; i < land; i++) {
       if (!near(cols, i) && rnd() < MAP_GEN.bendChance) {
         map.road[map.idx(i, rr)] = 1;
         rr = Math.max(1, Math.min(n - 2, rr + (rnd() < 0.5 ? -1 : 1)));
@@ -152,7 +157,7 @@ function carveStreets(map) {
     const d = D4[ri(4)];
     for (let s = 1; s <= MAP_GEN.alleyLength; s++) {
       const a = i + d[0] * s, b = j + d[1] * s;
-      if (map.inBounds(a, b)) map.road[map.idx(a, b)] = 1;
+      if (map.inBounds(a, b) && a < land) map.road[map.idx(a, b)] = 1;
     }
   }
 }
@@ -193,7 +198,7 @@ function findDistricts(map) {
   for (let j = 0; j < n; j++) {
     for (let i = 0; i < n; i++) {
       const k = map.idx(i, j);
-      if (map.road[k] || map.districtAt[k] >= 0) continue;
+      if (map.road[k] || map.districtAt[k] >= 0 || map.type[k] === '~') continue;
 
       const district = {
         id: districts.length,
@@ -223,7 +228,7 @@ function findDistricts(map) {
           const x = a + dx, y = b + dy;
           if (!map.inBounds(x, y)) continue;
           const nk = map.idx(x, y);
-          if (map.road[nk] || map.districtAt[nk] >= 0) continue;
+          if (map.road[nk] || map.districtAt[nk] >= 0 || map.type[nk] === '~') continue;
           map.districtAt[nk] = district.id;
           stack.push([x, y]);
         }
@@ -381,6 +386,15 @@ function fillDistricts(map, districts) {
         if (tile) map.type[map.idx(tile[0], tile[1])] = letter;
       });
     }
+  }
+}
+
+// النرويجية: المباني المجاورة للماء أكواخ على أعمدة (rorbu)، كما في hook المرجع
+function placeRorbu(map) {
+  const i = map.land - 1;
+  for (let j = 0; j < map.n; j++) {
+    const k = map.idx(i, j);
+    if (map.type[k] === 'H' && rnd() < CITIES.rorbuChance) map.kind[k] = 'rorbu';
   }
 }
 

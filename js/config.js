@@ -21,7 +21,10 @@ export const MAP_SIZES = {
 // --- طوابع المدن (القسم 3.9): شكل فقط، لا تغيّر قواعد اللعب ---
 export const CITIES = {
   order: ['arab', 'japan', 'china', 'europe', 'norway', 'hk', 'jaipur', 'mexico', 'chicago'],
-  defaultCity: 'random'
+  defaultCity: 'random',
+  // النرويجية: مضيق متجمد على حافة الخريطة بهذا العرض من المربعات (لا يُمشى عليه)
+  water: { norway: { small: 2, medium: 2, large: 3 } },
+  rorbuChance: 0.55             // نسبة المباني المجاورة للماء التي تصير أكواخاً على أعمدة
 };
 
 // أنواع من pool المدن ليست مباني (أشجار وزينة): لا تُصبغ بلون المالك، كأشجار الطابع القديم
@@ -95,7 +98,7 @@ export const MAP_GEN = {
   // إصلاح الفراغات المعزولة (القسم 3.4.1)
   pocketRepairRounds: 3,      // أقصى عدد مرات لإعادة الـ flood fill والإصلاح
   pocketFillType: 'H',        // الفراغ الذي لا يمكن وصله يُردم بهذا المبنى
-  protectedBuildings: ['Q', 'S', 'G', 'C', 'O', 'N'],  // مبانٍ لا تُفتح لعمل ممر (مقر، مستشفى، مخزن، ساعة، نافورة، مركز شرطة)
+  protectedBuildings: ['Q', 'S', 'G', 'C', 'O', 'N', '~'],  // لا تُفتح لعمل ممر (مقر، مستشفى، مخزن، ساعة، نافورة، مركز شرطة، ماء)
   devChecks: true             // وضع التطوير: يطبع تحذيراً إن بقي مربع معزول
 };
 
