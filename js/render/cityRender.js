@@ -1,15 +1,16 @@
 // رسم المدينة بطابعها (القسم 3.9): لون الأرض ومحتوى كل مربع (مبنى، أطلال، زينة، حطام)
 // الشكل فقط: مكان المباني والشوارع والأحياء يقرره مولّد الخريطة كما هو.
-import { CAPTURE } from '../config.js';
+import { CAPTURE, CITY_UNTINTED } from '../config.js';
 import { mix } from './colors.js';
 import { tintAmount } from '../game/capture.js';
-import { THEMES, setThemeContext, streetDebris, ruinTile, hsh, mixc } from './cityThemes.js';
+import { THEMES, setThemeContext, setTone, streetDebris, ruinTile, hsh, mixc } from './cityThemes.js';
 
 export const cityOf = (map) => THEMES[map.city] || THEMES.arab;
 
 // قبل رسم أي شيء من المدينة: سياق الرسم وبذرة الخريطة (العشوائية حتمية: نفس الشكل دائماً)
 export function beginCity(ctx, map) {
   setThemeContext(ctx, map.seed || 0);
+  setTone(null);
 }
 
 // أرض الحي المميز وحي الشرطة تميل قليلاً لألوانهما القديمة حتى تُعرف من بعيد
@@ -51,11 +52,27 @@ export function drawRoadSurface(ctx, map, i, j, x, y) {
   }
 }
 
+// --- صبغ المباني بلون مالك الحي (القسم 8) والطقس: الأسطح 45% والجدران 20% ---
+// المباني الحاسمة تُصبغ أيضاً، أما علاماتها فلا (landmarks.js)
+export function useTone(state, district, building) {
+  const weather = state.weather;
+  const amount = building ? tintAmount(district, 1) : 0;
+  const color = amount > 0 ? district.tintColor : null;
+  if (!color && weather !== 'snow') { setTone(null); return; }
+  setTone((c, roof) => {
+    if (color) c = mix(c, color, (roof ? CAPTURE.roofTintAlpha : CAPTURE.wallTintAlpha) * amount);
+    if (weather === 'snow') c = mix(c, '#eef2f5', roof ? 0.6 : building ? 0 : 0.3);
+    return c;
+  });
+}
+
 // محتوى مربع عادي: الشوارع (زينة وحطام لا يعيقان الحركة)، الأرض الفارغة، الأطلال، المباني والأشجار.
 // يعيد false إن كان المربع من المباني الحاسمة للعب (تُرسم في buildings.js)
-export function drawCityTile(map, i, j, x, y) {
+export function drawCityTile(state, i, j, x, y) {
+  const map = state.map;
   const T = cityOf(map);
   const k = map.idx(i, j);
+  if (map.road[k] || map.type[k] !== 'H') useTone(state, null, false);   // الحطام والأطلال لا تُصبغ
   if (map.road[k]) {
     if (T.draw.roadProp) T.draw.roadProp(x, y, i, j);
     streetDebris(x, y, i, j, T);
@@ -70,6 +87,7 @@ export function drawCityTile(map, i, j, x, y) {
   if (type === 'H') {
     let kind = map.kind[k];
     if (!kind || typeof T.draw[kind] !== 'function') kind = firstBuilding(T);
+    useTone(state, map.districtOf(i, j), !CITY_UNTINTED.includes(kind));
     T.draw[kind](x, y, i, j, T);
     return true;
   }

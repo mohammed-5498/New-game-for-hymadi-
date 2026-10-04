@@ -24,6 +24,9 @@ export const CITIES = {
   defaultCity: 'random'
 };
 
+// أنواع من pool المدن ليست مباني (أشجار وزينة): لا تُصبغ بلون المالك، كأشجار الطابع القديم
+export const CITY_UNTINTED = ['palm', 'cherry', 'lantern', 'willow', 'lanterns', 'pine', 'rack', 'banyan', 'neem', 'cactus'];
+
 // المباني الحاسمة بطراز كل مدينة: hq أعلى مبانيها للمقر، وbase مبناها العادي للشرطة والمستشفى والمخزن
 export const CITY_SPECIALS = {
   arab:    { hq: 'tall',    base: 'house' },

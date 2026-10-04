@@ -10,7 +10,7 @@ import { worldToTile } from '../map/coords.js';
 import { tintAmount } from '../game/capture.js';
 import { drawClash, drawBurst } from './combatArt.js';
 import { getPref } from '../prefs.js';
-import { beginCity, groundColor, drawRoadSurface, drawCityTile, debrisLight } from './cityRender.js';
+import { beginCity, groundColor, drawRoadSurface, drawCityTile, debrisLight, useTone } from './cityRender.js';
 import { drawLandmark, drawPoliceLamp } from './landmarks.js';
 
 export function resizeCanvas(canvas, state) {
@@ -400,7 +400,7 @@ function drawBuildingsAndUnits(ctx, state, alpha, visible) {
       // المباني والزينة والحطام بطابع المدينة (القسم 3.9)
       const k = map.idx(i, j);
       const special = specialType(state, k);
-      if (!special && drawCityTile(map, i, j, x, y)) {
+      if (!special && drawCityTile(state, i, j, x, y)) {
         cityLight(state, i, j, x, y);
         continue;
       }
@@ -411,6 +411,7 @@ function drawBuildingsAndUnits(ctx, state, alpha, visible) {
       if (special) {
         // المباني الحاسمة بطراز المدينة وعلاماتها الثابتة
         const flagColor = (PALETTES[map.region[k]] || PALETTES.neutral).flag;
+        useTone(state, district, true);
         const lamp = drawLandmark(map, special, x, y, i, j, ownerColor, flagColor, frameLights);
         if (lamp) drawPoliceLamp(ctx, lamp, state.time, frameLights);
         continue;
