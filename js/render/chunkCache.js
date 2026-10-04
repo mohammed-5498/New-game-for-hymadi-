@@ -282,3 +282,17 @@ export function measureChunkCost(state, scale, count = 20) {
   for (const chunk of full) renderChunk(state, chunk, scale);
   return (performance.now() - t0) / Math.max(1, full.length);
 }
+
+// رسم الخريطة كاملة مرة واحدة على لوحة (الصورة المصغرة للمدينة في قائمة الإعداد)
+export function drawWholeMap(ctx, state) {
+  const map = state.map, all = [];
+  for (let j = 0; j < map.n; j++) for (let i = 0; i < map.n; i++) all.push(i, j);
+  drawGround(ctx, state, all);
+  beginCity(ctx, map);
+  for (let s = 0; s <= 2 * map.n - 2; s++) {
+    for (let i = Math.max(0, s - map.n + 1); i <= Math.min(map.n - 1, s); i++) {
+      const j = s - i;
+      drawTileStatic(state, i, j, tileX(i, j), tileY(i, j), null, null);
+    }
+  }
+}

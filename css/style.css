@@ -371,6 +371,11 @@ button.wide.ghost { background: transparent; color: var(--text-dim); }
 .mode-desc { margin: 6px 0 0; line-height: 1.5; }
 .row[data-mode][hidden] { display: none; }
 
+/* المدينة (القسم 3.9): عشرة أزرار في صفين، وتحتها صورة مصغرة حية واسمها الكامل */
+.city-options .opt { flex: 1 1 18%; }
+.city-preview { display: flex; flex-direction: column; align-items: center; gap: 4px; margin-top: 8px; }
+#cityThumb { width: 260px; height: 130px; max-width: 100%; border-radius: 10px; border: 1px solid var(--line); background: #2a2622; }
+
 /* معركة البوتات (القسم 11.4): أداة قياس خفية */
 .menu.battle { max-width: 560px; text-align: right; }
 #optBattleCount .opt, #optBattleA .opt, #optBattleB .opt { flex: 1 1 20%; }

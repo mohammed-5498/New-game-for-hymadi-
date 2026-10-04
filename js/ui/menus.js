@@ -1,7 +1,7 @@
 // القوائم (القسم 12): الرئيسية، الإعداد، الإعدادات، الإحصائيات، سؤال الخروج، وتبديل الشاشات
 import {
   MAP_SIZES, PLAYER_COLORS, GANGS, GANG_IDS, BOT, BOT_LEVELS,
-  WEATHER, WEATHER_KEYS, UNITS, MATCH_DEFAULTS, AUDIO, UI, gameModes as GM
+  WEATHER, WEATHER_KEYS, UNITS, MATCH_DEFAULTS, AUDIO, UI, CITIES, gameModes as GM
 } from '../config.js';
 import { sound, audioSettings, setAudioSettings, startMusic } from '../audio/sound.js';
 import { isNativeApp, exitApp } from '../platform.js';
@@ -11,6 +11,7 @@ import { savedMatchInfo } from '../matchSave.js';
 import { fadeIn, fadeOut, isShown } from './transition.js';
 import { showMenuScene, hideMenuScene } from './menuScene.js';
 import { setupBattleScreen } from './battleScreen.js';
+import { updateCityThumb } from './cityThumb.js';
 
 const el = (id) => document.getElementById(id);
 
@@ -30,6 +31,7 @@ const setup = {
   allies: GM.survival.defaultAllies,
   survivalLevel: GM.survival.defaultLevel,
   mapSize: MATCH_DEFAULTS.mapSize,
+  city: CITIES.defaultCity,                   // طابع المدينة (القسم 3.9)، الافتراضي عشوائي
   maxUnits: UNITS.maxUnitsDefault,
   weather: 'day',
   slots: []
@@ -101,6 +103,9 @@ export function setupMenus(handlers) {
     key => MAP_SIZES[key].name + ' (' + MAP_SIZES[key].maxPlayers + ')',
     () => setup.mapSize, key => { setup.mapSize = key; refresh(); });
 
+  buildOptions('optCity', [...CITIES.order, 'random'], key => key === 'random' ? 'عشوائي' : CITIES.short[key],
+    () => setup.city, key => { setup.city = key; refresh(); showCity(); });
+
   buildOptions('optMaxUnits', MAX_UNIT_CHOICES, value => String(value),
     () => setup.maxUnits, value => { setup.maxUnits = value; refresh(); });
 
@@ -127,7 +132,7 @@ export function showScreen(name) {
   screen = name;
   closeExitDialog();
   if (name === 'main') refreshContinue();
-  if (name === 'setup') el('setupSaveHint').hidden = !savedMatchInfo();
+  if (name === 'setup') { el('setupSaveHint').hidden = !savedMatchInfo(); showCity(); }
   if (name === 'settings') refreshSettings();
   if (name === 'stats') renderStats();
   for (const [key, id] of Object.entries(SCREENS)) {
@@ -141,6 +146,11 @@ export function showScreen(name) {
   } else {
     showMenuScene();
   }
+}
+
+// الصورة المصغرة للمدينة المختارة (حية: في "عشوائي" تتبدل المدن ما دامت القائمة ظاهرة)
+function showCity() {
+  updateCityThumb(el('cityThumb'), el('cityName'), setup.city, () => screen === 'setup');
 }
 
 // --- متابعة المباراة المحفوظة ---
@@ -282,6 +292,7 @@ function loadSetup() {
   if (GM.survival.allies.includes(saved.allies)) setup.allies = saved.allies;
   if (GM.survival.levels.includes(saved.survivalLevel)) setup.survivalLevel = saved.survivalLevel;
   if (MAP_SIZES[saved.mapSize]) setup.mapSize = saved.mapSize;
+  if (saved.city === 'random' || CITIES.order.includes(saved.city)) setup.city = saved.city;
   if (MAX_UNIT_CHOICES.includes(saved.maxUnits)) setup.maxUnits = saved.maxUnits;
   if (WEATHER_CHOICES.includes(saved.weather)) setup.weather = saved.weather;
   if (!Array.isArray(saved.slots)) return;
@@ -411,6 +422,7 @@ function firstFreeColor(index) {
 function refresh() {
   for (const id of ['optMode', 'optPointsMinutes', 'optKingMinutes', 'optAllies', 'optSurvivalLevel']) refreshOptions(id);
   refreshOptions('optMapSize');
+  refreshOptions('optCity');
   refreshOptions('optMaxUnits');
   refreshOptions('optWeather');
 
@@ -543,6 +555,7 @@ export function buildMatchSettings() {
       level: setup.survivalLevel
     },
     mapSize: setup.mapSize,
+    city: setup.city,
     maxUnits: setup.maxUnits,
     weather: setup.weather === 'random'
       ? WEATHER_KEYS[Math.floor(Math.random() * WEATHER_KEYS.length)]

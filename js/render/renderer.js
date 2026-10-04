@@ -1,5 +1,5 @@
 // الكاميرا وترتيب الرسم الكامل لإطار واحد
-import { TILE_HALF_W, TILE_HALF_H, TICK_SEC, CAMERA, CAPTURE, PERFORMANCE, ALERTS, COMBAT_REALISM, UNIT_ART, gameModes as GM } from '../config.js';
+import { TILE_HALF_W, TILE_HALF_H, TICK_SEC, CAMERA, CAPTURE, PERFORMANCE, ALERTS, COMBAT_REALISM, UNIT_ART, CITIES, gameModes as GM } from '../config.js';
 import { enemyLeaders } from '../game/modes.js';
 import { onScreen } from '../game/alerts.js';
 import { BACKGROUND, UI_LIGHT } from './colors.js';
@@ -316,8 +316,16 @@ function drawUnitsLayer(ctx, state, alpha, visible) {
     else buckets.set(key, [unit]);
   }
   const keys = [...buckets.keys()].sort((a, b) => a - b);
+  const halo = CITIES.unitHalo[state.map.city];
   for (const key of keys) {
     for (const unit of buckets.get(key)) {
+      if (halo && unit.state !== 'dead') {
+        const p = unitWorldPos(unit, alpha);
+        ctx.beginPath();
+        ctx.ellipse(p.x, p.y - halo.lift, halo.rx, halo.ry, 0, 0, 6.2832);
+        ctx.fillStyle = halo.color;
+        ctx.fill();
+      }
       drawUnit(ctx, unit, alpha, state.camera.z, state.time, state.debugView, state.lodCrowded);
     }
   }
