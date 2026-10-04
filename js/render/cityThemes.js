@@ -19,6 +19,7 @@ let tone=null,roofMode=false;
 const paint=c=>tone?tone(c,roofMode):c;
 export function setThemeContext(context,seed){ctx=context;SEED=seed%10007;}
 export function setTone(fn){tone=fn;roofMode=false;}
+export const getTone=()=>tone;
 export const getCtx=()=>ctx;
 const TAU=6.2831853;
 function poly(a,c){ctx.beginPath();ctx.moveTo(a[0][0],a[0][1]);for(let k=1;k<a.length;k++)ctx.lineTo(a[k][0],a[k][1]);ctx.closePath();ctx.fillStyle=paint(c);ctx.fill();}

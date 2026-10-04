@@ -11,6 +11,7 @@ import { tintAmount } from '../game/capture.js';
 import { drawClash, drawBurst } from './combatArt.js';
 import { getPref } from '../prefs.js';
 import { beginCity, groundColor, drawRoadSurface, drawCityTile, debrisLight } from './cityRender.js';
+import { drawLandmark, drawPoliceLamp } from './landmarks.js';
 
 export function resizeCanvas(canvas, state) {
   const view = state.view;
@@ -397,23 +398,56 @@ function drawBuildingsAndUnits(ctx, state, alpha, visible) {
       if (!visible(x, y)) continue;
 
       // المباني والزينة والحطام بطابع المدينة (القسم 3.9)
-      if (drawCityTile(map, i, j, x, y)) {
+      const k = map.idx(i, j);
+      const special = specialType(state, k);
+      if (!special && drawCityTile(map, i, j, x, y)) {
         cityLight(state, i, j, x, y);
         continue;
       }
-      const k = map.idx(i, j);
-      const type = map.type[k];
 
       // مباني الحي تحمل لون مالكه: الأسطح 45% والجدران 20% (القسم 8)
       const district = map.districtOf(i, j);
       const ownerColor = district && district.owner !== null ? state.players[district.owner].color : null;
-      drawBuilding(type, x, y, map.region[k], i, j, ownerColor || (district && district.tintColor),
+      if (special) {
+        // المباني الحاسمة بطراز المدينة وعلاماتها الثابتة
+        const flagColor = (PALETTES[map.region[k]] || PALETTES.neutral).flag;
+        const lamp = drawLandmark(map, special, x, y, i, j, ownerColor, flagColor, frameLights);
+        if (lamp) drawPoliceLamp(ctx, lamp, state.time, frameLights);
+        continue;
+      }
+      drawBuilding(map.type[k], x, y, map.region[k], i, j, ownerColor || (district && district.tintColor),
                    detail, tintAmount(district, 1));
     }
 
     const unitsHere = buckets.get(s);
     if (unitsHere) for (const unit of unitsHere) drawUnit(ctx, unit, alpha, state.camera.z, state.time, state.debugView, state.lodCrowded);
   }
+}
+
+// المربع من المباني الحاسمة؟ (المقر، الشرطة، المستشفى، المخزن، برج الساعة، النافورة، معلم التلة)
+const SPECIAL_TYPES = 'QNSGCO';
+function specialType(state, k) {
+  if (state.mode === 'king' && hillLandmarkTile(state) === k) return 'L';
+  const type = state.map.type[k];
+  return SPECIAL_TYPES.includes(type) ? type : null;
+}
+
+// معلم التلة في طور ملك الحي: أقرب مبنى لمركز حي التلة (يُحسب مرة واحدة)
+function hillLandmarkTile(state) {
+  const ms = state.modeState;
+  if (ms.hillTile !== undefined) return ms.hillTile;
+  const map = state.map, hill = map.districts[ms.hillId];
+  let best = -1, bestD = Infinity;
+  if (hill) {
+    for (const [i, j] of hill.tiles) {
+      const k = map.idx(i, j);
+      if (map.type[k] !== 'H' && map.type[k] !== 'R') continue;
+      const d = Math.hypot(i - hill.cx, j - hill.cy);
+      if (d < bestD) { bestD = d; best = k; }
+    }
+  }
+  ms.hillTile = best;
+  return best;
 }
 
 // براميل النار في حطام الشوارع تضيء ليلاً

@@ -24,6 +24,19 @@ export const CITIES = {
   defaultCity: 'random'
 };
 
+// المباني الحاسمة بطراز كل مدينة: hq أعلى مبانيها للمقر، وbase مبناها العادي للشرطة والمستشفى والمخزن
+export const CITY_SPECIALS = {
+  arab:    { hq: 'tall',    base: 'house' },
+  japan:   { hq: 'two',     base: 'house' },
+  china:   { hq: 'tower2',  base: 'hutong' },
+  europe:  { hq: 'row',     base: 'row' },
+  norway:  { hq: 'long',    base: 'wood' },
+  hk:      { hq: 'tower',   base: 'shop' },
+  jaipur:  { hq: 'haveli2', base: 'haveli' },
+  mexico:  { hq: 'balcony', base: 'adobe' },
+  chicago: { hq: 'brick',   base: 'warehouse' }
+};
+
 // --- الكاميرا ---
 export const CAMERA = {
   minZoom: 0.8,
