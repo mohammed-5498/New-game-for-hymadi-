@@ -18,6 +18,12 @@ export const MAP_SIZES = {
   large:  { key: 'large',  name: 'كبيرة',  n: 42, maxPlayers: 8, specialDistricts: 4, policeStations: 4 }
 };
 
+// --- طوابع المدن (القسم 3.9): شكل فقط، لا تغيّر قواعد اللعب ---
+export const CITIES = {
+  order: ['arab', 'japan', 'china', 'europe', 'norway', 'hk', 'jaipur', 'mexico', 'chicago'],
+  defaultCity: 'random'
+};
+
 // --- الكاميرا ---
 export const CAMERA = {
   minZoom: 0.8,
@@ -862,7 +868,7 @@ export const UI = {
   // حفظ المباراة الجارية للعودة إليها لاحقاً (خانة واحدة)
   matchKey: 'gangcity.match',      // المباراة نفسها
   matchInfoKey: 'gangcity.matchInfo', // ملخص صغير يقرؤه زر "متابعة المباراة" بلا فك المباراة كلها
-  matchVersion: 1,               // يُرفع عند تغيّر شكل حالة المباراة، فتُهمل الحفظات القديمة
+  matchVersion: 2,               // يُرفع عند تغيّر شكل حالة المباراة، فتُهمل الحفظات القديمة
   matchDecimals: 5,              // دقة الأعداد العشرية في الحفظ (تصغّر حجمه)
 
   // الخلفية الحية للقائمة الرئيسية: الخريطة نفسها وبضع وحدات تتجول

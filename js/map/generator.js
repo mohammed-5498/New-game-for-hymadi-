@@ -1,22 +1,10 @@
 // توليد الخريطة العشوائية: شوارع، أحياء، نقاط استيلاء، مباني
-import { MAP_SIZES, MAP_GEN, POLICE } from '../config.js';
+import { MAP_SIZES, MAP_GEN, POLICE, CITIES } from '../config.js';
+import { THEMES as CITY_THEMES } from '../render/cityThemes.js';
 import { D4, D8 } from './pathfinding.js';
 
 const rnd = () => Math.random();
 const ri = (n) => Math.floor(Math.random() * n);
-
-// أنواع المباني في كل طابع حي، مع أوزان الاحتمال (منقولة من prototype.html)
-// '.' أرض فارغة، H بيت، A عمارة، R أطلال، F مصنع، W مستودع، T شجرة،
-// M أكشاك سوق، X سيارة محطمة، K خزان ماء
-const THEMES = {
-  crows:     [['A', 40], ['H', 22], ['R', 14], ['T', 6],  ['.', 18]],
-  hammers:   [['F', 18], ['W', 32], ['K', 8],  ['R', 14], ['X', 8], ['.', 20]],
-  vipers:    [['T', 38], ['H', 28], ['R', 12], ['.', 22]],
-  scorpions: [['H', 50], ['M', 10], ['B', 10], ['R', 12], ['.', 18]],
-  neutral:   [['H', 30], ['A', 14], ['R', 20], ['W', 10], ['T', 10], ['X', 5], ['.', 11]],
-  special:   [['T', 30], ['H', 25], ['.', 45]],
-  police:    [['H', 26], ['W', 16], ['X', 10], ['R', 10], ['T', 8], ['.', 30]]
-};
 
 // المباني الخاصة بكل حي مميز
 const SPECIAL_BUILDINGS = {
@@ -43,17 +31,25 @@ function pickWeighted(table) {
 }
 
 // ينشئ خريطة صالحة، ويعيد المحاولة إذا فشل الشرط (شوارع متصلة، أحياء منزلية كافية)
-export function createMap(sizeKey, players) {
+// city: مفتاح طابع المدينة (القسم 3.9)، أو 'random'. المدينة شكل فقط: الشوارع والأحياء كما هي
+export function resolveCity(city) {
+  return CITY_THEMES[city] ? city : CITIES.order[ri(CITIES.order.length)];
+}
+
+export function createMap(sizeKey, players, city = 'random') {
   const size = MAP_SIZES[sizeKey] || MAP_SIZES.medium;
+  const cityKey = resolveCity(city);
   for (let attempt = 0; attempt < MAP_GEN.maxTries; attempt++) {
-    const map = buildMap(size, players);
+    const map = buildMap(size, players, cityKey);
     if (map) return map;
   }
   return null;
 }
 
-function buildMap(size, players) {
+function buildMap(size, players, cityKey) {
   const map = createEmptyMap(size);
+  map.city = cityKey;
+  map.seed = ri(1e9);                // بذرة الرسم: نفس الخريطة تُرسم دائماً بنفس الشكل
   carveStreets(map);
   if (!roadsConnected(map)) return null;          // شرط إلزامي: الشوارع كلها متصلة
 
@@ -102,6 +98,7 @@ function createEmptyMap(size) {
     road: new Uint8Array(n * n),
     type: new Array(n * n).fill('.'),
     region: new Array(n * n).fill('neutral'),
+    kind: new Array(n * n).fill(null),   // نوع المبنى من pool المدينة ('house', 'ruin', 'palm'...)
     dash: new Uint8Array(n * n),      // خطوط منتصف الشارع
     decor: {},                        // زينة فوق الشوارع (برميل نار، عمود إنارة)
     districtAt: new Int32Array(n * n).fill(-1),
@@ -330,20 +327,25 @@ function assignPoliceDistricts(map, districts, size) {
 }
 
 // --- 5) ملء الأحياء بالمباني ونقاط الاستيلاء ---
-function fillDistricts(map, districts) {
-  for (const district of districts) {
-    const theme = THEMES[district.region] || THEMES.neutral;
+// نوع المربع من pool المدينة: '.' أرض فارغة يُمشى عليها، 'ruin' أطلال، والباقي مبانٍ وأشجار لا يُمشى عليها
+function placeKind(map, k, kind) {
+  map.kind[k] = kind === '.' ? null : kind;
+  map.type[k] = kind === '.' ? '.' : kind === 'ruin' ? 'R' : 'H';
+}
 
+function fillDistricts(map, districts) {
+  const city = CITY_THEMES[map.city];
+  for (const district of districts) {
     for (const [i, j] of district.tiles) {
       const k = map.idx(i, j);
       map.region[k] = district.region;
-      map.type[k] = pickWeighted(theme);
+      placeKind(map, k, pickWeighted(city.pool));
     }
 
     // حي صغير: ليس قابلاً للاستيلاء، أشجار أو أرض فارغة فقط
     if (!district.capturable) {
       for (const [i, j] of district.tiles) {
-        map.type[map.idx(i, j)] = rnd() < 0.5 ? 'T' : '.';
+        placeKind(map, map.idx(i, j), rnd() < 0.5 ? city.draw.tree : '.');
       }
       continue;
     }

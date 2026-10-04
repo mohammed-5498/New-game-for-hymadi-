@@ -24,7 +24,7 @@ export function createMatch(settings) {
     homeDistrictId: -1
   }));
 
-  const map = createMap(settings.mapSize, players);
+  const map = createMap(settings.mapSize, players, settings.city);   // طابع المدينة (القسم 3.9)
   if (!map) throw new Error('تعذر توليد خريطة صالحة');
 
   // الشرطة طرف محايد يُضاف بعد توزيع الأحياء المنزلية فلا يأخذ حياً ولا مقراً

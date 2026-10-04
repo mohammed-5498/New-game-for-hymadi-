@@ -10,6 +10,7 @@ import { worldToTile } from '../map/coords.js';
 import { tintAmount } from '../game/capture.js';
 import { drawClash, drawBurst } from './combatArt.js';
 import { getPref } from '../prefs.js';
+import { beginCity, groundColor, drawRoadSurface, drawCityTile, debrisLight } from './cityRender.js';
 
 export function resizeCanvas(canvas, state) {
   const view = state.view;
@@ -36,6 +37,7 @@ export function clampCamera(state) {
 export function render(ctx, state, alpha) {
   const { map, camera, view } = state;
   const lights = [];
+  frameLights = lights;
   shake = shakeOffset(state, alpha);   // إزاحة الارتجاجة لهذا الإطار
   setFrameContext(ctx, state.weather, lights, state.time);
 
@@ -288,6 +290,8 @@ function shakeOffset(state, alpha) {
   return { x: Math.cos(angle) * amount, y: Math.sin(angle) * amount };
 }
 
+let frameLights = [];
+
 function worldTransform(ctx, state) {
   const { camera: cam, view } = state;
   const s = view.dpr * cam.z;
@@ -314,18 +318,8 @@ function drawGround(ctx, state, visible) {
       if (!visible(x, y)) continue;
 
       const k = map.idx(i, j);
-      const isRoad = map.road[k] === 1;
-      let color = isRoad ? ROAD_COLOR : (PALETTES[map.region[k]] || PALETTES.neutral).ground;
-
-      // أرض الحي المملوك تُصبغ بلون مالكه (انتقال تدريجي خلال نصف ثانية)
-      if (!isRoad) {
-        const district = map.districtOf(i, j);
-        const amount = tintAmount(district, CAPTURE.groundTintAlpha);
-        if (amount > 0) color = mix(color, district.tintColor, amount);
-      }
-
-      if (state.weather === 'snow') color = mix(color, '#eef2f5', isRoad ? 0.45 : 0.72);
-      else if (state.weather === 'rain') color = mix(color, '#2a2f36', 0.2);
+      // لون الأرض بطابع المدينة، مع صبغ المالك والطقس (القسمان 3.9 و8)
+      const color = groundColor(state, i, j);
 
       let batch = groundBatches.get(color);
       if (!batch) groundBatches.set(color, batch = []);
@@ -353,6 +347,16 @@ function drawGround(ctx, state, visible) {
     }
     ctx.fillStyle = color;
     ctx.fill();
+  }
+
+  // تفاصيل سطح الشارع (حجارة، شقوق) بطابع المدينة
+  beginCity(ctx, map);
+  for (let j = 0; j < map.n; j++) {
+    for (let i = 0; i < map.n; i++) {
+      if (!map.road[map.idx(i, j)]) continue;
+      const x = (i - j) * TILE_HALF_W, y = (i + j) * TILE_HALF_H;
+      if (visible(x, y)) drawRoadSurface(ctx, map, i, j, x, y);
+    }
   }
 
   if (dashes) {
@@ -385,15 +389,20 @@ function drawBuildingsAndUnits(ctx, state, alpha, visible) {
     else buckets.set(key, [unit]);
   }
 
+  beginCity(ctx, map);
   for (let s = 0; s <= 2 * map.n - 2; s++) {
     for (let i = Math.max(0, s - map.n + 1); i <= Math.min(map.n - 1, s); i++) {
       const j = s - i;
       const x = (i - j) * TILE_HALF_W, y = (i + j) * TILE_HALF_H;
       if (!visible(x, y)) continue;
 
+      // المباني والزينة والحطام بطابع المدينة (القسم 3.9)
+      if (drawCityTile(map, i, j, x, y)) {
+        cityLight(state, i, j, x, y);
+        continue;
+      }
       const k = map.idx(i, j);
-      const type = map.road[k] ? map.decor[k] : map.type[k];
-      if (!type || type === '.') continue;
+      const type = map.type[k];
 
       // مباني الحي تحمل لون مالكه: الأسطح 45% والجدران 20% (القسم 8)
       const district = map.districtOf(i, j);
@@ -405,6 +414,12 @@ function drawBuildingsAndUnits(ctx, state, alpha, visible) {
     const unitsHere = buckets.get(s);
     if (unitsHere) for (const unit of unitsHere) drawUnit(ctx, unit, alpha, state.camera.z, state.time, state.debugView, state.lodCrowded);
   }
+}
+
+// براميل النار في حطام الشوارع تضيء ليلاً
+function cityLight(state, i, j, x, y) {
+  if (state.weather !== 'night') return;
+  if (debrisLight(state.map, i, j)) frameLights.push({ x, y: y - 7, r: 34, c: '255,150,60', a: 0.65 });
 }
 
 // شريط تقدم الاستيلاء فوق العلم بلون المستولي
