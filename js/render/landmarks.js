@@ -150,12 +150,37 @@ export function drawLandmark(map, type, x, y, i, j, ownerColor, flagColor, light
     return null;
   }
 
+  if (type === 'P') {
+    // ساحة العلم (نقطة الاستيلاء): دائرة متقطعة وعلم بلون المالك
+    plain(() => {
+      poly([[x - 12, y], [x, y - 6], [x + 12, y], [x, y + 6]], 'rgba(255,255,255,0.16)');
+      const c = getCtx();
+      c.beginPath();
+      c.ellipse(x, y, 15, 7.5, 0, 0, 6.2832);
+      c.strokeStyle = 'rgba(255,255,255,.55)';
+      c.lineWidth = 0.8;
+      c.setLineDash([3, 2]);
+      c.stroke();
+      c.setLineDash([]);
+      ln(x, y, x, y - 22, '#2b2825', 1.2);
+      poly([[x, y - 22], [x + 10, y - 19], [x, y - 16]], ownerColor || '#e8e2d6');
+    });
+    if (lights) lights.push({ x, y: y - 4, r: 18, c: '255,235,190', a: 0.25 });
+    return null;
+  }
+
   if (type === 'O') {
     // نافورة الساحة بطراز المدينة
     if (typeof T.draw.plazaProp === 'function') T.draw.plazaProp(x, y, i, j, T);
     return null;
   }
   return null;
+}
+
+// مكان المصباح الأزرق فوق مركز الشرطة بلا رسم (لطبقة المصابيح الخفيفة)
+export function lampSpot(map, i, j, x, y) {
+  const top = y - roofTop(map, specialsOf(map).base, i, j);
+  return { x, y: top - 20 };
 }
 
 // المصباح الأزرق الوامض فوق مركز الشرطة: يُرسم كل إطار فوق الطبقة الثابتة

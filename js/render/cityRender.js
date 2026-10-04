@@ -4,6 +4,8 @@ import { CAPTURE, CITY_UNTINTED } from '../config.js';
 import { mix } from './colors.js';
 import { tintAmount } from '../game/capture.js';
 import { THEMES, setThemeContext, setTone, streetDebris, ruinTile, hsh, mixc } from './cityThemes.js';
+import { PALETTES } from './colors.js';
+import { drawLandmark } from './landmarks.js';
 
 export const cityOf = (map) => THEMES[map.city] || THEMES.arab;
 
@@ -67,7 +69,7 @@ export function useTone(state, district, building) {
 }
 
 // محتوى مربع عادي: الشوارع (زينة وحطام لا يعيقان الحركة)، الأرض الفارغة، الأطلال، المباني والأشجار.
-// يعيد false إن كان المربع من المباني الحاسمة للعب (تُرسم في buildings.js)
+// يعيد false إن كان المربع من المباني الحاسمة للعب (تُرسم في landmarks.js)
 export function drawCityTile(state, i, j, x, y) {
   const map = state.map;
   const T = cityOf(map);
@@ -108,4 +110,50 @@ export function debrisLight(map, i, j) {
   else if (map.type[k] === '.' && hsh(i, j, 210) < 0.4) r = hsh(i, j + 99, 20);
   else return false;
   return r >= 0.07 && r < 0.12;
+}
+
+// --- الطبقة الثابتة لمربع واحد: كل ما لا يتحرك (يُرسم مرة واحدة في القطع المخزنة) ---
+// lights: مصادر الإضاءة الثابتة ليلاً، lamps: نقاط المصابيح الوامضة (تُرسم كل إطار)
+const SPECIAL_TYPES = 'QNSGCOP';
+
+export function specialType(state, k) {
+  if (state.mode === 'king' && hillLandmarkTile(state) === k) return 'L';
+  const type = state.map.type[k];
+  return SPECIAL_TYPES.includes(type) ? type : null;
+}
+
+export function drawTileStatic(state, i, j, x, y, lights, lamps) {
+  const map = state.map;
+  const k = map.idx(i, j);
+  const special = specialType(state, k);
+  if (!special) {
+    drawCityTile(state, i, j, x, y);
+    if (lights && debrisLight(map, i, j)) lights.push({ x, y: y - 7, r: 34, c: '255,150,60', a: 0.65 });
+    return;
+  }
+  // المباني الحاسمة بطراز المدينة: المبنى يُصبغ بلون المالك، وعلاماته لا
+  const district = map.districtOf(i, j);
+  const ownerColor = district && district.owner !== null ? state.players[district.owner].color : null;
+  const flagColor = (PALETTES[map.region[k]] || PALETTES.neutral).flag;
+  useTone(state, district, true);
+  const lamp = drawLandmark(map, special, x, y, i, j, ownerColor, flagColor, lights);
+  if (lamp && lamps) lamps.push(lamp);
+}
+
+// معلم التلة في طور ملك الحي: أقرب مبنى لمركز حي التلة (يُحسب مرة واحدة)
+function hillLandmarkTile(state) {
+  const ms = state.modeState;
+  if (ms.hillTile !== undefined) return ms.hillTile;
+  const map = state.map, hill = map.districts[ms.hillId];
+  let best = -1, bestD = Infinity;
+  if (hill) {
+    for (const [i, j] of hill.tiles) {
+      const k = map.idx(i, j);
+      if (map.type[k] !== 'H' && map.type[k] !== 'R') continue;
+      const d = Math.hypot(i - hill.cx, j - hill.cy);
+      if (d < bestD) { bestD = d; best = k; }
+    }
+  }
+  ms.hillTile = best;
+  return best;
 }

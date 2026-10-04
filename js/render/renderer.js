@@ -2,16 +2,14 @@
 import { TILE_HALF_W, TILE_HALF_H, TICK_SEC, CAMERA, CAPTURE, PERFORMANCE, ALERTS, COMBAT_REALISM, UNIT_ART, gameModes as GM } from '../config.js';
 import { enemyLeaders } from '../game/modes.js';
 import { onScreen } from '../game/alerts.js';
-import { mix, PALETTES, ROAD_COLOR, BACKGROUND, UI_LIGHT } from './colors.js';
-import { drawBuilding, setFrameContext } from './buildings.js';
+import { BACKGROUND, UI_LIGHT } from './colors.js';
 import { drawUnit, drawSelectionRing, drawProjectile, drawAura, drawFire, unitWorldPos } from './units.js';
 import { drawOverlay, drawLights, drawParticles } from './weather.js';
 import { worldToTile } from '../map/coords.js';
-import { tintAmount } from '../game/capture.js';
 import { drawClash, drawBurst } from './combatArt.js';
 import { getPref } from '../prefs.js';
-import { beginCity, groundColor, drawRoadSurface, drawCityTile, debrisLight, useTone } from './cityRender.js';
-import { drawLandmark, drawPoliceLamp } from './landmarks.js';
+import { drawCityLayer, cityStatics } from './chunkCache.js';
+import { drawPoliceLamp } from './landmarks.js';
 
 export function resizeCanvas(canvas, state) {
   const view = state.view;
@@ -38,9 +36,7 @@ export function clampCamera(state) {
 export function render(ctx, state, alpha) {
   const { map, camera, view } = state;
   const lights = [];
-  frameLights = lights;
   shake = shakeOffset(state, alpha);   // إزاحة الارتجاجة لهذا الإطار
-  setFrameContext(ctx, state.weather, lights, state.time);
 
   // خلفية
   ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
@@ -56,7 +52,13 @@ export function render(ctx, state, alpha) {
   const vy0 = camera.y - view.h / 2 / z - 30, vy1 = camera.y + view.h / 2 / z + 70;
   const visible = (x, y) => x > vx0 && x < vx1 && y > vy0 && y < vy1;
 
-  drawGround(ctx, state, visible);
+  // الطبقة الثابتة للمدينة (الأرض والمباني والزينة) من القطع المخزنة (المرحلة 7ب)
+  drawCityLayer(ctx, state, { x0: vx0, x1: vx1, y0: vy0, y1: vy1 });
+
+  // الطبقة الخفيفة كل إطار: المصابيح الزرقاء الوامضة وإضاءة الليل الثابتة
+  const statics = cityStatics();
+  for (const lamp of statics.lamps) if (visible(lamp.x, lamp.y)) drawPoliceLamp(ctx, lamp, state.time, lights);
+  if (state.weather === 'night') for (const l of statics.lights) if (visible(l.x, l.y)) lights.push(l);
 
   // النار والهالات على الأرض: تحتها المباني والوحدات تظهر فوقها
   for (const fire of state.fires) {
@@ -64,7 +66,7 @@ export function render(ctx, state, alpha) {
     lights.push({ x: (fire.x - fire.y) * TILE_HALF_W, y: (fire.x + fire.y) * TILE_HALF_H,
                   r: fire.radius * 28, c: '255,150,60', a: 0.7 });
   }
-  drawBuildingsAndUnits(ctx, state, alpha, visible);
+  drawUnitsLayer(ctx, state, alpha, visible);
 
   for (const shot of state.projectiles) drawProjectile(ctx, shot, alpha);
   drawCaptureBars(ctx, state, visible);
@@ -291,8 +293,6 @@ function shakeOffset(state, alpha) {
   return { x: Math.cos(angle) * amount, y: Math.sin(angle) * amount };
 }
 
-let frameLights = [];
-
 function worldTransform(ctx, state) {
   const { camera: cam, view } = state;
   const s = view.dpr * cam.z;
@@ -302,83 +302,9 @@ function worldTransform(ctx, state) {
     view.dpr * (view.h / 2 - cam.y * cam.z + dy));
 }
 
-// الأرض: نجمع المربعات حسب اللون ونرسم مساراً واحداً لكل لون
-// (أسرع بكثير من مسار لكل مربع مع آلاف المربعات)
-const groundBatches = new Map();
-
-function drawGround(ctx, state, visible) {
-  const { map } = state;
-  const EX = TILE_HALF_W + 0.4, EY = TILE_HALF_H + 0.25;   // توسيع بسيط يغلق الفراغات الشعرية
-
-  for (const tiles of groundBatches.values()) tiles.length = 0;
-  let dashes = null;
-
-  for (let j = 0; j < map.n; j++) {
-    for (let i = 0; i < map.n; i++) {
-      const x = (i - j) * TILE_HALF_W, y = (i + j) * TILE_HALF_H;
-      if (!visible(x, y)) continue;
-
-      const k = map.idx(i, j);
-      // لون الأرض بطابع المدينة، مع صبغ المالك والطقس (القسمان 3.9 و8)
-      const color = groundColor(state, i, j);
-
-      let batch = groundBatches.get(color);
-      if (!batch) groundBatches.set(color, batch = []);
-      batch.push(x, y);
-
-      // خطوط منتصف الشارع
-      if (map.dash[k]) {
-        if (!dashes) dashes = [];
-        if (map.dash[k] === 1) dashes.push(x - 4, y - 2, x + 4, y + 2);
-        else dashes.push(x + 4, y - 2, x - 4, y + 2);
-      }
-    }
-  }
-
-  for (const [color, tiles] of groundBatches) {
-    if (!tiles.length) continue;
-    ctx.beginPath();
-    for (let t = 0; t < tiles.length; t += 2) {
-      const x = tiles[t], y = tiles[t + 1];
-      ctx.moveTo(x - EX, y);
-      ctx.lineTo(x, y - EY);
-      ctx.lineTo(x + EX, y);
-      ctx.lineTo(x, y + EY);
-      ctx.closePath();
-    }
-    ctx.fillStyle = color;
-    ctx.fill();
-  }
-
-  // تفاصيل سطح الشارع (حجارة، شقوق) بطابع المدينة
-  beginCity(ctx, map);
-  for (let j = 0; j < map.n; j++) {
-    for (let i = 0; i < map.n; i++) {
-      if (!map.road[map.idx(i, j)]) continue;
-      const x = (i - j) * TILE_HALF_W, y = (i + j) * TILE_HALF_H;
-      if (visible(x, y)) drawRoadSurface(ctx, map, i, j, x, y);
-    }
-  }
-
-  if (dashes) {
-    ctx.beginPath();
-    for (let t = 0; t < dashes.length; t += 4) {
-      ctx.moveTo(dashes[t], dashes[t + 1]);
-      ctx.lineTo(dashes[t + 2], dashes[t + 3]);
-    }
-    ctx.strokeStyle = '#c9bd85';
-    ctx.lineWidth = 1;
-    ctx.stroke();
-  }
-}
-
-// ترتيب الرسام: كل قطر (i + j) من الخلف للأمام، مباني ثم وحدات
-function drawBuildingsAndUnits(ctx, state, alpha, visible) {
-  const { map } = state;
-  // عند الإبعاد الشديد تختفي التفاصيل الصغيرة أصلاً، فلا نرسمها
-  const detail = state.camera.z >= PERFORMANCE.detailZoom;
-
-  // توزيع الوحدات الظاهرة فقط على الأقطار حسب موقعها المنعّم
+// الوحدات فوق الطبقة الثابتة، بترتيب الأقطار (i + j) من الخلف للأمام فيما بينها.
+// المباني في القطع المخزنة تحتها، فلا يختفي جندي خلف مبنى عالٍ (مهم في الأبراج المكتظة)
+function drawUnitsLayer(ctx, state, alpha, visible) {
   const buckets = new Map();
   for (const unit of state.units) {
     const i = unit.prevX + (unit.x - unit.prevX) * alpha;
@@ -389,72 +315,12 @@ function drawBuildingsAndUnits(ctx, state, alpha, visible) {
     if (bucket) bucket.push(unit);
     else buckets.set(key, [unit]);
   }
-
-  beginCity(ctx, map);
-  for (let s = 0; s <= 2 * map.n - 2; s++) {
-    for (let i = Math.max(0, s - map.n + 1); i <= Math.min(map.n - 1, s); i++) {
-      const j = s - i;
-      const x = (i - j) * TILE_HALF_W, y = (i + j) * TILE_HALF_H;
-      if (!visible(x, y)) continue;
-
-      // المباني والزينة والحطام بطابع المدينة (القسم 3.9)
-      const k = map.idx(i, j);
-      const special = specialType(state, k);
-      if (!special && drawCityTile(state, i, j, x, y)) {
-        cityLight(state, i, j, x, y);
-        continue;
-      }
-
-      // مباني الحي تحمل لون مالكه: الأسطح 45% والجدران 20% (القسم 8)
-      const district = map.districtOf(i, j);
-      const ownerColor = district && district.owner !== null ? state.players[district.owner].color : null;
-      if (special) {
-        // المباني الحاسمة بطراز المدينة وعلاماتها الثابتة
-        const flagColor = (PALETTES[map.region[k]] || PALETTES.neutral).flag;
-        useTone(state, district, true);
-        const lamp = drawLandmark(map, special, x, y, i, j, ownerColor, flagColor, frameLights);
-        if (lamp) drawPoliceLamp(ctx, lamp, state.time, frameLights);
-        continue;
-      }
-      drawBuilding(map.type[k], x, y, map.region[k], i, j, ownerColor || (district && district.tintColor),
-                   detail, tintAmount(district, 1));
-    }
-
-    const unitsHere = buckets.get(s);
-    if (unitsHere) for (const unit of unitsHere) drawUnit(ctx, unit, alpha, state.camera.z, state.time, state.debugView, state.lodCrowded);
-  }
-}
-
-// المربع من المباني الحاسمة؟ (المقر، الشرطة، المستشفى، المخزن، برج الساعة، النافورة، معلم التلة)
-const SPECIAL_TYPES = 'QNSGCO';
-function specialType(state, k) {
-  if (state.mode === 'king' && hillLandmarkTile(state) === k) return 'L';
-  const type = state.map.type[k];
-  return SPECIAL_TYPES.includes(type) ? type : null;
-}
-
-// معلم التلة في طور ملك الحي: أقرب مبنى لمركز حي التلة (يُحسب مرة واحدة)
-function hillLandmarkTile(state) {
-  const ms = state.modeState;
-  if (ms.hillTile !== undefined) return ms.hillTile;
-  const map = state.map, hill = map.districts[ms.hillId];
-  let best = -1, bestD = Infinity;
-  if (hill) {
-    for (const [i, j] of hill.tiles) {
-      const k = map.idx(i, j);
-      if (map.type[k] !== 'H' && map.type[k] !== 'R') continue;
-      const d = Math.hypot(i - hill.cx, j - hill.cy);
-      if (d < bestD) { bestD = d; best = k; }
+  const keys = [...buckets.keys()].sort((a, b) => a - b);
+  for (const key of keys) {
+    for (const unit of buckets.get(key)) {
+      drawUnit(ctx, unit, alpha, state.camera.z, state.time, state.debugView, state.lodCrowded);
     }
   }
-  ms.hillTile = best;
-  return best;
-}
-
-// براميل النار في حطام الشوارع تضيء ليلاً
-function cityLight(state, i, j, x, y) {
-  if (state.weather !== 'night') return;
-  if (debrisLight(state.map, i, j)) frameLights.push({ x, y: y - 7, r: 34, c: '255,150,60', a: 0.65 });
 }
 
 // شريط تقدم الاستيلاء فوق العلم بلون المستولي
