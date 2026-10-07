@@ -3,13 +3,14 @@ import { TILE_HALF_W, TILE_HALF_H, TICK_SEC, CAMERA, CAPTURE, PERFORMANCE, ALERT
 import { enemyLeaders } from '../game/modes.js';
 import { onScreen } from '../game/alerts.js';
 import { BACKGROUND, UI_LIGHT } from './colors.js';
-import { drawUnit, drawSelectionRing, drawProjectile, drawAura, drawFire, unitWorldPos } from './units.js';
+import { drawUnit, drawSelectionRing, drawProjectile, drawAura, drawFire, unitWorldPos, unitSizeFactor } from './units.js';
 import { drawOverlay, drawLights, drawParticles } from './weather.js';
 import { worldToTile } from '../map/coords.js';
 import { drawClash, drawBurst } from './combatArt.js';
 import { getPref } from '../prefs.js';
 import { drawCityLayer, cityStatics } from './chunkCache.js';
 import { drawPoliceLamp } from './landmarks.js';
+import { drawUnitsOccluded } from './occlusion.js';
 
 export function resizeCanvas(canvas, state) {
   const view = state.view;
@@ -302,33 +303,31 @@ function worldTransform(ctx, state) {
     view.dpr * (view.h / 2 - cam.y * cam.z + dy));
 }
 
-// الوحدات فوق الطبقة الثابتة، بترتيب الأقطار (i + j) من الخلف للأمام فيما بينها.
-// المباني في القطع المخزنة تحتها، فلا يختفي جندي خلف مبنى عالٍ (مهم في الأبراج المكتظة)
+// الوحدات فوق الطبقة الثابتة، بترتيب الأقطار (i + j) من الخلف للأمام فيما بينها،
+// والوحدة خلف مبنى أمامها يُقصّ منها شكل المبنى فتختفي خلفه كما في ترتيب الرسام
 function drawUnitsLayer(ctx, state, alpha, visible) {
-  const buckets = new Map();
+  // الوحدات الظاهرة بقطرها المقرّب؛ والمباني التي أمامها تخفيها (occlusion.js)
+  const entries = [];
   for (const unit of state.units) {
     const i = unit.prevX + (unit.x - unit.prevX) * alpha;
     const j = unit.prevY + (unit.y - unit.prevY) * alpha;
-    if (!visible((i - j) * TILE_HALF_W, (i + j) * TILE_HALF_H)) continue;
-    const key = Math.round(i + j);
-    const bucket = buckets.get(key);
-    if (bucket) bucket.push(unit);
-    else buckets.set(key, [unit]);
+    const x = (i - j) * TILE_HALF_W, y = (i + j) * TILE_HALF_H;
+    if (!visible(x, y)) continue;
+    entries.push({ unit, x, y, key: Math.round(i + j), size: unitSizeFactor(unit) });
   }
-  const keys = [...buckets.keys()].sort((a, b) => a - b);
+  entries.sort((a, b) => a.key - b.key);
   const halo = CITIES.unitHalo[state.map.city];
-  for (const key of keys) {
-    for (const unit of buckets.get(key)) {
-      if (halo && unit.state !== 'dead') {
-        const p = unitWorldPos(unit, alpha);
-        ctx.beginPath();
-        ctx.ellipse(p.x, p.y - halo.lift, halo.rx, halo.ry, 0, 0, 6.2832);
-        ctx.fillStyle = halo.color;
-        ctx.fill();
-      }
-      drawUnit(ctx, unit, alpha, state.camera.z, state.time, state.debugView, state.lodCrowded);
+  drawUnitsOccluded(ctx, state, entries, (c, e) => {
+    const unit = e.unit;
+    if (halo && unit.state !== 'dead') {
+      const p = unitWorldPos(unit, alpha);
+      c.beginPath();
+      c.ellipse(p.x, p.y - halo.lift, halo.rx, halo.ry, 0, 0, 6.2832);
+      c.fillStyle = halo.color;
+      c.fill();
     }
-  }
+    drawUnit(c, unit, alpha, state.camera.z, state.time, state.debugView, state.lodCrowded);
+  });
 }
 
 // شريط تقدم الاستيلاء فوق العلم بلون المستولي
