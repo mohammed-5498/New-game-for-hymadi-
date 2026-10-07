@@ -2,7 +2,7 @@
 // على لوحات مخفية مقسمة إلى قطع، ويُعرض منها الظاهر فقط.
 // - كل قطعة مربع من العالم (128 وحدة) بدقة تناسب التقريب الحالي (درجات ثابتة لا كل تقريب)
 // - تُعاد قطعة فقط حين يتغير مالك حي فيها (وعلى 3 مراحل أثناء انتقال اللون)
-// - رسم القطع الجديدة محدود بوقت في كل إطار؛ وحتى تجهز يظهر مكانها نسخة أقدم أو خريطة أرض منخفضة الدقة
+// - رسم القطع على دفعات محدودة بوقت في كل إطار؛ وحتى تجهز يظهر مكانها نسختها الأقدم أو خريطة أرض منخفضة الدقة
 // - المصابيح الوامضة وإضاءة الليل طبقة خفيفة تُرسم كل إطار
 import { TILE_HALF_W, TILE_HALF_H, CITY_CACHE as CC } from '../config.js';
 import { beginCity, groundColor, drawRoadSurface, drawTileStatic, debrisLight, specialType } from './cityRender.js';
@@ -32,7 +32,7 @@ function setup(state) {
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       chunks.push({ id: chunks.length, x: x0 + c * size, y: y0 + r * size, tiles: [],
-                    canvas: null, scale: 0, dirty: false, used: 0 });
+                    canvas: null, job: null, scale: 0, dirty: false, used: 0, ver: 0 });
     }
   }
   // كل مربع ينتمي لكل قطعة قد يرسم فيها شيئاً (المباني ترتفع حتى 110 وحدة فوق المربع)
@@ -54,9 +54,11 @@ function setup(state) {
   });
 
   cache = {
+    gen: (cache ? cache.gen : 0) + 1,
     map, weather: state.weather, mode: state.mode, x0, y0, cols, rows, chunks, districtChunks,
     keys: map.districts.map(d => tintKey(d)),
-    lights: [], lamps: [], frame: 0, pixels: 0, base: null
+    lights: [], lamps: [], frame: 0, pixels: 0, base: null,
+    tileMs: cache ? cache.tileMs : 0.3          // الزمن الحقيقي لرسم مربع واحد (يُقاس ويُحدَّث)
   };
   collectStatics(state);
   buildBase(state);
@@ -95,23 +97,70 @@ function buildBase(state) {
 }
 
 // --- رسم قطعة: الأرض ثم سطح الشوارع ثم محتوى المربعات بترتيب الرسام ---
-function renderChunk(state, chunk, scale) {
+// يُرسم على لوحة جديدة على دفعات بحدود وقت كل إطار، والقديمة تبقى معروضة حتى تكتمل الجديدة:
+// فلا إطار واحد يحمل رسم قطعة كاملة (تغيّر لون حي، أو رفع الدقة بعد بداية المباراة)
+function startJob(state, chunk, scale) {
   const size = Math.ceil((CC.chunkWorld + 2 * PAD) * scale);
-  if (!chunk.canvas || chunk.canvas.width !== size) {
-    if (chunk.canvas) cache.pixels -= chunk.canvas.width * chunk.canvas.height;
-    chunk.canvas = makeCanvas(size, size);
-    cache.pixels += size * size;
-  }
-  const ctx = chunk.canvas.getContext('2d');
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.clearRect(0, 0, size, size);
+  const canvas = makeCanvas(size, size);
+  const ctx = canvas.getContext('2d');
   ctx.setTransform(scale, 0, 0, scale, -(chunk.x - PAD) * scale, -(chunk.y - PAD) * scale);
   drawGround(ctx, state, chunk.tiles);
-  beginCity(ctx, state.map);
-  const t = chunk.tiles;
-  for (let k = 0; k < t.length; k += 2) drawTileStatic(state, t[k], t[k + 1], tileX(t[k], t[k + 1]), tileY(t[k], t[k + 1]), null, null);
-  chunk.scale = scale;
+  chunk.job = { canvas, ctx, scale, t: 0 };
+}
+
+// المتصفح يسجّل أوامر الرسم ثم ينفذها لاحقاً عند استعمال الصورة، فقياس الوقت وحده يخدع:
+// ننفذها فوراً بنسخ بكسل واحد منها، فيُحسب وقتها الحقيقي داخل دفعة القطعة لا في إطار آخر
+let sink = null;
+function flush(canvas) {
+  if (!sink) sink = makeCanvas(1, 1);
+  sink.getContext('2d').drawImage(canvas, 0, 0, 1, 1, 0, 0, 1, 1);
+}
+
+// متابعة رسم القطعة حتى deadline؛ true إن اكتملت ووُضعت مكان القديمة.
+// عدد المربعات في الدفعة من زمنها الحقيقي المقيس (cache.tileMs)، لا من زمن تسجيل الأوامر
+function stepJob(state, chunk, deadline) {
+  const job = chunk.job, t = chunk.tiles;
+  const start = performance.now();
+  const room = deadline - start;
+  const max = room === Infinity ? t.length : Math.max(2, 2 * Math.floor(room / cache.tileMs));
+  const end = Math.min(t.length, job.t + max);
+  const from = job.t;
+  beginCity(job.ctx, state.map);
+  while (job.t < end) {
+    const i = t[job.t], j = t[job.t + 1];
+    drawTileStatic(state, i, j, tileX(i, j), tileY(i, j), null, null);
+    job.t += 2;
+  }
+  if (room !== Infinity) {
+    flush(job.canvas);
+    const tiles = (job.t - from) / 2;
+    if (tiles > 0) cache.tileMs = 0.7 * cache.tileMs + 0.3 * Math.max(0.02, (performance.now() - start) / tiles);
+  }
+  if (job.t < t.length) return false;
+  if (chunk.canvas) cache.pixels -= chunk.canvas.width * chunk.canvas.height;
+  chunk.canvas = job.canvas;
+  cache.pixels += job.canvas.width * job.canvas.height;
+  chunk.scale = job.scale;
   chunk.dirty = false;
+  chunk.job = null;
+  chunk.ver++;
+  return true;
+}
+
+function renderChunk(state, chunk, scale) {
+  startJob(state, chunk, scale);
+  stepJob(state, chunk, Infinity);
+}
+
+// قطعة تحتاج رسماً بهذه الدقة: تبدأ عملها (أو تعيده إن كان بدقة أخرى) ثم تتقدم حتى deadline
+function work(state, chunk, scale, deadline) {
+  if (chunk.job && chunk.job.scale !== scale) chunk.job = null;
+  if (!chunk.job) {
+    startJob(state, chunk, scale);
+    if (deadline !== Infinity) flush(chunk.job.canvas);    // الأرض نفسها تأخذ وقتاً: تُحسب الآن
+    if (performance.now() > deadline) return false;
+  }
+  return stepJob(state, chunk, deadline);
 }
 
 // الأرض: نجمع المربعات حسب اللون ونرسم مساراً واحداً لكل لون، ثم سطح الشوارع وخطوطها
@@ -168,33 +217,35 @@ function pickScale(need) {
 
 // --- كل إطار: الطبقة الثابتة للقطع الظاهرة ---
 // ctx في إحداثيات العالم (worldTransform)، والإطار الظاهر بوحدات العالم
-export function drawCityLayer(ctx, state, view) {
+// budgetMs: وقت رسم القطع في هذا الإطار. maxScale: سقف الدقة (بداية المباراة: دقة أقل تُرسم بسرعة ثم تُرفع تدريجياً)
+export function drawCityLayer(ctx, state, view, budgetMs = CC.frameBudgetMs, maxScale = Infinity) {
   if (!cache || cache.map !== state.map || cache.weather !== state.weather || cache.mode !== state.mode) setup(state);
   cache.frame++;
   markDirty(state);
 
-  const scale = pickScale(state.view.dpr * state.camera.z);
+  const scale = Math.min(maxScale, pickScale(state.view.dpr * state.camera.z));
   const size = CC.chunkWorld;
   const c0 = Math.max(0, Math.floor((view.x0 - cache.x0) / size)), c1 = Math.min(cache.cols - 1, Math.floor((view.x1 - cache.x0) / size));
   const r0 = Math.max(0, Math.floor((view.y0 - cache.y0) / size)), r1 = Math.min(cache.rows - 1, Math.floor((view.y1 - cache.y0) / size));
 
-  // القطع الظاهرة الناقصة أو القديمة تُرسم الآن بحدود وقت، والأقرب للمركز أولاً.
+  // القطع الظاهرة الناقصة أو القديمة تتقدم بحدود وقت، والأقرب للمركز أولاً.
   // ثم حلقة حول الشاشة تُرسم مسبقاً بما بقي من الوقت، فتكون جاهزة قبل أن تظهر أثناء التحريك
   const cx = (view.x0 + view.x1) / 2, cy = (view.y0 + view.y1) / 2;
   const near = (a, b) => Math.hypot(a.x + size / 2 - cx, a.y + size / 2 - cy) - Math.hypot(b.x + size / 2 - cx, b.y + size / 2 - cy);
+  const needs = (chunk) => !chunk.canvas || chunk.dirty || (chunk.scale !== scale && !(maxScale < Infinity && chunk.scale > scale));
   const pending = [];
   for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
     const chunk = cache.chunks[r * cache.cols + c];
     chunk.used = cache.frame;
-    if (!chunk.canvas || chunk.scale !== scale || chunk.dirty) pending.push(chunk);
+    if (needs(chunk)) pending.push(chunk);
   }
   pending.sort(near);
   const start = performance.now();
-  const spent = () => performance.now() - start;
   for (const chunk of pending) {
-    // القطعة التي لا شيء لها تُرسم ولو تجاوزنا الوقت قليلاً؛ أما تحديث الدقة أو اللون فينتظر وقتاً فارغاً
-    if (spent() > CC.frameBudgetMs && (chunk.canvas || spent() > CC.frameBudgetMs * 2)) break;
-    renderChunk(state, chunk, scale);
+    // القطعة الفارغة (تظهر مكانها الأرض فقط) تأخذ ضعف الوقت؛ أما تحديث الدقة أو اللون فوقته العادي
+    const deadline = start + (chunk.canvas ? budgetMs : budgetMs * 2);
+    if (performance.now() > deadline) continue;
+    work(state, chunk, scale, deadline);
   }
   // الحلقة محفوظة من الحذف ما دامت قرب الشاشة، وتُرسم فقط إن بقي متسع في حد الذاكرة
   const ring = [];
@@ -204,15 +255,16 @@ export function drawCityLayer(ctx, state, view) {
       if (r >= r0 && r <= r1 && c >= c0 && c <= c1) continue;
       const chunk = cache.chunks[r * cache.cols + c];
       chunk.used = cache.frame;
-      if (!chunk.canvas || chunk.scale !== scale || chunk.dirty) ring.push(chunk);
+      if (needs(chunk)) ring.push(chunk);
     }
   }
   ring.sort(near);
+  const ringDeadline = start + Math.min(budgetMs, CC.frameBudgetMs);
   for (const chunk of ring) {
-    if (spent() > CC.frameBudgetMs) break;
+    if (performance.now() > ringDeadline) break;
     const px = Math.ceil((size + 2 * PAD) * scale) ** 2;
-    if (!chunk.canvas && cache.pixels + px > CC.maxPixels) break;
-    renderChunk(state, chunk, scale);
+    if (!chunk.canvas && !chunk.job && cache.pixels + px > CC.maxPixels) break;
+    work(state, chunk, scale, ringDeadline);
   }
 
   // العرض: القطعة الجاهزة، وإلا خريطة الأرض المنخفضة مكانها
@@ -233,21 +285,14 @@ export function drawCityLayer(ctx, state, view) {
 // تغيّر لون حي (مالك جديد أو مرحلة انتقال): قطعه تُعاد، والخريطة المنخفضة تتبعه
 function markDirty(state) {
   const districts = state.map.districts;
-  let changed = false;
   for (let d = 0; d < districts.length; d++) {
     const key = tintKey(districts[d]);
     if (key === cache.keys[d]) continue;
     cache.keys[d] = key;
-    changed = true;
-    for (const id of cache.districtChunks[d]) cache.chunks[id].dirty = true;
+    // رسم جارٍ بالألوان القديمة يُلغى ويبدأ من جديد
+    for (const id of cache.districtChunks[d]) { cache.chunks[id].dirty = true; cache.chunks[id].job = null; }
   }
-  if (changed) buildBaseLater(state);
-}
-
-let baseTimer = 0;
-function buildBaseLater(state) {
-  clearTimeout(baseTimer);
-  baseTimer = setTimeout(() => { if (cache && cache.map === state.map) buildBase(state); }, 600);
+  // خريطة الأرض المنخفضة لا تُعاد هنا: تظهر لحظة فقط مكان قطعة لم تُرسم، فلونها القديم لا يُلاحظ
 }
 
 // حد الذاكرة: الأقدم استعمالاً من القطع غير الظاهرة يُحذف أولاً
@@ -258,6 +303,7 @@ function evict() {
     if (cache.pixels <= CC.maxPixels) break;
     cache.pixels -= chunk.canvas.width * chunk.canvas.height;
     chunk.canvas = null;
+    chunk.job = null;
     chunk.scale = 0;
   }
 }
@@ -265,6 +311,43 @@ function evict() {
 // --- الطبقة الخفيفة كل إطار: المصابيح الوامضة وإضاءة الليل الثابتة ---
 export function cityStatics() {
   return cache ? { lamps: cache.lamps, lights: cache.lights } : { lamps: [], lights: [] };
+}
+
+// صورة المدينة الجاهزة لمستطيل من العالم (لقصاصات المباني فوق الوحدات خلفها):
+// ترسم القطع التي تغطيه في ctx (بإحداثيات العالم) وتعيد { scale, sig }، أو null إن لم تجهز كلها بنفس الدقة.
+// sig يتغير متى أُعيد رسم إحداها (لون مالك جديد، دقة أخرى، طقس آخر)
+export function cityRegion(x0, y0, x1, y1) {
+  if (!cache) return null;
+  const size = CC.chunkWorld;
+  const c0 = Math.max(0, Math.floor((x0 - cache.x0) / size)), c1 = Math.min(cache.cols - 1, Math.floor((x1 - cache.x0) / size));
+  const r0 = Math.max(0, Math.floor((y0 - cache.y0) / size)), r1 = Math.min(cache.rows - 1, Math.floor((y1 - cache.y0) / size));
+  const list = [];
+  let scale = 0, sig = cache.gen + ':';
+  for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
+    const chunk = cache.chunks[r * cache.cols + c];
+    if (!chunk.canvas) return null;
+    scale = Math.max(scale, chunk.scale);
+    sig += chunk.id + '.' + chunk.ver + ',';
+    list.push(chunk);
+  }
+  if (!list.length) return null;
+  // أصل شبكة بكسلات القطعة الأولى (مع هامشها): لمحاذاة القصاصة معها
+  return { scale, sig, list, gx: list[0].x - PAD, gy: list[0].y - PAD };
+}
+
+export function drawRegionChunks(ctx, region) {
+  for (const chunk of region.list) {
+    const w = chunk.canvas.width / chunk.scale;
+    ctx.drawImage(chunk.canvas, chunk.x - PAD, chunk.y - PAD, w, w);
+  }
+}
+
+// نفس توقيع القطع الآن؟ (القصاصة المخزنة ما زالت صحيحة)
+export function regionSig(region) {
+  if (!cache) return '';
+  let sig = cache.gen + ':';
+  for (const chunk of region.list) sig += chunk.id + '.' + chunk.ver + ',';
+  return sig;
 }
 
 // للقياس والاختبارات

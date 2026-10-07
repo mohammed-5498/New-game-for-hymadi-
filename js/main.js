@@ -3,7 +3,7 @@
 import { MATCH_DEFAULTS, TICK_MS } from './config.js';
 import { createMatch, resetMatch } from './state.js';
 import { updateMatch } from './game/loop.js';
-import { render, resizeCanvas, clampCamera } from './render/renderer.js';
+import { render, resizeCanvas, clampCamera, warmCity } from './render/renderer.js';
 import { updateParticles, resetParticles } from './render/weather.js';
 import { setupInput } from './ui/input.js';
 import {
@@ -96,6 +96,7 @@ function update() {
 let lastTime = performance.now();
 let hudMeasuredAt = 0;
 let accumulator = 0;
+let warmedMap = null;      // آخر خريطة رُسمت قطعها الظاهرة دفعة واحدة
 
 function loop(now) {
   const frameMs = Math.min(250, Math.max(0, now - lastTime));
@@ -119,6 +120,17 @@ function loop(now) {
   }
   // عناصر الواجهة تتغير (شريط الطور، طي شريط القوة): نعيد قياسها مرتين في الثانية
   if (now - hudMeasuredAt > 500) { state.hudAvoid = hudRects(); hudMeasuredAt = now; }
+
+  // خريطة جديدة (بداية أو إعادة أو متابعة): المدينة الظاهرة تُرسم كلها الآن، ولا يُعوَّض وقتها لعباً
+  if (state.map !== warmedMap && state.view.w) {
+    warmedMap = state.map;
+    warmCity(ctx, state);
+    lastTime = performance.now();
+    accumulator = 0;
+    render(ctx, state, 0);
+    requestAnimationFrame(loop);
+    return;
+  }
 
   accumulator += frameMs;
   let steps = 0;

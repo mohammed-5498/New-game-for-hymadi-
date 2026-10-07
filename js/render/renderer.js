@@ -1,5 +1,5 @@
 // الكاميرا وترتيب الرسم الكامل لإطار واحد
-import { TILE_HALF_W, TILE_HALF_H, TICK_SEC, CAMERA, CAPTURE, PERFORMANCE, ALERTS, COMBAT_REALISM, UNIT_ART, CITIES, gameModes as GM } from '../config.js';
+import { TILE_HALF_W, TILE_HALF_H, TICK_SEC, CAMERA, CAPTURE, PERFORMANCE, ALERTS, COMBAT_REALISM, UNIT_ART, CITIES, CITY_CACHE, gameModes as GM } from '../config.js';
 import { enemyLeaders } from '../game/modes.js';
 import { onScreen } from '../game/alerts.js';
 import { BACKGROUND, UI_LIGHT } from './colors.js';
@@ -34,6 +34,18 @@ export function clampCamera(state) {
   cam.y = (i + j) * TILE_HALF_H;
 }
 
+// بداية المباراة (أو إعادتها أو متابعتها): قطع المدينة الظاهرة تُرسم كلها دفعة واحدة أثناء التلاشي
+// بدقة أقل (سريعة)، ثم ترتفع دقتها على دفعات صغيرة في الإطارات التالية بلا تعليق
+export function warmCity(ctx, state) {
+  const { camera, view } = state;
+  worldTransform(ctx, state);
+  const z = camera.z;
+  drawCityLayer(ctx, state, {
+    x0: camera.x - view.w / 2 / z - 40, x1: camera.x + view.w / 2 / z + 40,
+    y0: camera.y - view.h / 2 / z - 30, y1: camera.y + view.h / 2 / z + 70
+  }, Infinity, CITY_CACHE.warmScale);
+}
+
 export function render(ctx, state, alpha) {
   const { map, camera, view } = state;
   const lights = [];
@@ -56,9 +68,8 @@ export function render(ctx, state, alpha) {
   // الطبقة الثابتة للمدينة (الأرض والمباني والزينة) من القطع المخزنة (المرحلة 7ب)
   drawCityLayer(ctx, state, { x0: vx0, x1: vx1, y0: vy0, y1: vy1 });
 
-  // الطبقة الخفيفة كل إطار: المصابيح الزرقاء الوامضة وإضاءة الليل الثابتة
+  // إضاءة الليل الثابتة
   const statics = cityStatics();
-  for (const lamp of statics.lamps) if (visible(lamp.x, lamp.y)) drawPoliceLamp(ctx, lamp, state.time, lights);
   if (state.weather === 'night') for (const l of statics.lights) if (visible(l.x, l.y)) lights.push(l);
 
   // النار والهالات على الأرض: تحتها المباني والوحدات تظهر فوقها
@@ -68,6 +79,8 @@ export function render(ctx, state, alpha) {
                   r: fire.radius * 28, c: '255,150,60', a: 0.7 });
   }
   drawUnitsLayer(ctx, state, alpha, visible);
+  // المصابيح الزرقاء الوامضة فوق أسطح الشرطة: بعد الوحدات حتى لا تغطيها قصاصات المباني
+  for (const lamp of statics.lamps) if (visible(lamp.x, lamp.y)) drawPoliceLamp(ctx, lamp, state.time, lights);
 
   for (const shot of state.projectiles) drawProjectile(ctx, shot, alpha);
   drawCaptureBars(ctx, state, visible);
