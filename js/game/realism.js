@@ -6,6 +6,7 @@
 import { TICK_SEC, COMBAT_REALISM as CR, COMBAT_STYLE } from '../config.js';
 import { forEachNearby } from './spatialHash.js';
 import { onScreen } from './alerts.js';
+import { hypot } from './hypot.js';
 
 // --- أدوات ---
 export const wrapAngle = (a) => {
@@ -283,8 +284,12 @@ export function approachPoint(unit, target, range) {
   const fx = target.x + Math.cos(ang) * R;                   // أمامه من جهتنا
   const fy = target.y + Math.sin(ang) * R;
 
-  return { x: fx + (bx - fx) * weight, y: fy + (by - fy) * weight };
+  // كائن واحد يُعاد في كل استدعاء: المستدعي (fightTarget) يقرأ x وy فوراً ولا يحفظه
+  APPROACH.x = fx + (bx - fx) * weight;
+  APPROACH.y = fy + (by - fy) * weight;
+  return APPROACH;
 }
+const APPROACH = { x: 0, y: 0 };
 
 // تفضيل الهدف المشغول بغيرنا عند اختيار الهدف (يُطرح من المسافة)
 export function busyBonus(unit, other) {
@@ -364,35 +369,40 @@ export function releaseRagdoll(state, unit) {
 
 // --- الاصطدام: وحدة مرتدة تصطدم بحليفها فتُترنّحه، والجثة المتدحرجة تزحزح من تلمسه ---
 export function updateBumps(state, isEnemyFn) {
-  for (const unit of state.units) {
-    const speed = Math.hypot(unit.vx, unit.vy);
+  // (دالة الجيران في دالة منفصلة: داخل الحلقة كانت تحجز ذاكرة لكل وحدة حتى الواقفة)
+  for (let k = 0, units = state.units; k < units.length; k++) {
+    const unit = units[k];
+    const speed = hypot(unit.vx, unit.vy);
     if (speed <= CR.bumpSpeed || unit.bumpCd > 0) continue;
-    const dead = unit.state === 'dead';
-
-    forEachNearby(state, unit.x, unit.y, CR.crowdRadius, (other) => {
-      if (other === unit || unit.bumpCd > 0) return;
-      if (other.state === 'dead' || other.hp <= 0) return;
-      const dx = other.x - unit.x, dy = other.y - unit.y;
-      if (dx * dx + dy * dy > 0.45 * 0.45) return;          // ملاصقة فعلاً
-
-      if (dead) {                                            // جثة متدحرجة: تزحزح بلا ترنّح
-        other.vx += unit.vx * 0.4; other.vy += unit.vy * 0.4;
-        unit.vx *= 0.6; unit.vy *= 0.6;
-        unit.bumpCd = CR.corpseBumpCd;
-        return;
-      }
-      if (isEnemyFn(state, unit, other)) return;             // الاصطدام بالحلفاء وحدهم
-      if (other.cState === 'stagger' || other.cState === 'dodge') return;
-      if (other.invulnUntil > state.time) return;           // تصلّب: لا يترنّح ولا يُدفع
-
-      stagger(state, other, CR.staggerBump);
-      other.vx += unit.vx * 0.5; other.vy += unit.vy * 0.5;
-      unit.vx *= 0.5; unit.vy *= 0.5;
-      unit.bumpCd = CR.bumpCd;
-      state.combatEvents.bump++;
-      addPop(state, other, 'اصطدام!', 'bump');
-    });
+    bumpFrom(state, unit, isEnemyFn);
   }
+}
+
+function bumpFrom(state, unit, isEnemyFn) {
+  const dead = unit.state === 'dead';
+  forEachNearby(state, unit.x, unit.y, CR.crowdRadius, (other) => {
+    if (other === unit || unit.bumpCd > 0) return;
+    if (other.state === 'dead' || other.hp <= 0) return;
+    const dx = other.x - unit.x, dy = other.y - unit.y;
+    if (dx * dx + dy * dy > 0.45 * 0.45) return;          // ملاصقة فعلاً
+
+    if (dead) {                                            // جثة متدحرجة: تزحزح بلا ترنّح
+      other.vx += unit.vx * 0.4; other.vy += unit.vy * 0.4;
+      unit.vx *= 0.6; unit.vy *= 0.6;
+      unit.bumpCd = CR.corpseBumpCd;
+      return;
+    }
+    if (isEnemyFn(state, unit, other)) return;             // الاصطدام بالحلفاء وحدهم
+    if (other.cState === 'stagger' || other.cState === 'dodge') return;
+    if (other.invulnUntil > state.time) return;           // تصلّب: لا يترنّح ولا يُدفع
+
+    stagger(state, other, CR.staggerBump);
+    other.vx += unit.vx * 0.5; other.vy += unit.vy * 0.5;
+    unit.vx *= 0.5; unit.vy *= 0.5;
+    unit.bumpCd = CR.bumpCd;
+    state.combatEvents.bump++;
+    addPop(state, other, 'اصطدام!', 'bump');
+  });
 }
 
 // --- مستويات التفصيل (القسم 5.4.5) ---

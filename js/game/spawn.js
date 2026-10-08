@@ -2,8 +2,9 @@
 import { TICK_SEC, SPAWN, GANGS, MAP_GEN, SPECIAL_BONUS, ai } from '../config.js';
 import { createUnit } from './units.js';
 import { findFreeTiles } from '../map/pathfinding.js';
-import { isEnemy } from './combat.js';
+import { isEnemy, isEnemyId } from './combat.js';
 import { soundAt } from '../audio/sound.js';
+import { hypot } from './hypot.js';
 
 export function initSpawnTimers(state) {
   state.spawnTimers = state.players.map(player => normalInterval(state, player));
@@ -102,8 +103,8 @@ function hasEnemyNearFlag(state, district, playerId) {
   const { i, j } = district.capture;
   for (const unit of state.units) {
     if (unit.state === 'dead') continue;
-    if (!isEnemy(state, { playerId }, unit)) continue;
-    if (Math.hypot(unit.x - i, unit.y - j) <= MAP_GEN.captureRadius) return true;
+    if (!isEnemyId(state, playerId, unit.playerId)) continue;
+    if (hypot(unit.x - i, unit.y - j) <= MAP_GEN.captureRadius) return true;
   }
   return false;
 }

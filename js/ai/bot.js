@@ -3,13 +3,14 @@
 import { TICK_SEC, BOT, SNOWBALL, MAP_GEN, gameModes as GM } from '../config.js';
 import { isFinalMinute, sideTotals, sideKey, hillOf } from '../game/modes.js';
 import { commandMove, commandAttackMove } from '../game/units.js';
-import { isEnemy, commandAttack } from '../game/combat.js';
+import { isEnemy, commandAttack, isEnemyId } from '../game/combat.js';
 import { ownedDistricts, championOf } from '../game/spawn.js';
 import { forEachNearby } from '../game/spatialHash.js';
 import { setTargetPicker } from '../game/combat.js';
 import { setUltGate } from '../game/ults.js';
 import { decideSquads, levelOf, squadOf } from './squads.js';
 import { pickTarget, ultAllowed, updateTactics } from './tactics.js';
+import { hypot } from '../game/hypot.js';
 
 // الطبقة التكتيكية تختار الأهداف وتمسك الضربات المميزة عبر بوابتين في كود القتال
 setTargetPicker(pickTarget);
@@ -55,7 +56,7 @@ function modeConfig(state, config) {
 }
 
 const isAlive = (unit) => unit.state !== 'dead' && unit.hp > 0;
-const distanceTo = (unit, district) => Math.hypot(unit.x - district.capture.i, unit.y - district.capture.j);
+const distanceTo = (unit, district) => hypot(unit.x - district.capture.i, unit.y - district.capture.j);
 
 function decide(state, player, config) {
   const units = state.units.filter(u => u.playerId === player.id && isAlive(u));
@@ -140,7 +141,7 @@ function districtThreat(state, district, playerId) {
   let count = 0;
   forEachNearby(state, district.capture.i, district.capture.j, radius, (unit) => {
     if (!isAlive(unit)) return;
-    if (!isEnemy(state, { playerId }, unit)) return;
+    if (!isEnemyId(state, playerId, unit.playerId)) return;
     if (distanceTo(unit, district) <= radius) count++;
   });
   return count;
@@ -175,8 +176,8 @@ function expand(state, player, config, pool) {
     .sort((a, b) => {
       const special = (b.special ? 1 : 0) - (a.special ? 1 : 0);
       if (special) return special;
-      return Math.hypot(a.capture.i - center.i, a.capture.j - center.j) -
-             Math.hypot(b.capture.i - center.i, b.capture.j - center.j);
+      return hypot(a.capture.i - center.i, a.capture.j - center.j) -
+             hypot(b.capture.i - center.i, b.capture.j - center.j);
     });
 
   const size = config.expandGroup || config.groupSize;
@@ -191,7 +192,7 @@ function expand(state, player, config, pool) {
 function helpAllies(state, player, config, pool) {
   const threatened = state.map.districts
     .filter(d => d.capture && d.owner !== null && d.owner !== player.id &&
-                 !state.players[d.owner].neutral && !isEnemy(state, { playerId: player.id }, { playerId: d.owner }))
+                 !state.players[d.owner].neutral && !isEnemyId(state, player.id, d.owner))
     .map(d => ({ district: d, threat: districtThreat(state, d, d.owner) }))
     .filter(entry => entry.threat > 0)
     .sort((a, b) => b.threat - a.threat);
@@ -227,13 +228,13 @@ function guardLeader(state, player, leader, units, R) {
     // خلف مركز الجيش بمسافة ثابتة في اتجاه الحي المنزلي
     const c = groupCenter(army);
     const back = homeOwned ? { i: home.capture.i, j: home.capture.j } : { i: leader.x, j: leader.y };
-    const dx = back.i - c.i, dy = back.j - c.j, len = Math.hypot(dx, dy);
+    const dx = back.i - c.i, dy = back.j - c.j, len = hypot(dx, dy);
     ti = len > 0.01 ? c.i + dx / len * Math.min(R.botGuardDistance, len) : c.i;
     tj = len > 0.01 ? c.j + dy / len * Math.min(R.botGuardDistance, len) : c.j;
   } else return;
   // لا نعيد الأمر إلا إذا تغيّر المكان المطلوب فعلاً (لا ارتجاف في الحركة)
   const last = leader.botTask && leader.botTask.point;
-  if (last && Math.hypot(last.i - ti, last.j - tj) < 1.5) return;
+  if (last && hypot(last.i - ti, last.j - tj) < 1.5) return;
   leader.botTask = { type: 'leader', point: { i: ti, j: tj } };
   commandMove(state, ti, tj, [leader], false);
 }
@@ -242,11 +243,11 @@ function huntLeaders(state, player, config, pool, units, R) {
   if (!pool.units.length || !units.length) return;
   for (const other of state.players) {
     if (other.neutral || other.fallen || other.id === player.id) continue;
-    if (!isEnemy(state, { playerId: player.id }, { playerId: other.id })) continue;
+    if (!isEnemyId(state, player.id, other.id)) continue;
     const target = championOf(state, other.id);
     if (!target) continue;
     // نراه؟ أي وحدة لنا قريبة منه
-    if (!units.some(u => Math.hypot(u.x - target.x, u.y - target.y) <= R.botHuntRange)) continue;
+    if (!units.some(u => hypot(u.x - target.x, u.y - target.y) <= R.botHuntRange)) continue;
     let guards = 0;
     forEachNearby(state, target.x, target.y, 3, (u) => {
       if (u !== target && u.playerId === other.id && isAlive(u)) guards++;
@@ -330,8 +331,8 @@ function attack(state, player, config, pool, armySize) {
     }
     // وإلا: الأقرب، ومن يملك أحياء أقل (الأضعف) أولاً
     const weak = ownedCount(state, a.owner) - ownedCount(state, b.owner);
-    const distance = Math.hypot(a.capture.i - center.i, a.capture.j - center.j) -
-                     Math.hypot(b.capture.i - center.i, b.capture.j - center.j);
+    const distance = hypot(a.capture.i - center.i, a.capture.j - center.j) -
+                     hypot(b.capture.i - center.i, b.capture.j - center.j);
     return distance + weak * 3;
   });
 
@@ -387,7 +388,7 @@ function sendGroup(state, group, district, config, taskType) {
   if (back.length) {
     const center = groupCenter(back);
     const dx = center.i - district.capture.i, dy = center.j - district.capture.j;
-    const length = Math.hypot(dx, dy) || 1;
+    const length = hypot(dx, dy) || 1;
     const i = district.capture.i + (dx / length) * config.rangedOffset;
     const j = district.capture.j + (dy / length) * config.rangedOffset;
     commandMove(state, i, j, back, false);
@@ -403,7 +404,7 @@ function groupCenter(units) {
 function enemyDistricts(state, player) {
   return state.map.districts.filter(d =>
     d.capture && d.owner !== null && d.owner !== player.id &&
-    isEnemy(state, { playerId: player.id }, { playerId: d.owner }));
+    isEnemyId(state, player.id, d.owner));
 }
 
 function ownedCount(state, playerId) {
@@ -417,7 +418,7 @@ export function strongestPlayer(state, player) {
 
   for (const other of state.players) {
     if (other.id === player.id) continue;
-    if (!isEnemy(state, { playerId: player.id }, { playerId: other.id })) continue;
+    if (!isEnemyId(state, player.id, other.id)) continue;
     if (ownedCount(state, other.id) / total >= SNOWBALL.districtShare) return other.id;
   }
   return null;

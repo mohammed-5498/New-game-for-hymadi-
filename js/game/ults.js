@@ -8,6 +8,7 @@ import { forEachNearby } from './spatialHash.js';
 import { registerSight } from './realism.js';
 import { soundAt } from '../audio/sound.js';
 import { onScreen } from './alerts.js';
+import { hypot } from './hypot.js';
 
 const isAlive = (unit) => unit && unit.state !== 'dead' && unit.hp > 0;
 const allied = (state, a, b) => a.playerId === b.playerId || !isEnemy(state, a, b);
@@ -200,7 +201,7 @@ function slam(state, unit, ult) {
 function arc(state, unit, ult, target) {
   const dx = target ? target.x - unit.x : 1;
   const dy = target ? target.y - unit.y : 0;
-  const length = Math.hypot(dx, dy) || 1;
+  const length = hypot(dx, dy) || 1;
   const fx = dx / length, fy = dy / length;
   const radiusSq = ult.radius * ult.radius;
 
@@ -217,7 +218,7 @@ function arc(state, unit, ult, target) {
 function pierce(state, unit, ult, target) {
   const dx = target ? target.x - unit.x : 1;
   const dy = target ? target.y - unit.y : 0;
-  const length = Math.hypot(dx, dy) || 1;
+  const length = hypot(dx, dy) || 1;
   const fx = dx / length, fy = dy / length;
   const reach = ult.range + COMBAT.pierceReachBonus;
 
@@ -301,7 +302,7 @@ function bash(state, unit, ult, target) {
 
   // الدفع لا يمر عبر المباني: نتوقف عند آخر مربع موصول في طريق الدفع
   const dx = target.x - unit.x, dy = target.y - unit.y;
-  const length = Math.hypot(dx, dy) || 1;
+  const length = hypot(dx, dy) || 1;
   const toX = target.x + (dx / length) * ult.push;
   const toY = target.y + (dy / length) * ult.push;
   if (!state.map.isConnected(Math.round(toX), Math.round(toY))) return;

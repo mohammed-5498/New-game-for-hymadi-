@@ -7,12 +7,22 @@
 // حالة كل بوت بيانات بسيطة في state.botBrains (أرقام الوحدات لا مراجعها) فتُحفظ مع المباراة.
 import { ai } from '../config.js';
 import { commandMove, commandAttackMove } from '../game/units.js';
-import { isEnemy } from '../game/combat.js';
-import { forEachNearby } from '../game/spatialHash.js';
+import { isEnemy, isEnemyId } from '../game/combat.js';
+import { forEachNearby, hashCells, cellBox } from '../game/spatialHash.js';
+import { hypot } from '../game/hypot.js';
 
 const isAlive = (unit) => unit.state !== 'dead' && unit.hp > 0;
-const dist = (a, b) => Math.hypot(a.i - b.i, a.j - b.j);
-const at = (unit) => ({ i: unit.x, j: unit.y });
+const dist = (a, b) => hypot(a.i - b.i, a.j - b.j);
+// بُعد الوحدة عن نقطة {i, j}: نفس dist({i: x, j: y}, p) بلا كائن مؤقت
+const distU = (unit, p) => hypot(unit.x - p.i, unit.y - p.j);
+
+// ترتيب بمفتاح يُحسب مرة لكل عنصر: نفس نتيجة sort بمقارنة (مفتاح أ - مفتاح ب) تماماً
+// (الترتيب ثابت ونفس المقارنات بنفس القيم)، لكن بلا حساب المسافة مرتين في كل مقارنة
+function sortedBy(list, key) {
+  const items = list.map(u => [key(u), u]);
+  items.sort((a, b) => a[0] - b[0]);
+  return items.map(x => x[1]);
+}
 
 export const levelOf = (player) => ai.levels[player.difficulty] || ai.levels.medium;
 // رقم خاص بالمستوى إن وُجد في ai.levels، وإلا الرقم العام في ai
@@ -38,21 +48,52 @@ export function squadOf(state, unit) {
   return brain ? brain.squads.find(s => s.id === task.squadId) || null : null;
 }
 
+// --- لقطة أرقام للوحدات في التحديث (البوتات وحدها تسألها، وكلها في مرحلة البوتات حيث لا تتحرك وحدة):
+// المواقع واللاعب والحياة والقيمة في مصفوفات بترتيب خلايا الشبكة نفسه، فالمسح حلقة أرقام بلا استدعاءات
+let snap = { state: null, time: -1 };
+
+function aiSnapshot(state) {
+  const H = hashCells(state);
+  if (snap.state === state && snap.time === state.time && snap.cells === H) return snap;
+  const n = H.list.length;
+  const xs = new Float64Array(n), ys = new Float64Array(n), pids = new Int32Array(n), alive = new Uint8Array(n), values = new Float64Array(n);
+  for (let k = 0; k < n; k++) {
+    const u = H.list[k];
+    xs[k] = u.x; ys[k] = u.y; pids[k] = u.playerId;
+    if (isAlive(u)) { alive[k] = 1; values[k] = unitValue(u); }
+  }
+  snap = { state, time: state.time, cells: H, xs, ys, pids, alive, values };
+  return snap;
+}
+
+// كل وحدة حية في خلايا الدائرة بترتيب forEachNearby: fn(k) برقمها في اللقطة
+function scanAround(S, x, y, radius, fn) {
+  const H = S.cells;
+  const [minI, maxI, minJ, maxJ] = cellBox(x, y, radius);
+  for (let ci = Math.max(minI, H.minI); ci <= Math.min(maxI, H.maxI); ci++) {
+    const row = (ci - H.minI) * H.h;
+    for (let cj = Math.max(minJ, H.minJ); cj <= Math.min(maxJ, H.maxJ); cj++) {
+      const c = row + (cj - H.minJ);
+      for (let k = H.start[c], end = H.start[c + 1]; k < end; k++) if (S.alive[k]) fn(k);
+    }
+  }
+}
+
 // --- خريطة القوى: تُحسب مرة واحدة في التحديث مهما تعددت البوتات ---
 let cache = { state: null, time: -1, power: null };
 
 function powerMap(state) {
   if (cache.state === state && cache.time === state.time) return cache.power;
   const R = ai.powerRadius, n = state.players.length;
+  const S = aiSnapshot(state);
   const power = new Map();
   for (const d of state.map.districts) {
     if (!d.capture) continue;
     const row = new Float32Array(n);
     const { i, j } = d.capture;
-    forEachNearby(state, i, j, R, (unit) => {
-      if (!isAlive(unit)) return;
-      const dx = unit.x - i, dy = unit.y - j;
-      if (dx * dx + dy * dy <= R * R) row[unit.playerId] += unitValue(unit);
+    scanAround(S, i, j, R, (k) => {
+      const dx = S.xs[k] - i, dy = S.ys[k] - j;
+      if (dx * dx + dy * dy <= R * R) row[S.pids[k]] += S.values[k];
     });
     power.set(d.id, row);
   }
@@ -67,7 +108,7 @@ function sidePowers(state, player, district) {
   if (!row) return { enemy, mine };
   for (let p = 0; p < row.length; p++) {
     if (!row[p]) continue;
-    if (isEnemy(state, { playerId: player.id }, { playerId: p })) enemy += row[p];
+    if (isEnemyId(state, player.id, p)) enemy += row[p];
     else mine += row[p];
   }
   return { enemy, mine };
@@ -90,13 +131,40 @@ function enemyPowerAround(state, player, point, radius) {
 }
 
 function enemyPowerAroundNow(state, player, point, radius) {
+  // الوحدات الحية داخل الدائرة بقيمها، مشتركة بين البوتات في نفس التحديث (نفس النقطة بالضبط ونفس نصف القطر):
+  // كل بوت يجمع قيم أعدائه منها بنفس ترتيب البحث، فالمجموع مطابق تماماً للحساب المباشر
+  const near = unitsAround(state, point.i, point.j, radius);
+  const ids = near.ids, values = near.values;
   let total = 0;
-  forEachNearby(state, point.i, point.j, radius, (unit) => {
-    if (!isAlive(unit) || !isEnemy(state, { playerId: player.id }, unit)) return;
-    if (Math.hypot(unit.x - point.i, unit.y - point.j) <= radius) total += unitValue(unit);
-  });
+  for (let k = 0; k < ids.length; k++) if (isEnemyId(state, player.id, ids[k])) total += values[k];
   return total;
 }
+
+let nearCache = { state: null, time: -1, map: new Map() };
+
+function unitsAround(state, i, j, radius) {
+  if (nearCache.state !== state || nearCache.time !== state.time) nearCache = { state, time: state.time, map: new Map() };
+  const key = i + ',' + j + ',' + radius;
+  let near = nearCache.map.get(key);
+  if (near) return near;
+  // مقارنة مربعة سريعة، وhypot الدقيق فقط قرب الحافة: نفس قرار (hypot <= radius) بالضبط
+  const inside = radius * radius * (1 - 1e-9), outside = radius * radius * (1 + 1e-9);
+  const S = aiSnapshot(state);
+  if (scratchIds.length < S.xs.length) { scratchIds = new Int32Array(S.xs.length); scratchValues = new Float64Array(S.xs.length); }
+  let count = 0;
+  scanAround(S, i, j, radius, (k) => {
+    const dx = S.xs[k] - i, dy = S.ys[k] - j, d2 = dx * dx + dy * dy;
+    if (d2 > outside) return;
+    if (d2 >= inside && !(hypot(dx, dy) <= radius)) return;
+    scratchIds[count] = S.pids[k];
+    scratchValues[count++] = S.values[k];
+  });
+  // نسخة بطولها بالضبط (مصفوفات أرقام لا مصفوفات عادية تكبر عنصراً عنصراً)
+  near = { ids: scratchIds.slice(0, count), values: scratchValues.slice(0, count) };
+  nearCache.map.set(key, near);
+  return near;
+}
+let scratchIds = new Int32Array(0), scratchValues = new Float64Array(0);
 
 // عدّاد أحداث الذكاء لكل لاعب (للقياس والاختبارات): انسحاب، إغارة، جبهتان...
 export function note(state, player, key) {
@@ -142,8 +210,7 @@ export function decideSquads(state, player, config, pool, units, owned, helpers)
     if (!pool.length) break;
     const raid = t.district.owner !== null;
     const capture = t.district.capture;
-    const order = (list) => [...list].sort((a, b) =>
-      (dist(at(a), capture) + (raid ? fastFirst(a) : 0)) - (dist(at(b), capture) + (raid ? fastFirst(b) : 0)));
+    const order = (list) => sortedBy(list, (u) => distU(u, capture) + (raid ? fastFirst(u) : 0));
 
     if (!raid && enemyPowerAround(state, player, capture, param(lvl, 'soloSafeRadius')) === 0) {
       const [unit] = order(pool);
@@ -156,7 +223,7 @@ export function decideSquads(state, player, config, pool, units, owned, helpers)
     const size = raid ? ai.raidSize : ai.expandSize;      // الإغارة فرقة سريعة لا وحدة وحيدة
     const group = [];
     let power = 0;
-    for (const unit of order(pool.filter(u => dist(at(u), rally.capture) > ai.rallyRadius))) {
+    for (const unit of order(pool.filter(u => distU(u, rally.capture) > ai.rallyRadius))) {
       if (group.length >= size && power >= ai.attackRatio * danger) break;
       group.push(unit);
       power += unitValue(unit);
@@ -170,7 +237,7 @@ export function decideSquads(state, player, config, pool, units, owned, helpers)
   // الباقون يتجمعون عند نقطة التجمع
   const gathered = [];
   for (const unit of pool) {
-    const d = dist(at(unit), rally.capture);
+    const d = distU(unit, rally.capture);
     if (d <= ai.rallyRadius) { gathered.push(unit); continue; }
     if (unit.gatherRally !== rally.id || unit.state === 'idle') {
       unit.gatherRally = rally.id;
@@ -224,7 +291,7 @@ function awayScore(state, player, lvl, rally) {
   for (const d of state.map.districts) {
     if (!d.capture || d.owner === null) continue;
     const owner = state.players[d.owner];
-    if (!owner.neutral && isEnemy(state, { playerId: player.id }, { playerId: d.owner })) hostile.push(d.capture);
+    if (!owner.neutral && isEnemyId(state, player.id, d.owner)) hostile.push(d.capture);
   }
   return (district) => {
     let near = Infinity;
@@ -282,7 +349,7 @@ function updateSquads(state, player, lvl, brain, byId, owned, pool) {
       const still = district && district.owner === player.id && sidePowers(state, player, district).enemy > 0;
       if (!still) { disband(members); pool.push(...members.filter(u => u.state !== 'attacking')); continue; }
     } else if (!district || district.owner === player.id ||
-               (district.owner !== null && !isEnemy(state, { playerId: player.id }, { playerId: district.owner }))) {
+               (district.owner !== null && !isEnemyId(state, player.id, district.owner))) {
       // احتلت هدفها: تكمل لهدف قريب تقدر عليه، وإلا تتحرر وتعود للتجمع
       const next = nextTarget(state, player, lvl, members, c, squad.type);
       if (!next) {
@@ -313,12 +380,12 @@ function updateSquads(state, player, lvl, brain, byId, owned, pool) {
 
     // نقطة الالتئام: حين يصل أغلبها (أو يطول الانتظار) تقتحم الهدف معاً
     if (squad.phase === 'stage') {
-      const near = members.filter(u => dist(at(u), squad.stage) <= ai.stageRadius).length;
+      const near = members.filter(u => distU(u, squad.stage) <= ai.stageRadius).length;
       if (near >= members.length * ai.stageShare || state.time - squad.stagedAt >= ai.stageMaxSeconds) {
         squad.phase = 'assault';
         orderSquad(state, members, district, lvl, true);
       } else {
-        const late = members.filter(u => u.state === 'idle' && dist(at(u), squad.stage) > ai.stageRadius);
+        const late = members.filter(u => u.state === 'idle' && distU(u, squad.stage) > ai.stageRadius);
         if (late.length) commandAttackMove(state, squad.stage.i, squad.stage.j, late, false);
       }
       keep.push(squad);
@@ -326,7 +393,7 @@ function updateSquads(state, player, lvl, brain, byId, owned, pool) {
     }
 
     // من توقف بعيداً عن الهدف (بعد قتال أو طريق مسدود) يُعاد إرساله
-    const idle = members.filter(u => u.state === 'idle' && dist(at(u), district.capture) > 2.5);
+    const idle = members.filter(u => u.state === 'idle' && distU(u, district.capture) > 2.5);
     if (idle.length) commandAttackMove(state, district.capture.i, district.capture.j, idle, false);
     keep.push(squad);
   }
@@ -343,8 +410,7 @@ function reinforce(state, player, lvl, brain, byId, pool) {
     const enemy = enemyPowerAround(state, player, c, ai.powerRadius);
     let deficit = ai.attackRatio * enemy - powerOf(members);
     if (deficit <= 0) continue;
-    const near = pool.filter(u => dist(at(u), c) <= param(lvl, 'reinforceRange'))
-      .sort((a, b) => dist(at(a), c) - dist(at(b), c));
+    const near = sortedBy(pool.filter(u => distU(u, c) <= param(lvl, 'reinforceRange')), (u) => distU(u, c));
     const group = [];
     for (const unit of near) {
       if (deficit <= 0) break;
@@ -394,7 +460,7 @@ function defend(state, player, lvl, brain, pool, owned) {
     let deficit = ai.defenseRatio * enemy - mine - coming;
     if (deficit <= 0) continue;
     const group = [];
-    const sorted = [...pool].sort((a, b) => dist(at(a), district.capture) - dist(at(b), district.capture));
+    const sorted = sortedBy(pool, (u) => distU(u, district.capture));
     for (const unit of sorted) {
       if (deficit <= 0) break;
       group.push(unit);
@@ -412,11 +478,11 @@ function defend(state, player, lvl, brain, pool, owned) {
 function rallyPoint(state, player, brain, owned) {
   if (!owned.length) return null;
   const hostile = state.map.districts.filter(d => d.capture && d.owner !== null &&
-    isEnemy(state, { playerId: player.id }, { playerId: d.owner }) && !state.players[d.owner].neutral);
+    isEnemyId(state, player.id, d.owner) && !state.players[d.owner].neutral);
   const mid = (state.map.n - 1) / 2;
   const front = (d) => hostile.length
     ? Math.min(...hostile.map(h => dist(d.capture, h.capture)))
-    : Math.hypot(d.capture.i - mid, d.capture.j - mid);
+    : hypot(d.capture.i - mid, d.capture.j - mid);
   let best = owned[0], bestValue = Infinity;
   for (const d of owned) {
     const v = front(d);
@@ -451,7 +517,7 @@ function targetList(state, player, lvl, armySize, helpers) {
   for (const d of state.map.districts) {
     if (!d.capture || d.owner === player.id) continue;
     const owner = d.owner !== null ? state.players[d.owner] : null;
-    if (owner && !isEnemy(state, { playerId: player.id }, { playerId: d.owner })) continue;   // حليف
+    if (owner && !isEnemyId(state, player.id, d.owner)) continue;   // حليف
     if (d.police) {
       if (survival) continue;                 // المراكز لا تُحتل في الصمود
       // مع الشرطة (11.3): المتوسط حين يصير جيشه 8 فأكثر، والصعب فما فوق مبكراً
@@ -497,7 +563,7 @@ function launch(state, brain, units, district, type, lvl, defended) {
 
 function stage(state, squad, units, district) {
   const c = center(units), t = district.capture;
-  const len = Math.hypot(t.i - c.i, t.j - c.j);
+  const len = hypot(t.i - c.i, t.j - c.j);
   if (len <= ai.stageDistance + 1) { squad.phase = 'assault'; orderSquad(state, units, district, { flank: false }, true); return; }
   const point = { i: t.i - (t.i - c.i) / len * ai.stageDistance, j: t.j - (t.j - c.j) / len * ai.stageDistance };
   squad.phase = 'stage';
@@ -510,7 +576,7 @@ function stage(state, squad, units, district) {
 function orderSquad(state, units, district, lvl, defended) {
   const t = district.capture;
   const c = center(units);
-  const len = Math.hypot(t.i - c.i, t.j - c.j) || 1;
+  const len = hypot(t.i - c.i, t.j - c.j) || 1;
   const ux = (t.i - c.i) / len, uy = (t.j - c.j) / len;
 
   const main = [], flank = [], heroes = [];
@@ -551,7 +617,7 @@ const fastFirst = (unit) => unit.stats.speed >= ai.raidMinSpeed ? 0 : 3;
 
 // يأخذ أقرب الوحدات من القائمة (ويزيلها منها)
 function takeNearest(list, point, count) {
-  const sorted = [...list].sort((a, b) => dist(at(a), point) - dist(at(b), point));
+  const sorted = sortedBy(list, (u) => distU(u, point));
   const group = sorted.slice(0, count);
   removeFrom(list, group);
   return group;

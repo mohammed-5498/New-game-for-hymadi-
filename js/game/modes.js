@@ -2,7 +2,7 @@
 // السيطرة الكاملة (الافتراضي) لا تمر بشيء هنا: قواعدها كما كانت في victory.js.
 import { TICK_SEC, ALERTS, COMBAT, BOT, gameModes as GM } from '../config.js';
 import { isPlayerAlive, finish } from './victory.js';
-import { isEnemy } from './combat.js';
+import { isEnemy, isEnemyId } from './combat.js';
 import { championOf } from './spawn.js';
 import { onScreen } from './alerts.js';
 import { createUnit, commandAttackMove } from './units.js';
@@ -10,6 +10,7 @@ import { policePlayer, policeStations } from './police.js';
 import { findFreeTiles } from '../map/pathfinding.js';
 import { setSummonHook } from './ults.js';
 import { sound } from '../audio/sound.js';
+import { hypot } from './hypot.js';
 
 export const modeOf = (state) => (state.mode && GM[state.mode]) ? state.mode : 'conquest';
 
@@ -166,7 +167,7 @@ export function pickHill(map) {
   let best = null, bestDist = Infinity;
   for (const d of map.districts) {
     if (!d.capture || d.isHome || d.police || d.tiles.length < GM.king.hillMinTiles) continue;
-    const dist = Math.hypot(d.cx - center, d.cy - center);
+    const dist = hypot(d.cx - center, d.cy - center);
     if (dist < bestDist) { bestDist = dist; best = d; }
   }
   return best;
@@ -187,7 +188,7 @@ function updateKing(state) {
     for (const unit of state.units) {
       if (unit.state === 'dead') continue;
       if (!zone.has(state.map.idx(Math.round(unit.x), Math.round(unit.y)))) continue;
-      if (isEnemy(state, { playerId: owner }, unit)) { ms.blocked = true; break; }
+      if (isEnemyId(state, owner, unit.playerId)) { ms.blocked = true; break; }
     }
     if (!ms.blocked) ms.held[owner] += TICK_SEC;
   }
@@ -242,7 +243,7 @@ function updateRegicide(state) {
     const home = state.map.districts[player.homeDistrictId];
     const district = state.map.districtOf(Math.round(leader.x), Math.round(leader.y));
     const atHome = home && (district === home ||
-      (home.capture && Math.hypot(leader.x - home.capture.i, leader.y - home.capture.j) <= R.homeHealRadius));
+      (home.capture && hypot(leader.x - home.capture.i, leader.y - home.capture.j) <= R.homeHealRadius));
     if (atHome && leader.hp < leader.maxHp) {
       leader.hp = Math.min(leader.maxHp, leader.hp + R.homeHealPerSecond * TICK_SEC);
     }
@@ -286,7 +287,7 @@ function fallLeader(state, player) {
   // من أسقطه؟ آخر من ضربه (يُحسب لجانبك إن كان أنت أو حليفك)
   const human = state.players[state.humanId];
   const body = state.units.find(u => u.playerId === player.id && u.champion);
-  const killer = body && body.lastHitBy !== undefined ? state.players[body.lastHitBy] : null;
+  const killer = body && body.lastHitBy >= 0 ? state.players[body.lastHitBy] : null;   // -1: لم يضربه أحد
   if (human && killer && player.id !== state.humanId && sideKey(killer) === sideKey(human)) ms.leaderKills++;
 
   for (const unit of state.units) {
@@ -307,7 +308,7 @@ function fallLeader(state, player) {
 // التلاشي: تموت الوحدات في لحظاتها المحددة بلا قاتل (لا تُحسب قتلى لأحد)
 export function updateFades(state) {
   for (const unit of state.units) {
-    if (unit.fadeAt === undefined || unit.state === 'dead' || state.time < unit.fadeAt) continue;
+    if (!(unit.fadeAt >= 0) || unit.state === 'dead' || state.time < unit.fadeAt) continue;   // -1: لا تلاشي
     unit.hp = 0;
     unit.state = 'dead';
     unit.deathTimer = COMBAT.deathTime;
@@ -467,7 +468,7 @@ function spawnWave(state, n) {
     const front = units.filter(u => !behind.includes(u));
     if (front.length) commandAttackMove(state, target.i, target.j, front, false);
     if (behind.length) {
-      const dx = target.i - source.i, dy = target.j - source.j, len = Math.hypot(dx, dy) || 1;
+      const dx = target.i - source.i, dy = target.j - source.j, len = hypot(dx, dy) || 1;
       commandAttackMove(state, target.i - dx / len * S.captainsBehind, target.j - dy / len * S.captainsBehind, behind, false);
     }
   });
@@ -495,7 +496,7 @@ function waveSources(state, fronts) {
     let best = null, bestD = -1;
     for (const c of all) {
       if (chosen.includes(c)) continue;
-      const d = Math.min(...chosen.map(x => Math.hypot(x.i - c.i, x.j - c.j)));
+      const d = Math.min(...chosen.map(x => hypot(x.i - c.i, x.j - c.j)));
       if (d > bestD) { bestD = d; best = c; }
     }
     chosen.push(best);
@@ -508,13 +509,13 @@ function waveTarget(state, i, j) {
   let best = null, bestDist = Infinity;
   for (const d of state.map.districts) {
     if (!d.capture || d.police || d.owner === null || state.players[d.owner].neutral) continue;
-    const dist = Math.hypot(d.capture.i - i, d.capture.j - j);
+    const dist = hypot(d.capture.i - i, d.capture.j - j);
     if (dist < bestDist) { bestDist = dist; best = { i: d.capture.i, j: d.capture.j }; }
   }
   if (best) return best;
   for (const unit of state.units) {
     if (unit.state === 'dead' || state.players[unit.playerId].neutral) continue;
-    const dist = Math.hypot(unit.x - i, unit.y - j);
+    const dist = hypot(unit.x - i, unit.y - j);
     if (dist < bestDist) { bestDist = dist; best = { i: Math.round(unit.x), j: Math.round(unit.y) }; }
   }
   return best;
@@ -528,7 +529,7 @@ function weakestTarget(state) {
     let defenders = 0;
     for (const u of state.units) {
       if (u.state === 'dead' || state.players[u.playerId].neutral) continue;
-      if (Math.hypot(u.x - d.capture.i, u.y - d.capture.j) <= 5) defenders++;
+      if (hypot(u.x - d.capture.i, u.y - d.capture.j) <= 5) defenders++;
     }
     if (defenders < fewest) { fewest = defenders; best = { i: d.capture.i, j: d.capture.j }; }
   }

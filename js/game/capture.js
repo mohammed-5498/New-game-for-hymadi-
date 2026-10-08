@@ -4,6 +4,7 @@ import { isEnemy } from './combat.js';
 import { AUDIO } from '../config.js';
 import { sound, soundAt } from '../audio/sound.js';
 import { raiseAlert } from './alerts.js';
+import { hypot } from './hypot.js';
 
 // منطقة الاستيلاء: دائرة نصف قطرها 1.5 مربع حول نقطة الاستيلاء
 // (تشمل مربعات الشارع المجاورة، وقد تتداخل منطقتان فيُحسب المربع للاثنتين)
@@ -21,7 +22,7 @@ export function buildCaptureZones(state) {
     for (let j = cj - span; j <= cj + span; j++) {
       for (let i = ci - span; i <= ci + span; i++) {
         if (!map.inBounds(i, j)) continue;
-        if (Math.hypot(i - ci, j - cj) > radius) continue;
+        if (hypot(i - ci, j - cj) > radius) continue;
         const key = map.idx(i, j);
         district.zone.push(key);
         if (!map.zoneAt.has(key)) map.zoneAt.set(key, []);

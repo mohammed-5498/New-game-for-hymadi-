@@ -30,9 +30,14 @@ function chooseTarget(state, unit) {
 
 // لا ضرر على وحدات نفس اللاعب ولا على الحلفاء (فريق 0 يعني بدون فريق: عدو للجميع)
 export function isEnemy(state, a, b) {
-  if (a.playerId === b.playerId) return false;
-  const teamA = state.players[a.playerId].team;
-  const teamB = state.players[b.playerId].team;
+  return isEnemyId(state, a.playerId, b.playerId);
+}
+
+// نفس السؤال بأرقام اللاعبين مباشرة: بلا كائنات مؤقتة في الحلقات الساخنة (المرحلة 8)
+export function isEnemyId(state, a, b) {
+  if (a === b) return false;
+  const teamA = state.players[a].team;
+  const teamB = state.players[b].team;
   if (teamA && teamB && teamA === teamB) return false;
   return true;
 }
@@ -378,7 +383,7 @@ function fightTarget(state, unit, budget) {
   // فيقتربان إلى مداها؛ وإلا وقفا على مدى الطعنة وضربا الهواء بلا نهاية
   const reachAdd = ranged || unit.lod !== 'full' ? 0 : longestReachAdd(unit);
   if (dist <= range + reachAdd + COMBAT.rangeTolerance) {
-    unit.path = [];                       // وصلت للمدى: تتوقف وتضرب
+    if (unit.path.length) unit.path = [];   // وصلت للمدى: تتوقف وتضرب (لا مصفوفة جديدة كل تحديث إن كانت فارغة)
     if (unit.attackCooldown <= 0 && !unit.cMove) {
       attackTime = comboAttackTime(state, unit, target, attackTime);
       // توحّش الزعيم: +20% سرعة ضرب لمدة محدودة
@@ -431,7 +436,7 @@ function closeSteer(state, unit, goal, dist) {
   const ny = unit.y + (dy / need) * step;
   if (!state.map.isWalkable(Math.round(nx), Math.round(ny))) return false;   // مبنى: نرجع لـ A*
   unit.x = nx; unit.y = ny;
-  unit.path = [];
+  if (unit.path.length) unit.path = [];
   return true;
 }
 

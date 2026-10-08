@@ -2,6 +2,7 @@
 import { MAP_SIZES, MAP_GEN, POLICE, CITIES } from '../config.js';
 import { THEMES as CITY_THEMES } from '../render/cityThemes.js';
 import { D4, D8 } from './pathfinding.js';
+import { hypot } from '../game/hypot.js';
 
 const rnd = () => Math.random();
 const ri = (n) => Math.floor(Math.random() * n);
@@ -264,7 +265,7 @@ function assignHomeDistricts(map, districts, players) {
     let best = null, bestDist = Infinity;
     for (const d of big) {
       if (d.isHome) continue;
-      const dist = Math.hypot(d.cx - px, d.cy - py);
+      const dist = hypot(d.cx - px, d.cy - py);
       if (dist < bestDist) { bestDist = dist; best = d; }
     }
     if (!best) return false;
@@ -286,7 +287,7 @@ function assignSpecialDistricts(map, districts, size) {
   const limit = n * MAP_GEN.specialCenterRadiusPct;
 
   const candidates = districts
-    .filter(d => !d.isHome && d.capturable && Math.hypot(d.cx - center, d.cy - center) < limit)
+    .filter(d => !d.isHome && d.capturable && hypot(d.cx - center, d.cy - center) < limit)
     .sort(() => rnd() - 0.5);
 
   const types = ['hospital', 'armory', 'clock'].sort(() => rnd() - 0.5);
@@ -304,7 +305,7 @@ function assignSpecialDistricts(map, districts, size) {
 function assignPoliceDistricts(map, districts, size) {
   const homes = districts.filter(d => d.isHome);
   const farFromHomes = (d) => homes.every(h =>
-    Math.hypot(d.cx - h.cx, d.cy - h.cy) >= POLICE.minHomeDistance);
+    hypot(d.cx - h.cx, d.cy - h.cy) >= POLICE.minHomeDistance);
 
   const candidates = districts.filter(d =>
     !d.isHome && !d.special && d.capturable && farFromHomes(d));
@@ -318,7 +319,7 @@ function assignPoliceDistricts(map, districts, size) {
     let best = null, bestDist = -1;
     for (const d of candidates) {
       if (chosen.includes(d)) continue;
-      const nearest = Math.min(...chosen.map(c => Math.hypot(d.cx - c.cx, d.cy - c.cy)));
+      const nearest = Math.min(...chosen.map(c => hypot(d.cx - c.cx, d.cy - c.cy)));
       if (nearest > bestDist) { bestDist = nearest; best = d; }
     }
     if (!best) break;
@@ -361,7 +362,7 @@ function fillDistricts(map, districts) {
       const touchesRoad = D4.some(([dx, dy]) =>
         map.inBounds(i + dx, j + dy) && map.road[map.idx(i + dx, j + dy)]);
       if (!touchesRoad) continue;
-      const dist = Math.hypot(i - district.cx, j - district.cy);
+      const dist = hypot(i - district.cx, j - district.cy);
       if (dist < bestDist) { bestDist = dist; point = [i, j]; }
     }
     if (!point) { district.capturable = false; continue; }
@@ -373,8 +374,8 @@ function fillDistricts(map, districts) {
     const inner = district.tiles
       .filter(([i, j]) => !(i === point[0] && j === point[1]))
       .sort((a, b) =>
-        Math.hypot(a[0] - district.cx, a[1] - district.cy) -
-        Math.hypot(b[0] - district.cx, b[1] - district.cy));
+        hypot(a[0] - district.cx, a[1] - district.cy) -
+        hypot(b[0] - district.cx, b[1] - district.cy));
 
     if (district.isHome && inner[0]) {
       map.type[map.idx(inner[0][0], inner[0][1])] = 'Q';   // مبنى المقر

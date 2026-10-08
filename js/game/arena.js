@@ -3,6 +3,7 @@
 import { COMBAT_REALISM } from '../config.js';
 import { createUnit } from './units.js';
 import { findFreeTiles, nearestWalkable } from '../map/pathfinding.js';
+import { hypot } from './hypot.js';
 
 const A = COMBAT_REALISM.arena;
 const alive = (u) => u.state !== 'dead' && u.hp > 0;
@@ -14,10 +15,10 @@ function battleLine(map) {
   let best = null, bestScore = -1;
   for (let i = 2; i < map.n - 2; i++) {
     for (let j = 2; j < map.n - 2; j++) {
-      if (!map.isWalkable(i, j) || Math.hypot(i - c, j - c) > reach) continue;
+      if (!map.isWalkable(i, j) || hypot(i - c, j - c) > reach) continue;
       let open = 0;
       for (let a = -2; a <= 2; a++) for (let b = -2; b <= 2; b++) if (map.isWalkable(i + a, j + b)) open++;
-      const score = open - Math.hypot(i - c, j - c) * 0.05;
+      const score = open - hypot(i - c, j - c) * 0.05;
       if (score > bestScore) { bestScore = score; best = [i, j]; }
     }
   }

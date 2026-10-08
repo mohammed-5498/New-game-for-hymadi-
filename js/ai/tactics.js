@@ -7,6 +7,7 @@ import { commandMove } from '../game/units.js';
 import { isEnemy } from '../game/combat.js';
 import { forEachNearby } from '../game/spatialHash.js';
 import { levelOf, note } from './squads.js';
+import { hypot } from '../game/hypot.js';
 
 const isAlive = (unit) => unit && unit.state !== 'dead' && unit.hp > 0;
 
@@ -36,7 +37,7 @@ export function pickTarget(state, unit, vision) {
   let crowded = null, crowdedScore = Infinity;    // احتياط: كل الأهداف عليها 3 مهاجمين
   forEachNearby(state, unit.x, unit.y, reach, (other) => {
     if (other === unit || !isAlive(other) || !isEnemy(state, unit, other)) return;
-    const d = Math.hypot(other.x - unit.x, other.y - unit.y);
+    const d = hypot(other.x - unit.x, other.y - unit.y);
     if (d >= reach) return;
     const ehp = other.hp / Math.max(0.05, 1 - (other.stats.armor || 0));
     const score = d + ehp / ai.ehpScale - (priority(other) ? ai.priorityBonus : 0);
@@ -55,7 +56,7 @@ function heroFirst(state, unit, vision) {
   let best = null, bestScore = Infinity;
   forEachNearby(state, unit.x, unit.y, vision, (other) => {
     if (other === unit || !isAlive(other) || !isEnemy(state, unit, other)) return;
-    const d = Math.hypot(other.x - unit.x, other.y - unit.y);
+    const d = hypot(other.x - unit.x, other.y - unit.y);
     if (d >= vision) return;
     const score = d - (other.champion ? 6 : other.hero ? 4 : 0);
     if (score < bestScore) { bestScore = score; best = other; }
@@ -100,7 +101,7 @@ function goodMoment(state, unit, ult, target, full) {
     let wounded = 0;
     forEachNearby(state, unit.x, unit.y, ult.radius, (other) => {
       if (!isAlive(other) || isEnemy(state, unit, other)) return;
-      if (Math.hypot(other.x - unit.x, other.y - unit.y) > ult.radius) return;
+      if (hypot(other.x - unit.x, other.y - unit.y) > ult.radius) return;
       if (other.hp < other.maxHp * 0.75) wounded++;
     });
     return wounded >= ai.healMinWounded;
@@ -119,7 +120,7 @@ function countAround(state, unit, spot, radius, enemies) {
   let n = 0;
   forEachNearby(state, spot.x, spot.y, radius, (other) => {
     if (!isAlive(other) || isEnemy(state, unit, other) !== enemies) return;
-    if (Math.hypot(other.x - spot.x, other.y - spot.y) <= radius) n++;
+    if (hypot(other.x - spot.x, other.y - spot.y) <= radius) n++;
   });
   return n;
 }
@@ -138,7 +139,7 @@ export function updateTactics(state) {
     const lvl = levelOf(player);
     if (!lvl.squads) continue;
     for (const squad of state.botBrains[key].squads) {
-      if (!byId) byId = new Map(state.units.map(u => [u.id, u]));
+      if (!byId) { byId = new Map(); for (const u of state.units) byId.set(u.id, u); }
       const members = [];
       for (const id of squad.units) {
         const unit = byId.get(id);
@@ -171,7 +172,7 @@ function engage(state, player, lvl, members) {
       const threat = nearestEnemy(state, unit, ai.kiteDistance);
       if (threat) {
         const dx = unit.x - threat.x, dy = unit.y - threat.y;
-        const len = Math.hypot(dx, dy) || 1;
+        const len = hypot(dx, dy) || 1;
         unit.kiteAt = state.time;
         note(state, player, 'kite');
         commandMove(state, unit.x + dx / len * ai.kiteStep, unit.y + dy / len * ai.kiteStep, [unit], false);
@@ -180,7 +181,7 @@ function engage(state, player, lvl, members) {
     }
     // البطل قرب مركز فرقته لا في مقدمتها (إلا ذو الدرع)
     if (unit.champion && (unit.stats.armor || 0) < ai.armoredHero && unit.state !== 'attacking' &&
-        Math.hypot(unit.x - ci, unit.y - cj) > ai.heroBehind * 2) {
+        hypot(unit.x - ci, unit.y - cj) > ai.heroBehind * 2) {
       commandMove(state, ci, cj, [unit], false);
     }
   }
@@ -190,7 +191,7 @@ function nearestEnemy(state, unit, radius) {
   let best = null, bestD = radius;
   forEachNearby(state, unit.x, unit.y, radius, (other) => {
     if (!isAlive(other) || !isEnemy(state, unit, other) || other.stats.projectile) return;
-    const d = Math.hypot(other.x - unit.x, other.y - unit.y);
+    const d = hypot(other.x - unit.x, other.y - unit.y);
     if (d < bestD) { bestD = d; best = other; }
   });
   return best;
@@ -201,12 +202,12 @@ function healSpot(state, player, unit) {
   let best = null, bestD = Infinity;
   for (const other of state.units) {
     if (other.playerId !== player.id || other.hero !== 'medic' || !isAlive(other) || other === unit) continue;
-    const d = Math.hypot(other.x - unit.x, other.y - unit.y);
+    const d = hypot(other.x - unit.x, other.y - unit.y);
     if (d < bestD) { bestD = d; best = { i: other.x, j: other.y }; }
   }
   for (const d of state.map.districts) {
     if (d.special !== 'hospital' || d.owner !== player.id || !d.capture) continue;
-    const dd = Math.hypot(d.capture.i - unit.x, d.capture.j - unit.y);
+    const dd = hypot(d.capture.i - unit.x, d.capture.j - unit.y);
     if (dd < bestD) { bestD = dd; best = { i: d.capture.i, j: d.capture.j }; }
   }
   return best && bestD > MAP_GEN.captureRadius ? best : null;

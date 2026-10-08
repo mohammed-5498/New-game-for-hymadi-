@@ -4,6 +4,7 @@ import { findPath, findFreeTiles, nearestWalkable, buildFlowField, flowStep } fr
 import { clearCombatOrders } from './combat.js';
 import { moveSpeed } from './weather.js';
 import { initRealism, faceAngleTo } from './realism.js';
+import { hypot } from './hypot.js';
 
 // إحصائيات الوحدة: الأساس + ميزة العصابة، أو الأساس + قيم الشخصية المميزة أو البطل
 // والشرطة المحايدة لها جدولها الخاص (القسم 3.8)
@@ -94,12 +95,51 @@ export function createUnit(state, player, i, j, heroId = null, champion = false)
     damageMultiplier: 1,
     aura: false,            // هل هو داخل هالة
     auraBonus: 0,           // أقوى مكافأة ضرر من الهالات المحيطة
-    auraHeal: 0             // علاج هالة بطل العقارب
+    auraHeal: 0,            // علاج هالة بطل العقارب
+
+    // حقول تُملأ لاحقاً، موجودة من البداية بقيمة "لا شيء" حتى يبقى لكل الوحدات نفس الشكل
+    // (المحرك يبطئ كل وصول لخصائص الكائنات إن اختلفت أشكالها)
+    hardened: false,        // تصلّب (realism.js)
+    botTask: null,          // مهمة البوت (ai/bot.js)
+    gatherRally: null,      // نقطة تجمع الفرقة (ai/squads.js)
+    kiteAt: -99,            // آخر ابتعاد للرامي (ai/tactics.js)
+    ultHeldSince: -1,       // بداية تأجيل الضربة المميزة (ai/tactics.js)
+    lastHitBy: -1,          // آخر لاعب ضربه (حماية الزعيم)
+    fadeAt: -1,             // زمن التلاشي بعد سقوط الزعيم
+    wave: 0,                // رقم موجة الصمود (وحدات الشرطة فيه)
+    waveFactor: 0,
+    riot: false,
+    boss: false,
+    alwaysBlock: false,
+    focusHeroes: false,
+    artColor: null,
+    artScale: null,
+    healingTarget: null     // آخر من عالجه الطبيب
   };
 
   // القتال الواقعي (القسم 5.4): بذرة الشخصية وأسلوب القتال والحالات الجديدة
   initRealism(state, unit);
+  if (!shapeWarm) warmShape(unit);
   return unit;
+}
+
+// حقول تبدأ null وتحمل أرقاماً لاحقاً
+const NULL_NUMBERS = new Set(['attackStart', 'ultStart', 'gatherRally', 'artScale']);
+let shapeWarm = false;
+
+// (المرحلة 8) أول وحدة في الجلسة فقط: كل حقل يأخذ مرة واحدة أعم نوع سيحمله ثم يعود لقيمته فوراً.
+// المحرك يعيد ترتيب شكل الكائن كلما تلقى حقلٌ نوعاً جديداً لأول مرة (عدد بفاصلة، رقم بدل null...)
+// ويرمي الكود المحسّن لكل الوحدات أثناء اللعب؛ هكذا يحدث ذلك مرة واحدة هنا قبل أن يبدأ اللعب.
+// القيم لا تتغير أبداً: نفس القيمة الأصلية تُعاد.
+function warmShape(unit) {
+  shapeWarm = true;
+  for (const key of Object.keys(unit)) {
+    const v = unit[key];
+    if (typeof v === 'number') { unit[key] = 0.5; unit[key] = v; }
+    else if (v === null) { unit[key] = NULL_NUMBERS.has(key) ? 0.5 : {}; unit[key] = null; }
+    else if (typeof v === 'boolean') { unit[key] = !v; unit[key] = v; }
+    else if (typeof v === 'string') { unit[key] = v + '_'; unit[key] = v; }
+  }
 }
 
 // أمر حركة لمجموعة الوحدات المحددة
@@ -135,7 +175,7 @@ export function commandMove(state, targetI, targetJ, units, showMarker = true) {
 
   // الأقرب للهدف يأخذ المربعات الأقرب
   const sorted = [...group].sort((a, b) =>
-    Math.hypot(a.x - start[0], a.y - start[1]) - Math.hypot(b.x - start[0], b.y - start[1]));
+    hypot(a.x - start[0], a.y - start[1]) - hypot(b.x - start[0], b.y - start[1]));
 
   let spotIndex = 0, ordered = 0;
   for (const unit of sorted) {
@@ -242,7 +282,7 @@ function moveAlongPath(state, unit) {
 
   // قد تقطع الوحدة أكثر من نقطة مسار في التحديث الواحد إذا كانت سريعة
   while (remaining > 0 && unit.path.length) {
-    const [tx, ty] = unit.path[0];
+    const point = unit.path[0], tx = point[0], ty = point[1];
     const dx = tx - unit.x, dy = ty - unit.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
 
@@ -282,35 +322,63 @@ export function facingFromAngle(unit) {
 }
 
 // قوة تباعد خفيفة حتى لا تتداخل الوحدات، بشرط ألا تدفع أي وحدة داخل مبنى
-function applySeparation(state) {
-  const map = state.map;
-  const radius = UNITS.separationRadius;
-  const push = UNITS.separationStrength * TICK_SEC;
+// الشبكة بخلايا بحجم مسافة التباعد في مصفوفات أرقام تُعاد كل تحديث (بلا نصوص ولا كائنات جديدة)،
+// وكل خلية تحفظ وحداتها بترتيب state.units نفسه: نفس المقارنات بنفس الترتيب، فالنتيجة مطابقة تماماً
+const sepGrid = { cx: new Int32Array(0), cy: new Int32Array(0), count: new Int32Array(0), start: new Int32Array(0), list: new Int32Array(0) };
 
-  // شبكة بسيطة بخلايا بحجم مسافة التباعد لتقليل المقارنات
-  const cells = new Map();
-  const cellKey = (x, y) => Math.floor(x / radius) + ',' + Math.floor(y / radius);
-  for (const unit of state.units) {
-    if (unit.state === 'dead') continue;
-    const key = cellKey(unit.x, unit.y);
-    if (!cells.has(key)) cells.set(key, []);
-    cells.get(key).push(unit);
+function applySeparation(state) {
+  const map = state.map, units = state.units, total = units.length;
+  const radius = UNITS.separationRadius;
+  const radiusSq = radius * radius;
+  const push = UNITS.separationStrength * TICK_SEC;
+  const g = sepGrid;
+  if (g.cx.length < total) {
+    const size = Math.max(64, total * 2);
+    g.cx = new Int32Array(size); g.cy = new Int32Array(size); g.list = new Int32Array(size);
   }
 
-  for (const unit of state.units) {
+  // خلية كل وحدة حية، وحدود الشبكة
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (let k = 0; k < total; k++) {
+    const unit = units[k];
+    if (unit.state === 'dead') continue;
+    const x = Math.floor(unit.x / radius), y = Math.floor(unit.y / radius);
+    g.cx[k] = x; g.cy[k] = y;
+    if (x < minX) minX = x; if (x > maxX) maxX = x;
+    if (y < minY) minY = y; if (y > maxY) maxY = y;
+  }
+  if (minX === Infinity) return;
+  // هامش خلية من كل جانب: الجيران عند الحافة خلايا فارغة لا خارج المصفوفة
+  const w = maxX - minX + 3, h = maxY - minY + 3, cells = w * h;
+  if (g.count.length < cells) { g.count = new Int32Array(cells * 2); g.start = new Int32Array(cells * 2); }
+  const count = g.count, start = g.start, list = g.list;
+  count.fill(0, 0, cells);
+  const cellIndex = (x, y) => (x - minX + 1) + (y - minY + 1) * w;
+  for (let k = 0; k < total; k++) if (units[k].state !== 'dead') count[cellIndex(g.cx[k], g.cy[k])]++;
+  let sum = 0;
+  for (let c = 0; c < cells; c++) { start[c] = sum; sum += count[c]; count[c] = 0; }
+  for (let k = 0; k < total; k++) {
+    if (units[k].state === 'dead') continue;
+    const c = cellIndex(g.cx[k], g.cy[k]);
+    list[start[c] + count[c]++] = k;
+  }
+
+  for (let k = 0; k < total; k++) {
+    const unit = units[k];
     if (unit.state === 'dead') continue;
     let ox = 0, oy = 0;
-    const cx = Math.floor(unit.x / radius), cy = Math.floor(unit.y / radius);
+    const cx = g.cx[k], cy = g.cy[k];
 
     for (let a = -1; a <= 1; a++) {
       for (let b = -1; b <= 1; b++) {
-        const group = cells.get((cx + a) + ',' + (cy + b));
-        if (!group) continue;
-        for (const other of group) {
+        const c = cellIndex(cx + a, cy + b);
+        const end = start[c] + count[c];
+        for (let q = start[c]; q < end; q++) {
+          const other = units[list[q]];
           if (other === unit) continue;
           const dx = unit.x - other.x, dy = unit.y - other.y;
           const distSq = dx * dx + dy * dy;
-          if (distSq >= radius * radius) continue;
+          if (distSq >= radiusSq) continue;
           const dist = Math.sqrt(distSq);
           if (dist < 0.0001) {   // متطابقتان تماماً: دفعة عشوائية صغيرة
             ox += (Math.random() - 0.5) * push;
