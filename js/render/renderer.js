@@ -34,19 +34,21 @@ export function clampCamera(state) {
   cam.y = (i + j) * TILE_HALF_H;
 }
 
-// بداية المباراة (أو إعادتها أو متابعتها): قطع المدينة الظاهرة تُرسم كلها دفعة واحدة أثناء التلاشي
-// بدقة أقل (سريعة)، ثم ترتفع دقتها على دفعات صغيرة في الإطارات التالية بلا تعليق
-export function warmCity(ctx, state) {
+// بداية المباراة (أو إعادتها أو متابعتها): قطع المدينة الظاهرة تُرسم على دفعات كبيرة في الإطارات الأولى
+// (أثناء التلاشي، والمباراة لا تتقدم) بدقة أقل سريعة، ثم ترتفع دقتها تدريجياً بلا تعليق.
+// يعيد true حين تكتمل كل القطع الظاهرة
+export function warmCity(ctx, state, budgetMs) {
   const { camera, view } = state;
   worldTransform(ctx, state);
   const z = camera.z;
-  drawCityLayer(ctx, state, {
+  return drawCityLayer(ctx, state, {
     x0: camera.x - view.w / 2 / z - 40, x1: camera.x + view.w / 2 / z + 40,
     y0: camera.y - view.h / 2 / z - 30, y1: camera.y + view.h / 2 / z + 70
-  }, Infinity, CITY_CACHE.warmScale);
+  }, budgetMs, CITY_CACHE.warmScale) === 0;
 }
 
-export function render(ctx, state, alpha) {
+// cityBudgetMs: وقت رسم قطع المدينة في هذا الإطار (صفر أثناء تجهيز البداية: warmCity وحدها ترسم)
+export function render(ctx, state, alpha, cityBudgetMs = CITY_CACHE.frameBudgetMs) {
   const { map, camera, view } = state;
   const lights = [];
   shake = shakeOffset(state, alpha);   // إزاحة الارتجاجة لهذا الإطار
@@ -66,7 +68,7 @@ export function render(ctx, state, alpha) {
   const visible = (x, y) => x > vx0 && x < vx1 && y > vy0 && y < vy1;
 
   // الطبقة الثابتة للمدينة (الأرض والمباني والزينة) من القطع المخزنة (المرحلة 7ب)
-  drawCityLayer(ctx, state, { x0: vx0, x1: vx1, y0: vy0, y1: vy1 });
+  drawCityLayer(ctx, state, { x0: vx0, x1: vx1, y0: vy0, y1: vy1 }, cityBudgetMs);
 
   // إضاءة الليل الثابتة
   const statics = cityStatics();

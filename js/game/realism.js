@@ -414,20 +414,24 @@ export function updateLod(state) {
 
   const cx = state.camera.x, cy = state.camera.y;
   const visible = [];
+  let alive = 0;
   for (const unit of state.units) {
+    if (unit.state !== 'dead') alive++;
     if (!onScreen(state, unit.x, unit.y, 40)) { unit.lod = 'stat'; continue; }
     unit.lod = 'simple';
     const wx = (unit.x - unit.y) * 18, wy = (unit.x + unit.y) * 9;
     const dx = wx - cx, dy = wy - cy;
     visible.push({ unit, d: dx * dx + dy * dy });
   }
-  state.lodCrowded = visible.length > CR.lod.fullUnits;   // يقلل أشباح أثر السلاح عند الازدحام
-  if (visible.length <= CR.lod.fullUnits) {
+  // مباراة فيها أكثر من 800 وحدة: حد المستوى الكامل 30 بدل 60 (القسم 5.4.5)
+  const fullUnits = alive > CR.lod.crowdedAbove ? CR.lod.fullUnitsCrowded : CR.lod.fullUnits;
+  state.lodCrowded = visible.length > fullUnits;   // يقلل أشباح أثر السلاح عند الازدحام
+  if (visible.length <= fullUnits) {
     for (const v of visible) v.unit.lod = 'full';
     return;
   }
   visible.sort((a, b) => a.d - b.d);
-  for (let k = 0; k < CR.lod.fullUnits; k++) visible[k].unit.lod = 'full';
+  for (let k = 0; k < fullUnits; k++) visible[k].unit.lod = 'full';
 }
 
 // الضرر الإحصائي خارج الشاشة أقل قليلاً (القسم 5.4.5)

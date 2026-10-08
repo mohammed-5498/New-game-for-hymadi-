@@ -7,6 +7,7 @@ import { fadeIn, fadeOut, isShown } from './transition.js';
 import { recordMatch } from '../stats.js';
 import { saveMatch, clearSavedMatch } from '../matchSave.js';
 import { modeBar, modeExtras } from '../game/modes.js';
+import { pacingState } from '../pacing.js';
 
 const el = (id) => document.getElementById(id);
 
@@ -20,7 +21,8 @@ export function reportFrame(frameMs) {
   if (fpsSamples.length < 20) return;
   const average = fpsSamples.reduce((sum, ms) => sum + ms, 0) / fpsSamples.length;
   fpsSamples.length = 0;
-  el('fps').textContent = Math.round(1000 / average) + ' إطار/ث';
+  // "ثابت": الجهاز لا يلحق بكل إطارات الشاشة فالرسم بإيقاع ثابت أبطأ (js/pacing.js)
+  el('fps').textContent = Math.round(1000 / average) + ' إطار/ث' + (pacingState().div > 1 ? ' ثابت' : '');
 }
 const fpsSamples = [];
 

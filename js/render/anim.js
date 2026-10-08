@@ -2,7 +2,9 @@
    اللكمات والركلات، السقوط والنهوض، وردود الفعل المبالغ فيها).
    لا تُعدَّل أرقام الوضعيات هنا؛ عدّل المرجع ثم أعد النسخ.
    الإضافات الوحيدة: مفاتيح القوس (ATK.shoot) والرمي (ATK.throw) للرماة في آخر الملف، وتصدير ES،
-   واستيراد CR من config.js (poseDown و downAngle تقرآن CR.downTime كما في المرجع). */
+   واستيراد CR من config.js (poseDown و downAngle تقرآن CR.downTime كما في المرجع).
+   (المرحلة 8) تسريعات لا تغيّر بكسلاً واحداً: حفظ الألوان المحسوبة، وضبط الأطراف المستديرة مرة واحدة
+   في drawBody، ونسخ G المحسوبة مرة بدل P({}) في كل إطار. */
 import { COMBAT_REALISM as CR } from '../config.js';
 /* ===================== نظام الأنميشن v2: وضعيات مفتاحية (Keyframe Poses) =====================
    بدل ذراع واحدة تتأرجح، كل حركة تُعرَّف بوضعيات مفتاحية للجسم كله:
@@ -11,13 +13,22 @@ import { COMBAT_REALISM as CR } from '../config.js';
 const TAU=6.2831853,WOOD='#8a6a45',STEEL='#b9bec5',DARKW='#5f646b',SKIN='#d9a77a';
 const Pf=(c,f)=>{c.fillStyle=f;c.fill();};
 const ease=x=>x<0?0:x>1?1:x*x*(3-2*x);
-function dk(h,a){const n=parseInt(h.slice(1),16);
+function dk0(h,a){const n=parseInt(h.slice(1),16);
   return '#'+((1<<24)+(Math.round(((n>>16)&255)*(1-a))<<16)+(Math.round(((n>>8)&255)*(1-a))<<8)+Math.round((n&255)*(1-a))).toString(16).slice(1);}
-function lt(h,a){const n=parseInt(h.slice(1),16),r=(n>>16)&255,g=(n>>8)&255,b=n&255;
+function lt0(h,a){const n=parseInt(h.slice(1),16),r=(n>>16)&255,g=(n>>8)&255,b=n&255;
   return '#'+((1<<24)+(Math.round(r+(255-r)*a)<<16)+(Math.round(g+(255-g)*a)<<8)+Math.round(b+(255-b)*a)).toString(16).slice(1);}
-function limb(c,x1,y1,x2,y2,w,col){c.beginPath();c.moveTo(x1,y1);c.lineTo(x2,y2);c.strokeStyle=col;c.lineWidth=w;c.lineCap='round';c.stroke();}
+// (المرحلة 8) نفس اللون محفوظاً بعد أول حساب: الألوان قليلة وتتكرر لكل وحدة في كل إطار،
+// وحسابها كل مرة ينشئ نصوصاً جديدة يجمعها جامع القمامة. النتيجة نفسها تماماً.
+const DK=new Map(),LT=new Map();
+function memo2(M,f,h,a){let m=M.get(h);if(!m)M.set(h,m=new Map());let v=m.get(a);if(v===undefined)m.set(a,v=f(h,a));return v;}
+function dk(h,a){return memo2(DK,dk0,h,a);}
+function lt(h,a){return memo2(LT,lt0,h,a);}
+// (المرحلة 8) داخل drawBody كل الخطوط بأطراف ووصلات مستديرة: تُضبطان مرة واحدة في أوله بدل كل خط
+// (نفس الحالة عند كل رسم بالضبط، فالصورة نفسها تماماً، بأوامر أقل للوحة)
+let roundSet=false;
+function limb(c,x1,y1,x2,y2,w,col){c.beginPath();c.moveTo(x1,y1);c.lineTo(x2,y2);c.strokeStyle=col;c.lineWidth=w;if(!roundSet)c.lineCap='round';c.stroke();}
 function bone3(c,a,b,d,w,col){c.beginPath();c.moveTo(a[0],a[1]);c.lineTo(b[0],b[1]);c.lineTo(d[0],d[1]);
-  c.strokeStyle=col;c.lineWidth=w;c.lineCap='round';c.lineJoin='round';c.stroke();}
+  c.strokeStyle=col;c.lineWidth=w;if(!roundSet){c.lineCap='round';c.lineJoin='round';}c.stroke();}
 function ell(c,x,y,rx,ry,f){c.beginPath();c.ellipse(x,y,rx,ry,0,0,TAU);Pf(c,f);}
 function rrect(c,x,y,w,h,r,f){c.beginPath();c.roundRect?c.roundRect(x,y,w,h,r):c.rect(x,y,w,h);Pf(c,f);}
 function tri(c,a,b,d,f){c.beginPath();c.moveTo(a[0],a[1]);c.lineTo(b[0],b[1]);c.lineTo(d[0],d[1]);c.closePath();Pf(c,f);}
@@ -88,10 +99,10 @@ const BLOCK=[[0,G],[0.22,P({py:-10,pl:0.2,cb:0.26,ht:0.34,hdx:-0.9,fh:[7.5,-12.5
   [1,P({py:-10,pl:0.18,cb:0.22,ht:0.3,hdx:-0.8,fh:[7,-12],bh:[3,-9],tf:0.5,kf:0.7,tb:-0.8,kb:0.3})]];
 
 function poseIdle(t,combat){if(combat){const b=Math.sin(t*4.2);
-    return Object.assign(P({}),{py:-10.3+b*0.3,cb:0.06+b*0.03,fh:[5,-11+b*0.4],bh:[1.5,-9.5+b*0.3],ht:0.05-b*0.03});}
+    return Object.assign({},G,{py:-10.3+b*0.3,cb:0.06+b*0.03,fh:[5,-11+b*0.4],bh:[1.5,-9.5+b*0.3],ht:0.05-b*0.03});}
   const b=Math.sin(t*2.6);return Object.assign({},BASE,{py:-11+b*0.3,cb:b*0.03,ht:-b*0.04,fh:[3.5,-6.5+b*0.3],bh:[-2.5,-6.5+b*0.3]});}
 function poseWalk(t,spd,combat){const p=t*2.55*spd*TAU,s=Math.sin(p),c2=Math.cos(p*2);
-  const r=Object.assign({},combat?P({}):BASE);
+  const r=Object.assign({},combat?G:BASE);
   r.py=-11.6-c2*1.4;r.pl=0.28;r.cb=0.1+c2*0.04;r.ht=-0.12-c2*0.05;r.air=Math.max(0,Math.sin(p*2))*0.55;
   r.tf=0.95*s;r.kf=1.55*Math.pow(0.5+0.5*Math.cos(p-4.12),2.2)+0.18;
   r.tb=0.95*Math.sin(p+Math.PI);r.kb=1.55*Math.pow(0.5+0.5*Math.cos(p+Math.PI-4.12),2.2)+0.18;
@@ -117,10 +128,13 @@ function addFlinch(p,f,fromBack){const s=fromBack?-1:1;p=Object.assign({},p);
 function poseDeath(){return P({py:-9,pl:0.3,cb:0.55,ht:0.65,fh:[4,-3],bh:[-2,-3],wa:1.3,tf:0.55,kf:1.0,tb:-0.45,kb:1.0});}
 
 /* ---------- رسم الجسد من الوضعية ---------- */
-function leg(c,hx,hy,th,fl,W,col){const k=[hx+Math.sin(th)*5.8,hy+Math.cos(th)*5.8];
-  const f=[k[0]+Math.sin(th-fl)*6,k[1]+Math.cos(th-fl)*6];bone3(c,[hx,hy],k,f,W,col);
-  limb(c,f[0],f[1],f[0]+Math.sin(th-fl+1.1)*2,f[1]+Math.cos(th-fl+1.1)*0.9,W,col);}
+function leg(c,hx,hy,th,fl,W,col){const kx=hx+Math.sin(th)*5.8,ky=hy+Math.cos(th)*5.8;
+  const fx=kx+Math.sin(th-fl)*6,fy=ky+Math.cos(th-fl)*6;
+  c.beginPath();c.moveTo(hx,hy);c.lineTo(kx,ky);c.lineTo(fx,fy);c.strokeStyle=col;c.lineWidth=W;
+  if(!roundSet){c.lineCap='round';c.lineJoin='round';}c.stroke();
+  limb(c,fx,fy,fx+Math.sin(th-fl+1.1)*2,fy+Math.cos(th-fl+1.1)*0.9,W,col);}
 function drawBody(c,p,col,o){
+  c.lineCap='round';c.lineJoin='round';roundSet=true;
   const W=o.lw||2,dc=dk(col,0.32),hp=[p.px,p.py];
   const M=add(hp,rot(0,-4.6,p.pl)),a2=p.pl+p.cb,C=add(M,rot(0,-4.6,a2)),N=add(C,rot(0,-1.3,a2));
   const ha=a2+p.ht,H=add(add(N,rot(0,-3.1,ha)),[p.hdx,p.hdy]);
@@ -141,6 +155,7 @@ function drawBody(c,p,col,o){
   o.weapon&&o.weapon(c,J,p,col);
   bone3(c,Sf,f.j,f.e,W,col);
   o.front&&o.front(c,J,p,col);
+  roundSet=false;
   return J;}
 
 /* ===================== إضافات اللعبة (ليست في المرجع) =====================

@@ -8,12 +8,18 @@
 const TAU=6.2831853,WOOD='#8a6a45',STEEL='#b9bec5',DARKW='#5f646b';
 const P=(c,f)=>{c.fillStyle=f;c.fill();};
 const ease=x=>x<0?0:x>1?1:x*x*(3-2*x), easeOut=x=>1-(1-Math.min(1,Math.max(0,x)))**3;
-function dk(h,a){const n=parseInt(h.slice(1),16);
+function dk0(h,a){const n=parseInt(h.slice(1),16);
   const r=Math.round(((n>>16)&255)*(1-a)),g=Math.round(((n>>8)&255)*(1-a)),b=Math.round((n&255)*(1-a));
   return '#'+((1<<24)+(r<<16)+(g<<8)+b).toString(16).slice(1);}
-function lt(h,a){const n=parseInt(h.slice(1),16);
+function lt0(h,a){const n=parseInt(h.slice(1),16);
   const r=Math.round(((n>>16)&255)+(255-((n>>16)&255))*a),g=Math.round(((n>>8)&255)+(255-((n>>8)&255))*a),b=Math.round((n&255)+(255-(n&255))*a);
   return '#'+((1<<24)+(r<<16)+(g<<8)+b).toString(16).slice(1);}
+// (المرحلة 8) نفس اللون محفوظاً بعد أول حساب: الألوان قليلة وتتكرر لكل وحدة في كل إطار،
+// وحسابها كل مرة ينشئ نصوصاً جديدة يجمعها جامع القمامة. النتيجة نفسها تماماً.
+const DK=new Map(),LT=new Map();
+function memo2(M,f,h,a){let m=M.get(h);if(!m)M.set(h,m=new Map());let v=m.get(a);if(v===undefined)m.set(a,v=f(h,a));return v;}
+function dk(h,a){return memo2(DK,dk0,h,a);}
+function lt(h,a){return memo2(LT,lt0,h,a);}
 function limb(c,x1,y1,x2,y2,w,col){c.beginPath();c.moveTo(x1,y1);c.lineTo(x2,y2);c.strokeStyle=col;c.lineWidth=w;c.lineCap='round';c.stroke();}
 function bone(c,x1,y1,x2,y2,x3,y3,w,col){c.beginPath();c.moveTo(x1,y1);c.lineTo(x2,y2);c.lineTo(x3,y3);c.strokeStyle=col;c.lineWidth=w;c.lineCap='round';c.lineJoin='round';c.stroke();}
 function ell(c,x,y,rx,ry,f){c.beginPath();c.ellipse(x,y,rx,ry,0,0,TAU);P(c,f);}

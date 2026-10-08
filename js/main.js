@@ -1,6 +1,7 @@
 // نقطة البداية: القوائم، دورة حياة المباراة، وحلقة اللعبة
 // منطق اللعبة بخطوة زمنية ثابتة (20 تحديثاً/ث)، والرسم كل إطار مع تنعيم المواقع
-import { MATCH_DEFAULTS, TICK_MS } from './config.js';
+import { MATCH_DEFAULTS, TICK_MS, CITY_CACHE } from './config.js';
+import { paceFrame, paceWork } from './pacing.js';
 import { createMatch, resetMatch } from './state.js';
 import { updateMatch } from './game/loop.js';
 import { render, resizeCanvas, clampCamera, warmCity } from './render/renderer.js';
@@ -96,9 +97,16 @@ function update() {
 let lastTime = performance.now();
 let hudMeasuredAt = 0;
 let accumulator = 0;
-let warmedMap = null;      // آخر خريطة رُسمت قطعها الظاهرة دفعة واحدة
+let warmedMap = null;      // آخر خريطة بدأ تجهيز مدينتها
+let warmUntil = 0;         // أقصى وقت لتجهيز المدينة قبل أن تبدأ المباراة على أي حال
 
 function loop(now) {
+  // إيقاع الإطارات (js/pacing.js): الإطار المتخطى لا يحدّث ولا يرسم، ووقته يُحسب في الإطار التالي
+  if (!paceFrame(now, state.running && !state.paused && !state.matchResult && !warmUntil)) {
+    requestAnimationFrame(loop);
+    return;
+  }
+  const workStart = performance.now();
   const frameMs = Math.min(250, Math.max(0, now - lastTime));
   lastTime = now;
 
@@ -121,13 +129,21 @@ function loop(now) {
   // عناصر الواجهة تتغير (شريط الطور، طي شريط القوة): نعيد قياسها مرتين في الثانية
   if (now - hudMeasuredAt > 500) { state.hudAvoid = hudRects(); hudMeasuredAt = now; }
 
-  // خريطة جديدة (بداية أو إعادة أو متابعة): المدينة الظاهرة تُرسم كلها الآن، ولا يُعوَّض وقتها لعباً
+  // خريطة جديدة (بداية أو إعادة أو متابعة): المدينة الظاهرة تُجهَّز على دفعات في الإطارات الأولى
+  // والمباراة لا تتقدم حتى تكتمل (أو حتى الحد الأقصى)، ولا يُعوَّض وقت التجهيز لعباً
   if (state.map !== warmedMap && state.view.w) {
     warmedMap = state.map;
-    warmCity(ctx, state);
-    lastTime = performance.now();
-    accumulator = 0;
-    render(ctx, state, 0);
+    warmUntil = now + CITY_CACHE.warmMaxMs;
+  }
+  if (warmUntil) {
+    const ready = warmCity(ctx, state, CITY_CACHE.warmBudgetMs);
+    render(ctx, state, 0, 0);
+    updateHud(state);
+    if (ready || performance.now() > warmUntil) {
+      warmUntil = 0;
+      lastTime = performance.now();
+      accumulator = 0;
+    }
     requestAnimationFrame(loop);
     return;
   }
@@ -147,6 +163,7 @@ function loop(now) {
   updatePower(state);          // شريط القوة يتحدث كل ثانية لا كل إطار
   updateGroups(state, frameMs); // أعداد المجموعات وانتقال الكاميرا إليها
   reportFrame(frameMs);
+  paceWork(performance.now() - workStart);
 
   requestAnimationFrame(loop);
 }

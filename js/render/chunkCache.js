@@ -110,9 +110,11 @@ function startJob(state, chunk, scale) {
 
 // المتصفح يسجّل أوامر الرسم ثم ينفذها لاحقاً عند استعمال الصورة، فقياس الوقت وحده يخدع:
 // ننفذها فوراً بنسخ بكسل واحد منها، فيُحسب وقتها الحقيقي داخل دفعة القطعة لا في إطار آخر
+// لوحة الاستقبال كبيرة عمداً (256×256 ولا يُرسم فيها إلا بكسل): Chrome يرسم اللوحات الصغيرة جداً
+// بالمعالج لا بكرت الشاشة، ونسخ لوحة من كرت الشاشة إلى لوحة معالج يوقف الجوال حتى ينتهي كرت الشاشة
 let sink = null;
 function flush(canvas) {
-  if (!sink) sink = makeCanvas(1, 1);
+  if (!sink) sink = makeCanvas(256, 256);
   sink.getContext('2d').drawImage(canvas, 0, 0, 1, 1, 0, 0, 1, 1);
 }
 
@@ -218,6 +220,7 @@ function pickScale(need) {
 // --- كل إطار: الطبقة الثابتة للقطع الظاهرة ---
 // ctx في إحداثيات العالم (worldTransform)، والإطار الظاهر بوحدات العالم
 // budgetMs: وقت رسم القطع في هذا الإطار. maxScale: سقف الدقة (بداية المباراة: دقة أقل تُرسم بسرعة ثم تُرفع تدريجياً)
+// يعيد عدد القطع الظاهرة التي لم تكتمل بعد
 export function drawCityLayer(ctx, state, view, budgetMs = CC.frameBudgetMs, maxScale = Infinity) {
   if (!cache || cache.map !== state.map || cache.weather !== state.weather || cache.mode !== state.mode) setup(state);
   cache.frame++;
@@ -241,11 +244,11 @@ export function drawCityLayer(ctx, state, view, budgetMs = CC.frameBudgetMs, max
   }
   pending.sort(near);
   const start = performance.now();
+  let left = 0;               // قطع ظاهرة لم تكتمل بعد هذا الإطار
   for (const chunk of pending) {
     // القطعة الفارغة (تظهر مكانها الأرض فقط) تأخذ ضعف الوقت؛ أما تحديث الدقة أو اللون فوقته العادي
     const deadline = start + (chunk.canvas ? budgetMs : budgetMs * 2);
-    if (performance.now() > deadline) continue;
-    work(state, chunk, scale, deadline);
+    if (performance.now() > deadline || !work(state, chunk, scale, deadline)) left++;
   }
   // الحلقة محفوظة من الحذف ما دامت قرب الشاشة، وتُرسم فقط إن بقي متسع في حد الذاكرة
   const ring = [];
@@ -280,6 +283,7 @@ export function drawCityLayer(ctx, state, view, budgetMs = CC.frameBudgetMs, max
     }
   }
   evict();
+  return left;
 }
 
 // تغيّر لون حي (مالك جديد أو مرحلة انتقال): قطعه تُعاد، والخريطة المنخفضة تتبعه

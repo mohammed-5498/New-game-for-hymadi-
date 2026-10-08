@@ -20,6 +20,11 @@ function makeCanvas(w, h) {
   return c;
 }
 
+// لوحة القصاصة لا تصغر عن 130×130: Chrome يرسم اللوحات الأصغر من 128×129 بالمعالج لا بكرت الشاشة،
+// ونسخ صورة المدينة (على كرت الشاشة) إلى لوحة معالج يوقف الجوال حتى ينتهي كرت الشاشة من عمله
+const GPU_MIN = 130;
+const spriteSize = (w) => Math.max(GPU_MIN, w);
+
 function reset(state) {
   const map = state.map, n = map.n;
   // ما يرتفع عن الأرض فقط: المباني والأشجار والأطلال والمباني الحاسمة (لا الشوارع ولا الأرض ولا الماء)
@@ -86,10 +91,11 @@ function spriteOf(state, o, canSpend) {
   const w = Math.ceil((o.bx + b[p + 2] - x0) * scale), h = Math.ceil((o.by + b[p + 3] - y0) * scale);
   if (w <= 0 || h <= 0) return null;
 
-  const canvas = sprite && sprite.canvas.width === w && sprite.canvas.height === h ? sprite.canvas : makeCanvas(w, h);
+  const canvas = sprite && sprite.canvas.width === spriteSize(w) && sprite.canvas.height === spriteSize(h)
+    ? sprite.canvas : makeCanvas(spriteSize(w), spriteSize(h));
   const sc = canvas.getContext('2d');
   sc.setTransform(1, 0, 0, 1, 0, 0);
-  sc.clearRect(0, 0, w, h);
+  sc.clearRect(0, 0, canvas.width, canvas.height);
   sc.setTransform(scale, 0, 0, scale, -x0 * scale, -y0 * scale);
   drawRegionChunks(sc, region);
   if (!mask) mask = makeCanvas(w, h);
@@ -105,9 +111,9 @@ function spriteOf(state, o, canSpend) {
   sc.globalCompositeOperation = 'source-over';
 
   if (sprite) cache.pixels -= sprite.canvas.width * sprite.canvas.height;
-  sprite = { canvas, scale, x0, y0, region, sig: region.sig, used: cache.frame };
+  sprite = { canvas, scale, x0, y0, w, h, region, sig: region.sig, used: cache.frame };
   cache.sprites.set(o.k, sprite);
-  cache.pixels += w * h;
+  cache.pixels += canvas.width * canvas.height;
   return sprite;
 }
 
@@ -170,7 +176,7 @@ function findOccluders(state, entries, canSpend) {
 function paste(ctx, o) {
   const sp = o.sprite, k = sp.scale;
   const x0 = Math.max(o.x0, sp.x0), y0 = Math.max(o.y0, sp.y0);
-  const x1 = Math.min(o.x1, sp.x0 + sp.canvas.width / k), y1 = Math.min(o.y1, sp.y0 + sp.canvas.height / k);
+  const x1 = Math.min(o.x1, sp.x0 + sp.w / k), y1 = Math.min(o.y1, sp.y0 + sp.h / k);   // أبعاد المحتوى لا اللوحة
   if (x1 <= x0 || y1 <= y0) return;
   // حواف المستطيل على شبكة بكسلات القصاصة: نفس عيّنات صورة المدينة بلا تمويه
   const sx0 = Math.floor((x0 - sp.x0) * k), sy0 = Math.floor((y0 - sp.y0) * k);
