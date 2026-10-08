@@ -81,7 +81,8 @@ export function drawCityTile(state, i, j, x, y) {
   const k = map.idx(i, j);
   if (map.road[k] || map.type[k] !== 'H') useTone(state, null, false);   // الحطام والأطلال لا تُصبغ
   if (map.road[k]) {
-    if (T.draw.roadProp) T.draw.roadProp(x, y, i, j);
+    const open = CITIES.open[map.city];
+    if (T.draw.roadProp && !(open && open.roadProp === false)) T.draw.roadProp(x, y, i, j);
     streetDebris(x, y, i, j, T);
     return true;
   }

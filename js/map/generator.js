@@ -116,6 +116,9 @@ function createEmptyMap(size) {
 // --- 1) الشوارع ---
 function carveStreets(map) {
   const n = map.n, land = map.land;
+  // المدن المفتوحة (CITIES.open): شوارع أعرض ومستقيمة بلا انحراف ولا أزقة، فالأحياء مستطيلات مرتبة
+  const open = CITIES.open[map.city];
+  if (open) { carveWideStreets(map, open); return; }
   const spacing = () => MAP_GEN.streetSpacingMin + ri(MAP_GEN.streetSpacingMax - MAP_GEN.streetSpacingMin + 1);
   const lines = (limit) => {
     const arr = [];
@@ -161,6 +164,20 @@ function carveStreets(map) {
       if (map.inBounds(a, b) && a < land) map.road[map.idx(a, b)] = 1;
     }
   }
+}
+
+// شبكة شوارع مستقيمة بعرض open.street، والمسافة بين بدايتي شارعين من open.spacing
+function carveWideStreets(map, open) {
+  const n = map.n, land = map.land, w = open.street;
+  const [smin, smax] = open.spacing;
+  const lines = (limit) => {
+    const arr = [];
+    let p = 1 + ri(2);
+    while (p + w <= limit - 1) { arr.push(p); p += smin + ri(smax - smin + 1); }
+    return arr;
+  };
+  for (const c of lines(land)) for (let j = 0; j < n; j++) for (let d = 0; d < w; d++) map.road[map.idx(c + d, j)] = 1;
+  for (const r of lines(n)) for (let i = 0; i < land; i++) for (let d = 0; d < w; d++) map.road[map.idx(i, r + d)] = 1;
 }
 
 // شرط إلزامي: كل مربعات الشوارع متصلة ببعضها
@@ -339,30 +356,31 @@ function placeKind(map, k, kind) {
   map.type[k] = kind === '.' ? '.' : kind === 'ruin' ? 'R' : 'H';
 }
 
-// رقم حتمي من بذرة الخريطة والمربع (0 إلى 1): لا يستهلك Math.random، فبقية الخريطة لا تتغير
-function tileRoll(seed, i, j) {
-  let h = (seed ^ Math.imul(i, 0x27d4eb2d) ^ Math.imul(j, 0x165667b1)) | 0;
-  h = Math.imul(h ^ (h >>> 16), 0x85ebca6b);
-  h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
-  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
-}
-
-// المدن المزدحمة (CITIES.open): بعض مباني الصف المطل على الشارع تصير أرضاً فارغة.
-// المطل على الشارع فقط: الأرض الجديدة موصولة دائماً، فلا تُحدث فراغاً محاصراً يُردم أو يُفتح له ممر
-function openLot(map, i, j, kind) {
-  const open = CITIES.open[map.city];
-  if (!open || kind === '.' || kind === 'ruin') return kind;
-  const onStreet = D4.some(([dx, dy]) => map.inBounds(i + dx, j + dy) && map.road[map.idx(i + dx, j + dy)]);
-  return onStreet && tileRoll(map.seed, i, j) < open.lots ? '.' : kind;
+// المدن المفتوحة: ممرات أرض فارغة بين صفوف المباني داخل الحي (المستطيل بين الشوارع).
+// المربع ممر إن كان بعده عن أقرب طرف للحي فردياً: الحي 3 ← صفان وممر، 4 ← صفان وممران، 5 ← ثلاثة صفوف.
+// 'rows': الصفوف موازية لضلع الحي الأطول، 'lots': ممرات في الاتجاهين (كل مبنى في قطعته)
+function laneMask(district, lanes) {
+  let i0 = Infinity, i1 = -1, j0 = Infinity, j1 = -1;
+  for (const [i, j] of district.tiles) {
+    if (i < i0) i0 = i; if (i > i1) i1 = i;
+    if (j < j0) j0 = j; if (j > j1) j1 = j;
+  }
+  const odd = (v, a, b) => Math.min(v - a, b - v) % 2 === 1;
+  const alongI = i1 - i0 >= j1 - j0;     // الحي أعرض في اتجاه i: الصفوف تمتد على i والممرات بينها
+  return (i, j) => lanes === 'lots' ? odd(i, i0, i1) || odd(j, j0, j1)
+    : alongI ? odd(j, j0, j1) : odd(i, i0, i1);
 }
 
 function fillDistricts(map, districts) {
   const city = CITY_THEMES[map.city];
+  const open = CITIES.open[map.city];
   for (const district of districts) {
+    const lane = open && open.lanes && district.capturable ? laneMask(district, open.lanes) : null;
     for (const [i, j] of district.tiles) {
       const k = map.idx(i, j);
       map.region[k] = district.region;
-      placeKind(map, k, openLot(map, i, j, pickWeighted(city.pool)));
+      const kind = pickWeighted(city.pool);
+      placeKind(map, k, lane && lane(i, j) ? '.' : kind);
     }
 
     // حي صغير: ليس قابلاً للاستيلاء، أشجار أو أرض فارغة فقط
@@ -418,19 +436,33 @@ function placeRorbu(map) {
   }
 }
 
+// الشارع العريض (حارتان): خط المنتصف على الحد بين الحارتين، ترسمه الحارة الأولى
+// 3: شارع على اتجاه i والخط بين j و j+1، 4: شارع على اتجاه j والخط بين i و i+1، ولا خط في التقاطعات
+function wideDash(map, i, j) {
+  const r = (a, b) => map.inBounds(a, b) && map.road[map.idx(a, b)] === 1;
+  if (r(i, j + 1) && !r(i, j - 1) && !r(i, j + 2) && r(i - 1, j) && r(i + 1, j)) return 3;
+  if (r(i + 1, j) && !r(i - 1, j) && !r(i + 2, j) && r(i, j - 1) && r(i, j + 1)) return 4;
+  return 0;
+}
+
 // --- 6) خطوط منتصف الشوارع وزينتها ---
 function decorateRoads(map) {
   const n = map.n;
+  const open = CITIES.open[map.city];
+  const wide = open && open.street === 2;
   for (let j = 0; j < n; j++) {
     for (let i = 0; i < n; i++) {
       const k = map.idx(i, j);
       if (!map.road[k]) continue;
 
-      const horizontal = (map.inBounds(i - 1, j) && map.road[map.idx(i - 1, j)]) ||
-                         (map.inBounds(i + 1, j) && map.road[map.idx(i + 1, j)]);
-      const vertical   = (map.inBounds(i, j - 1) && map.road[map.idx(i, j - 1)]) ||
-                         (map.inBounds(i, j + 1) && map.road[map.idx(i, j + 1)]);
-      map.dash[k] = horizontal && !vertical ? 1 : vertical && !horizontal ? 2 : 0;
+      if (wide) map.dash[k] = wideDash(map, i, j);
+      else {
+        const horizontal = (map.inBounds(i - 1, j) && map.road[map.idx(i - 1, j)]) ||
+                           (map.inBounds(i + 1, j) && map.road[map.idx(i + 1, j)]);
+        const vertical   = (map.inBounds(i, j - 1) && map.road[map.idx(i, j - 1)]) ||
+                           (map.inBounds(i, j + 1) && map.road[map.idx(i, j + 1)]);
+        map.dash[k] = horizontal && !vertical ? 1 : vertical && !horizontal ? 2 : 0;
+      }
 
       const q = rnd();
       if (q < 0.015) map.decor[k] = 'B';              // برميل نار

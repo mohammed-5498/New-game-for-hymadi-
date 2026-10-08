@@ -202,7 +202,10 @@ function drawGround(ctx, state, tiles) {
     const x = tileX(i, j), y = tileY(i, j);
     if (!dashes) { ctx.beginPath(); dashes = true; }
     if (map.dash[k] === 1) { ctx.moveTo(x - 4, y - 2); ctx.lineTo(x + 4, y + 2); }
-    else { ctx.moveTo(x + 4, y - 2); ctx.lineTo(x - 4, y + 2); }
+    else if (map.dash[k] === 2) { ctx.moveTo(x + 4, y - 2); ctx.lineTo(x - 4, y + 2); }
+    // الشارع العريض: الخط على الحد بين الحارتين (نصف مربع نحو الحارة الثانية)
+    else if (map.dash[k] === 3) { ctx.moveTo(x - 13, y + 2.5); ctx.lineTo(x - 5, y + 6.5); }
+    else { ctx.moveTo(x + 5, y + 6.5); ctx.lineTo(x + 13, y + 2.5); }
   }
   if (dashes) {
     ctx.strokeStyle = '#c9bd85';
