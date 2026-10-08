@@ -1,9 +1,9 @@
 // رسم المدينة بطابعها (القسم 3.9): لون الأرض ومحتوى كل مربع (مبنى، أطلال، زينة، حطام)
 // الشكل فقط: مكان المباني والشوارع والأحياء يقرره مولّد الخريطة كما هو.
-import { CAPTURE, CITY_UNTINTED } from '../config.js';
+import { CAPTURE, CITY_UNTINTED, CITIES } from '../config.js';
 import { mix } from './colors.js';
 import { tintAmount } from '../game/capture.js';
-import { THEMES, setThemeContext, setTone, streetDebris, ruinTile, hsh, mixc } from './cityThemes.js';
+import { THEMES, setThemeContext, setTone, getCtx, streetDebris, ruinTile, hsh, mixc } from './cityThemes.js';
 import { PALETTES } from './colors.js';
 import { drawLandmark } from './landmarks.js';
 
@@ -96,7 +96,16 @@ export function drawCityTile(state, i, j, x, y) {
     let kind = map.kind[k];
     if (!kind || typeof T.draw[kind] !== 'function') kind = firstBuilding(T);
     useTone(state, map.districtOf(i, j), !CITY_UNTINTED.includes(kind));
-    T.draw[kind](x, y, i, j, T);
+    // المدن المزدحمة: المبنى أصغر قليلاً حول قاعدته فتظهر الأرض بينه وبين جيرانه
+    const open = CITIES.open[map.city];
+    if (open && open.scale !== 1) {
+      const ctx = getCtx();
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.scale(open.scale, open.scale);
+      T.draw[kind](0, 0, i, j, T);
+      ctx.restore();
+    } else T.draw[kind](x, y, i, j, T);
     return true;
   }
   return false;

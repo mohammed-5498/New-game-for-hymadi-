@@ -339,19 +339,38 @@ function placeKind(map, k, kind) {
   map.type[k] = kind === '.' ? '.' : kind === 'ruin' ? 'R' : 'H';
 }
 
+// رقم حتمي من بذرة الخريطة والمربع (0 إلى 1): لا يستهلك Math.random، فبقية الخريطة لا تتغير
+function tileRoll(seed, i, j) {
+  let h = (seed ^ Math.imul(i, 0x27d4eb2d) ^ Math.imul(j, 0x165667b1)) | 0;
+  h = Math.imul(h ^ (h >>> 16), 0x85ebca6b);
+  h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+
+// المدن المزدحمة (CITIES.open): بعض مباني الصف المطل على الشارع تصير أرضاً فارغة.
+// المطل على الشارع فقط: الأرض الجديدة موصولة دائماً، فلا تُحدث فراغاً محاصراً يُردم أو يُفتح له ممر
+function openLot(map, i, j, kind) {
+  const open = CITIES.open[map.city];
+  if (!open || kind === '.' || kind === 'ruin') return kind;
+  const onStreet = D4.some(([dx, dy]) => map.inBounds(i + dx, j + dy) && map.road[map.idx(i + dx, j + dy)]);
+  return onStreet && tileRoll(map.seed, i, j) < open.lots ? '.' : kind;
+}
+
 function fillDistricts(map, districts) {
   const city = CITY_THEMES[map.city];
   for (const district of districts) {
     for (const [i, j] of district.tiles) {
       const k = map.idx(i, j);
       map.region[k] = district.region;
-      placeKind(map, k, pickWeighted(city.pool));
+      placeKind(map, k, openLot(map, i, j, pickWeighted(city.pool)));
     }
 
     // حي صغير: ليس قابلاً للاستيلاء، أشجار أو أرض فارغة فقط
+    // (الأوروبية تعرّف شجرتها دالة رسم لا اسم نوع: نوعها 'tree'، وإلا رُسمت بيتاً)
     if (!district.capturable) {
+      const tree = typeof city.draw.tree === 'function' ? 'tree' : city.draw.tree;
       for (const [i, j] of district.tiles) {
-        placeKind(map, map.idx(i, j), rnd() < 0.5 ? city.draw.tree : '.');
+        placeKind(map, map.idx(i, j), rnd() < 0.5 ? tree : '.');
       }
       continue;
     }

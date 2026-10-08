@@ -31,11 +31,19 @@ export const CITIES = {
   thumbCycleMs: 2000,           // "عشوائي": الصورة المصغرة تتبدل بين المدن
   thumbZoom: 1.4,               // تقريب الصورة المصغرة (تُقص الأطراف)
   // هالة خفيفة خلف الجنود في المدن الداكنة فقط (هونغ كونغ) حتى يبقوا واضحين فوق الأرض والأبراج
-  unitHalo: { hk: { color: 'rgba(255,255,255,0.28)', rx: 5.5, ry: 9, lift: 8 } }
+  unitHalo: { hk: { color: 'rgba(255,255,255,0.28)', rx: 5.5, ry: 9, lift: 8 } },
+  // المدن المزدحمة (بطلب المستخدم): مبانٍ أقل قليلاً ومسافة بينها حتى تتضح الرؤية
+  // lots: نسبة مباني الصف المطل على الشارع التي تصير أرضاً فارغة (يمشي عليها الجنود)
+  // scale: حجم رسم المبنى العادي (المباني الحاسمة بحجمها الكامل)، فتظهر الأرض بين المباني
+  open: {
+    chicago: { lots: 0.15, scale: 0.86 },
+    hk:      { lots: 0.2,  scale: 0.86 },
+    europe:  { lots: 0.2,  scale: 0.86 }
+  }
 };
 
 // أنواع من pool المدن ليست مباني (أشجار وزينة): لا تُصبغ بلون المالك، كأشجار الطابع القديم
-export const CITY_UNTINTED = ['palm', 'cherry', 'lantern', 'willow', 'lanterns', 'pine', 'rack', 'banyan', 'neem', 'cactus'];
+export const CITY_UNTINTED = ['palm', 'cherry', 'lantern', 'willow', 'lanterns', 'pine', 'rack', 'banyan', 'neem', 'cactus', 'tree'];
 
 // تخزين الطبقة الثابتة (الأرض والمباني والزينة) في قطع مخفية: تُرسم مرة وتُعرض الظاهرة فقط
 export const CITY_CACHE = {
