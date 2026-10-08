@@ -6,6 +6,7 @@
 // - المصابيح الوامضة وإضاءة الليل طبقة خفيفة تُرسم كل إطار
 import { TILE_HALF_W, TILE_HALF_H, CITY_CACHE as CC } from '../config.js';
 import { beginCity, groundColor, drawRoadSurface, drawTileStatic, debrisLight, specialType } from './cityRender.js';
+import { isLane, drawLanePaving, roundaboutAnchor, drawRoundaboutRing, laneLight, roundaboutLights } from './openCity.js';
 import { lampSpot } from './landmarks.js';
 
 const PAD = 1;   // كل قطعة تتجاوز حدودها بوحدة: لا خطوط شعرية بين القطع
@@ -80,6 +81,8 @@ function collectStatics(state) {
     if (special === 'N') cache.lamps.push(lampSpot(map, i, j, x, y));
     else if (special === 'P') cache.lights.push({ x, y: y - 4, r: 18, c: '255,235,190', a: 0.25 });
     else if (!special && debrisLight(map, i, j)) cache.lights.push({ x, y: y - 7, r: 34, c: '255,150,60', a: 0.65 });
+    else if (!special && isLane(map, k)) { const l = laneLight(map, i, j, x, y); if (l) cache.lights.push(l); }
+    else if (map.type[k] === 'Y' && roundaboutAnchor(map, i, j)) cache.lights.push(...roundaboutLights(x, y));
   }
 }
 
@@ -192,9 +195,10 @@ function drawGround(ctx, state, tiles) {
   let dashes = false;
   for (let t = 0; t < tiles.length; t += 2) {
     const i = tiles[t], j = tiles[t + 1], k = map.idx(i, j);
-    if (!map.road[k]) continue;
     const x = tileX(i, j), y = tileY(i, j);
-    drawRoadSurface(ctx, map, i, j, x, y);
+    if (map.road[k]) drawRoadSurface(ctx, map, i, j, x, y);
+    else if (isLane(map, k)) drawLanePaving(ctx, map, i, j, x, y);            // المدن المفتوحة
+    else if (map.type[k] === 'Y' && roundaboutAnchor(map, i, j)) drawRoundaboutRing(ctx, x, y);
   }
   for (let t = 0; t < tiles.length; t += 2) {
     const i = tiles[t], j = tiles[t + 1], k = map.idx(i, j);
@@ -203,9 +207,9 @@ function drawGround(ctx, state, tiles) {
     if (!dashes) { ctx.beginPath(); dashes = true; }
     if (map.dash[k] === 1) { ctx.moveTo(x - 4, y - 2); ctx.lineTo(x + 4, y + 2); }
     else if (map.dash[k] === 2) { ctx.moveTo(x + 4, y - 2); ctx.lineTo(x - 4, y + 2); }
-    // الشارع العريض: الخط على الحد بين الحارتين (نصف مربع نحو الحارة الثانية)
+    // الشارع العريض: الخط على الحد بين الحارتين (نصف مربع نحو الحارة الثانية)؛ 5-7 لا خط (حلقة وممرات مشاة)
     else if (map.dash[k] === 3) { ctx.moveTo(x - 13, y + 2.5); ctx.lineTo(x - 5, y + 6.5); }
-    else { ctx.moveTo(x + 5, y + 6.5); ctx.lineTo(x + 13, y + 2.5); }
+    else if (map.dash[k] === 4) { ctx.moveTo(x + 5, y + 6.5); ctx.lineTo(x + 13, y + 2.5); }
   }
   if (dashes) {
     ctx.strokeStyle = '#c9bd85';

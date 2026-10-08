@@ -6,6 +6,10 @@ import { tintAmount } from '../game/capture.js';
 import { THEMES, setThemeContext, setTone, getCtx, streetDebris, ruinTile, hsh, mixc } from './cityThemes.js';
 import { PALETTES } from './colors.js';
 import { drawLandmark } from './landmarks.js';
+import {
+  openOf, isLane, cleanRoad, drawSidewalks, drawCrosswalk, drawLaneDecor, roundaboutAnchor, drawRoundaboutIsland,
+  drawStreetTree
+} from './openCity.js';
 
 export const cityOf = (map) => THEMES[map.city] || THEMES.arab;
 
@@ -29,11 +33,12 @@ export function groundColor(state, i, j) {
     color = T.waterCol || '#34566e';
     return state.weather === 'snow' ? mix(color, '#dfe8ee', 0.3) : color;
   }
-  if (isRoad) color = (i + j) % 2 ? T.road : T.road2;
+  if (isRoad || map.type[k] === 'Y') color = (i + j) % 2 ? T.road : T.road2;   // جزيرة الدوار على أرض الشارع
   else if (map.type[k] === 'P') color = T.plaza;
   else {
     color = T.ground;
-    if (T.groundAt) color = T.groundAt(i, j, color);
+    if (isLane(map, k)) color = mix(T.ground, T.plaza, 0.8);   // ممر مرصوف بين صفوف المباني
+    else if (T.groundAt) color = T.groundAt(i, j, color);
     else if (hsh(i, j, 200) < 0.3) color = mixc(color, '#5a5040', 0.12);
     const hint = REGION_HINT[map.region[k]];
     if (hint) color = mix(color, hint[0], hint[1]);
@@ -49,6 +54,11 @@ export function groundColor(state, i, j) {
 // زينة الشارع المرسومة على الأرض نفسها (حجارة أوروبا، الشقوق)
 export function drawRoadSurface(ctx, map, i, j, x, y) {
   const T = cityOf(map);
+  if (openOf(map)) {                   // الشوارع العريضة: أرصفة على حوافها وممرات مشاة عند التقاطعات
+    drawSidewalks(ctx, map, i, j, x, y);
+    const dash = map.dash[map.idx(i, j)];
+    if (dash === 6 || dash === 7) drawCrosswalk(ctx, map, i, j, x, y);
+  }
   if (T.draw.tile) T.draw.tile(x, y, i, j);
   if (hsh(i, j, 201) < 0.35) {
     ctx.beginPath();
@@ -81,16 +91,20 @@ export function drawCityTile(state, i, j, x, y) {
   const k = map.idx(i, j);
   if (map.road[k] || map.type[k] !== 'H') useTone(state, null, false);   // الحطام والأطلال لا تُصبغ
   if (map.road[k]) {
+    if (cleanRoad(map, k)) return true;       // حلقة الدوار وممرات المشاة: نظيفة
     const open = CITIES.open[map.city];
     if (T.draw.roadProp && !(open && open.roadProp === false)) T.draw.roadProp(x, y, i, j);
     streetDebris(x, y, i, j, T);
+    if (open) drawStreetTree(map, i, j, x, y);  // أشجار على الرصيف
     return true;
   }
   const type = map.type[k];
   if (type === '.') {
-    if (hsh(i, j, 210) < 0.4) streetDebris(x, y, i, j + 99, T);
+    if (isLane(map, k)) drawLaneDecor(map, i, j, x, y);
+    else if (hsh(i, j, 210) < 0.4) streetDebris(x, y, i, j + 99, T);
     return true;
   }
+  if (type === 'Y') { if (roundaboutAnchor(map, i, j)) drawRoundaboutIsland(x, y); return true; }
   if (type === 'R') { ruinTile(x, y, i, j, T); return true; }
   if (type === '~') { if (T.draw.water) T.draw.water(x, y, i, j); return true; }
   if (type === 'H') {
@@ -122,8 +136,8 @@ function firstBuilding(T) {
 export function debrisLight(map, i, j) {
   const k = map.idx(i, j);
   let r;
-  if (map.road[k]) r = hsh(i, j, 20);
-  else if (map.type[k] === '.' && hsh(i, j, 210) < 0.4) r = hsh(i, j + 99, 20);
+  if (map.road[k]) { if (cleanRoad(map, k)) return false; r = hsh(i, j, 20); }
+  else if (map.type[k] === '.' && !isLane(map, k) && hsh(i, j, 210) < 0.4) r = hsh(i, j + 99, 20);
   else return false;
   return r >= 0.07 && r < 0.12;
 }

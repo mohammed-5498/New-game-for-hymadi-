@@ -166,18 +166,36 @@ function carveStreets(map) {
   }
 }
 
-// شبكة شوارع مستقيمة بعرض open.street، والمسافة بين بدايتي شارعين من open.spacing
+// شبكة شوارع مستقيمة بعرض open.street، والمسافة بين بدايتي شارعين إحدى قيم open.spacing
 function carveWideStreets(map, open) {
   const n = map.n, land = map.land, w = open.street;
-  const [smin, smax] = open.spacing;
   const lines = (limit) => {
     const arr = [];
     let p = 1 + ri(2);
-    while (p + w <= limit - 1) { arr.push(p); p += smin + ri(smax - smin + 1); }
+    while (p + w <= limit - 1) { arr.push(p); p += open.spacing[ri(open.spacing.length)]; }
     return arr;
   };
-  for (const c of lines(land)) for (let j = 0; j < n; j++) for (let d = 0; d < w; d++) map.road[map.idx(c + d, j)] = 1;
-  for (const r of lines(n)) for (let i = 0; i < land; i++) for (let d = 0; d < w; d++) map.road[map.idx(i, r + d)] = 1;
+  const cols = lines(land), rows = lines(n);
+  for (const c of cols) for (let j = 0; j < n; j++) for (let d = 0; d < w; d++) map.road[map.idx(c + d, j)] = 1;
+  for (const r of rows) for (let i = 0; i < land; i++) for (let d = 0; d < w; d++) map.road[map.idx(i, r + d)] = 1;
+  if (open.roundabout && cols.length && rows.length) carveRoundabout(map, cols, rows, w, open.roundabout.radius);
+}
+
+// دوار في التقاطع الأقرب لمركز الخريطة: جزيرة في وسط التقاطع ('Y': لا يُمشى عليها ولا تُفتح)
+// وحولها حلقة شارع حتى نصف القطر radius، تأخذ زوايا الأحياء الأربعة المجاورة
+function carveRoundabout(map, cols, rows, w, radius) {
+  const mid = (map.n - 1) / 2, half = (w - 1) / 2;
+  const nearest = (arr) => arr.reduce((a, b) => Math.abs(b + half - mid) < Math.abs(a + half - mid) ? b : a);
+  const c = nearest(cols), r = nearest(rows), ci = c + half, cj = r + half;
+  const reach = Math.ceil(radius);
+  for (let j = Math.floor(cj - reach); j <= Math.ceil(cj + reach); j++) {
+    for (let i = Math.floor(ci - reach); i <= Math.ceil(ci + reach); i++) {
+      if (!map.inBounds(i, j)) continue;
+      const di = i - ci, dj = j - cj, k = map.idx(i, j);
+      if (Math.abs(di) < w / 2 && Math.abs(dj) < w / 2) { map.road[k] = 0; map.type[k] = 'Y'; }
+      else if (di * di + dj * dj <= radius * radius) map.road[k] = 1;
+    }
+  }
 }
 
 // شرط إلزامي: كل مربعات الشوارع متصلة ببعضها
@@ -216,7 +234,7 @@ function findDistricts(map) {
   for (let j = 0; j < n; j++) {
     for (let i = 0; i < n; i++) {
       const k = map.idx(i, j);
-      if (map.road[k] || map.districtAt[k] >= 0 || map.type[k] === '~') continue;
+      if (map.road[k] || map.districtAt[k] >= 0 || map.type[k] === '~' || map.type[k] === 'Y') continue;
 
       const district = {
         id: districts.length,
@@ -246,7 +264,7 @@ function findDistricts(map) {
           const x = a + dx, y = b + dy;
           if (!map.inBounds(x, y)) continue;
           const nk = map.idx(x, y);
-          if (map.road[nk] || map.districtAt[nk] >= 0 || map.type[nk] === '~') continue;
+          if (map.road[nk] || map.districtAt[nk] >= 0 || map.type[nk] === '~' || map.type[nk] === 'Y') continue;
           map.districtAt[nk] = district.id;
           stack.push([x, y]);
         }
@@ -356,19 +374,26 @@ function placeKind(map, k, kind) {
   map.type[k] = kind === '.' ? '.' : kind === 'ruin' ? 'R' : 'H';
 }
 
-// المدن المفتوحة: ممرات أرض فارغة بين صفوف المباني داخل الحي (المستطيل بين الشوارع).
-// المربع ممر إن كان بعده عن أقرب طرف للحي فردياً: الحي 3 ← صفان وممر، 4 ← صفان وممران، 5 ← ثلاثة صفوف.
-// 'rows': الصفوف موازية لضلع الحي الأطول، 'lots': ممرات في الاتجاهين (كل مبنى في قطعته)
+// المدن المفتوحة: ممرات أرض مرصوفة بين صفوف المباني داخل الحي (المستطيل بين الشوارع)، موصولة بالشارع
+// من طرفيها. الصفوف موازية لضلع الحي الأطول، والممر بينها:
+// 'rows': كل مربع بعده عن أقرب طرف للحي فردي (الحي 3 ← صفان وممر، 4 ← صفان وممران، 5 ← ثلاثة صفوف)
+// 'center': ممر واحد في وسط الحي (3 ← صفان، 5 ← صفان مزدوجان): أكثف
+// 'lots': ممرات في الاتجاهين (كل مبنى في قطعته)
+// يعيد اتجاه الممر للمربع ('lane_i' يمتد على i، 'lane_j' على j) أو null للمبنى
 function laneMask(district, lanes) {
   let i0 = Infinity, i1 = -1, j0 = Infinity, j1 = -1;
   for (const [i, j] of district.tiles) {
     if (i < i0) i0 = i; if (i > i1) i1 = i;
     if (j < j0) j0 = j; if (j > j1) j1 = j;
   }
-  const odd = (v, a, b) => Math.min(v - a, b - v) % 2 === 1;
-  const alongI = i1 - i0 >= j1 - j0;     // الحي أعرض في اتجاه i: الصفوف تمتد على i والممرات بينها
-  return (i, j) => lanes === 'lots' ? odd(i, i0, i1) || odd(j, j0, j1)
-    : alongI ? odd(j, j0, j1) : odd(i, i0, i1);
+  const lane = (v, a, b) => {
+    const u = v - a, w = b - a + 1;
+    if (lanes !== 'center') return Math.min(u, b - v) % 2 === 1;
+    return w % 2 ? w >= 3 && u === (w - 1) / 2 : w >= 4 && (u === w / 2 - 1 || u === w / 2);
+  };
+  if (lanes === 'lots') return (i, j) => lane(j, j0, j1) ? 'lane_i' : lane(i, i0, i1) ? 'lane_j' : null;
+  return i1 - i0 >= j1 - j0 ? (i, j) => lane(j, j0, j1) ? 'lane_i' : null
+                            : (i, j) => lane(i, i0, i1) ? 'lane_j' : null;
 }
 
 function fillDistricts(map, districts) {
@@ -380,7 +405,9 @@ function fillDistricts(map, districts) {
       const k = map.idx(i, j);
       map.region[k] = district.region;
       const kind = pickWeighted(city.pool);
-      placeKind(map, k, lane && lane(i, j) ? '.' : kind);
+      const path = lane && lane(i, j);
+      placeKind(map, k, path ? '.' : kind);
+      if (path) map.kind[k] = path;            // أرض فارغة تُرسم ممراً مرصوفاً باتجاهه
     }
 
     // حي صغير: ليس قابلاً للاستيلاء، أشجار أو أرض فارغة فقط
@@ -436,10 +463,20 @@ function placeRorbu(map) {
   }
 }
 
-// الشارع العريض (حارتان): خط المنتصف على الحد بين الحارتين، ترسمه الحارة الأولى
-// 3: شارع على اتجاه i والخط بين j و j+1، 4: شارع على اتجاه j والخط بين i و i+1، ولا خط في التقاطعات
+// علامات الشارع العريض (حارتان)، ترسمها chunkCache.js:
+// 3: خط المنتصف بين j و j+1 (شارع على i)، 4: بين i و i+1 (شارع على j)، ولا خط في التقاطعات
+// 5: حلقة الدوار (بلا علامات ولا حطام)، 6 و7: ممر مشاة عند مدخل التقاطع (شارع على i / على j)
 function wideDash(map, i, j) {
   const r = (a, b) => map.inBounds(a, b) && map.road[map.idx(a, b)] === 1;
+  for (let b = j - 2; b <= j + 2; b++) for (let a = i - 2; a <= i + 2; a++) {
+    if (map.inBounds(a, b) && map.type[map.idx(a, b)] === 'Y') return 5;
+  }
+  const roads = (a, b) => r(a - 1, b) + r(a + 1, b) + r(a, b - 1) + r(a, b + 1);
+  const cross = (a, b) => r(a, b) && roads(a, b) === 4;      // مربع تقاطع: شارع من الجهات الأربع
+  if (roads(i, j) === 3) {
+    if (r(i - 1, j) && r(i + 1, j) && (cross(i - 1, j) || cross(i + 1, j))) return 6;
+    if (r(i, j - 1) && r(i, j + 1) && (cross(i, j - 1) || cross(i, j + 1))) return 7;
+  }
   if (r(i, j + 1) && !r(i, j - 1) && !r(i, j + 2) && r(i - 1, j) && r(i + 1, j)) return 3;
   if (r(i + 1, j) && !r(i - 1, j) && !r(i + 2, j) && r(i, j - 1) && r(i, j + 1)) return 4;
   return 0;
