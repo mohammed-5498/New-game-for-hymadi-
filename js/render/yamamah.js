@@ -18,9 +18,9 @@ const ART = {
   round_tower: [109, 193, 54.5, 172.9, 1],
   arch_tower: [104, 179, 52, 158.7, 1],
   drum: [138, 156, 69.3, 123, 1],
-  great_dome: [202, 218, 101, 177.8, 1],
-  hall_a: [173, 151, 86.6, 97.5, 1],
-  hall_b: [176, 178, 89.4, 120.6, 1],
+  great_dome: [172, 185, 85.8, 151.1, 1],
+  hall_a: [105, 92, 52.5, 59.5, 1],
+  hall_b: [131, 132, 66.3, 89.3, 1],
   gatehouse_a: [167, 170, 82.1, 126, 1],
   gatehouse_b: [168, 179, 85, 131, 1],
   gate_i: [152, 168, 75.9, 125.7, 0],
@@ -33,7 +33,7 @@ const ART = {
   minaret: [38, 224, 19.1, 214.6, 1],
   rotunda: [121, 133, 60.6, 104, 0],
   watchtower: [117, 182, 58.3, 160.3, 0],
-  qubba: [142, 92, 70.9, 58, 1],
+  dome: [122, 80, 61.1, 50, 1],
   well: [76, 104, 34.9, 86, 0],
   cart_a: [87, 58, 44.7, 43, 0],
   cart_b: [87, 65, 44.5, 48.4, 0],
@@ -43,6 +43,8 @@ const SET = 'yamamah';
 loadSpriteSet(SET, new URL('../../assets/yamamah/', import.meta.url), ART);
 
 const art = (name, x, y) => drawSprite(getCtx(), getSprite(SET, name), x, y, getToneInfo());
+// ارتفاع مركز الحلقة العليا للرواق فوق مركز قاعدته (من صورته: أعلاها 19.3 وحدة ونصف ارتفاع الحلقة 5.5)
+const ROTUNDA_TOP = 13.8;
 const pick = (a, b, i, j, k) => (hsh(i, j, k) < 0.5 ? a : b);
 
 // ركام عند قاعدة المبنى (نفس ركام damage في المدن الأخرى) لنحو نصف المباني
@@ -74,6 +76,45 @@ function palm(x, y, i, j, s = 1) {
     c.fillStyle = col; c.fill();
   }
   if (!dead) for (let k = 0; k < 3; k++) circ(tx - 2.2 * s + k * 2.2 * s, ty + 2.2 * s + (k % 2) * 0.8 * s, 1.1 * s, k % 2 ? '#b8621e' : '#c97a2a');
+}
+
+// الأطلال: بيت طين منهار بوضوح — أرضيته مكشوفة، وبقايا جدرانه الأربعة قصيرة متكسرة، وركام وعارضة في وسطه.
+// الجداران الأماميان من صورة البيت نفسها مقصوصة فوق خط مكسور موازٍ لقاعدتها (بارتفاع 2.5–6.5 وحدة)،
+// والخلفيان رسم بسيط لوجههما الداخلي. رؤوس قاعدة بيت الطين حول مركز المربع: يسار، أمام، يمين، خلف
+const HL = [-15, 0.9], HB = [-1.8, 7.5], HR = [15, -0.9], HT = [1.8, -7.5];
+const lerp = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+function ruinedHouse(x, y, i, j, T) {
+  const c = getCtx(), at = (p, up = 0) => [x + p[0], y + p[1] - up];
+  poly([at(HL), at(HB), at(HR), at(HT)], '#c2a274');
+  const stump = (a, b, col, seed) => {
+    const base = [], top = [];
+    for (let k = 0; k <= 5; k++) { const p = lerp(a, b, k / 5); base.push(at(p)); top.push(at(p, 2 + hsh(i, j, seed + k) * 4.5)); }
+    poly(base.concat(top.reverse()), col);
+  };
+  stump(HL, HT, '#e2cea6', 770);
+  stump(HT, HR, '#cbb48a', 780);
+  for (let k = 0; k < 3; k++) {
+    const cx = x + (hsh(i, j, 790 + k) - 0.5) * 14, cy = y + (hsh(i, j, 793 + k) - 0.5) * 6, r = 3 + hsh(i, j, 796 + k) * 2.5;
+    poly([[cx - r, cy + 0.6], [cx - r * 0.4, cy - r * 0.55], [cx + r * 0.5, cy - r * 0.45], [cx + r, cy + 0.6], [cx, cy + r * 0.45]], k % 2 ? '#cdb48c' : '#b89a70');
+  }
+  if (hsh(i, j, 810) < 0.6) ln(x - 7, y + 1.5, x + 4, y - 3, '#6e5232', 1.1);
+  const jag = [];
+  for (let k = 0; k <= 8; k++) {
+    const t = k / 8, p = t <= 0.5 ? lerp(HL, HB, t * 2) : lerp(HB, HR, t * 2 - 1);
+    jag.push([x + p[0], y + p[1] - (2.5 + hsh(i, j, 800 + k) * 4)]);
+  }
+  jag[0][0] -= 2;
+  jag[8][0] += 2;
+  c.save();
+  c.beginPath();
+  c.moveTo(jag[0][0], y + 20);
+  for (const p of jag) c.lineTo(p[0], p[1]);
+  c.lineTo(jag[8][0], y + 20);
+  c.closePath();
+  c.clip();
+  art(pick('house_a', 'house_b', i, j, 700), x, y);
+  c.restore();
+  rubble(x, y, i, j + 7, T);
 }
 
 // تموجات الرمل وشجيرات صحراوية على الأرض الفارغة
@@ -120,9 +161,9 @@ export const yamamah = {
   // النوع الافتراضي (للمربعات المردومة)، وأنماط الأحياء: كل حي يأخذ نمطاً واحداً فيبدو حياً متجانساً
   pool: [['house', 40], ['watchtower', 6], ['palm', 14], ['ruin', 12], ['.', 8]],
   styles: [
-    { weight: 52, pool: [['house', 46], ['watchtower', 6], ['qubba', 3], ['palm', 13], ['ruin', 12], ['.', 9]] },          // نجدي
+    { weight: 52, pool: [['house', 49], ['watchtower', 6], ['palm', 13], ['ruin', 12], ['.', 9]] },          // نجدي
     { weight: 33, pool: [['tower', 10], ['roundTower', 7], ['archTower', 6], ['drum', 6], ['hall', 9], ['gatehouse', 6],
-                         ['qubba', 5], ['rotunda', 2], ['minaret', 2], ['house', 12], ['palm', 9], ['ruin', 10], ['.', 6]] },  // قصور
+                         ['pavilion', 5], ['rotunda', 2], ['minaret', 2], ['house', 12], ['palm', 9], ['ruin', 10], ['.', 6]] },  // قصور
     { weight: 15, pool: [['grove', 30], ['palm', 16], ['well', 8], ['house', 16], ['watchtower', 4], ['ruin', 6], ['.', 14]] }   // واحة
   ],
   // الأحياء الصغيرة (غير القابلة للاستيلاء): بساتين نخيل وآبار وعربات
@@ -138,19 +179,16 @@ export const yamamah = {
       art(pick('house_a', 'house_b', i, j, 700), x, y);
       damage(x, y, 15, 7.5, 8, i, j, T);
     },
-    // الأطلال: بيت طين منهار (الصورة نفسها مقصوصة بخط مكسور) وركام حوله
-    ruin(x, y, i, j, T) {
-      broken(pick('house_a', 'house_b', i, j, 700), x, y, i, j, T, 0, 3 + hsh(i, j, 742) * 5);
-      rubble(x, y, i, j + 7, T);
-    },
+    ruin(x, y, i, j, T) { ruinedHouse(x, y, i, j, T); },
     tower(x, y, i, j, T) { art(pick('tower_a', 'tower_b', i, j, 701), x, y); rubble(x, y, i, j, T); },
     roundTower(x, y, i, j, T) { art('round_tower', x, y); rubble(x, y, i, j, T); },
     archTower(x, y, i, j, T) { art('arch_tower', x, y); rubble(x, y, i, j, T); },
     drum(x, y, i, j, T) { art('drum', x, y); rubble(x, y, i, j, T); },
     hall(x, y, i, j, T) { art(pick('hall_a', 'hall_b', i, j, 702), x, y); rubble(x, y, i, j, T); },
     gatehouse(x, y, i, j, T) { art(pick('gatehouse_a', 'gatehouse_b', i, j, 703), x, y); rubble(x, y, i, j, T); },
-    qubba(x, y, i, j, T) { art('qubba', x, y); rubble(x, y, i, j, T, 6); },
+    // الرواق المقوّس: وحده مفتوحاً، أو بالقبة الزرقاء فوق حلقته العليا (القبة لا تُستعمل وحدها على الأرض)
     rotunda(x, y) { art('rotunda', x, y); },
+    pavilion(x, y) { art('rotunda', x, y); art('dome', x, y - ROTUNDA_TOP); },
     minaret(x, y, i, j, T) { art('minaret', x, y); rubble(x, y, i, j, T, 4); },
     watchtower(x, y, i, j, T) { art('watchtower', x, y); rubble(x, y, i, j, T, 6); },
     // زينة لا تُصبغ (CITY_UNTINTED): نخيل وبساتين وآبار وعربات
@@ -174,8 +212,8 @@ export const yamamah = {
     brokenI(x, y, i, j, T) { broken(pick('wall_i1', 'wall_i2', i, j, 705), x, y, i, j, T, 0.5); },
     brokenJ(x, y, i, j, T) { broken(pick('wall_j1', 'wall_j2', i, j, 706), x, y, i, j, T, -0.5); },
     brokenTower(x, y, i, j, T) { broken('round_tower', x, y, i, j, T, 0); },
-    // المئذنة خلف القبة إلى اليسار، خارج أعمدة قياس السطح (landmarks.roofTop) فتبقى الساعة فوق القبة
-    landmark(x, y) { art('minaret', x - 17, y - 8.5); art('great_dome', x, y); },
+    // القبة الكبرى وحدها داخل مربعها (لا جزء منها في مربع جار يختلط ترتيب رسمه)
+    landmark(x, y) { art('great_dome', x, y); },
     plazaProp(x, y) { art('well', x, y); },
     // حطام الشارع (streetDebris): عربة متروكة بدل السيارة المحطمة، وبراميل هنا وهناك
     wreck(x, y, i, j) { art(pick('cart_a', 'cart_b', i, j, 761), x + (hsh(i, j, 762) - 0.5) * 6, y); },
