@@ -20,18 +20,20 @@ export const MAP_SIZES = {
 
 // --- طوابع المدن (القسم 3.9): شكل فقط، لا تغيّر قواعد اللعب ---
 export const CITIES = {
-  order: ['arab', 'japan', 'china', 'europe', 'norway', 'hk', 'jaipur', 'mexico', 'chicago'],
+  order: ['yamamah', 'arab', 'japan', 'china', 'europe', 'norway', 'hk', 'jaipur', 'mexico', 'chicago'],
   defaultCity: 'random',
   // النرويجية: مضيق متجمد على حافة الخريطة بهذا العرض من المربعات (لا يُمشى عليه)
   water: { norway: { small: 2, medium: 2, large: 3 } },
   rorbuChance: 0.55,            // نسبة المباني المجاورة للماء التي تصير أكواخاً على أعمدة
   // أسماء قصيرة لأزرار قائمة الإعداد (الاسم الكامل تحت الصورة المصغرة)
-  short: { arab: 'عربية', japan: 'يابانية', china: 'صينية', europe: 'أوروبية', norway: 'نرويجية',
+  short: { yamamah: 'اليمامة', arab: 'عربية', japan: 'يابانية', china: 'صينية', europe: 'أوروبية', norway: 'نرويجية',
            hk: 'هونغ كونغ', jaipur: 'جايبور', mexico: 'مكسيكية', chicago: 'شيكاغو' },
   thumbCycleMs: 2000,           // "عشوائي": الصورة المصغرة تتبدل بين المدن
   thumbZoom: 1.4,               // تقريب الصورة المصغرة (تُقص الأطراف)
-  // هالة خفيفة خلف الجنود في المدن الداكنة فقط (هونغ كونغ) حتى يبقوا واضحين فوق الأرض والأبراج
-  unitHalo: { hk: { color: 'rgba(255,255,255,0.28)', rx: 5.5, ry: 9, lift: 8 } },
+  // هالة خفيفة خلف الجنود: فاتحة في المدينة الداكنة (هونغ كونغ)، وداكنة في الصحراء الفاتحة (اليمامة)
+  // حتى يبقى الجنود الصفر والبرتقاليون واضحين فوق الرمل والبيوت الفاتحة
+  unitHalo: { hk: { color: 'rgba(255,255,255,0.28)', rx: 5.5, ry: 9, lift: 8 },
+              yamamah: { color: 'rgba(58,38,16,0.2)', rx: 5.5, ry: 9, lift: 8 } },
   // المدن المفتوحة (بطلب المستخدم): شوارع أعرض ومستقيمة بأرصفة وممرات مشاة، والمباني صفوف مرتبة
   // بينها ممرات مرصوفة (أرض يمشي عليها الجنود، موصولة بالشارع من طرفيها)
   // street: عرض الشارع بالمربعات، spacing: قيم المسافة بين بدايتي شارعين (5 و7 ← أحياء 3 و5 مربعات)
@@ -39,6 +41,10 @@ export const CITIES = {
   // scale: حجم رسم المبنى العادي (المباني الحاسمة بحجمها الكامل)، أقل من 1 تظهر الأرض بين المباني
   // roadProp: false يخفي علامات الطابع على الشارع (خطوط شيكاغو تتقاطع مع خط منتصف الشارع العريض)
   // roundabout: دوار في التقاطع الأقرب لمركز الخريطة، radius نصف قطر حلقته بالمربعات
+  // مدينة بسور (صحراء اليمامة): سور حجري بأقواس على الحافتين البعيدتين وبوابات حيث تخرج الشوارع،
+  // وسور منهار منخفض على الحافتين القريبتين (لا يحجب الجنود)، وأبراج على الزوايا وكل towerEvery مربعاً
+  // archChance: نسبة الشوارع الخارجة من الحافتين القريبتين التي يقوم فوقها قوس قديم
+  walls: { yamamah: { towerEvery: 6, archChance: 0.6 } },
   open: {
     chicago: { street: 2, spacing: [5, 7], lanes: 'center', scale: 1, roadProp: false },
     hk:      { street: 2, spacing: [5, 7], lanes: 'center', scale: 1, roundabout: { radius: 3 } },
@@ -47,7 +53,9 @@ export const CITIES = {
 };
 
 // أنواع من pool المدن ليست مباني (أشجار وزينة): لا تُصبغ بلون المالك، كأشجار الطابع القديم
-export const CITY_UNTINTED = ['palm', 'cherry', 'lantern', 'willow', 'lanterns', 'pine', 'rack', 'banyan', 'neem', 'cactus', 'tree'];
+// والسور وبواباته وأبراجه في صحراء اليمامة: ملك المدينة لا الحي
+export const CITY_UNTINTED = ['palm', 'cherry', 'lantern', 'willow', 'lanterns', 'pine', 'rack', 'banyan', 'neem', 'cactus', 'tree',
+  'grove', 'well', 'cart', 'wallI', 'wallJ', 'gateI', 'gateJ', 'archI', 'archJ', 'wallTower', 'brokenI', 'brokenJ', 'brokenTower'];
 
 // تخزين الطبقة الثابتة (الأرض والمباني والزينة) في قطع مخفية: تُرسم مرة وتُعرض الظاهرة فقط
 export const CITY_CACHE = {
@@ -76,6 +84,7 @@ export const CITY_CACHE = {
 
 // المباني الحاسمة بطراز كل مدينة: hq أعلى مبانيها للمقر، وbase مبناها العادي للشرطة والمستشفى والمخزن
 export const CITY_SPECIALS = {
+  yamamah: { hq: 'tower',   base: 'house' },
   arab:    { hq: 'tall',    base: 'house' },
   japan:   { hq: 'two',     base: 'house' },
   china:   { hq: 'tower2',  base: 'hutong' },
@@ -560,6 +569,13 @@ export const CAPTURE = {
   groundTintAlpha: 0.30,      // نسبة صبغ أرض الحي بلون المالك
   roofTintAlpha: 0.45,        // الأسطح والأجزاء العلوية للمباني
   wallTintAlpha: 0.20,        // الجدران فقط، حتى تبقى قراءة المباني واضحة
+  // الخلط في فضاء OKLab (colors.js): الإضاءة تقترب من لون المالك بالنسب أعلاه، ودرجة اللون أسرع بهذا الضعف
+  // (أسطح 81% وجدران 36%): لون المالك نقي في كل المدن، لا زيتوني ولا باهت، وظلال المبنى كما هي
+  tintChroma: 1.8,
+  groundTintChroma: 1.0,      // الأرض أهدأ (درجة اللون بنسبة الخلط نفسها): لا تذوب فيها وحدات المالك بلونها نفسه
+  // حدّ الحي بلون مالكه: خط مرسوم على أطراف الحي المطلة على الشارع (داخلها بمقدار inset)،
+  // يُقرأ في كل مدينة مهما كانت ألوان مبانيها (الأحمر في جايبور وشيكاغو، والمدن الملونة)
+  border: { width: 1.5, inset: 1.3, alpha: 0.95, under: 'rgba(24,18,12,0.45)', underWidth: 2.6 },
   tintSeconds: 0.5,           // زمن الانتقال اللوني عند تغيّر المالك
   tintSteps: 10,              // درجات الانتقال (تقليل عدد الألوان المخلوطة)
   noticeSeconds: 2.5          // مدة ظهور إشعار الاستيلاء

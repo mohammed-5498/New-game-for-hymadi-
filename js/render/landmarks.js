@@ -6,7 +6,7 @@
 // - برج الساعة والتلة: معلم المدينة (landmark) + ساعة، أو تاج ذهبي فوق علم التلة
 // العلامات لا تُصبغ بلون المالك حتى تبقى واضحة دائماً.
 import { CITY_SPECIALS } from '../config.js';
-import { THEMES, getCtx, setThemeContext, setTone, getTone, poly, circ, ln, box, el } from './cityThemes.js';
+import { THEMES, getCtx, setThemeContext, setTone, getTone, getToneInfo, poly, circ, ln, box, el } from './cityThemes.js';
 
 const cityOf = (map) => THEMES[map.city] || THEMES.arab;
 const specialsOf = (map) => CITY_SPECIALS[map.city] || CITY_SPECIALS.arab;
@@ -28,12 +28,12 @@ export function roofTop(map, kind, i, j) {
     pc.setTransform(1, 0, 0, 1, 0, 0);
     pc.clearRect(0, 0, 120, 170);
     pc.setTransform(1, 0, 0, 1, 60, 150);
-    const saved = getCtx(), savedTone = getTone();
+    const saved = getCtx(), savedTone = getTone(), savedInfo = getToneInfo();
     setThemeContext(pc, map.seed || 0);
     setTone(null);
     drawKind(map, kind, 0, 0, i, j);
     setThemeContext(saved, map.seed || 0);
-    setTone(savedTone);
+    setTone(savedTone, savedInfo);
     // أعلى بكسل معتم في الأعمدة الوسطى (لا الوهج ولا الدخان على الأطراف)
     const data = pc.getImageData(48, 0, 24, 170).data;
     for (let y = 0; y < 170; y++) {
@@ -54,10 +54,10 @@ function drawKind(map, kind, x, y, i, j) {
 
 // بلا صبغ: العلامات واضحة بألوانها دائماً
 function plain(draw) {
-  const saved = getTone();
+  const saved = getTone(), savedInfo = getToneInfo();
   setTone(null);
   draw();
-  setTone(saved);
+  setTone(saved, savedInfo);
 }
 
 // --- كل مبنى حاسم ---

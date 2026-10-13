@@ -64,6 +64,8 @@ function buildMap(size, players, cityKey) {
   assignPoliceDistricts(map, districts, size);
   fillDistricts(map, districts);
   map.districts = districts;
+  const walls = CITIES.walls[cityKey];
+  if (walls) buildCityWalls(map, walls);
   if (map.land < map.n) placeRorbu(map);
   repairIsolatedPockets(map);     // القسم 3.4.1: لا يبقى فراغ محاصر بالمباني
   decorateRoads(map);
@@ -401,10 +403,12 @@ function fillDistricts(map, districts) {
   const open = CITIES.open[map.city];
   for (const district of districts) {
     const lane = open && open.lanes && district.capturable ? laneMask(district, open.lanes) : null;
+    // أنماط الأحياء (صحراء اليمامة): الحي كله من نمط واحد (نجدي، قصور، واحة) فيبدو متجانساً
+    const pool = city.styles && district.capturable ? pickWeighted(city.styles.map(style => [style, style.weight])).pool : city.pool;
     for (const [i, j] of district.tiles) {
       const k = map.idx(i, j);
       map.region[k] = district.region;
-      const kind = pickWeighted(city.pool);
+      const kind = pickWeighted(pool);
       const path = lane && lane(i, j);
       placeKind(map, k, path ? '.' : kind);
       if (path) map.kind[k] = path;            // أرض فارغة تُرسم ممراً مرصوفاً باتجاهه
@@ -413,6 +417,10 @@ function fillDistricts(map, districts) {
     // حي صغير: ليس قابلاً للاستيلاء، أشجار أو أرض فارغة فقط
     // (الأوروبية تعرّف شجرتها دالة رسم لا اسم نوع: نوعها 'tree'، وإلا رُسمت بيتاً)
     if (!district.capturable) {
+      if (city.smallPool) {                    // بساتين وآبار (صحراء اليمامة)
+        for (const [i, j] of district.tiles) placeKind(map, map.idx(i, j), pickWeighted(city.smallPool));
+        continue;
+      }
       const tree = typeof city.draw.tree === 'function' ? 'tree' : city.draw.tree;
       for (const [i, j] of district.tiles) {
         placeKind(map, map.idx(i, j), rnd() < 0.5 ? tree : '.');
@@ -450,6 +458,46 @@ function fillDistricts(map, districts) {
         const tile = inner[index];
         if (tile) map.type[map.idx(tile[0], tile[1])] = letter;
       });
+    }
+  }
+}
+
+// صحراء اليمامة: السور على مربعات حافة الخريطة (مبانٍ لا يُمشى عليها، وقبل إصلاح الفراغات فيُفتح منه ما يلزم)
+// - الحافتان البعيدتان (i = 0 وj = 0): أقواس السور، وبرج كل towerEvery مربعاً، والأطلال فيه ثغرات منهارة،
+//   وبوابة فوق كل شارع يخرج من الحافة (الشارع يبقى شارعاً: نوع البوابة على مربعه ويُمشى تحتها)
+// - الحافتان القريبتان: سور منهار منخفض لا يحجب الجنود خلفه، والشوارع تخرج منه بلا بوابة
+// - الزوايا أبراج (القريبة منهارة). ساحة العلم والمباني الحاسمة والشوارع على الحافة لا تُمس
+function buildCityWalls(map, cfg) {
+  const n = map.n, last = n - 1;
+  const road = (i, j) => map.inBounds(i, j) && map.road[map.idx(i, j)] === 1;
+  for (let j = 0; j < n; j++) {
+    for (let i = 0; i < n; i++) {
+      if (i !== 0 && j !== 0 && i !== last && j !== last) continue;
+      const k = map.idx(i, j);
+      const corner = (i === 0 || i === last) && (j === 0 || j === last);
+      if (map.road[k]) {
+        if (corner) continue;
+        if (i === 0 && road(1, j) && !road(0, j - 1) && !road(0, j + 1)) map.kind[k] = 'gateJ';
+        else if (j === 0 && road(i, 1) && !road(i - 1, 0) && !road(i + 1, 0)) map.kind[k] = 'gateI';
+        // الحافتان القريبتان: قوس قديم قائم فوق بعض الشوارع الخارجة، والباقي ثغرة
+        else if (rnd() < cfg.archChance) {
+          if (i === last && road(i - 1, j) && !road(i, j - 1) && !road(i, j + 1)) map.kind[k] = 'archJ';
+          else if (j === last && road(i, j - 1) && !road(i - 1, j) && !road(i + 1, j)) map.kind[k] = 'archI';
+        }
+        continue;
+      }
+      const type = map.type[k];
+      if (type !== 'H' && type !== '.' && type !== 'R') continue;
+      let kind;
+      if (corner) kind = i === last && j === last ? 'brokenTower' : 'wallTower';
+      else if (i === 0 || j === 0) {
+        const along = i === 0 ? j : i;
+        if (along % cfg.towerEvery === 0) kind = 'wallTower';
+        else if (type === 'R') kind = i === 0 ? 'brokenJ' : 'brokenI';
+        else kind = i === 0 ? 'wallJ' : 'wallI';
+      } else kind = i === last ? 'brokenJ' : 'brokenI';
+      map.type[k] = 'H';
+      map.kind[k] = kind;
     }
   }
 }

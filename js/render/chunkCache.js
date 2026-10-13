@@ -4,8 +4,9 @@
 // - تُعاد قطعة فقط حين يتغير مالك حي فيها (وعلى 3 مراحل أثناء انتقال اللون)
 // - رسم القطع على دفعات محدودة بوقت في كل إطار؛ وحتى تجهز يظهر مكانها نسختها الأقدم أو خريطة أرض منخفضة الدقة
 // - المصابيح الوامضة وإضاءة الليل طبقة خفيفة تُرسم كل إطار
-import { TILE_HALF_W, TILE_HALF_H, CITY_CACHE as CC } from '../config.js';
-import { beginCity, groundColor, drawRoadSurface, drawTileStatic, debrisLight, specialType } from './cityRender.js';
+import { TILE_HALF_W, TILE_HALF_H, CITY_CACHE as CC, CAPTURE } from '../config.js';
+import { tintAmount } from '../game/capture.js';
+import { beginCity, groundColor, drawRoadSurface, drawTileStatic, debrisLight, specialType, cityOf, cityReady } from './cityRender.js';
 import { isLane, drawLanePaving, roundaboutAnchor, drawRoundaboutRing, laneLight, roundaboutLights } from './openCity.js';
 import { lampSpot } from './landmarks.js';
 
@@ -73,7 +74,7 @@ function tintKey(d) {
 
 // إضاءة الليل الثابتة والمصابيح الوامضة: تُحسب مرة واحدة بلا رسم
 function collectStatics(state) {
-  const map = state.map, n = map.n;
+  const map = state.map, n = map.n, T = cityOf(map);
   beginCity(makeCanvas(1, 1).getContext('2d'), map);   // بذرة هذه الخريطة قبل أي حساب عشوائي حتمي
   for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
     const x = tileX(i, j), y = tileY(i, j), k = map.idx(i, j);
@@ -83,6 +84,7 @@ function collectStatics(state) {
     else if (!special && debrisLight(map, i, j)) cache.lights.push({ x, y: y - 7, r: 34, c: '255,150,60', a: 0.65 });
     else if (!special && isLane(map, k)) { const l = laneLight(map, i, j, x, y); if (l) cache.lights.push(l); }
     else if (map.type[k] === 'Y' && roundaboutAnchor(map, i, j)) cache.lights.push(...roundaboutLights(x, y));
+    else if (T.lightsAt) { const l = T.lightsAt(map, i, j, x, y); if (l) cache.lights.push(...l); }   // مشاعل بوابات اليمامة
   }
 }
 
@@ -200,6 +202,7 @@ function drawGround(ctx, state, tiles) {
     else if (isLane(map, k)) drawLanePaving(ctx, map, i, j, x, y);            // المدن المفتوحة
     else if (map.type[k] === 'Y' && roundaboutAnchor(map, i, j)) drawRoundaboutRing(ctx, x, y);
   }
+  drawBorders(ctx, map, tiles);
   for (let t = 0; t < tiles.length; t += 2) {
     const i = tiles[t], j = tiles[t + 1], k = map.idx(i, j);
     if (!map.dash[k]) continue;
@@ -218,6 +221,57 @@ function drawGround(ctx, state, tiles) {
   }
 }
 
+// حدّ الحي المملوك بلون مالكه (القسم 8): خط على كل ضلع من مربعات الحي يطل على غير الحي (شارع أو حافة)،
+// مزاح نحو داخل المربع حتى لا يتداخل مع رصيف الشارع، وتحته خط داكن أعرض يفصله عن الأرض.
+// لكل ضلع: الجار خلفه، وطرفاه نسبة لمركز المربع مزاحين نحو المركز بمقدار inset (عمودياً على الضلع)
+const EDGES = [
+  [-1, 0, [-TILE_HALF_W, 0], [0, -TILE_HALF_H]],
+  [1, 0, [TILE_HALF_W, 0], [0, TILE_HALF_H]],
+  [0, -1, [0, -TILE_HALF_H], [TILE_HALF_W, 0]],
+  [0, 1, [0, TILE_HALF_H], [-TILE_HALF_W, 0]]
+].map(([di, dj, a, b]) => {
+  const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2, len = Math.hypot(mx, my);
+  const sx = -mx / len * CAPTURE.border.inset, sy = -my / len * CAPTURE.border.inset;   // نحو المركز
+  return [di, dj, a[0] + sx, a[1] + sy, b[0] + sx, b[1] + sy];
+});
+
+function drawBorders(ctx, map, tiles) {
+  const B = CAPTURE.border, groups = new Map();
+  for (let t = 0; t < tiles.length; t += 2) {
+    const i = tiles[t], j = tiles[t + 1], k = map.idx(i, j);
+    const d = map.districtAt[k];
+    if (d < 0 || map.road[k]) continue;
+    const district = map.districts[d];
+    const amount = tintAmount(district, 1);
+    if (amount <= 0) continue;
+    const x = tileX(i, j), y = tileY(i, j);
+    const key = district.tintColor + '|' + amount;
+    let g = groups.get(key);
+    for (const [di, dj, ax, ay, bx, by] of EDGES) {
+      const a = i + di, b = j + dj;
+      if (map.inBounds(a, b) && map.districtAt[map.idx(a, b)] === d) continue;
+      if (!g) groups.set(key, g = { color: district.tintColor, amount, lines: [] });
+      g.lines.push(x + ax, y + ay, x + bx, y + by);
+    }
+  }
+  if (!groups.size) return;
+  ctx.save();
+  ctx.lineCap = 'round';
+  for (const g of groups.values()) {
+    ctx.beginPath();
+    for (let n = 0; n < g.lines.length; n += 4) { ctx.moveTo(g.lines[n], g.lines[n + 1]); ctx.lineTo(g.lines[n + 2], g.lines[n + 3]); }
+    ctx.globalAlpha = g.amount;
+    ctx.strokeStyle = B.under;
+    ctx.lineWidth = B.underWidth;
+    ctx.stroke();
+    ctx.globalAlpha = g.amount * B.alpha;
+    ctx.strokeStyle = g.color;
+    ctx.lineWidth = B.width;
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
 // الدقة المناسبة للتقريب: أصغر درجة تكفي (مع هامش)، وإلا الأعلى
 function pickScale(need) {
   for (const s of CC.scales) if (s >= need * CC.scaleSlack) return s;
@@ -229,6 +283,7 @@ function pickScale(need) {
 // budgetMs: وقت رسم القطع في هذا الإطار. maxScale: سقف الدقة (بداية المباراة: دقة أقل تُرسم بسرعة ثم تُرفع تدريجياً)
 // يعيد عدد القطع الظاهرة التي لم تكتمل بعد
 export function drawCityLayer(ctx, state, view, budgetMs = CC.frameBudgetMs, maxScale = Infinity) {
+  if (!cityReady(state.map)) return Infinity;      // صور مباني المدينة لم تُحمّل بعد: لا شيء يُرسم ولا يُخزن
   if (!cache || cache.map !== state.map || cache.weather !== state.weather || cache.mode !== state.mode) setup(state);
   cache.frame++;
   markDirty(state);
@@ -302,8 +357,19 @@ function markDirty(state) {
     cache.keys[d] = key;
     // رسم جارٍ بالألوان القديمة يُلغى ويبدأ من جديد
     for (const id of cache.districtChunks[d]) { cache.chunks[id].dirty = true; cache.chunks[id].job = null; }
+    repaintBase(state, districts[d]);
   }
-  // خريطة الأرض المنخفضة لا تُعاد هنا: تظهر لحظة فقط مكان قطعة لم تُرسم، فلونها القديم لا يُلاحظ
+}
+
+// خريطة الأرض المنخفضة تتبع لون الحي: تُعاد أرض مربعاته وحدها (بضع عشرات من المعينات، لا الخريطة كلها)
+function repaintBase(state, district) {
+  const b = cache.base;
+  if (!b) return;
+  const ctx = b.canvas.getContext('2d');
+  ctx.setTransform(b.scale, 0, 0, b.scale, -cache.x0 * b.scale, -cache.y0 * b.scale);
+  const tiles = [];
+  for (const [i, j] of district.tiles) tiles.push(i, j);
+  drawGround(ctx, state, tiles);
 }
 
 // حد الذاكرة: الأقدم استعمالاً من القطع غير الظاهرة يُحذف أولاً
@@ -328,7 +394,7 @@ export function cityStatics() {
 // ترسم القطع التي تغطيه في ctx (بإحداثيات العالم) وتعيد { scale, sig }، أو null إن لم تجهز كلها بنفس الدقة.
 // sig يتغير متى أُعيد رسم إحداها (لون مالك جديد، دقة أخرى، طقس آخر)
 export function cityRegion(x0, y0, x1, y1) {
-  if (!cache) return null;
+  if (!cache || !cityReady(cache.map)) return null;
   const size = CC.chunkWorld;
   const c0 = Math.max(0, Math.floor((x0 - cache.x0) / size)), c1 = Math.min(cache.cols - 1, Math.floor((x1 - cache.x0) / size));
   const r0 = Math.max(0, Math.floor((y0 - cache.y0) / size)), r1 = Math.min(cache.rows - 1, Math.floor((y1 - cache.y0) / size));

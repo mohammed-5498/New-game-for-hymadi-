@@ -4,7 +4,7 @@
 // كلفة الإطار: نسخ صورة واحد لكل مبنى يغطي وحدات (لا قصّ ولا لوحات وسيطة). والقصاصة تُعاد فقط
 // حين تُعاد قطعة المدينة تحتها (لون مالك جديد، دقة أخرى، طقس آخر).
 import { TILE_HALF_W, TILE_HALF_H, CITY_CACHE as CC } from '../config.js';
-import { beginCity, drawTileStatic } from './cityRender.js';
+import { beginCity, drawTileStatic, cityReady } from './cityRender.js';
 import { getCtx, setThemeContext } from './cityThemes.js';
 import { cityRegion, drawRegionChunks, regionSig } from './chunkCache.js';
 
@@ -27,11 +27,12 @@ const spriteSize = (w) => Math.max(GPU_MIN, w);
 
 function reset(state) {
   const map = state.map, n = map.n;
-  // ما يرتفع عن الأرض فقط: المباني والأشجار والأطلال والمباني الحاسمة (لا الشوارع ولا الأرض ولا الماء)
+  // ما يرتفع عن الأرض فقط: المباني والأشجار والأطلال والمباني الحاسمة (لا الشوارع ولا الأرض ولا الماء)،
+  // والبوابات والأقواس القائمة فوق الشوارع (صحراء اليمامة): تُرى الوحدات من فتحتها وتختفي خلف أعمدتها
   const solid = new Uint8Array(n * n);
   for (let k = 0; k < n * n; k++) {
     const type = map.type[k];
-    solid[k] = !map.road[k] && type !== '.' && type !== '~' ? 1 : 0;
+    solid[k] = (map.road[k] ? map.kind[k] : type !== '.' && type !== '~') ? 1 : 0;
   }
   // حدود المبنى حول مركز مربعه: أعلى، يسار، يمين، أسفل (-1 = لم يُقس بعد)
   cache = { map, mode: state.mode, solid, bounds: new Int16Array(n * n * 4).fill(-1),
@@ -188,7 +189,7 @@ function paste(ctx, o) {
 // رسم الوحدات بترتيب الأقطار مع إخفائها خلف المباني التي أمامها.
 // entries مرتبة بالقطر تصاعدياً، وdraw(c, entry) ترسم الوحدة على اللوحة c
 export function drawUnitsOccluded(ctx, state, entries, draw) {
-  if (!O.enabled || typeof document === 'undefined' || !state.map.type) {
+  if (!O.enabled || typeof document === 'undefined' || !state.map.type || !cityReady(state.map)) {
     for (const e of entries) draw(ctx, e);
     return;
   }

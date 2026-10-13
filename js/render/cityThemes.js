@@ -13,13 +13,16 @@
    - كل دالة رسم تأخذ (x, y, i, j, T): مركز المربع على الشاشة بنظام 36×18، وإحداثيات المربع، والطابع.
    - العشوائية حتمية عبر hsh(i,j,k) وبذرة الخريطة SEED: نفس الخريطة تُرسم دائماً بنفس الشكل، وهذا شرط للتخزين المؤقت.
    - drawMap() و buildMap() في آخر الملف للعرض التجريبي فقط (شبكة 11×11)، لا تُنقل كما هي. */
+import { yamamah } from './yamamah.js';
 let ctx=null,SEED=0;
 // تلوين كل لون قبل استعماله: صبغ المالك (القسم 8) والطقس. roofMode: الأسطح تُصبغ أكثر من الجدران
-let tone=null,roofMode=false;
+// toneInfo: نفس الصبغ للصور الجاهزة (صحراء اليمامة) التي لا تمر ألوانها عبر paint(): { color, amount, snow }
+let tone=null,roofMode=false,toneInfo=null;
 const paint=c=>tone?tone(c,roofMode):c;
 export function setThemeContext(context,seed){ctx=context;SEED=seed%10007;}
-export function setTone(fn){tone=fn;roofMode=false;}
+export function setTone(fn,info=null){tone=fn;toneInfo=info;roofMode=false;}
 export const getTone=()=>tone;
+export const getToneInfo=()=>toneInfo;
 export const getCtx=()=>ctx;
 const TAU=6.2831853;
 function poly(a,c){ctx.beginPath();ctx.moveTo(a[0][0],a[0][1]);for(let k=1;k<a.length;k++)ctx.lineTo(a[k][0],a[k][1]);ctx.closePath();ctx.fillStyle=paint(c);ctx.fill();}
@@ -88,7 +91,8 @@ function ruinTile(x,y,i,j,T){const L=T.wallL||'#8a8074',R=T.wallR||'#a39888',w=1
   circ(x+6,y+3,0.9,'#5a524a');circ(x-9,y+3,0.8,'#5a524a');}
 /* حطام الشوارع: سيارات محطمة، براميل نار، حفر، ركام، أكياس رمل */
 function streetDebris(x,y,i,j,T){const r=hsh(i,j,20);
-  if(r<0.07){const car=T.car||['#6b4f3a','#85624a','#57402f'];box(x,y+2,8,4,4,car[0],car[1],car[2]);box(x+1,y-2,4,2,3,'#2f2c29','#3d3936','#34302c');
+  if(r<0.07&&T.draw.wreck){T.draw.wreck(x,y,i,j,T);}   // حطام بطابع المدينة بدل السيارة (عربة في صحراء اليمامة)
+  else if(r<0.07){const car=T.car||['#6b4f3a','#85624a','#57402f'];box(x,y+2,8,4,4,car[0],car[1],car[2]);box(x+1,y-2,4,2,3,'#2f2c29','#3d3936','#34302c');
     ctx.save();ctx.globalAlpha=0.3;el(x+2,y-6,4,2.5,'#2a2724');ctx.restore();}
   else if(r<0.12){glow(x,y-6,14,'rgba(255,150,60,0.38)');rc(x-2.5,y-5,5,6,'#4f4337');
     poly([[x-3,y-5],[x,y-13],[x+3,y-5]],'#e8893a');poly([[x-1.5,y-5],[x,y-9],[x+1.5,y-5]],'#f2c14e');}
@@ -439,6 +443,8 @@ THEMES.chicago={name:'شيكاغو الثلاثينيات',ground:'#7d7a72',road
     roadProp(x,y,i,j){if((i+j)%2===0){ln(x-4,y-2,x+4,y+2,'rgba(230,210,140,0.55)',0.8);}},
     tree:'tank'}};
 
+/* ---------- صحراء اليمامة (بطلب المستخدم): صور مباني جاهزة بدل الرسم بالكود، في js/render/yamamah.js ---------- */
+THEMES.yamamah=yamamah;
 
 export { THEMES, TAU, poly, circ, ln, rc, el, box, qL, qR, wL, wR, arch, ridgeRoof, hipRoof, dome, flag, glow,
   damage, ruinTile, streetDebris, hsh, mixc, snowCap, stepGable, bellGable, neonSign, hexRgb };

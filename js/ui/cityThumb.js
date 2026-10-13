@@ -4,9 +4,13 @@ import { CITIES, TILE_HALF_W, TILE_HALF_H, PLAYER_COLORS } from '../config.js';
 import { createMap } from '../map/generator.js';
 import { drawWholeMap } from '../render/chunkCache.js';
 import { THEMES } from '../render/cityThemes.js';
+import { cityReady } from '../render/cityRender.js';
+import { onSpritesReady } from '../render/sprites.js';
 
 const thumbs = new Map();     // مدينة -> لوحة جاهزة
 let timer = 0, shown = '';
+let waiting = null;           // صورة مصغرة طُلبت قبل تحميل صور مبانيها: تُرسم حين تكتمل
+onSpritesReady(() => { if (waiting) { const w = waiting; waiting = null; show(...w); } });
 
 const THUMB = { w: 260, h: 130, tiles: 'small' };
 
@@ -18,7 +22,7 @@ function buildThumb(city) {
   canvas.height = THUMB.h * dpr;
   const players = [0, 1].map(k => ({ name: '', gang: 'crows', color: PLAYER_COLORS[k].id, isHuman: false, team: 0 }));
   const map = createMap(THUMB.tiles, players, city);
-  if (!map) return null;
+  if (!map || !cityReady(map)) return null;
   // حيّان منزليان ملوّنان بلونين، حتى يظهر تلوين المالك أيضاً
   const colors = [PLAYER_COLORS[0].hex, PLAYER_COLORS[1].hex];
   for (const d of map.districts) if (d.owner !== null) { d.tintColor = colors[d.owner]; d.tintMix = 1; }
@@ -38,6 +42,7 @@ function buildThumb(city) {
 
 function show(target, nameEl, city) {
   const thumb = buildThumb(city);
+  waiting = thumb ? null : [target, nameEl, city];
   const ctx = target.getContext('2d');
   target.width = thumb ? thumb.width : 1;
   target.height = thumb ? thumb.height : 1;

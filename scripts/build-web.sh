@@ -11,6 +11,7 @@ mkdir -p www
 cp index.html www/
 cp -r css www/
 cp -r js www/
+cp -r assets www/      # صور مباني صحراء اليمامة (assets/yamamah)
 
 # مراجع يستوردها كود اللعبة وقت التشغيل (إن وُجدت)
 # ملاحظة: js/render/unitsArt.js وjs/audio/audio.js نسختان داخل js/ أصلاً،
