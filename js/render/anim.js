@@ -127,26 +127,32 @@ function addFlinch(p,f,fromBack){const s=fromBack?-1:1;p=Object.assign({},p);
   p.tf+=0.75*f;p.kf+=0.95*f;return p;}
 function poseDeath(){return P({py:-9,pl:0.3,cb:0.55,ht:0.65,fh:[4,-3],bh:[-2,-3],wa:1.3,tf:0.55,kf:1.0,tb:-0.45,kb:1.0});}
 
-/* ---------- رسم الجسد من الوضعية ---------- */
-function leg(c,hx,hy,th,fl,W,col){const kx=hx+Math.sin(th)*5.8,ky=hy+Math.cos(th)*5.8;
+/* ---------- رسم الجسد من الوضعية ----------
+   (المرحلة 9أ، من docs/nations/anim-v4.js) leg تعيد نقاط الورك والركبة والقدم {h,k,f}، ويحفظها drawBody
+   في J.legB وJ.legF (ومعها J.elbowF وJ.pl) للخطافين الجديدين: robe بعد الساق الأمامية (ثوب يتمايل مع
+   الساقين) وover بعده (حزام، صديري، جنبية). النقاط تُحسب فقط لوحدة تحتاجها (robe أو over أو legs):
+   العصابات الكلاسيكية بنفس الأوامر تماماً وبلا كائنات جديدة في كل إطار */
+function leg(c,hx,hy,th,fl,W,col,pts){const kx=hx+Math.sin(th)*5.8,ky=hy+Math.cos(th)*5.8;
   const fx=kx+Math.sin(th-fl)*6,fy=ky+Math.cos(th-fl)*6;
   c.beginPath();c.moveTo(hx,hy);c.lineTo(kx,ky);c.lineTo(fx,fy);c.strokeStyle=col;c.lineWidth=W;
   if(!roundSet){c.lineCap='round';c.lineJoin='round';}c.stroke();
-  limb(c,fx,fy,fx+Math.sin(th-fl+1.1)*2,fy+Math.cos(th-fl+1.1)*0.9,W,col);}
+  limb(c,fx,fy,fx+Math.sin(th-fl+1.1)*2,fy+Math.cos(th-fl+1.1)*0.9,W,col);
+  return pts?{h:[hx,hy],k:[kx,ky],f:[fx,fy]}:null;}
 function drawBody(c,p,col,o){
   c.lineCap='round';c.lineJoin='round';roundSet=true;
-  const W=o.lw||2,dc=dk(col,0.32),hp=[p.px,p.py];
+  const W=o.lw||2,dc=dk(col,0.32),hp=[p.px,p.py],pts=!!(o.robe||o.over||o.legs);
   const M=add(hp,rot(0,-4.6,p.pl)),a2=p.pl+p.cb,C=add(M,rot(0,-4.6,a2)),N=add(C,rot(0,-1.3,a2));
   const ha=a2+p.ht,H=add(add(N,rot(0,-3.1,ha)),[p.hdx,p.hdy]);
   const Sb=add(C,rot(-0.9,0.7,a2)),Sf=add(C,rot(0.9,0.5,a2));
-  const J={hip:hp,mid:M,chest:C,neck:N,head:H,ha,Sf,Sb,a2};
-  leg(c,p.px-1.2,p.py,p.tb,p.kb,W,dc);
+  const J={hip:hp,mid:M,chest:C,neck:N,head:H,ha,Sf,Sb,a2,pl:p.pl,legB:null,legF:null};
+  J.legB=leg(c,p.px-1.2,p.py,p.tb,p.kb,W,dc,pts);
   o.backWeapon&&o.backWeapon(c,J,p,col);
   const b=ik2(Sb,p.bh,3.7,3.7,true);bone3(c,Sb,b.j,b.e,W-0.1,dc);J.handB=b.e;
   o.back&&o.back(c,J,p,col);
   bone3(c,hp,M,C,W+0.5,col);limb(c,C[0],C[1],N[0],N[1],W*0.8,col);
   o.chest&&o.chest(c,J,p,col);
-  leg(c,p.px+1.2,p.py,p.tf,p.kf,W,col);
+  J.legF=leg(c,p.px+1.2,p.py,p.tf,p.kf,W,col,pts);
+  o.robe&&o.robe(c,J,p,col);o.over&&o.over(c,J,p,col);
   c.save();c.translate(H[0],H[1]);c.rotate(ha);
   c.beginPath();c.arc(0,0,o.headR||3,0,TAU);Pf(c,col);c.lineWidth=0.7;c.strokeStyle=dk(col,0.4);c.stroke();
   ell(c,1.5,-0.3,0.55,0.55,dk(col,0.6));                      // العين تُظهر اتجاه الرأس
