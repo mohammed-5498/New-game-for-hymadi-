@@ -23,7 +23,7 @@ const ULT_MOVE = {
   pierce: 'thrust', flurry: 'quick', slam: 'heavy', shot: 'shoot', fire: 'throw',
   buff: 'heavy', heal: 'heavy', arc: 'spin', arrows: 'shoot', bash: 'thrust', harden: 'block',
   caravan: 'heavy', falcon: 'throw', shout: 'heavy', whirl: 'spin', rain: 'shoot',
-  throwdown: 'spin', bribe: 'thrust', banner: 'heavy'
+  throwdown: 'spin', bribe: 'thrust', banner: 'heavy', haste: 'heavy', knockout: 'punch'
 };
 const RANGED = { shoot: true, throw: true };
 

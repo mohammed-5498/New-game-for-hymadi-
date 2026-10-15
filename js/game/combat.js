@@ -232,6 +232,8 @@ function resolveMove(state, unit, hit) {
       flinch(target, unit.x, unit.y, zone === 'back', false); // الركلة الأمامية تدفعه ليصنع مسافة
       target.flinch = CR.flinchTime * CR.pushFlinch;
       knockback(target, unit.x, unit.y, m.push);
+    } else if (hit.move === 'punch' && unit.stats.punches && unit.rng() < unit.stats.punches.stagger) {
+      stagger(state, target, unit.stats.punches.staggerTime);  // اليد الملفوفة: اللكمة قد ترنّح (القسم 3.10)
     } else {
       flinch(target, unit.x, unit.y, zone === 'back');        // ارتداد مع كل ضربة عادية
     }
@@ -472,9 +474,14 @@ function showoff(state, unit) {
   return 1 + show.bonus;
 }
 
-// «السافات» (سمة فرنسا، القسم 3.10): الركلتان أقوى (1 لغيرهما ولمن لا يملك السمة)
-const kickBonus = (unit, key) =>
-  unit.stats.kicks && (key === 'kick_front' || key === 'kick_high') ? 1 + unit.stats.kicks.damage : 1;
+// «السافات» (سمة فرنسا) و«اليد الملفوفة» (سمة نيجيريا)، القسم 3.10: الركلتان أو اللكمة أقوى
+// (1 لغيرها ولمن لا يملك السمة)
+function moveBonus(unit, key) {
+  const s = unit.stats;
+  if (s.kicks && (key === 'kick_front' || key === 'kick_high')) return 1 + s.kicks.damage;
+  if (s.punches && key === 'punch') return 1 + s.punches.damage;
+  return 1;
+}
 
 // ضربة قريبة بالحركات الأربع (القسم 5.4)
 function meleeSwing(state, unit, target, dist, range, damage, attackTime, aimOff) {
@@ -512,7 +519,7 @@ function meleeSwing(state, unit, target, dist, range, damage, attackTime, aimOff
 
   unit.pendingHit = {
     target, move: key, range,
-    damage: damage * unit.damageMultiplier * CR.moves[key].dmg * showoff(state, unit) * kickBonus(unit, key),
+    damage: damage * unit.damageMultiplier * CR.moves[key].dmg * showoff(state, unit) * moveBonus(unit, key),
     ranged: false,
     at: state.time + phases.wind + phases.strike * CR.strikeMoment
   };

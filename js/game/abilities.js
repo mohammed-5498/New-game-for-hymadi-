@@ -6,7 +6,7 @@ import { ownsSpecial } from './spawn.js';
 import { policeArmorBonus } from './police.js';
 import { forEachNearby } from './spatialHash.js';
 import { soundAt } from '../audio/sound.js';
-import { homeMods, inOwnArea, brotherMods, phalanxMods } from './nations.js';
+import { homeMods, inOwnArea, brotherMods, phalanxMods, outnumberedMods } from './nations.js';
 
 const isAlive = (unit) => unit.state !== 'dead' && unit.hp > 0;
 const allied = (state, a, b) => a.playerId === b.playerId || !isEnemy(state, a, b);
@@ -30,6 +30,7 @@ function applyDamageBonuses(state) {
   // «الـ108» (الصين) و«الكتيبة» (ألمانيا): null لكل لاعب بلا هذه السمة
   const brothers = state.players.map(brotherMods);
   const phalanx = state.players.map(phalanxMods);
+  const outnumbered = state.players.map(outnumberedMods);
 
   // نبدأ من الصفر (المضاعف النهائي يُحسب في الحلقة الأخيرة بنفس ترتيب الجمع)
   // كتابة العدد العشري في خاصية الوحدة تحجز ذاكرة: لا نكتب إلا ما تغيّر فعلاً
@@ -79,6 +80,9 @@ function applyDamageBonuses(state) {
       const b = brothers[unit.playerId];
       multiplier += Math.min(b.max, unit.brothers * b.perHero);
     }
+    // «روح عدوة»: ضرر أكبر للوحدة التي يفوقها الأعداء عدداً حولها
+    const out = outnumbered[unit.playerId];
+    if (out && enemiesOutnumber(state, unit, out.radius)) multiplier += out.bonus;
     // «الكتيبة»: ضرر متلقى أقل للوحدة داخل مجموعة كبيرة من وحدات لاعبها
     const ph = phalanx[unit.playerId];
     if (ph) {
@@ -113,6 +117,19 @@ function inGroup(state, unit, ph) {
     if (dx * dx + dy * dy <= radiusSq) count++;
   });
   return count >= ph.count;
+}
+
+// هل الأعداء حول الوحدة أكثر من وحدات لاعبها وحلفائه (ومعهم هي نفسها)؟
+function enemiesOutnumber(state, unit, radius) {
+  const radiusSq = radius * radius;
+  let foes = 0, friends = 0;
+  forEachNearby(state, unit.x, unit.y, radius, (other) => {
+    if (!isAlive(other)) return;
+    const dx = other.x - unit.x, dy = other.y - unit.y;
+    if (dx * dx + dy * dy > radiusSq) return;
+    if (allied(state, unit, other)) friends++; else foes++;
+  });
+  return foes > friends;
 }
 
 // --- مناطق ضربات الأبطال (القسم 3.10): الراية المغروسة ---

@@ -6,6 +6,7 @@ import { nationArtKey, shotLook } from './nationArt.js';
 import './nationsArab.js';                 // مظاهر الدفعة العربية تُسجَّل في سجل الأمم (القسم 3.10)
 import './nationsAsia.js';                 // والدفعة الآسيوية
 import './nationsEurope.js';               // والدفعة الأوروبية
+import './nationsAfrica.js';               // والدفعة الأفريقية
 
 // الأفراد العاديون بلا ضربة مميزة، فلا نجمة ولا شريط شحن لهم
 const hasUlt = (unit) => !!unit.stats.ult;
@@ -204,11 +205,21 @@ export function drawProjectile(ctx, shot, alpha) {
     aimedArrow(ctx, shot, x, (i + j) * TILE_HALF_H - 6 - Math.sin(progress * Math.PI) * arc, progress, arc, color);
     return;
   }
+  const look = shotLook(shot);
   // السهم المشتعل (رامي السهام المشتعلة): شكل فقط، وقواعده قواعد زجاجة رامي النار
-  if (shotLook(shot) === 'firearrow') {
+  if (look === 'firearrow') {
     const head = aimedArrow(ctx, shot, x, y, progress, COMBAT.projectileArc, PROJECTILE_COLORS.arrow);
     ctx.beginPath(); ctx.ellipse(head.x, head.y, 1.2, 1.5, 0, 0, 6.2832); ctx.fillStyle = '#f0902a'; ctx.fill();
     ctx.beginPath(); ctx.ellipse(head.x, head.y - 0.4, 0.6, 0.9, 0, 0, 6.2832); ctx.fillStyle = '#ffd45a'; ctx.fill();
+    return;
+  }
+  // المشعل (رامي المشاعل): عصا تدور في الهواء وفي طرفها لهب، وقواعده أيضاً قواعد زجاجة رامي النار
+  if (look === 'torch') {
+    const a = progress * 9.4, cx = Math.cos(a) * 2, cy = Math.sin(a) * 1.2;
+    ctx.beginPath(); ctx.moveTo(x - cx, y - cy); ctx.lineTo(x + cx, y + cy);
+    ctx.strokeStyle = '#6a4a2a'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(x + cx, y + cy - 0.6, 1.5, 2, 0, 0, 6.2832); ctx.fillStyle = '#f0902a'; ctx.fill();
+    ctx.beginPath(); ctx.ellipse(x + cx, y + cy - 0.9, 0.8, 1.2, 0, 0, 6.2832); ctx.fillStyle = '#ffd45a'; ctx.fill();
     return;
   }
   if (shot.kind === 'arrow') {

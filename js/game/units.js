@@ -96,6 +96,8 @@ export function createUnit(state, player, i, j, heroId = null, champion = false)
     holdUntil: 0,           // داخل راية مغروسة: لا يُدفع حتى هذا الزمن (غرس الراية، ألمانيا)
     bribedUntil: 0,         // شرطي مرتشٍ: لا يهاجم وحدات اللاعب bribedBy ولا تهاجمه حتى هذا الزمن (بريطانيا)
     bribedBy: -1,
+    hasteUntil: 0,          // اندفاع: سرعة أكبر بنسبة hasteFactor حتى هذا الزمن (هجوم عدوة)
+    hasteFactor: 0,
 
     // الشرطة المحايدة (القسم 3.8)
     stationId: -1,          // رقم حي المركز الذي تتبعه

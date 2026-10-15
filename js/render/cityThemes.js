@@ -17,6 +17,7 @@ import { yamamah } from './yamamah.js';
 import { shibam, diriyah, cairo } from './citiesArab.js';
 import { kaifeng, gyeongju } from './citiesAsia.js';
 import { paris, birmingham, rothenburg } from './citiesEurope.js';
+import { gondar, kano, meroe } from './citiesAfrica.js';
 let ctx=null,SEED=0;
 // تلوين كل لون قبل استعماله: صبغ المالك (القسم 8) والطقس. roofMode: الأسطح تُصبغ أكثر من الجدران
 // toneInfo: نفس الصبغ للصور الجاهزة (صحراء اليمامة) التي لا تمر ألوانها عبر paint(): { color, amount, snow }
@@ -69,6 +70,12 @@ function dome(x,y,r,col,shade,tip){roofMode=true;ctx.beginPath();ctx.ellipse(x,y
   el(x,y,r,r*0.32,shade);if(tip){ln(x,y-r*1.15,x,y-r*1.15-4,tip,0.9);circ(x,y-r*1.15-4.4,0.9,tip);}}
 function flag(x,y,col){ln(x,y,x,y-22,'#2b2825',1.2);poly([[x,y-22],[x+10,y-19],[x,y-16]],col);}
 function glow(x,y,r,col){const g=ctx.createRadialGradient(x,y,0,x,y,r);g.addColorStop(0,col);g.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=g;ctx.beginPath();ctx.arc(x,y,r,0,TAU);ctx.fill();}
+/* أسطوانة مائلة (أبراج دائرية، أكواخ) ومخروط (أسقف القش): من مدن الدفعة 4 (docs/nations/batch4-cities.js)، مشتركة لكل المدن.
+   لونا تدرج الأسطوانة يمران عبر paint()، وغطاؤها والمخروط سطحان (roofMode) كبقية الأسقف. asRoof: أي رسم آخر كسطح (قباب النوبة) */
+function cyl(x,y,r,h,L,R,T){const ry=r*0.5;ctx.beginPath();ctx.moveTo(x-r,y);ctx.lineTo(x-r,y-h);ctx.ellipse(x,y-h,r,ry,0,Math.PI,0,true);ctx.lineTo(x+r,y);ctx.ellipse(x,y,r,ry,0,0,Math.PI);ctx.closePath();
+  const g=ctx.createLinearGradient(x-r,0,x+r,0);g.addColorStop(0,paint(L));g.addColorStop(1,paint(R));ctx.fillStyle=g;ctx.fill();if(T)asRoof(()=>el(x,y-h,r,ry,T));}
+function cone(x,y,r,h,L,R){const ry=r*0.5;asRoof(()=>{poly([[x-r,y],[x,y-h],[x,y+ry]],L);poly([[x,y+ry],[x,y-h],[x+r,y]],R);});}
+function asRoof(f){roofMode=true;try{f();}finally{roofMode=false;}}
 
 /* ================= طبقة الخراب المشتركة ================= */
 /* أضرار على أي مبنى: شقوق، سخام، نوافذ مسدودة بألواح، كتابات جدران، ركام عند القاعدة */
@@ -459,6 +466,8 @@ THEMES.shibam=shibam;THEMES.diriyah=diriyah;THEMES.cairo=cairo;
 THEMES.kaifeng=kaifeng;THEMES.gyeongju=gyeongju;
 /* ---------- مدن الأمم الأوروبية (المرحلة 9ب): باريس وبرمنغهام وروتنبورغ في js/render/citiesEurope.js ---------- */
 THEMES.paris=paris;THEMES.birmingham=birmingham;THEMES.rothenburg=rothenburg;
+/* ---------- مدن الأمم الأفريقية (المرحلة 9ب): غوندر وكانو ومروي في js/render/citiesAfrica.js ---------- */
+THEMES.gondar=gondar;THEMES.kano=kano;THEMES.meroe=meroe;
 
 export { THEMES, TAU, poly, circ, ln, rc, el, box, qL, qR, wL, wR, arch, ridgeRoof, hipRoof, dome, flag, glow,
-  damage, ruinTile, streetDebris, hsh, mixc, snowCap, stepGable, bellGable, neonSign, hexRgb, paint };
+  damage, ruinTile, streetDebris, hsh, mixc, snowCap, stepGable, bellGable, neonSign, hexRgb, paint, cyl, cone, asRoof };

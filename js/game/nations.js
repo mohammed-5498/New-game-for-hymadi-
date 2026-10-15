@@ -36,6 +36,9 @@ export function nationStats(stats, nationId, champion, heroId = null) {
   if (mods.kicks) stats.kicks = mods.kicks;                              // السافات (combat.js وrealism.js)
   if (mods.commonArmor && !champion && !heroId) stats.armor += mods.commonArmor;   // معاطف الصوف للأفراد
   if (mods.heavyStagger) stats.heavyStagger = 1 + mods.heavyStagger;     // ترنّح الضربة القوية أطول (combat.js)
+  if (mods.punches) stats.punches = mods.punches;                        // اليد الملفوفة (combat.js)
+  if (mods.armorAll) stats.armor += mods.armorAll;                       // درع كل الوحدات
+  if (mods.rangedDamage && stats.projectile) stats.damage *= 1 + mods.rangedDamage;   // ضرر الرمي (لا القريب)
   if (champion && nation.ult) stats.ult = nation.ult;
   return stats;
 }
@@ -95,6 +98,12 @@ export function homeMods(player) {
 export function brotherMods(player) {
   const nation = nationOf(player.nation);
   return (nation && nation.trait.mods.brothers) || null;
+}
+
+// «روح عدوة» للاعب: {radius, bonus} إن كانت لأمته، وإلا null (abilities.js)
+export function outnumberedMods(player) {
+  const nation = nationOf(player.nation);
+  return (nation && nation.trait.mods.outnumbered) || null;
 }
 
 // «الكتيبة» للاعب: {count, radius, reduce} إن كانت لأمته، وإلا null (abilities.js)

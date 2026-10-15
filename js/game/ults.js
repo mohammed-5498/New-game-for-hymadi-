@@ -184,7 +184,9 @@ export function resolveUlt(state, unit) {
     case 'shout':   rallyShout(state, unit, ult); break;
     case 'whirl':   startFlurry(state, unit, ult, null, ult.radius); break;
     case 'rain':    arrowRain(state, unit, ult, target); break;
-    case 'throwdown': throwdown(state, unit, ult, target); break;
+    case 'throwdown':
+    case 'knockout': throwdown(state, unit, ult, target); break;     // رقصة الأباتشي والضربة القاضية
+    case 'haste':   hasteAllies(state, unit, ult); break;
     case 'bribe':   bribePolice(state, unit, ult); break;
     case 'banner':  plantBanner(state, unit, ult); break;
   }
@@ -492,4 +494,14 @@ function plantBanner(state, unit, ult) {
                      playerId: unit.playerId, color: unit.color });
   unit.awayUntil = state.time + ult.duration;
   addUltFx(state, 'ring', unit.x, unit.y, ult.radius);
+}
+
+// هجوم عدوة (الراس): كل حليف حوله، ومعه الراس، أسرع مدة محدودة
+function hasteAllies(state, unit, ult) {
+  const until = state.time + ult.duration;
+  forEachAlly(state, unit, ult.radius, (ally) => {
+    ally.hasteUntil = until;
+    ally.hasteFactor = ult.bonus;
+  });
+  addUltFx(state, 'ring', unit.x, unit.y, ult.radius, ult.ring);
 }

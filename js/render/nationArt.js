@@ -72,6 +72,7 @@ export function memo(fn) {
 }
 export const GOLD = '#c9a04a';
 export const STEEL2 = '#cfd3d8';
+export const CREAM = '#efe9dc';
 
 // ---------- علامات النمط عند القدمين (كما في bodies.js) ----------
 // هالة الزعيم، وهالتا بطل الحشد (الضرر والعلاج)
@@ -203,5 +204,62 @@ export function vStripes(c, T, ts, col, w) {
     c.lineTo(T.x3 + (T.x2 - T.x3) * t, T.y3 + (T.y2 - T.y3) * t);
   }
   c.strokeStyle = col; c.lineWidth = w || 0.6; c.stroke();
+}
+
+// ---------- أدوات الرماة (كوريا والسودان) ----------
+// قوس بشد الوتر بلون col، بهندسة قوس اللعبة (bow في bodies.js): الطرفان خلف اليد والبطن أمامها.
+// curlF وcurlO: طرفان مرتدان للأمام وللخارج بهذا القدر (القوس الكوري المنحني)، والوتر مربوط بهما.
+// arrows: سهام على الوتر عند الشد (بطل الرماة يرمي ثلاثة)
+export function pullBow(half, lw, col, arrows, curlF = 0, curlO = 0) {
+  return (c, J, p) => {
+    // خارج الرمي يُحمل القوس شبه قائم كقوس اللعبة
+    const aim = p.pull === undefined ? p.wa * 0.4 : p.wa;
+    const dx = Math.cos(aim), dy = Math.sin(aim), ux = dy, uy = -dx, hx = J.handF[0], hy = J.handF[1];
+    const pull = p.pull || 0, b = 1 + pull * 0.55, back = 2.3 * b;
+    const t1x = hx - dx * back + ux * half, t1y = hy - dy * back + uy * half;
+    const t2x = hx - dx * back - ux * half, t2y = hy - dy * back - uy * half;
+    const r1x = t1x + dx * curlF + ux * curlO, r1y = t1y + dy * curlF + uy * curlO;
+    const r2x = t2x + dx * curlF - ux * curlO, r2y = t2y + dy * curlF - uy * curlO;
+    c.beginPath();
+    if (curlF) { c.moveTo(r1x, r1y); c.lineTo(t1x, t1y); } else c.moveTo(t1x, t1y);
+    c.quadraticCurveTo(hx + dx * 2.3 * b, hy + dy * 2.3 * b, t2x, t2y);
+    if (curlF) c.lineTo(r2x, r2y);
+    c.strokeStyle = col; c.lineWidth = lw; c.stroke();
+    const nx = pull > 0.05 ? J.handB[0] : (r1x + r2x) / 2, ny = pull > 0.05 ? J.handB[1] : (r1y + r2y) / 2;
+    c.beginPath(); c.moveTo(r1x, r1y); c.lineTo(nx, ny); c.lineTo(r2x, r2y);
+    c.strokeStyle = '#ece6d6'; c.lineWidth = 0.4; c.stroke();
+    if (pull > 0.2 && arrows) {
+      c.beginPath();
+      for (let k = 0; k < arrows; k++) {
+        const o = (k - (arrows - 1) / 2) * 0.9;
+        c.moveTo(nx + ux * o * 0.4, ny + uy * o * 0.4); c.lineTo(hx + dx * 3.8 + ux * o, hy + dy * 3.8 + uy * o);
+      }
+      c.strokeStyle = '#d9d3c6'; c.lineWidth = 0.8; c.stroke();
+    }
+  };
+}
+// جعبة سهام على الظهر من الكتف إلى الورك، وثلاثة ريش بارزة (المبسّطة: الجعبة وحدها)
+export function quiverBack(c, J, strap, fletch, lite) {
+  const ca = Math.cos(J.a2), sa = Math.sin(J.a2), cb = Math.cos(J.pl), sb = Math.sin(J.pl);
+  const ax = J.chest[0] - 1.6 * ca + 1.2 * sa, ay = J.chest[1] - 1.6 * sa - 1.2 * ca;   // add(J.chest, rot(-1.6, -1.2, J.a2))
+  limb(c, ax, ay, J.mid[0] - 2.2 * cb - 2 * sb, J.mid[1] - 2.2 * sb + 2 * cb, 2, strap);   // إلى add(J.mid, rot(-2.2, 2, J.pl))
+  if (lite) return;
+  c.beginPath();
+  for (let k = 0; k < 3; k++) triTo(c, ax - 0.6 + k * 0.6, ay, ax - 0.2 + k * 0.6, ay - 2, ax + 0.2 + k * 0.6, ay);
+  c.fillStyle = fletch; c.fill();
+}
+// وهج دائري حول نقطة (سهم مشتعل، مشعل): تدرج واحد لكل لوحة ونصف قطر ولون، يُرسم بالإزاحة (لا تدرج جديد في كل إطار)
+const glows = new WeakMap();
+export function glowAt(c, x, y, r, color) {
+  let byCanvas = glows.get(c);
+  if (!byCanvas) glows.set(c, byCanvas = new Map());
+  const key = r + color;
+  let g = byCanvas.get(key);
+  if (!g) {
+    g = c.createRadialGradient(0, 0, 0, 0, 0, r);
+    g.addColorStop(0, color); g.addColorStop(1, color.replace(/[\d.]+\)$/, '0)'));
+    byCanvas.set(key, g);
+  }
+  c.save(); c.translate(x, y); c.fillStyle = g; c.beginPath(); c.arc(0, 0, r, 0, 6.2831853); c.fill(); c.restore();
 }
 

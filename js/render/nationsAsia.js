@@ -7,11 +7,11 @@
    - رامي السهام المشتعلة يرمي بالقوس لا باليد (shoots)، وزجاجته تطير سهماً مشتعلاً (shotLook في nationArt.js)،
      وقواعده كلها قواعد رامي النار (السهم يشعل الأرض حيث يسقط)
    - البطل الصيني يحمل راية ليانغشان المشمشية على ظهره */
-import { TAU, dk, lt, limb, ell, rrect, tri, rot, add } from './anim.js';
+import { dk, lt, limb, ell, rrect, tri, rot, add } from './anim.js';
 import { heroRing } from './bodies.js';
 import {
   registerNation, both, memo, mixHex, GOLD, STEEL2, auraRing, auraHealRings,
-  lp, pg, dot, robe, stripes, belt, staff, ellTo, triTo
+  lp, pg, dot, robe, stripes, belt, staff, ellTo, triTo, pullBow, quiverBack, glowAt
 } from './nationArt.js';
 
 const JADE = '#3f8f6a', APRI = '#e0b23a', CRIM = '#b8283a', INK = '#232328', PINK = '#e07a9a', SKY = '#6aa8d8';
@@ -108,45 +108,8 @@ function katana(c, fx, fy, a, L, w, lite) {
   limb(c, fx - dx * 1.6, fy - dy * 1.6, fx + dx, fy + dy, 1.3, '#2a2026');
   if (!lite) ell(c, fx + dx * 1.1, fy + dy * 1.1, 1, 1, GOLD);
 }
-// القوس الكوري المنحني: قوس اللعبة (bodies.js) بشد الوتر، وطرفاه مرتدان للأمام والوتر مربوط بهما.
-// arrows: سهام على الوتر عند الشد (بطل الرماة يرمي ثلاثة)
-function recurve(half, lw, col, arrows) {
-  return (c, J, p) => {
-    // خارج الرمي يُحمل القوس شبه قائم كقوس اللعبة
-    const aim = p.pull === undefined ? p.wa * 0.4 : p.wa;
-    const dx = Math.cos(aim), dy = Math.sin(aim), ux = dy, uy = -dx, hx = J.handF[0], hy = J.handF[1];
-    const pull = p.pull || 0, b = 1 + pull * 0.55, back = 2.3 * b;
-    const t1x = hx - dx * back + ux * half, t1y = hy - dy * back + uy * half;
-    const t2x = hx - dx * back - ux * half, t2y = hy - dy * back - uy * half;
-    const r1x = t1x + dx * 1.6 + ux * 0.5, r1y = t1y + dy * 1.6 + uy * 0.5;
-    const r2x = t2x + dx * 1.6 - ux * 0.5, r2y = t2y + dy * 1.6 - uy * 0.5;
-    c.beginPath(); c.moveTo(r1x, r1y); c.lineTo(t1x, t1y);
-    c.quadraticCurveTo(hx + dx * 2.3 * b, hy + dy * 2.3 * b, t2x, t2y); c.lineTo(r2x, r2y);
-    c.strokeStyle = col; c.lineWidth = lw; c.stroke();
-    const nx = pull > 0.05 ? J.handB[0] : (r1x + r2x) / 2, ny = pull > 0.05 ? J.handB[1] : (r1y + r2y) / 2;
-    c.beginPath(); c.moveTo(r1x, r1y); c.lineTo(nx, ny); c.lineTo(r2x, r2y);
-    c.strokeStyle = '#ece6d6'; c.lineWidth = 0.4; c.stroke();
-    if (pull > 0.2 && arrows) {
-      c.beginPath();
-      for (let k = 0; k < arrows; k++) {
-        const o = (k - (arrows - 1) / 2) * 0.9;
-        c.moveTo(nx + ux * o * 0.4, ny + uy * o * 0.4); c.lineTo(hx + dx * 3.8 + ux * o, hy + dy * 3.8 + uy * o);
-      }
-      c.strokeStyle = '#d9d3c6'; c.lineWidth = 0.8; c.stroke();
-    }
-  };
-}
-// وهج السهم المشتعل: تدرج واحد لكل لوحة رسم يُرسم بالإزاحة (لا تدرج جديد في كل إطار)
-const glows = new WeakMap();
-function flameGlow(c, x, y) {
-  let g = glows.get(c);
-  if (!g) {
-    g = c.createRadialGradient(0, 0, 0, 0, 0, 4);
-    g.addColorStop(0, 'rgba(255,170,60,0.6)'); g.addColorStop(1, 'rgba(255,170,60,0)');
-    glows.set(c, g);
-  }
-  c.save(); c.translate(x, y); c.fillStyle = g; c.beginPath(); c.arc(0, 0, 4, 0, TAU); c.fill(); c.restore();
-}
+// القوس الكوري المنحني: قوس اللعبة بشد الوتر وطرفان مرتدان للأمام (pullBow في nationArt.js)
+const recurve = (half, lw, col, arrows) => pullBow(half, lw, col, arrows, 1.6, 0.5);
 // رامي السهام المشتعلة: القوس، والسهم المشتعل في يده ثم على الوتر عند الشد، ولا سهم بعد الإطلاق
 const fireBow = recurve(6.4, 1.2, '#5a2a22', 0);
 function fireArcher(lite) {
@@ -159,7 +122,7 @@ function fireArcher(lite) {
     const sx = drawn ? J.handB[0] : hx - dx, sy = drawn ? J.handB[1] : hy - dy;
     const tx = hx + dx * (drawn ? 3.8 : 5), ty = hy + dy * (drawn ? 3.8 : 5);
     limb(c, sx, sy, tx, ty, 0.5, '#d8c8a8');
-    if (!lite) flameGlow(c, tx, ty);
+    if (!lite) glowAt(c, tx, ty, 4, 'rgba(255,170,60,0.6)');
     ell(c, tx, ty, 1, 1.3, '#f0902a');
     if (!lite) ell(c, tx, ty - 0.4, 0.5, 0.8, '#ffd45a');
   };
@@ -324,15 +287,7 @@ function korea(lite) {
     sniper: { sx: 0.97, sy: 1.05, lw: 2.8, headR: 3.5, wlen: 2, legFrom: lite ? 0.5 : 0,
       head: flower,
       robe: (c, J, p, col) => hanbok(c, J, col, 0.5, lite),
-      back(c, J) {                               // جعبة السهام
-        const ca = Math.cos(J.a2), sa = Math.sin(J.a2), cb = Math.cos(J.pl), sb = Math.sin(J.pl);
-        const ax = J.chest[0] - 1.6 * ca + 1.2 * sa, ay = J.chest[1] - 1.6 * sa - 1.2 * ca;   // add(J.chest, rot(-1.6, -1.2, J.a2))
-        limb(c, ax, ay, J.mid[0] - 2.2 * cb - 2 * sb, J.mid[1] - 2.2 * sb + 2 * cb, 2, '#5a3a2a');   // إلى add(J.mid, rot(-2.2, 2, J.pl))
-        if (lite) return;
-        c.beginPath();
-        for (let k = 0; k < 3; k++) triTo(c, ax - 0.6 + k * 0.6, ay, ax - 0.2 + k * 0.6, ay - 2, ax + 0.2 + k * 0.6, ay);
-        c.fillStyle = '#f2f0e8'; c.fill();
-      },
+      back: (c, J) => quiverBack(c, J, '#5a3a2a', '#f2f0e8', lite),     // جعبة السهام
       over: lite ? undefined : (c, J) => sash(c, J, SKY),
       weapon: archerBow },
     firebomber: { sx: 0.98, sy: 1.04, lw: 2.9, headR: 3.5, wlen: 2, shoots: true, legFrom: lite ? 0.46 : 0,

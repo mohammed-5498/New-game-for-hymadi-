@@ -22,21 +22,23 @@ export const MAP_SIZES = {
 export const CITIES = {
   // مدن الأمم (القسم 3.10) تُضاف بعد المدن العشر: شبام والدرعية والقاهرة القديمة (الدفعة العربية)،
   // ثم كايفنغ وغيونغجو (الدفعة الآسيوية). إيدو هي المدينة اليابانية نفسها بمعلم جديد (المفتاح japan)،
-  // ثم باريس وبرمنغهام وروتنبورغ (الدفعة الأوروبية)
+  // ثم باريس وبرمنغهام وروتنبورغ (الدفعة الأوروبية)، ثم غوندر وكانو ومروي (الدفعة الأفريقية)
   order: ['yamamah', 'arab', 'japan', 'china', 'europe', 'norway', 'hk', 'jaipur', 'mexico', 'chicago',
-          'shibam', 'diriyah', 'cairo', 'kaifeng', 'gyeongju', 'paris', 'birmingham', 'rothenburg'],
+          'shibam', 'diriyah', 'cairo', 'kaifeng', 'gyeongju', 'paris', 'birmingham', 'rothenburg',
+          'gondar', 'kano', 'meroe'],
   defaultCity: 'random',
-  // ماء على حافة الخريطة بهذا العرض من المربعات (لا يُمشى عليه): مضيق النرويجية المتجمد، وقناتا كايفنغ وبرمنغهام
-  // huts: المباني المجاورة للماء أكواخ على أعمدة (النرويجية وحدها)
+  // ماء على حافة الخريطة بهذا العرض من المربعات (لا يُمشى عليه): مضيق النرويجية المتجمد، وقناتا كايفنغ وبرمنغهام،
+  // ونيل مروي. huts: المباني المجاورة للماء أكواخ على أعمدة (النرويجية وحدها)
   water: { norway: { small: 2, medium: 2, large: 3, huts: true },
            kaifeng: { small: 2, medium: 2, large: 3 },
-           birmingham: { small: 2, medium: 2, large: 3 } },
+           birmingham: { small: 2, medium: 2, large: 3 },
+           meroe: { small: 2, medium: 2, large: 3 } },
   rorbuChance: 0.55,            // نسبة المباني المجاورة للماء التي تصير أكواخاً على أعمدة
   // أسماء قصيرة لأزرار قائمة الإعداد (الاسم الكامل تحت الصورة المصغرة)
   short: { yamamah: 'اليمامة', arab: 'عربية', japan: 'إيدو', china: 'صينية', europe: 'أوروبية', norway: 'نرويجية',
            hk: 'هونغ كونغ', jaipur: 'جايبور', mexico: 'مكسيكية', chicago: 'شيكاغو',
            shibam: 'شبام', diriyah: 'الدرعية', cairo: 'القاهرة', kaifeng: 'كايفنغ', gyeongju: 'غيونغجو',
-           paris: 'باريس', birmingham: 'برمنغهام', rothenburg: 'روتنبورغ' },
+           paris: 'باريس', birmingham: 'برمنغهام', rothenburg: 'روتنبورغ', gondar: 'غوندر', kano: 'كانو', meroe: 'مروي' },
   thumbCycleMs: 2000,           // "عشوائي": الصورة المصغرة تتبدل بين المدن
   thumbZoom: 1.4,               // تقريب الصورة المصغرة (تُقص الأطراف)
   // هالة خفيفة خلف الجنود: فاتحة في المدينة الداكنة (هونغ كونغ)، وداكنة في الصحراء الفاتحة (اليمامة)
@@ -66,7 +68,7 @@ export const CITIES = {
 // أنواع من pool المدن ليست مباني (أشجار وزينة): لا تُصبغ بلون المالك، كأشجار الطابع القديم
 // والسور وبواباته وأبراجه في صحراء اليمامة: ملك المدينة لا الحي
 export const CITY_UNTINTED = ['palm', 'cherry', 'lantern', 'willow', 'lanterns', 'pine', 'rack', 'banyan', 'neem', 'cactus', 'tree',
-  'ptree', 'rtree', 'lamp',
+  'ptree', 'rtree', 'lamp', 'acacia', 'baobab', 'dye',
   'grove', 'well', 'cart', 'wallI', 'wallJ', 'gateI', 'gateJ', 'archI', 'archJ', 'wallTower', 'brokenI', 'brokenJ', 'brokenTower'];
 
 // تخزين الطبقة الثابتة (الأرض والمباني والزينة) في قطع مخفية: تُرسم مرة وتُعرض الظاهرة فقط
@@ -116,7 +118,11 @@ export const CITY_SPECIALS = {
   // مدن الأمم الأوروبية
   paris:      { hq: 'haus',    base: 'haus' },
   birmingham: { hq: 'factory', base: 'terrace' },
-  rothenburg: { hq: 'row',     base: 'fach' }
+  rothenburg: { hq: 'row',     base: 'fach' },
+  // مدن الأمم الأفريقية
+  gondar: { hq: 'stone',     base: 'stone' },
+  kano:   { hq: 'hausaTall', base: 'hausa' },
+  meroe:  { hq: 'nubian',    base: 'nubian' }
 };
 
 // --- الكاميرا ---
@@ -525,11 +531,16 @@ export const CHAMPIONS = {
 //     commonArmor:     درع يُضاف إلى الأفراد العاديين (بريطانيا)
 //     heavyStagger:    نسبة تُضاف إلى زمن ترنّح الضربة القوية (بريطانيا)
 //     phalanx:         {count, radius, reduce} ضرر متلقى أقل في المجموعة الكبيرة (ألمانيا)
+//     outnumbered:     {radius, bonus} ضرر أكبر حين يفوقك الأعداء عدداً حولك (إثيوبيا)
+//     punches:         {damage, stagger, staggerTime} اللكمات أقوى وقد ترنّح (نيجيريا)
+//     armorAll:        درع يُضاف إلى كل الوحدات (نيجيريا)
+//     rangedDamage:    نسبة تُضاف إلى ضرر رمي الرماة (السودان)
 //   ult ضربة البطل الخاصة: تحل محل ضربة بطل النمط، وبقية أرقام البطل كما هي.
 //     ring (اختياري): لون حلقة تتسع حول مكان الضربة
 // "داخل أحيائك": منطقة الحي هي مربعاته ومعها الشوارع الأقرب إليه (game/nations.js).
 export const nations = {
-  order: ['yemen', 'saudi', 'egypt', 'china', 'japan', 'korea', 'france', 'britain', 'germany'],   // الأمم المتاحة في قائمة الإعداد، دفعةً دفعة (القسم 5 من NATIONS.md)
+  order: ['yemen', 'saudi', 'egypt', 'china', 'japan', 'korea', 'france', 'britain', 'germany',
+          'ethiopia', 'nigeria', 'sudan'],   // الأمم المتاحة في قائمة الإعداد، دفعةً دفعة (القسم 5 من NATIONS.md)
 
   // ===== الدفعة العربية (المرحلة 9أ) =====
   yemen: {
@@ -622,6 +633,37 @@ export const nations = {
     // غرس الراية (مبسّطة): الراية تُغرس مكانه duration ثانية، وكل حليف داخل radius منها يصمد بلا ترنّح ولا سقوط ولا دفع
     ult: { kind: 'banner', needs: 'enemy', radius: 3, duration: 8,
            name: 'غرس الراية', desc: 'منطقة لا يتراجع منها أحد' }
+  },
+
+  // ===== الدفعة الأفريقية (المرحلة 9ب) =====
+  ethiopia: {
+    name: 'إثيوبيا', gangName: 'أبطال عدوة', style: 'scorpions', city: 'gondar', secondary: '#2e8b57',   // أخضر الحواف (مع الأصفر والأحمر)
+    names: { common: 'محارب عدوة', boss: 'قارع النقارة', medic: 'المعالج', champion: 'الراس' },
+    // روح عدوة: الوحدة التي حولها داخل radius أعداء أكثر من وحدات لاعبها وحلفائه (ومعها نفسها) تضرّ أكثر بنسبة bonus
+    trait: { name: 'روح عدوة', desc: 'حين يفوقك الأعداء عدداً حولك، ضررك +18%',
+             mods: { outnumbered: { radius: 3, bonus: 0.18 } } },
+    // هجوم عدوة: حين يكون عدو داخل range، كل حليف داخل radius منه أسرع بنسبة bonus مدة duration ثانية
+    ult: { kind: 'haste', needs: 'enemy', range: 6, radius: 4, bonus: 0.30, duration: 5, ring: '#e8c23a',
+           name: 'هجوم عدوة', desc: 'اندفاع جماعي بسرعة +30%' }
+  },
+  nigeria: {
+    name: 'نيجيريا', gangName: 'مقاتلو الدمبي', style: 'hammers', city: 'kano', secondary: '#24325e',   // نيلي كانو الداكن
+    names: { common: 'مقاتل الدمبي', armored: 'حارس السور', smasher: 'الملاكم الثقيل', champion: 'بطل الدمبي' },
+    // اليد الملفوفة: اللكمة تضرّ أكثر بنسبة damage، وترنّح المصاب staggerTime ثانية باحتمال stagger؛ ودرع كل الوحدات +armorAll
+    trait: { name: 'اليد الملفوفة', desc: 'اللكمات +35% ضرراً وفرصة ترنّح، والدرع +10%',
+             mods: { punches: { damage: 0.35, stagger: 0.3, staggerTime: 0.3 }, armorAll: 0.10 } },
+    // الضربة القاضية: لكمة على أقرب عدو داخل range بضرر damage تقذفه throw مربعاً وتسقطه أرضاً
+    ult: { kind: 'knockout', needs: 'enemy', range: 1.4, damage: 60, throw: 2.6,
+           name: 'الضربة القاضية', desc: 'لكمة تقذف وتُسقط' }
+  },
+  sudan: {
+    name: 'السودان', gangName: 'رماة النوبة', style: 'vipers', city: 'meroe', secondary: '#c98a3a',   // ذهبي مغرة
+    names: { common: 'فتى النوبة', sniper: 'الرامي الطويل', firebomber: 'رامي المشاعل', champion: 'الكنداكة' },
+    // أرض القوس: الرماة +rangedRange مربع مدى، وضرر رميهم +rangedDamage
+    trait: { name: 'أرض القوس', desc: 'الرماة +1 مربع مدى و+10% ضرر', mods: { rangedRange: 1, rangedDamage: 0.10 } },
+    // وابل الملكة: arrows سهماً لا تُتفادى، كل سهم على عدو مختلف حول الهدف إن وُجد، بضرر damage
+    ult: { kind: 'arrows', needs: 'enemy', range: 7.5, arrows: 6, damage: 22,
+           name: 'وابل الملكة', desc: 'ستة سهام دفعة واحدة على الأعداء' }
   },
 
   // الأنماط القتالية الأربعة (أسماؤها في قائمة الإعداد)
@@ -1124,7 +1166,7 @@ export const UI = {
   // حفظ المباراة الجارية للعودة إليها لاحقاً (خانة واحدة)
   matchKey: 'gangcity.match',      // المباراة نفسها
   matchInfoKey: 'gangcity.matchInfo', // ملخص صغير يقرؤه زر "متابعة المباراة" بلا فك المباراة كلها
-  matchVersion: 5,               // يُرفع عند تغيّر شكل حالة المباراة، فتُهمل الحفظات القديمة (3: الأمم، 4: الآسيوية، 5: الأوروبية)
+  matchVersion: 6,               // يُرفع عند تغيّر شكل حالة المباراة، فتُهمل الحفظات القديمة (3: الأمم، 4: الآسيوية، 5: الأوروبية، 6: الأفريقية)
   matchDecimals: 5,              // دقة الأعداد العشرية في الحفظ (تصغّر حجمه)
 
   // الخلفية الحية للقائمة الرئيسية: الخريطة نفسها وبضع وحدات تتجول
