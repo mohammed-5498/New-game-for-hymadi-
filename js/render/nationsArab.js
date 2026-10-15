@@ -7,10 +7,13 @@
    - للأداء: الأشكال بلون واحد في مسار واحد (مربعات الشماغ الحمراء رسمة واحدة بدل خمس عشرة)،
      وفي المستوى المبسّط تبدأ الساقان من حاشية الثوب (legFrom = طول الثوب) فلا يُرسم ما يغطيه الثوب */
 import { TAU, dk, lt, limb, ell, rrect, tri, rot, add } from './anim.js';
-import { heroRing, dashedRing, bow } from './bodies.js';
-import { registerNation, memo, mixHex, GOLD, lp, pg, circ, dot, legPt, robe, stripes, belt, staff } from './nationArt.js';
+import { heroRing, bow } from './bodies.js';
+import {
+  registerNation, both, memo, mixHex, GOLD, STEEL2, auraRing, auraHealRings,
+  lp, pg, circ, dot, legPt, robe, stripes, belt, staff, triTo
+} from './nationArt.js';
 
-const IND = '#2f3f7a', HORN = '#e3d6b0', STEEL2 = '#cfd3d8', WOODD = '#6e4f33', WHT = '#f2efe8', SHM = '#c0392b', AGAL = '#1c1c1c';
+const IND = '#2f3f7a', HORN = '#e3d6b0', WOODD = '#6e4f33', WHT = '#f2efe8', SHM = '#c0392b', AGAL = '#1c1c1c';
 
 // ألوان مشتقة من لون اللاعب (مرة لكل لون)
 const wrapCol = memo(col => lt(col, 0.72));                       // لفّة العمامة
@@ -24,19 +27,12 @@ const thobeCol = memo(col => lt(col, 0.62));                       // الثوب
 const galabCol = memo(col => mixHex(col, '#e6d7bc', 0.55));        // الجلابية المصرية
 const SHM_LITE = mixHex(WHT, SHM, 0.3);                             // الشماغ من بعيد: أبيض بحمرة
 
-// ---------- علامات النمط عند القدمين (كما في bodies.js) ----------
-const auraRing = (c, col, t) => { const k = 1 + Math.sin(t * 2.4) * 0.05; dashedRing(c, 10.5 * k, 4.2 * k, 'rgba(240,182,74,0.9)'); };
-const auraHealRings = (c, col, t) => {
-  const k = 1 + Math.sin(t * 2.4) * 0.06;
-  dashedRing(c, 11.5 * k, 4.6 * k, 'rgba(240,182,74,0.9)'); dashedRing(c, 8.4 * k, 3.4 * k, 'rgba(127,212,138,0.8)');
-};
-
 // ---------- أغطية الرأس (إحداثيات الرأس: المركز 0,0 والوجه نحو +x) ----------
 // العمامة اليمنية بشريط نيلي وطرف خلفي. المبسّطة: اللفّة وطرفها رسمة واحدة ثم الشريط
 function imama(c, col, big, lite) {
   const w = wrapCol(col), rx = big ? 4.8 : 4.2, ry = big ? 2.9 : 2.4, tx = big ? -6.2 : -5.4, ty = big ? 5 : 3;
   c.beginPath(); c.ellipse(0, -1.7, rx, ry, 0, 0, TAU);
-  if (lite) { c.moveTo(-3.8, -0.8); c.lineTo(tx, ty); c.lineTo(-2.8, 0.6); c.closePath(); }
+  if (lite) triTo(c, -3.8, -0.8, tx, ty, -2.8, 0.6);
   c.fillStyle = w; c.fill();
   ell(c, 0, -0.9, big ? 4.8 : 4.3, 1, IND);
   if (lite) return;
@@ -319,11 +315,6 @@ function egypt(lite) {
 }
 
 // التسجيل: لكل نوع نسختان (الكاملة والمبسّطة)
-function both(make) {
-  const full = make(false), lite = make(true), out = {};
-  for (const kind of Object.keys(full)) out[kind] = { full: full[kind], lite: lite[kind] };
-  return out;
-}
 registerNation('yemen', both(yemen));
 registerNation('saudi', both(saudi));
 registerNation('egypt', both(egypt));

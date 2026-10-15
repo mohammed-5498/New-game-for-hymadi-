@@ -6,7 +6,7 @@ import { ownsSpecial } from './spawn.js';
 import { policeArmorBonus } from './police.js';
 import { forEachNearby } from './spatialHash.js';
 import { soundAt } from '../audio/sound.js';
-import { homeMods, inOwnArea } from './nations.js';
+import { homeMods, inOwnArea, brotherMods } from './nations.js';
 
 const isAlive = (unit) => unit.state !== 'dead' && unit.hp > 0;
 const allied = (state, a, b) => a.playerId === b.playerId || !isEnemy(state, a, b);
@@ -26,6 +26,8 @@ function applyDamageBonuses(state) {
   const armorBonus = state.players.map(p => policeArmorBonus(state, p.id));
   // سمات الأمم "داخل أحيائك" (القسم 3.10): null لكل لاعب بلا سمة من هذا النوع
   const home = state.players.map(homeMods);
+  // «الـ108» (الصين): null لكل لاعب بلا هذه السمة
+  const brothers = state.players.map(brotherMods);
 
   // نبدأ من الصفر (المضاعف النهائي يُحسب في الحلقة الأخيرة بنفس ترتيب الجمع)
   // كتابة العدد العشري في خاصية الوحدة تحجز ذاكرة: لا نكتب إلا ما تغيّر فعلاً
@@ -37,6 +39,7 @@ function applyDamageBonuses(state) {
     unit.aura = false;
     if (unit.auraBonus !== 0) unit.auraBonus = 0;
     if (unit.auraHeal !== 0) unit.auraHeal = 0;
+    if (unit.brothers !== 0) unit.brothers = 0;
   }
 
   // ثم نمر على أصحاب الهالات ونأخذ الأقوى لكل وحدة
@@ -45,6 +48,14 @@ function applyDamageBonuses(state) {
     const boss = units[k];
     if (!isAlive(boss) || !boss.stats.aura) continue;
     spreadAura(state, boss, boss.stats.aura);
+  }
+
+  // «الـ108»: كل شخصية مميزة حية تُحسب لكل فرد عادي من لاعبها حولها
+  for (let k = 0, units = state.units; k < units.length; k++) {
+    const hero = units[k];
+    if (!hero.hero || !isAlive(hero)) continue;
+    const mods = brothers[hero.playerId];
+    if (mods) countBrothers(state, hero, mods.radius);
   }
 
   for (let k = 0, units = state.units; k < units.length; k++) {
@@ -62,6 +73,10 @@ function applyDamageBonuses(state) {
       const taken = inside && mods.homeDamageTaken ? 1 - mods.homeDamageTaken : 1;
       if (unit.takenMul !== taken) unit.takenMul = taken;
     }
+    if (unit.brothers) {
+      const b = brothers[unit.playerId];
+      multiplier += Math.min(b.max, unit.brothers * b.perHero);
+    }
     if (unit.damageMultiplier !== multiplier) unit.damageMultiplier = multiplier;
   }
 }
@@ -77,6 +92,17 @@ function spreadAura(state, boss, aura) {
     // هالة بطل العقارب تعالج الحلفاء أيضاً، وتؤخذ الأقوى كذلك
     const healing = aura.healPerSecond || 0;
     if (healing > unit.auraHeal) unit.auraHeal = healing;
+  });
+}
+
+// الأفراد العاديون من لاعب الشخصية المميزة داخل نصف القطر (لا الشخصيات ولا البطل)
+function countBrothers(state, hero, radius) {
+  const radiusSq = radius * radius;
+  forEachNearby(state, hero.x, hero.y, radius, (unit) => {
+    if (unit.playerId !== hero.playerId || unit.hero || unit.champion) return;
+    const dx = unit.x - hero.x, dy = unit.y - hero.y;
+    if (dx * dx + dy * dy > radiusSq || !isAlive(unit)) return;
+    unit.brothers++;
   });
 }
 

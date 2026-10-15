@@ -20,17 +20,20 @@ export const MAP_SIZES = {
 
 // --- طوابع المدن (القسم 3.9): شكل فقط، لا تغيّر قواعد اللعب ---
 export const CITIES = {
-  // مدن الأمم (القسم 3.10) تُضاف بعد المدن العشر: شبام والدرعية والقاهرة القديمة (الدفعة العربية)
+  // مدن الأمم (القسم 3.10) تُضاف بعد المدن العشر: شبام والدرعية والقاهرة القديمة (الدفعة العربية)،
+  // ثم كايفنغ وغيونغجو (الدفعة الآسيوية). إيدو هي المدينة اليابانية نفسها بمعلم جديد (المفتاح japan)
   order: ['yamamah', 'arab', 'japan', 'china', 'europe', 'norway', 'hk', 'jaipur', 'mexico', 'chicago',
-          'shibam', 'diriyah', 'cairo'],
+          'shibam', 'diriyah', 'cairo', 'kaifeng', 'gyeongju'],
   defaultCity: 'random',
-  // النرويجية: مضيق متجمد على حافة الخريطة بهذا العرض من المربعات (لا يُمشى عليه)
-  water: { norway: { small: 2, medium: 2, large: 3 } },
+  // ماء على حافة الخريطة بهذا العرض من المربعات (لا يُمشى عليه): مضيق النرويجية المتجمد، وقناة كايفنغ
+  // huts: المباني المجاورة للماء أكواخ على أعمدة (النرويجية وحدها)
+  water: { norway: { small: 2, medium: 2, large: 3, huts: true },
+           kaifeng: { small: 2, medium: 2, large: 3 } },
   rorbuChance: 0.55,            // نسبة المباني المجاورة للماء التي تصير أكواخاً على أعمدة
   // أسماء قصيرة لأزرار قائمة الإعداد (الاسم الكامل تحت الصورة المصغرة)
-  short: { yamamah: 'اليمامة', arab: 'عربية', japan: 'يابانية', china: 'صينية', europe: 'أوروبية', norway: 'نرويجية',
+  short: { yamamah: 'اليمامة', arab: 'عربية', japan: 'إيدو', china: 'صينية', europe: 'أوروبية', norway: 'نرويجية',
            hk: 'هونغ كونغ', jaipur: 'جايبور', mexico: 'مكسيكية', chicago: 'شيكاغو',
-           shibam: 'شبام', diriyah: 'الدرعية', cairo: 'القاهرة' },
+           shibam: 'شبام', diriyah: 'الدرعية', cairo: 'القاهرة', kaifeng: 'كايفنغ', gyeongju: 'غيونغجو' },
   thumbCycleMs: 2000,           // "عشوائي": الصورة المصغرة تتبدل بين المدن
   thumbZoom: 1.4,               // تقريب الصورة المصغرة (تُقص الأطراف)
   // هالة خفيفة خلف الجنود: فاتحة في المدينة الداكنة (هونغ كونغ)، وداكنة في الصحراء الفاتحة (اليمامة)
@@ -102,7 +105,10 @@ export const CITY_SPECIALS = {
   // مدن الأمم العربية: المقر أعلى مبانيها، والمباني الحاسمة على مبنى المدينة العادي
   shibam:  { hq: 'tower',   base: 'towerLow' },
   diriyah: { hq: 'najdiTall', base: 'najdi' },
-  cairo:   { hq: 'house',   base: 'wikala' }
+  cairo:   { hq: 'house',   base: 'wikala' },
+  // مدن الأمم الآسيوية (إيدو هي japan أعلاه)
+  kaifeng:  { hq: 'tea',      base: 'shop' },
+  gyeongju: { hq: 'hanokBig', base: 'hanok' }
 };
 
 // --- الكاميرا ---
@@ -347,7 +353,8 @@ export const COMBAT_REALISM = {
   pops: {
     seconds: 1.1,
     max: 40,                   // أقصى عدد ظاهر معاً (الأقدم يُحذف)
-    colors: { dodge: '#b8f0a8', block: '#8fd0ff', back: '#ff8a7a', bump: '#ffd66e', clash: '#ffe08a', down: '#ffffff' }
+    colors: { dodge: '#b8f0a8', block: '#8fd0ff', back: '#ff8a7a', bump: '#ffd66e', clash: '#ffe08a', down: '#ffffff',
+              show: '#ffb3c2' }   // show: «استعراض!» (سمة اليابان، القسم 3.10)
   },
   clashFxSeconds: 0.3,         // شرر التصادم
   burstSeconds: 0.22,          // نجمة الانفجار عند الارتطام (القسم 5.4.7)
@@ -503,10 +510,14 @@ export const CHAMPIONS = {
 //     vision:          مربعات تُضاف إلى مدى رصد كل وحداتك
 //     rangedRange:     مربعات تُضاف إلى مدى كل وحدة ترمي من بعيد
 //     adjacentCapture: نسبة تُضاف إلى سرعة الاستيلاء على حي مجاور لحي تملكه
+//     brothers:        {radius, perHero, max} كل شخصية مميزة حية تعطي الأفراد حولها نسبة ضرر (الصين)
+//     showoff:         {idle, bonus, pop} أول ضربة بعد مدة بلا هجوم أقوى (اليابان)
+//     weatherProof:    الرماة لا يتأثرون بالليل ولا بالمطر (كوريا)
 //   ult ضربة البطل الخاصة: تحل محل ضربة بطل النمط، وبقية أرقام البطل كما هي.
+//     ring (اختياري): لون حلقة تتسع حول مكان الضربة
 // "داخل أحيائك": منطقة الحي هي مربعاته ومعها الشوارع الأقرب إليه (game/nations.js).
 export const nations = {
-  order: ['yemen', 'saudi', 'egypt'],   // الأمم المتاحة في قائمة الإعداد، دفعةً دفعة (القسم 5 من NATIONS.md)
+  order: ['yemen', 'saudi', 'egypt', 'china', 'japan', 'korea'],   // الأمم المتاحة في قائمة الإعداد، دفعةً دفعة (القسم 5 من NATIONS.md)
 
   // ===== الدفعة العربية (المرحلة 9أ) =====
   yemen: {
@@ -536,6 +547,40 @@ export const nations = {
            name: 'صيحة الحارة', desc: 'كل فتوة حوله يصمد 3 ثوانٍ بلا ترنّح ولا سقوط' }
   },
 
+  // ===== الدفعة الآسيوية (المرحلة 9ب) =====
+  china: {
+    name: 'الصين', gangName: 'إخوة الجبل', style: 'scorpions', city: 'kaifeng', secondary: '#3f8f6a',   // أخضر يشمي
+    names: { common: 'فتى الجبل', boss: 'شيخ العصا', medic: 'الطبيب الجوال', champion: 'زعيم ليانغشان' },
+    // الـ108: كل شخصية مميزة حية (لا البطل) تعطي الأفراد العاديين من لاعبها داخل radius نسبة perHero ضرراً، بحد أقصى max
+    trait: { name: 'الـ108', desc: 'كل شخصية مميزة حية تعطي الأفراد حولها +3% ضرر، بحد أقصى +15%',
+             mods: { brothers: { radius: 3, perHero: 0.03, max: 0.15 } } },
+    // راية الأخوة: تحفيز وعلاج معاً لكل حليف داخل radius (بأرقام ضربة بطل الحشد)، وحلقة بلون ring حوله
+    ult: { kind: 'buff', needs: 'either', radius: 3.5, damageBonus: 0.50, duration: 5, heal: 60, ring: '#7fd48a',
+           name: 'راية الأخوة', desc: 'علاج وزيادة ضرر لكل حليف في دائرة حوله' }
+  },
+  japan: {
+    name: 'اليابان', gangName: 'الكابوكيمونو', style: 'crows', city: 'japan', secondary: '#b8283a',   // قرمزي
+    names: { common: 'كابوكيمونو', spear: 'حامل الغليون', dual: 'مبارز السيفين', champion: 'زعيم الكابوكيمونو' },
+    // الاستعراض: أول ضربة بعد idle ثانية بلا هجوم تضرّ أكثر بنسبة bonus، وتظهر فوقها كلمة pop
+    trait: { name: 'الاستعراض', desc: 'أول ضربة بعد 3 ثوانٍ بلا هجوم تُحدث +40% ضرر',
+             mods: { showoff: { idle: 3, bonus: 0.40, pop: 'استعراض!' } } },
+    // رقصة الشارع: hits ضربة متتالية خلال duration ثانية، كل ضربة على كل عدو داخل radius (لفّة في كل ضربة)
+    ult: { kind: 'whirl', needs: 'enemy', radius: 2, hits: 4, damage: 8, duration: 1,
+           name: 'رقصة الشارع', desc: 'سلسلة ضربات سريعة على كل من حوله' }
+  },
+  korea: {
+    name: 'كوريا', gangName: 'الهوارانغ', style: 'vipers', city: 'gyeongju', secondary: '#e07a9a',   // وردي زهري
+    names: { common: 'فتى الهوارانغ', sniper: 'الرامي الدقيق', firebomber: 'رامي السهام المشتعلة', champion: 'قائد الهوارانغ' },
+    // weatherProof: الرماة لا يقصر رصدهم ليلاً ولا تخطئ رمياتهم في المطر
+    trait: { name: 'رماية الهوارانغ', desc: 'الرماة لا يتأثرون بالليل ولا بالمطر، و+0.5 مربع مدى',
+             mods: { rangedRange: 0.5, weatherProof: true } },
+    // مطر السهام: arrows سهماً على دائرة نصف قطرها area حول أكثف تجمع للأعداء داخل range،
+    // كل سهم يضر كل عدو داخل hitRadius من سقوطه (لا يُتفادى)، وتصل خلال flight + حتى spreadSeconds
+    ult: { kind: 'rain', needs: 'enemy', range: 7, arrows: 12, area: 1.6, damage: 12, hitRadius: 0.7,
+           flight: 0.55, spreadSeconds: 0.45, ring: '#e07a9a',
+           name: 'مطر السهام', desc: 'وابل من السهام على مساحة' }
+  },
+
   // الأنماط القتالية الأربعة (أسماؤها في قائمة الإعداد)
   styles: {
     crows:     { name: 'الخاطف', desc: 'سرعة والتفاف واستيلاء سريع' },
@@ -545,7 +590,8 @@ export const nations = {
   },
   classicNote: 'كلاسيكية',       // السطر الصغير تحت العصابة الكلاسيكية في خانة اللاعب
   // آثار ضربات الأبطال: مدة الحلقة المتسعة وغبار ظهور الأفراد، وحلقة الصامدين تحت أقدامهم
-  fx: { ringSeconds: 0.7, dustSeconds: 0.8, steadyRing: 'rgba(230,194,90,0.85)' },
+  // rainArc: ارتفاع قوس سهام مطر السهام (بكسل) فتسقط من الأعلى، لا كالرمية العادية (COMBAT.projectileArc)
+  fx: { ringSeconds: 0.7, dustSeconds: 0.8, steadyRing: 'rgba(230,194,90,0.85)', rainArc: 30 },
   noticeSeconds: 6               // إشعار سمة أمتك عند بداية المباراة
 };
 
@@ -1033,7 +1079,7 @@ export const UI = {
   // حفظ المباراة الجارية للعودة إليها لاحقاً (خانة واحدة)
   matchKey: 'gangcity.match',      // المباراة نفسها
   matchInfoKey: 'gangcity.matchInfo', // ملخص صغير يقرؤه زر "متابعة المباراة" بلا فك المباراة كلها
-  matchVersion: 3,               // يُرفع عند تغيّر شكل حالة المباراة، فتُهمل الحفظات القديمة (3: الأمم)
+  matchVersion: 4,               // يُرفع عند تغيّر شكل حالة المباراة، فتُهمل الحفظات القديمة (3: الأمم، 4: الدفعة الآسيوية)
   matchDecimals: 5,              // دقة الأعداد العشرية في الحفظ (تصغّر حجمه)
 
   // الخلفية الحية للقائمة الرئيسية: الخريطة نفسها وبضع وحدات تتجول

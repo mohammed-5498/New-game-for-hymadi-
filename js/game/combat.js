@@ -449,11 +449,23 @@ function rangedSwing(state, unit, target, damage, attackTime) {
   soundAt(state, 'swing', unit.x, unit.y);
   unit.pendingHit = {
     target,
-    damage: damage * unit.damageMultiplier,
+    damage: damage * unit.damageMultiplier * showoff(state, unit),
     ranged: true,
     at: state.time + attackTime * COMBAT.hitMoment
   };
   registerSight(state, unit, target, true);
+}
+
+// «الاستعراض» (سمة اليابان، القسم 3.10): أول ضربة بعد idle ثانية بلا هجوم أقوى، وتظهر فوقها كلمتها
+// يعيد مضاعف ضرر الضربة التي تبدأ الآن (1 لمن لا يملك السمة)
+function showoff(state, unit) {
+  const show = unit.stats.showoff;
+  if (!show) return 1;
+  const rested = state.time - unit.lastSwingAt >= show.idle;
+  unit.lastSwingAt = state.time;
+  if (!rested) return 1;
+  addPop(state, unit, show.pop, 'show');
+  return 1 + show.bonus;
 }
 
 // ضربة قريبة بالحركات الأربع (القسم 5.4)
@@ -467,7 +479,7 @@ function meleeSwing(state, unit, target, dist, range, damage, attackTime, aimOff
     unit.attackStart = null;
     unit.pendingHit = {
       target, move: 'quick', range,
-      damage: damage * unit.damageMultiplier * CR.moves.quick.dmg,
+      damage: damage * unit.damageMultiplier * CR.moves.quick.dmg * showoff(state, unit),
       ranged: false,
       at: state.time + attackTime * COMBAT.hitMoment
     };
@@ -492,7 +504,7 @@ function meleeSwing(state, unit, target, dist, range, damage, attackTime, aimOff
 
   unit.pendingHit = {
     target, move: key, range,
-    damage: damage * unit.damageMultiplier * CR.moves[key].dmg,
+    damage: damage * unit.damageMultiplier * CR.moves[key].dmg * showoff(state, unit),
     ranged: false,
     at: state.time + phases.wind + phases.strike * CR.strikeMoment
   };
@@ -613,7 +625,7 @@ export function spawnProjectile(state, unit, target, damage, offset = 0, fire = 
   const duration = COMBAT.projectileMinTime + (COMBAT.projectileMaxTime - COMBAT.projectileMinTime) * ratio;
 
   // في المطر تخطئ بعض الرميات فتسقط قرب الهدف بلا ضرر
-  const hits = rangedShotHits(state);
+  const hits = rangedShotHits(state, unit);
   const angle = Math.random() * 6.2832;
   const spread = COMBAT.missSpread * (0.6 + Math.random() * 0.4);
 
@@ -635,7 +647,8 @@ export function spawnProjectile(state, unit, target, damage, offset = 0, fire = 
     t: 0, prevT: 0,
     duration,
     returns: false,          // يعود إلى صاحبه بعد السقوط (صقر الصقّار)
-    back: false              // هو نفسه رحلة العودة (بلا ضرر)
+    back: false,             // هو نفسه رحلة العودة (بلا ضرر)
+    area: 0                  // نصف قطر ضرر السقوط حول النقطة (سهام مطر السهام)، 0 لمقذوف يصيب هدفه
   });
 }
 
@@ -646,7 +659,34 @@ export function spawnFalcon(state, unit, target, damage, duration) {
     kind: 'falcon', attacker: unit, target, damage, dodgeable: false, fire: null, hits: true,
     missX: target.x, missY: target.y,
     startX: unit.x, startY: unit.y, x: unit.x, y: unit.y, prevX: unit.x, prevY: unit.y,
-    t: 0, prevT: 0, duration, returns: true, back: false
+    t: 0, prevT: 0, duration, returns: true, back: false, area: 0
+  });
+}
+
+// مطر السهام (قائد الهوارانغ، القسم 3.10): سهام تسقط على نقاط عشوائية داخل دائرة حول (cx, cy)،
+// لا تتبع هدفاً ولا تُتفادى، وكل سهم يضر كل عدو داخل hitRadius من سقوطه. وصولها متفرق
+export function spawnRain(state, unit, cx, cy, ult, damage) {
+  soundAt(state, 'arrow', unit.x, unit.y);
+  for (let k = 0; k < ult.arrows; k++) {
+    const angle = Math.random() * 6.2832, r = Math.sqrt(Math.random()) * ult.area;
+    state.projectiles.push({
+      kind: 'arrow', attacker: unit, target: null, damage, dodgeable: false, fire: null, hits: false,
+      missX: cx + Math.cos(angle) * r, missY: cy + Math.sin(angle) * r,
+      startX: unit.x, startY: unit.y, x: unit.x, y: unit.y, prevX: unit.x, prevY: unit.y,
+      t: 0, prevT: 0, duration: ult.flight + Math.random() * ult.spreadSeconds,
+      returns: false, back: false, area: ult.hitRadius
+    });
+  }
+}
+
+// سقوط سهم من مطر السهام: يضر كل عدو حول نقطة سقوطه
+function rainLanding(state, shot) {
+  const areaSq = shot.area * shot.area;
+  forEachNearby(state, shot.x, shot.y, shot.area, (other) => {
+    const dx = other.x - shot.x, dy = other.y - shot.y;
+    if (dx * dx + dy * dy > areaSq) return;
+    if (!isAlive(other) || !isEnemy(state, shot.attacker, other)) return;
+    applyDamage(state, shot.attacker, other, shot.damage);
   });
 }
 
@@ -655,7 +695,7 @@ const returnFlight = (shot) => ({
   kind: shot.kind, attacker: shot.attacker, target: shot.attacker, damage: 0, dodgeable: false, fire: null, hits: true,
   missX: shot.x, missY: shot.y,
   startX: shot.x, startY: shot.y, x: shot.x, y: shot.y, prevX: shot.x, prevY: shot.y,
-  t: 0, prevT: 0, duration: shot.duration, returns: false, back: true
+  t: 0, prevT: 0, duration: shot.duration, returns: false, back: true, area: 0
 });
 
 function updateProjectiles(state) {
@@ -677,6 +717,7 @@ function updateProjectiles(state) {
     if (shot.t >= shot.duration) {
       // الزجاجة والسهم المشتعل يشعلان الأرض حيث سقطا (حتى لو أخطآ الهدف)
       if (shot.fire) createFire(state, shot.attacker.playerId, shot.x, shot.y, shot.fire);
+      if (shot.area > 0) rainLanding(state, shot);
       // المتفادي في لحظة السقوط تمر الرمية بجانبه
       const dodged = shot.dodgeable && isAlive(shot.target) && shot.target.cState === 'dodge';
       if (shot.damage > 0 && shot.hits && !dodged && isAlive(shot.target)) {

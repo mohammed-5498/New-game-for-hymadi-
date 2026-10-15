@@ -1,7 +1,7 @@
 // الضربات المميزة (القسم 6.7): الشحن، شرط الإطلاق، والتأثير الفعلي
 // الأفراد العاديون لا يملكون ضربة مميزة، فلا شحن لهم.
 import { TICK_SEC, COMBAT, ULT, CAMERA, ai } from '../config.js';
-import { isEnemy, applyDamage, spawnProjectile, spawnFalcon } from './combat.js';
+import { isEnemy, applyDamage, spawnProjectile, spawnFalcon, spawnRain } from './combat.js';
 import { createFire } from './abilities.js';
 import { faceTowards, createUnit } from './units.js';
 import { forEachNearby } from './spatialHash.js';
@@ -168,6 +168,8 @@ export function resolveUlt(state, unit) {
     case 'caravan': callCaravan(state, unit, ult); break;
     case 'falcon':  falconDive(state, unit, ult, target); break;
     case 'shout':   rallyShout(state, unit, ult); break;
+    case 'whirl':   startFlurry(state, unit, ult, null, ult.radius); break;
+    case 'rain':    arrowRain(state, unit, ult, target); break;
   }
 }
 
@@ -245,20 +247,23 @@ function pierce(state, unit, ult, target) {
 }
 
 // وابل: عدة ضربات متتالية على نفس الهدف خلال مدة قصيرة (المزدوج)
-function startFlurry(state, unit, ult, target) {
-  if (!target) return;
+// radius: رقصة الشارع (زعيم الكابوكيمونو، القسم 3.10): كل ضربة على كل عدو حوله بدل هدف واحد
+function startFlurry(state, unit, ult, target, radius = 0) {
+  if (!target && !radius) return;
   unit.flurry = {
     target,
     left: ult.hits,
     damage: ult.damage,
     interval: ult.duration / ult.hits,
-    next: state.time
+    next: state.time,
+    radius
   };
 }
 
 export function updateFlurry(state, unit) {
   const flurry = unit.flurry;
   if (!flurry) return;
+  if (flurry.radius) { updateWhirl(state, unit, flurry); return; }
   if (!isAlive(unit) || !isAlive(flurry.target)) { unit.flurry = null; return; }
   if (state.time < flurry.next) return;
 
@@ -268,7 +273,27 @@ export function updateFlurry(state, unit) {
   if (flurry.left <= 0) unit.flurry = null;
 }
 
+// رقصة الشارع: ضربة على كل عدو داخل نصف القطر كل interval، وكل ضربة لفّة سريعة في الرسم.
+// لا ضربة عادية قبل أن تنتهي الرقصة
+function updateWhirl(state, unit, whirl) {
+  if (!isAlive(unit)) { unit.flurry = null; return; }
+  if (state.time < whirl.next) return;
+  const radiusSq = whirl.radius * whirl.radius;
+  forEachNearby(state, unit.x, unit.y, whirl.radius, (other) => {
+    if (distanceSq(unit, other) > radiusSq) return;
+    if (!isAlive(other) || !isEnemy(state, unit, other)) return;
+    applyDamage(state, unit, other, ultDamage(unit, whirl.damage));
+  });
+  unit.attackStart = unit.ultStart = state.time;
+  unit.attackRate = unit.ultRate = whirl.interval;
+  if (unit.attackCooldown < whirl.interval) unit.attackCooldown = whirl.interval;
+  whirl.left--;
+  whirl.next = state.time + whirl.interval;
+  if (whirl.left <= 0) unit.flurry = null;
+}
+
 // تحفيز الحلفاء (الزعيم وبطل العقارب)، وقد يرافقه علاج فوري
+// ring: حلقة تتسع حوله بهذا اللون (راية الأخوة، القسم 3.10)
 function buffAllies(state, unit, ult) {
   forEachAlly(state, unit, ult.radius, (ally) => {
     ally.buffUntil = state.time + ult.duration;
@@ -277,6 +302,7 @@ function buffAllies(state, unit, ult) {
     if (ult.heal) heal(ally, ult.heal);
   });
   if (ult.heal) soundAt(state, 'heal', unit.x, unit.y);
+  if (ult.ring) addUltFx(state, 'ring', unit.x, unit.y, ult.radius, ult.ring);
 }
 
 // علاج جماعي دفعة واحدة (الطبيب)
@@ -383,4 +409,30 @@ function rallyShout(state, unit, ult) {
     if (ally.cState === 'stagger') { ally.cState = null; ally.cTimer = 0; }
   });
   addUltFx(state, 'ring', unit.x, unit.y, ult.radius);
+}
+
+// مطر السهام (قائد الهوارانغ): على أكثف تجمع للأعداء داخل المدى، وحلقة تعلّم مكان الوابل
+function arrowRain(state, unit, ult, fallback) {
+  let spot = fallback, most = 0;
+  const rangeSq = ult.range * ult.range;
+  forEachNearby(state, unit.x, unit.y, ult.range, (other) => {
+    if (distanceSq(unit, other) > rangeSq) return;
+    if (!isAlive(other) || !isEnemy(state, unit, other)) return;
+    const around = enemiesAround(state, unit, other, ult.area);
+    if (around > most) { most = around; spot = other; }
+  });
+  if (!spot) return;
+  spawnRain(state, unit, spot.x, spot.y, ult, ultDamage(unit, ult.damage));
+  addUltFx(state, 'ring', spot.x, spot.y, ult.area, ult.ring);
+  faceTowards(unit, spot.x, spot.y);
+}
+
+function enemiesAround(state, unit, spot, radius) {
+  let count = 0;
+  const radiusSq = radius * radius;
+  forEachNearby(state, spot.x, spot.y, radius, (other) => {
+    if (distanceSq(spot, other) > radiusSq) return;
+    if (isAlive(other) && isEnemy(state, unit, other)) count++;
+  });
+  return count;
 }

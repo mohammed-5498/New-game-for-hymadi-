@@ -30,6 +30,8 @@ export function nationStats(stats, nationId, champion) {
   const mods = nation.trait.mods;
   if (mods.vision) stats.visionRange += mods.vision;
   if (mods.rangedRange && stats.projectile) stats.attackRange += mods.rangedRange;
+  if (mods.showoff) stats.showoff = mods.showoff;                        // الاستعراض (combat.js)
+  if (mods.weatherProof && stats.projectile) stats.weatherProof = true;   // الرماة لا يتأثرون بالطقس (weather.js)
   if (champion && nation.ult) stats.ult = nation.ult;
   return stats;
 }
@@ -83,6 +85,12 @@ export function homeMods(player) {
   const nation = nationOf(player.nation);
   const mods = nation && nation.trait.mods;
   return mods && (mods.homeDamage || mods.homeDamageTaken) ? mods : null;
+}
+
+// «الـ108» للاعب: {radius, perHero, max} إن كانت لأمته، وإلا null (abilities.js)
+export function brotherMods(player) {
+  const nation = nationOf(player.nation);
+  return (nation && nation.trait.mods.brothers) || null;
 }
 
 // نسبة تُضاف لسرعة استيلاء اللاعب على هذا الحي: حي مجاور لحي يملكه (0 لمن لا سمة له)

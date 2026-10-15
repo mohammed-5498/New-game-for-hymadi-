@@ -2,7 +2,7 @@
 // 1) كل لون يمر عبر paint() قبل الرسم، فيعمل صبغ المالك (القسم 8) والطقس على كل المدن
 // 2) لا يحوي buildMap/drawMap التجريبيتين: مولّد الخريطة الحقيقي في js/map/generator.js
 /* ===================== طوابع المدن — 9 مدن مخربة (مرجع للمرحلة 7ب، القسم 3.9) =====================
-   المدن: arab, japan, china, europe, norway, hk, jaipur, mexico, chicago
+   المدن: arab, japan (إيدو منذ المرحلة 9ب), china, europe, norway, hk, jaipur, mexico, chicago
    كيف يُقرأ هذا الملف:
    - أدوات رسم مشتركة: box, wL/wR (عناصر على الواجهتين)، arch، ridgeRoof (سقف بسنام: مثلث أوروبي/نرويجي أو مقعّر بأطراف مرفوعة صيني/ياباني)،
      hipRoof، dome، stepGable/bellGable، snowCap، glow، neonSign.
@@ -15,6 +15,7 @@
    - drawMap() و buildMap() في آخر الملف للعرض التجريبي فقط (شبكة 11×11)، لا تُنقل كما هي. */
 import { yamamah } from './yamamah.js';
 import { shibam, diriyah, cairo } from './citiesArab.js';
+import { kaifeng, gyeongju } from './citiesAsia.js';
 let ctx=null,SEED=0;
 // تلوين كل لون قبل استعماله: صبغ المالك (القسم 8) والطقس. roofMode: الأسطح تُصبغ أكثر من الجدران
 // toneInfo: نفس الصبغ للصور الجاهزة (صحراء اليمامة) التي لا تمر ألوانها عبر paint(): { color, amount, snow }
@@ -131,8 +132,9 @@ THEMES.arab={name:'مدينة عربية',ground:'#d4bd92',road:'#b99f74',road2:
       arch(qR(x,y,17,8.5),0.35,0.3,13,'#4a3528');arch(qL(x,y,17,8.5),0.4,0.2,9,'#4a3528');damage(x,y,17,8.5,20,i,j,T);},
     plazaProp(x,y){el(x,y+1,10,5,'#c8b48c');el(x,y+1,7.5,3.6,'#7a8f86');box(x,y,2,1,6,'#cbb68e','#e2d2b0','#d7c6a2');},
     tree:'palm'}};
-/* ---------- ياباني ---------- */
-THEMES.japan={name:'مدينة يابانية',ground:'#9aa585',road:'#b2aa9a',road2:'#a39b8b',plaza:'#c6bdab',debris:'#8f8778',wallL:'#d8d0bf',wallR:'#e6dfcf',
+/* ---------- ياباني: إيدو (المرحلة 9ب، مدينة اليابان): نفس المدينة بمعلم جديد من docs/nations/batch2-cities.js:
+   برج مراقبة الحريق الخشبي بدل القلعة ---------- */
+THEMES.japan={name:'إيدو — اليابان',ground:'#9aa585',road:'#b2aa9a',road2:'#a39b8b',plaza:'#c6bdab',debris:'#8f8778',wallL:'#d8d0bf',wallR:'#e6dfcf',
   pool:[['house',28],['two',16],['shop',12],['cherry',14],['lantern',6],['ruin',14],['.',8]],
   draw:{
     house(x,y,i,j,T){box(x,y,13,6.5,11,'#e6dfcf','#f3eee2');const qa=qL(x,y,13,6.5),qb=qR(x,y,13,6.5);
@@ -151,12 +153,16 @@ THEMES.japan={name:'مدينة يابانية',ground:'#9aa585',road:'#b2aa9a',r
       for(let k=0;k<4;k++)circ(x-6+hsh(i,j,40+k)*14,y+1+hsh(i,j,50+k)*3,0.8,'#f2b8c6');},
     lantern(x,y){box(x,y+2,2.2,1.1,1.6,'#9c978e','#b2ada3','#c2bdb3');rc(x-0.6,y-6,1.2,7,'#a8a398');box(x,y-6,2.4,1.2,3,'#8f8a82','#a8a398');
       poly([[x-3.4,y-9],[x,y-11.2],[x+3.4,y-9],[x,y-7.8]],'#7f7a72');rc(x-0.9,y-8.6,1.8,1.6,'#f2d58a');},
-    landmark(x,y,i,j,T){poly([[x-18,y],[x,y+9],[x,y-3],[x-15,y-10]],'#8f8b84');poly([[x,y+9],[x+18,y],[x+15,y-10],[x,y-3]],'#a6a29a');poly([[x-15,y-10],[x,y-17.5],[x+15,y-10],[x,y-3]],'#b5b1a8');
-      for(let k=0;k<5;k++)ln(x-18+k*0.6,y-k*2.4,x-k*0.1,y+9-k*2.4,'rgba(0,0,0,0.12)',0.5);
-      const R={front:'#3d4450',front2:'#4a525e',end:'#4f5866',end2:'#5a6370',back:'#2a2e36',sag:1,tile:'rgba(0,0,0,0.2)',ridgeW:1.4};
-      box(x,y-10,12,6,9,'#efeae0','#faf6ee');damage(x,y-10,12,6,9,i,j,T);ridgeRoof(x,y-10,12,6,9,4,Object.assign({ov:3.4,flare:2,k:0.7},R));
-      box(x,y-23,9,4.5,8,'#efeae0','#faf6ee');ridgeRoof(x,y-23,9,4.5,8,4,Object.assign({ov:3,flare:2,k:0.7},R));
-      box(x,y-35,6,3,7,'#efeae0','#faf6ee');ridgeRoof(x,y-35,6,3,7,6,Object.assign({ov:2.6,flare:2.2},R));},
+    landmark(x,y,i,j,T){ // برج مراقبة الحريق: هيكل خشبي شاهق بسلّم ومنصة مسقوفة وجرس
+      const W='#4a3426',H=46;[[-6,0],[6,0],[0,-3],[0,3]].forEach(([dx,dy])=>ln(x+dx,y+dy,x+dx*0.45,y+dy*0.45-H,W,1.4));
+      for(let k=0;k<7;k++){const t=k/7,yy=y-H*t-2;ln(x-6+2.7*t,yy,x+6-2.7*t,yy,W,0.8);ln(x-6+2.7*t,yy,x+6-2.7*(t+1/7),yy-H/7,W,0.5);}
+      for(let k=0;k<12;k++)ln(x+1.4,y-k*3.8,x+3,y-k*3.8,'#6a4a36',0.6);ln(x+1.4,y,x+1.4,y-H,'#6a4a36',0.6);ln(x+3,y,x+3,y-H,'#6a4a36',0.6);
+      box(x,y-H,4,2,1.2,'#5a3e2c','#6e4c36','#7a5640');
+      ridgeRoof(x,y-H-1.2,4.4,2.2,6,5,{front:'#3d4450',front2:'#4a525e',end:'#4f5866',back:'#2a2e36',ov:2.2,sag:0.8,flare:1.6});
+      el(x,y-H-4,1.3,1.6,'#b8913a');ln(x,y-H-5.6,x,y-H-6.2,'#5a4a2a',0.5);
+      // ركام الخراب عند القاعدة فقط (برج مفتوح بلا جدران: شقوق damage() وكتاباتها كانت تطفو بين قوائمه)
+      if(hsh(i,j,8)<0.45){const dc=T.debris||'#8a8074';poly([[x+3,y+2],[x+7,y-0.6],[x+11,y+0.4],[x+8,y+3.4]],dc);
+        poly([[x-10,y+2],[x-7,y],[x-4,y+2.4],[x-7,y+3.6]],mixc(dc,'#000000',0.15));}},
     plazaProp(x,y){el(x,y+1,9,4.5,'#9a9a8c');el(x,y+1,6.5,3.2,'#6f8f9c');circ(x-2,y+1,1,'#e86a3a');},
     tree:'cherry'}};
 /* ---------- صيني (أُعيد تصميمه: أسقف بسنام طويل مقعّر وأطراف مرفوعة، أعمدة حمراء، جدران بيضاء بأغطية رمادية، بوابات تذكارية) ---------- */
@@ -448,6 +454,8 @@ THEMES.chicago={name:'شيكاغو الثلاثينيات',ground:'#7d7a72',road
 THEMES.yamamah=yamamah;
 /* ---------- مدن الأمم العربية (المرحلة 9أ، القسم 3.10): في js/render/citiesArab.js ---------- */
 THEMES.shibam=shibam;THEMES.diriyah=diriyah;THEMES.cairo=cairo;
+/* ---------- مدن الأمم الآسيوية (المرحلة 9ب): كايفنغ وغيونغجو في js/render/citiesAsia.js، وإيدو هي japan أعلاه ---------- */
+THEMES.kaifeng=kaifeng;THEMES.gyeongju=gyeongju;
 
 export { THEMES, TAU, poly, circ, ln, rc, el, box, qL, qR, wL, wR, arch, ridgeRoof, hipRoof, dome, flag, glow,
   damage, ruinTile, streetDebris, hsh, mixc, snowCap, stepGable, bellGable, neonSign, hexRgb };

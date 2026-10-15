@@ -66,7 +66,7 @@ function buildMap(size, players, cityKey) {
   map.districts = districts;
   const walls = CITIES.walls[cityKey];
   if (walls) buildCityWalls(map, walls);
-  if (map.land < map.n) placeRorbu(map);
+  if (map.land < map.n && CITIES.water[cityKey].huts) placeRorbu(map);   // أكواخ الماء للنرويجية وحدها
   repairIsolatedPockets(map);     // القسم 3.4.1: لا يبقى فراغ محاصر بالمباني
   decorateRoads(map);
   return map;

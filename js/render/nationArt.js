@@ -5,17 +5,20 @@
    والسلاح فقط، بلا خطوط ولا نقوش صغيرة.
    أدوات الرسم المشتركة هنا منقولة من docs/nations/batch1-skins.js (تتكرر في الدفعات الأخرى)،
    وتعريفات كل دفعة في ملفها (nationsArab.js للدفعة العربية). */
-import { BODIES } from './bodies.js';
+import { BODIES, dashedRing } from './bodies.js';
 import { PERFORMANCE } from '../config.js';
 import { limb } from './anim.js';
 
 // أمة ← نوع الوحدة (common، الشخصيتان المميزتان، champion، و'<نوع>_away') ← [مفتاح الكامل، مفتاح المبسّط]
 export const NATION_ART = {};
+// أمة ← نوع الوحدة ← شكل مقذوفها وهو يطير، إن اختلف عن نوعه في القواعد (سهم مشتعل بدل الزجاجة)
+const NATION_SHOTS = {};
 
 // تسجيل مظاهر أمة: units = { common: {full, lite}, boss: {full, lite}, ..., champion: {full, lite} }
 // المفاتيح في BODIES: '<أمة>_<نوع>' و'<أمة>_<نوع>_lite'. نقاط الساقين لازمة لكل مظهر أمة (legs)
 // النوع '<نوع>_away': نفس الوحدة وقد غاب عنها شيء مؤقتاً (صقر الصقّار في انقضاضه، unit.awayUntil)
-export function registerNation(id, units) {
+// shots: { <نوع>: شكل المقذوف } (اختياري)، يقرؤه shotLook
+export function registerNation(id, units, shots = null) {
   const art = {};
   for (const [kind, { full, lite }] of Object.entries(units)) {
     const key = id + '_' + kind;
@@ -24,6 +27,22 @@ export function registerNation(id, units) {
     art[kind] = [key, key + '_lite'];
   }
   NATION_ART[id] = art;
+  if (shots) NATION_SHOTS[id] = shots;
+}
+
+// شكل المقذوف وهو يطير: شكل أمة صاحبه إن كان لها شكل خاص، وإلا نوعه (stone، arrow، bottle...)
+// الشكل رسم فقط: القواعد كلها من نوعه (الزجاجة تبقى تشعل الأرض)
+export function shotLook(shot) {
+  const a = shot.attacker, shots = a && a.nation ? NATION_SHOTS[a.nation] : null;
+  if (!shots) return shot.kind;
+  return shots[a.champion ? 'champion' : (a.hero || 'common')] || shot.kind;
+}
+
+// لكل نوع نسختان: الكاملة (make(false)) والمبسّطة (make(true))
+export function both(make) {
+  const full = make(false), lite = make(true), out = {};
+  for (const kind of Object.keys(full)) out[kind] = { full: full[kind], lite: lite[kind] };
+  return out;
 }
 
 // مفتاح رسم وحدة الأمة حسب مستوى تفصيلها، أو null (عصابة كلاسيكية أو أمة بلا مظهر بعد)
@@ -52,6 +71,15 @@ export function memo(fn) {
   };
 }
 export const GOLD = '#c9a04a';
+export const STEEL2 = '#cfd3d8';
+
+// ---------- علامات النمط عند القدمين (كما في bodies.js) ----------
+// هالة الزعيم، وهالتا بطل الحشد (الضرر والعلاج)
+export const auraRing = (c, col, t) => { const k = 1 + Math.sin(t * 2.4) * 0.05; dashedRing(c, 10.5 * k, 4.2 * k, 'rgba(240,182,74,0.9)'); };
+export const auraHealRings = (c, col, t) => {
+  const k = 1 + Math.sin(t * 2.4) * 0.06;
+  dashedRing(c, 11.5 * k, 4.6 * k, 'rgba(240,182,74,0.9)'); dashedRing(c, 8.4 * k, 3.4 * k, 'rgba(127,212,138,0.8)');
+};
 
 // ---------- أدوات الرسم المشتركة (من batch1-skins.js) ----------
 // تُرسم مئات الوحدات في كل إطار: الأدوات تحسب نقاطها أعداداً مباشرة بلا مصفوفات جديدة،
@@ -123,3 +151,12 @@ export function staff(c, J, p, back, fwd, w, col) {
 }
 // دائرة ممتلئة بإحداثيين (بلا مصفوفة)
 export function dot(c, x, y, r, f) { c.beginPath(); c.arc(x, y, r, 0, 6.2831853); c.fillStyle = f; c.fill(); }
+// شكل بيضاوي يضاف إلى المسار الجاري (بلا خط يصله بما قبله)
+export function ellTo(c, x, y, rx, ry) { c.moveTo(x + rx, y); c.ellipse(x, y, rx, ry, 0, 0, 6.2831853); }
+// مثلث يضاف إلى المسار الجاري بدوران الشكل البيضاوي نفسه (مع عقارب الساعة على الشاشة):
+// أشكال متداخلة بدوران معاكس في مسار واحد يصير تداخلها ثقباً (قاعدة الملء nonzero)
+export function triTo(c, ax, ay, bx, by, dx, dy) {
+  if ((bx - ax) * (dy - ay) - (by - ay) * (dx - ax) < 0) { c.moveTo(ax, ay); c.lineTo(dx, dy); c.lineTo(bx, by); }
+  else { c.moveTo(ax, ay); c.lineTo(bx, by); c.lineTo(dx, dy); }
+  c.closePath();
+}

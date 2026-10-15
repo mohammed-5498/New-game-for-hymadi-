@@ -73,7 +73,7 @@ function attackersOn(state, playerId, target) {
   return count;
 }
 
-// --- الضربات المميزة الذكية: الدائرية والأرضية والحريق عند 3 أعداء فأكثر،
+// --- الضربات المميزة الذكية: الدائرية والأرضية والحريق (ورقصة الشارع ومطر السهام) عند 3 أعداء فأكثر،
 // والعلاج الجماعي عند حليفين مصابين فأكثر، والتصلّب عند الضرب من أكثر من عدو ---
 // (المتوسط "جزئياً": الدائرية والحريق فقط؛ والسهل يطلقها حين تمتلئ)
 export function ultAllowed(state, unit, ult, target) {
@@ -89,12 +89,17 @@ export function ultAllowed(state, unit, ult, target) {
 }
 
 function goodMoment(state, unit, ult, target, full) {
-  if (ult.kind === 'slam' || ult.kind === 'arc') {
+  // رقصة الشارع (اليابان) دائرية حوله مثل الضربة الأرضية
+  if (ult.kind === 'slam' || ult.kind === 'arc' || ult.kind === 'whirl') {
     return countAround(state, unit, unit, ult.radius, true) >= ai.aoeMinEnemies;
   }
   if (ult.kind === 'fire') {
     const spot = target || unit;
     return countAround(state, unit, spot, ult.fire.radius, true) >= ai.aoeMinEnemies;
+  }
+  // مطر السهام (كوريا) على مساحة حول الهدف مثل الحريق
+  if (ult.kind === 'rain') {
+    return countAround(state, unit, target || unit, ult.area, true) >= ai.aoeMinEnemies;
   }
   if (!full) return true;
   if (ult.kind === 'heal') {

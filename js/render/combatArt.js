@@ -16,11 +16,12 @@ export const MOVE_AR = {
 export const ST_AR = { dodge: 'تفادٍ', block: 'صدّ', stagger: 'ترنّح', down: 'على الأرض' };
 
 // الضربة المميزة تستعمل مفاتيح أقرب حركة للوحدة (مع الوهج الذهبي الموجود)
-// ضربات أبطال الأمم (القسم 3.10): النداء والصيحة برفع العصا، وإطلاق الصقر من القبضة كالرمي
+// ضربات أبطال الأمم (القسم 3.10): النداء والصيحة برفع العصا، وإطلاق الصقر من القبضة كالرمي،
+// ورقصة الشارع لفّة في كل ضربة منها، ومطر السهام بالقوس
 const ULT_MOVE = {
   pierce: 'thrust', flurry: 'quick', slam: 'heavy', shot: 'shoot', fire: 'throw',
   buff: 'heavy', heal: 'heavy', arc: 'spin', arrows: 'shoot', bash: 'thrust', harden: 'block',
-  caravan: 'heavy', falcon: 'throw', shout: 'heavy'
+  caravan: 'heavy', falcon: 'throw', shout: 'heavy', whirl: 'spin', rain: 'shoot'
 };
 const RANGED = { shoot: true, throw: true };
 
@@ -33,7 +34,8 @@ function canonA(ph, T) {
 }
 
 // الحركة الجارية وتقدمها على الخط القياسي: الحركات الأربع، أو الرمي البعيد، أو الضربة المميزة
-function swingOf(unit, time) {
+// ud.shoots: مظهر أمة يرمي بالقوس ما يرميه نمطه باليد (رامي السهام المشتعلة، القسم 3.10)
+function swingOf(unit, time, ud) {
   if (unit.cMove && unit.cPhases && unit.attackStart !== null) {
     return { key: unit.cMove, a: canonA(unit.cPhases, unit.cMoveT), ult: false };
   }
@@ -42,8 +44,13 @@ function swingOf(unit, time) {
   if (elapsed < 0 || elapsed >= unit.attackRate) return null;
   const a = elapsed / unit.attackRate;            // الارتطام عند 0.47 يقع داخل تجمّد الخط القياسي
   const ult = unit.ultStart !== null && time - unit.ultStart < unit.ultRate;
-  if (ult) return { key: ULT_MOVE[unit.stats.ult.kind] || 'heavy', a, ult: true };
-  return { key: unit.stats.projectile === 'arrow' ? 'shoot' : unit.stats.projectile ? 'throw' : 'quick', a, ult: false };
+  const shoots = ud && ud.shoots;
+  if (ult) {
+    const key = ULT_MOVE[unit.stats.ult.kind] || 'heavy';
+    return { key: shoots && key === 'throw' ? 'shoot' : key, a, ult: true };
+  }
+  const projectile = unit.stats.projectile;
+  return { key: projectile === 'arrow' || (shoots && projectile) ? 'shoot' : projectile ? 'throw' : 'quick', a, ult: false };
 }
 
 // تسمية الحالة لوضع التفاصيل
@@ -98,7 +105,7 @@ export function drawOne(ctx, unit, key, x, y, scale, color, time, walking, ghost
   const ud = BODIES[key] || BODIES.crow_common;
   const animT = time + (unit.id % 17) * 0.13;
   const dead = unit.state === 'dead';
-  const sw = dead ? null : swingOf(unit, time);
+  const sw = dead ? null : swingOf(unit, time, ud);
   const pose = dead ? poseDeath() : poseOf(unit, time, animT, walking, sw);
   // اللكمة باليد الحرة: لا تُثبَّت اليد الخلفية على مقبض السلاح ذي اليدين أثناءها
   const p = sw && sw.key === 'punch' ? pose : twoHand(ud, pose);

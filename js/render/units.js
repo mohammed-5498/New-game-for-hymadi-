@@ -2,8 +2,9 @@
 import { TILE_HALF_W, TILE_HALF_H, COMBAT, COMBAT_REALISM, PERFORMANCE, UNIT_ART, ULT, nations } from '../config.js';
 import { UI_LIGHT } from './colors.js';
 import { drawOne, stateLabel, drawSpeedLines } from './combatArt.js';
-import { nationArtKey } from './nationArt.js';
+import { nationArtKey, shotLook } from './nationArt.js';
 import './nationsArab.js';                 // مظاهر الدفعة العربية تُسجَّل في سجل الأمم (القسم 3.10)
+import './nationsAsia.js';                 // والدفعة الآسيوية
 
 // الأفراد العاديون بلا ضربة مميزة، فلا نجمة ولا شريط شحن لهم
 const hasUlt = (unit) => !!unit.stats.ult;
@@ -194,6 +195,19 @@ export function drawProjectile(ctx, shot, alpha) {
   const color = PROJECTILE_COLORS[shot.kind] || PROJECTILE_COLORS.stone;
 
   if (shot.kind === 'falcon') { drawFalcon(ctx, shot, x, (i + j) * TILE_HALF_H, progress, t); return; }
+  // سهام مطر السهام (القسم 3.10): قوس عالٍ تسقط منه على المساحة، والسهم باتجاه طيرانه
+  if (shot.area > 0) {
+    const arc = nations.fx.rainArc;
+    aimedArrow(ctx, shot, x, (i + j) * TILE_HALF_H - 6 - Math.sin(progress * Math.PI) * arc, progress, arc, color);
+    return;
+  }
+  // السهم المشتعل (رامي السهام المشتعلة): شكل فقط، وقواعده قواعد زجاجة رامي النار
+  if (shotLook(shot) === 'firearrow') {
+    const head = aimedArrow(ctx, shot, x, y, progress, COMBAT.projectileArc, PROJECTILE_COLORS.arrow);
+    ctx.beginPath(); ctx.ellipse(head.x, head.y, 1.2, 1.5, 0, 0, 6.2832); ctx.fillStyle = '#f0902a'; ctx.fill();
+    ctx.beginPath(); ctx.ellipse(head.x, head.y - 0.4, 0.6, 0.9, 0, 0, 6.2832); ctx.fillStyle = '#ffd45a'; ctx.fill();
+    return;
+  }
   if (shot.kind === 'arrow') {
     ctx.beginPath();
     ctx.moveTo(x - 2, y + 1);
@@ -210,6 +224,23 @@ export function drawProjectile(ctx, shot, alpha) {
     ctx.lineWidth = 0.5;
     ctx.stroke();
   }
+}
+
+// سهم بطول 4 باتجاه طيرانه على الشاشة (مع ميل قوس الرمية arc)، ويعيد مكان رأسه
+const HEAD = { x: 0, y: 0 };
+function aimedArrow(ctx, shot, x, y, progress, arc, color) {
+  const dI = shot.x - shot.prevX, dJ = shot.y - shot.prevY, dp = (shot.t - shot.prevT) / shot.duration;
+  let vx = (dI - dJ) * TILE_HALF_W, vy = (dI + dJ) * TILE_HALF_H - arc * Math.PI * Math.cos(progress * Math.PI) * dp;
+  const n = Math.sqrt(vx * vx + vy * vy);
+  if (n > 1e-6) { vx = vx / n * 2; vy = vy / n * 2; } else { vx = 2; vy = -1; }
+  ctx.beginPath();
+  ctx.moveTo(x - vx, y - vy);
+  ctx.lineTo(x + vx, y + vy);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 0.9;
+  ctx.stroke();
+  HEAD.x = x + vx; HEAD.y = y + vy;
+  return HEAD;
 }
 
 // صقر الصقّار (القسم 3.10): يرتفع من ساعده ثم ينقضّ بجناحين مضمومين على صدر الهدف،
