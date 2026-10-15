@@ -6,12 +6,13 @@ import { ownsSpecial } from './spawn.js';
 import { policeArmorBonus } from './police.js';
 import { forEachNearby } from './spatialHash.js';
 import { soundAt } from '../audio/sound.js';
-import { homeMods, inOwnArea, brotherMods } from './nations.js';
+import { homeMods, inOwnArea, brotherMods, phalanxMods } from './nations.js';
 
 const isAlive = (unit) => unit.state !== 'dead' && unit.hp > 0;
 const allied = (state, a, b) => a.playerId === b.playerId || !isEnemy(state, a, b);
 
 export function updateAbilities(state) {
+  updateZones(state);
   applyDamageBonuses(state);
   applyHealing(state);
   updateFires(state);
@@ -26,8 +27,9 @@ function applyDamageBonuses(state) {
   const armorBonus = state.players.map(p => policeArmorBonus(state, p.id));
   // سمات الأمم "داخل أحيائك" (القسم 3.10): null لكل لاعب بلا سمة من هذا النوع
   const home = state.players.map(homeMods);
-  // «الـ108» (الصين): null لكل لاعب بلا هذه السمة
+  // «الـ108» (الصين) و«الكتيبة» (ألمانيا): null لكل لاعب بلا هذه السمة
   const brothers = state.players.map(brotherMods);
+  const phalanx = state.players.map(phalanxMods);
 
   // نبدأ من الصفر (المضاعف النهائي يُحسب في الحلقة الأخيرة بنفس ترتيب الجمع)
   // كتابة العدد العشري في خاصية الوحدة تحجز ذاكرة: لا نكتب إلا ما تغيّر فعلاً
@@ -77,6 +79,12 @@ function applyDamageBonuses(state) {
       const b = brothers[unit.playerId];
       multiplier += Math.min(b.max, unit.brothers * b.perHero);
     }
+    // «الكتيبة»: ضرر متلقى أقل للوحدة داخل مجموعة كبيرة من وحدات لاعبها
+    const ph = phalanx[unit.playerId];
+    if (ph) {
+      const taken = inGroup(state, unit, ph) ? 1 - ph.reduce : 1;
+      if (unit.takenMul !== taken) unit.takenMul = taken;
+    }
     if (unit.damageMultiplier !== multiplier) unit.damageMultiplier = multiplier;
   }
 }
@@ -93,6 +101,36 @@ function spreadAura(state, boss, aura) {
     const healing = aura.healPerSecond || 0;
     if (healing > unit.auraHeal) unit.auraHeal = healing;
   });
+}
+
+// هل حول الوحدة (ومعها نفسها) count من وحدات لاعبها الحية داخل نصف القطر؟
+function inGroup(state, unit, ph) {
+  const radiusSq = ph.radius * ph.radius;
+  let count = 0;
+  forEachNearby(state, unit.x, unit.y, ph.radius, (other) => {
+    if (other.playerId !== unit.playerId || !isAlive(other)) return;
+    const dx = other.x - unit.x, dy = other.y - unit.y;
+    if (dx * dx + dy * dy <= radiusSq) count++;
+  });
+  return count >= ph.count;
+}
+
+// --- مناطق ضربات الأبطال (القسم 3.10): الراية المغروسة ---
+// كل حليف داخلها يصمد (لا ترنّح ولا سقوط) ولا يُدفع ما دامت قائمة، والمنطقة تزول عند انتهاء مدتها
+function updateZones(state) {
+  if (!state.zones.length) return;
+  state.zones = state.zones.filter(zone => zone.until > state.time);
+  for (const zone of state.zones) {
+    const radiusSq = zone.radius * zone.radius, hold = state.time + 2 * TICK_SEC;
+    forEachNearby(state, zone.x, zone.y, zone.radius, (unit) => {
+      const dx = unit.x - zone.x, dy = unit.y - zone.y;
+      if (dx * dx + dy * dy > radiusSq || !isAlive(unit)) return;
+      if (unit.playerId !== zone.playerId && isEnemyId(state, unit.playerId, zone.playerId)) return;
+      if (unit.steadyUntil < hold) unit.steadyUntil = hold;
+      if (unit.holdUntil < hold) unit.holdUntil = hold;
+      if (unit.cState === 'stagger') { unit.cState = null; unit.cTimer = 0; }
+    });
+  }
 }
 
 // الأفراد العاديون من لاعب الشخصية المميزة داخل نصف القطر (لا الشخصيات ولا البطل)

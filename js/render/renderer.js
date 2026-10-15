@@ -3,7 +3,7 @@ import { TILE_HALF_W, TILE_HALF_H, TICK_SEC, CAMERA, CAPTURE, PERFORMANCE, ALERT
 import { enemyLeaders } from '../game/modes.js';
 import { onScreen } from '../game/alerts.js';
 import { BACKGROUND, UI_LIGHT } from './colors.js';
-import { drawUnit, drawSelectionRing, drawProjectile, drawAura, drawFire, unitWorldPos, unitSizeFactor } from './units.js';
+import { drawUnit, drawSelectionRing, drawProjectile, drawAura, drawFire, drawZone, unitWorldPos, unitSizeFactor } from './units.js';
 import { drawOverlay, drawLights, drawParticles } from './weather.js';
 import { worldToTile } from '../map/coords.js';
 import { drawClash, drawBurst } from './combatArt.js';
@@ -80,6 +80,7 @@ export function render(ctx, state, alpha, cityBudgetMs = CITY_CACHE.frameBudgetM
     lights.push({ x: (fire.x - fire.y) * TILE_HALF_W, y: (fire.x + fire.y) * TILE_HALF_H,
                   r: fire.radius * 28, c: '255,150,60', a: 0.7 });
   }
+  for (const zone of state.zones) drawZone(ctx, zone, state.time);   // الراية المغروسة (القسم 3.10)
   drawUnitsLayer(ctx, state, alpha, visible);
   // المصابيح الزرقاء الوامضة فوق أسطح الشرطة: بعد الوحدات حتى لا تغطيها قصاصات المباني
   for (const lamp of statics.lamps) if (visible(lamp.x, lamp.y)) drawPoliceLamp(ctx, lamp, state.time, lights);

@@ -5,6 +5,7 @@ import { drawOne, stateLabel, drawSpeedLines } from './combatArt.js';
 import { nationArtKey, shotLook } from './nationArt.js';
 import './nationsArab.js';                 // مظاهر الدفعة العربية تُسجَّل في سجل الأمم (القسم 3.10)
 import './nationsAsia.js';                 // والدفعة الآسيوية
+import './nationsEurope.js';               // والدفعة الأوروبية
 
 // الأفراد العاديون بلا ضربة مميزة، فلا نجمة ولا شريط شحن لهم
 const hasUlt = (unit) => !!unit.stats.ult;
@@ -82,11 +83,13 @@ export function drawUnit(ctx, unit, alpha, zoom = 99, time = 0, debug = false, c
     }
   }
   const ghosts = full ? (crowded ? COMBAT_REALISM.trailGhostsCrowded : COMBAT_REALISM.trailGhosts) : 0;
-  // صيحة الحارة (القسم 3.10): حلقة ذهبية تحت قدمي من يصمد بلا ترنّح ولا سقوط
-  if (!dead && unit.steadyUntil > time) {
+  // صيحة الحارة والراية المغروسة (القسم 3.10): حلقة ذهبية تحت قدمي من يصمد بلا ترنّح ولا سقوط،
+  // والشرطي المرتشي (رشوة الشرطي) بحلقة خضراء ما دامت الهدنة
+  const ring = dead ? null : unit.steadyUntil > time ? nations.fx.steadyRing : unit.bribedUntil > time ? nations.fx.bribeRing : null;
+  if (ring) {
     ctx.beginPath();
     ctx.ellipse(x, y + 0.6, 6.2 * scale, 2.5 * scale, 0, 0, 6.2832);
-    ctx.strokeStyle = nations.fx.steadyRing;
+    ctx.strokeStyle = ring;
     ctx.lineWidth = 0.9;
     ctx.stroke();
   }
@@ -288,6 +291,35 @@ export function drawAura(ctx, unit, alpha) {
   ctx.setLineDash([4, 3]);
   ctx.stroke();
   ctx.setLineDash([]);
+}
+
+// الراية المغروسة (غرس الراية، القسم 3.10): دائرة متقطعة بلون صاحبها، وسارية عليها راية بخطوط لونه والذهبي
+// تتموج، وتخفت في آخر ثانية من عمرها
+export function drawZone(ctx, zone, time) {
+  const x = (zone.x - zone.y) * TILE_HALF_W, y = (zone.x + zone.y) * TILE_HALF_H;
+  const fade = Math.max(0, Math.min(1, zone.until - time));
+  ctx.globalAlpha = 0.85 * fade;
+  ctx.beginPath();
+  ctx.ellipse(x, y, zone.radius * TILE_HALF_W, zone.radius * TILE_HALF_H, 0, 0, 6.2832);
+  ctx.strokeStyle = zone.color;
+  ctx.lineWidth = 1.2;
+  ctx.setLineDash([5, 3]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.globalAlpha = fade;
+  ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y - 30);
+  ctx.strokeStyle = '#5a4632'; ctx.lineWidth = 1.2; ctx.stroke();
+  for (let pass = 0; pass < 2; pass++) {
+    ctx.beginPath();
+    for (let k = pass; k < 5; k += 2) {
+      const y0 = y - 29 + k * 2.4, wv = Math.sin(time * 4 + k * 0.9) * 0.9;
+      ctx.moveTo(x, y0); ctx.lineTo(x - 13, y0 + wv); ctx.lineTo(x - 13, y0 + 2.4 + wv); ctx.lineTo(x, y0 + 2.4); ctx.closePath();
+    }
+    ctx.fillStyle = pass ? '#d9a83a' : zone.color;
+    ctx.fill();
+  }
+  ctx.beginPath(); ctx.arc(x, y - 30, 1, 0, 6.2832); ctx.fillStyle = '#c9a04a'; ctx.fill();
+  ctx.globalAlpha = 1;
 }
 
 // نار الزجاجات على الأرض

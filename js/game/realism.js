@@ -136,6 +136,8 @@ export function chooseMove(unit, target, dist, nearCount, range) {
     if (key === 'kick_high')  score = 0.45 + (inRecovery(target) ? 1.4 : 0) + (unit.traits.aggr - 1) * 0.8;
     if (unit.combo) score += m.unarmed ? -0.8 : 1.2;       // بعد لكمة أو ركلة: غالباً يكمل بالسلاح
     if (key === unit.style.primary) score += CR.primaryBonus;
+    // السافات (سمة فرنسا، القسم 3.10): الركلات تُختار أكثر
+    if (unit.stats.kicks && (key === 'kick_front' || key === 'kick_high')) score += unit.stats.kicks.prefer;
 
     score *= 1 + (unit.rng() * 2 - 1) * CR.jitter;
     if (score > bestScore) { bestScore = score; best = key; }
@@ -338,7 +340,8 @@ export function updateRealism(state, unit) {
 
   if (unit.state === 'dead') return true;
 
-  unit.hardened = unit.invulnUntil > state.time;    // تصلّب: يقرأه الارتداد والاصطدام
+  // تصلّب أو راية مغروسة (لا يُدفع، القسم 3.10): يقرأه الارتداد والاصطدام
+  unit.hardened = unit.invulnUntil > state.time || unit.holdUntil > state.time;
   if (unit.cState !== 'dodge') unit.stamina = Math.min(CR.stMax, unit.stamina + CR.stRegen * TICK_SEC);
   unit.dodgeCd = Math.max(0, unit.dodgeCd - TICK_SEC);
 

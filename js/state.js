@@ -67,6 +67,7 @@ export function createMatch(settings) {
     clashes: [],               // شرر تصادم الأسلحة
     fx: [],                    // نجوم الانفجار عند الارتطام
     ultFx: [],                 // آثار ضربات أبطال الأمم: حلقات وغبار (القسم 3.10)
+    zones: [],                 // مناطق ضربات الأبطال القائمة مدة: الراية المغروسة (القسم 3.10)
     shakeAt: -99,              // زمن آخر ارتجاجة كاميرا (القسم 5.2)
     cameraTween: null,         // انتقال الكاميرا الناعم إلى مجموعة تحكم (القسم 4.4)
     alerts: [],                // أسهم الحافة الظاهرة الآن (القسم 12.3)
@@ -188,6 +189,7 @@ export function resetMatch(state, settings = state.settings) {
   state.clashes = [];
   state.fx = [];
   state.ultFx = [];
+  state.zones = [];
   state.alerts = [];
   state.alertSeen = [];
   state.shakeAt = -99;

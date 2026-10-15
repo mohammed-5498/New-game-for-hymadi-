@@ -1,11 +1,11 @@
 // الضربات المميزة (القسم 6.7): الشحن، شرط الإطلاق، والتأثير الفعلي
 // الأفراد العاديون لا يملكون ضربة مميزة، فلا شحن لهم.
-import { TICK_SEC, COMBAT, ULT, CAMERA, ai } from '../config.js';
+import { TICK_SEC, COMBAT, ULT, CAMERA, ai, nations } from '../config.js';
 import { isEnemy, applyDamage, spawnProjectile, spawnFalcon, spawnRain } from './combat.js';
 import { createFire } from './abilities.js';
 import { faceTowards, createUnit } from './units.js';
 import { forEachNearby } from './spatialHash.js';
-import { registerSight, addUltFx } from './realism.js';
+import { registerSight, addUltFx, knockDown, addPop } from './realism.js';
 import { findFreeTiles } from '../map/pathfinding.js';
 import { soundAt } from '../audio/sound.js';
 import { onScreen } from './alerts.js';
@@ -96,10 +96,24 @@ function woundedAlly(state, unit, range) {
   return best;
 }
 
-// شرط الضربة: عدو في المدى، أو حليف متضرر للعلاج
+// أقرب شرطي داخل المدى (رشوة الشرطي، القسم 3.10): الشرطة لاعب محايد له وحداته
+function nearestPolice(state, unit, range) {
+  let best = null, bestSq = range * range;
+  forEachNearby(state, unit.x, unit.y, range, (other) => {
+    if (other.gang !== 'police') return;
+    const d2 = distanceSq(unit, other);
+    if (d2 >= bestSq || !isAlive(other)) return;
+    bestSq = d2;
+    best = other;
+  });
+  return best;
+}
+
+// شرط الضربة: عدو في المدى، أو حليف متضرر للعلاج، أو شرطي قريب
 function ultTarget(state, unit, ult) {
   const range = ultRange(unit, ult);
   if (ult.needs === 'ally') return woundedAlly(state, unit, range);
+  if (ult.needs === 'police') return nearestPolice(state, unit, range);
   if (ult.needs === 'either') return nearestEnemy(state, unit, range) || woundedAlly(state, unit, range);
   return nearestEnemy(state, unit, range);
 }
@@ -170,6 +184,9 @@ export function resolveUlt(state, unit) {
     case 'shout':   rallyShout(state, unit, ult); break;
     case 'whirl':   startFlurry(state, unit, ult, null, ult.radius); break;
     case 'rain':    arrowRain(state, unit, ult, target); break;
+    case 'throwdown': throwdown(state, unit, ult, target); break;
+    case 'bribe':   bribePolice(state, unit, ult); break;
+    case 'banner':  plantBanner(state, unit, ult); break;
   }
 }
 
@@ -435,4 +452,44 @@ function enemiesAround(state, unit, spot, radius) {
     if (isAlive(other) && isEnemy(state, unit, other)) count++;
   });
   return count;
+}
+
+// رقصة الأباتشي (ملك الأباتشي): يقذف خصمه بعيداً ويسقطه أرضاً (ومن يصمد يتلقى الضرر وحده)
+function throwdown(state, unit, ult, target) {
+  if (!target) return;
+  applyDamage(state, unit, target, ultDamage(unit, ult.damage));
+  if (isAlive(target)) knockDown(state, target, unit.x, unit.y, ult.throw);
+}
+
+// رشوة الشرطي (زعيم الحي): هدنة مؤقتة بين الشرطة القريبة الآن ووحدات لاعبه، فيترك كلٌّ منهما الآخر
+function bribePolice(state, unit, ult) {
+  const until = state.time + ult.duration, radiusSq = ult.radius * ult.radius, bribed = [];
+  forEachNearby(state, unit.x, unit.y, ult.radius, (other) => {
+    if (other.gang !== 'police' || !isAlive(other) || distanceSq(unit, other) > radiusSq) return;
+    other.bribedUntil = until;
+    other.bribedBy = unit.playerId;
+    if (other.target && other.target.playerId === unit.playerId) dropTarget(other);
+    addPop(state, other, 'رُشي!', 'bribe');
+    bribed.push(other);
+  });
+  // ووحداته تترك من كانت تقاتله منهم
+  for (const own of state.units) {
+    if (own.playerId === unit.playerId && own.target && bribed.includes(own.target)) dropTarget(own);
+  }
+  addUltFx(state, 'ring', unit.x, unit.y, ult.radius, nations.fx.bribeColor);
+}
+
+function dropTarget(unit) {
+  unit.target = null;
+  unit.commandedTarget = false;
+  unit.pendingHit = null;
+  if (unit.state === 'attacking') { unit.state = 'idle'; unit.path = []; }
+}
+
+// غرس الراية (حامل الراية): منطقة مكانه تبقى مدة (abilities.js يطبّق أثرها)، والراية تغيب عن يده حتى تزول
+function plantBanner(state, unit, ult) {
+  state.zones.push({ kind: 'banner', x: unit.x, y: unit.y, radius: ult.radius, until: state.time + ult.duration,
+                     playerId: unit.playerId, color: unit.color });
+  unit.awayUntil = state.time + ult.duration;
+  addUltFx(state, 'ring', unit.x, unit.y, ult.radius);
 }

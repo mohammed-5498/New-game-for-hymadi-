@@ -160,3 +160,48 @@ export function triTo(c, ax, ay, bx, by, dx, dy) {
   else { c.moveTo(ax, ay); c.lineTo(bx, by); c.lineTo(dx, dy); }
   c.closePath();
 }
+
+// نقطة على الجسد: (x, y) مدوّرة بالزاوية a حول O، في PT (كائن ثابت يُعاد ملؤه، بلا مصفوفة جديدة)
+export const PT = { x: 0, y: 0 };
+export function at(O, x, y, a) {
+  const ca = Math.cos(a), sa = Math.sin(a);
+  PT.x = O[0] + x * ca - y * sa; PT.y = O[1] + x * sa + y * ca;
+  return PT;
+}
+
+// لوح على الجذع (قميص، صديري، درع صدر) من الكتفين إلى الحوض، كما في torso بالدفعات 3 و4 و5.
+// inset يضيّقه من الجانبين. زواياه الأربع في out (TB افتراضياً): 0 أعلى الخلف، 1 أعلى الأمام، 2 أسفل الأمام، 3 أسفل الخلف
+export const TB = { x0: 0, y0: 0, x1: 0, y1: 0, x2: 0, y2: 0, x3: 0, y3: 0 };
+export function torso(c, J, fill, st, inset, out) {
+  const i = inset || 0, T = out || TB;
+  const ca = Math.cos(J.a2), sa = Math.sin(J.a2), cb = Math.cos(J.pl), sb = Math.sin(J.pl);
+  const cx = J.chest[0], cy = J.chest[1], hx = J.hip[0], hy = J.hip[1];
+  T.x0 = cx + (-2.2 + i) * ca + 0.2 * sa; T.y0 = cy + (-2.2 + i) * sa - 0.2 * ca;     // add(J.chest, rot(-2.2+i, -0.2, a2))
+  T.x1 = cx + (2.4 - i) * ca + 0.2 * sa;  T.y1 = cy + (2.4 - i) * sa - 0.2 * ca;      // add(J.chest, rot(2.4-i, -0.2, a2))
+  T.x2 = hx + (2.6 - i) * cb + sb;        T.y2 = hy + (2.6 - i) * sb - cb;            // add(J.hip, rot(2.6-i, -1, pl))
+  T.x3 = hx + (-2.4 + i) * cb + sb;       T.y3 = hy + (-2.4 + i) * sb - cb;           // add(J.hip, rot(-2.4+i, -1, pl))
+  c.beginPath(); c.moveTo(T.x0, T.y0); c.lineTo(T.x1, T.y1); c.lineTo(T.x2, T.y2); c.lineTo(T.x3, T.y3); c.closePath();
+  c.fillStyle = fill; c.fill();
+  if (st) { c.strokeStyle = st; c.lineWidth = 0.5; c.stroke(); }
+  return T;
+}
+// n خطوط عرضية على اللوح (قميص مخطط) بلون واحد في رسمة واحدة: من الحد الخلفي إلى الأمامي
+export function hStripes(c, T, n, col, w) {
+  c.beginPath();
+  for (let k = 1; k <= n; k++) {
+    const t = k / (n + 1);
+    c.moveTo(T.x0 + (T.x3 - T.x0) * t, T.y0 + (T.y3 - T.y0) * t);
+    c.lineTo(T.x1 + (T.x2 - T.x1) * t, T.y1 + (T.y2 - T.y1) * t);
+  }
+  c.strokeStyle = col; c.lineWidth = w || 0.7; c.stroke();
+}
+// خطوط طولية على اللوح عند المواضع ts (من الخلف 0 إلى الأمام 1)، من الكتفين إلى الحوض
+export function vStripes(c, T, ts, col, w) {
+  c.beginPath();
+  for (const t of ts) {
+    c.moveTo(T.x0 + (T.x1 - T.x0) * t, T.y0 + (T.y1 - T.y0) * t);
+    c.lineTo(T.x3 + (T.x2 - T.x3) * t, T.y3 + (T.y2 - T.y3) * t);
+  }
+  c.strokeStyle = col; c.lineWidth = w || 0.6; c.stroke();
+}
+

@@ -24,7 +24,8 @@ export function sideName(gang, nationId) {
 }
 
 // إحصائيات وحدة الأمة: إحصائيات نمطها كما هي، ثم معدِّلات السمة الثابتة، وضربة البطل الخاصة
-export function nationStats(stats, nationId, champion) {
+// heroId: الشخصية المميزة (null للفرد العادي والبطل)
+export function nationStats(stats, nationId, champion, heroId = null) {
   const nation = nationOf(nationId);
   if (!nation) return stats;
   const mods = nation.trait.mods;
@@ -32,6 +33,9 @@ export function nationStats(stats, nationId, champion) {
   if (mods.rangedRange && stats.projectile) stats.attackRange += mods.rangedRange;
   if (mods.showoff) stats.showoff = mods.showoff;                        // الاستعراض (combat.js)
   if (mods.weatherProof && stats.projectile) stats.weatherProof = true;   // الرماة لا يتأثرون بالطقس (weather.js)
+  if (mods.kicks) stats.kicks = mods.kicks;                              // السافات (combat.js وrealism.js)
+  if (mods.commonArmor && !champion && !heroId) stats.armor += mods.commonArmor;   // معاطف الصوف للأفراد
+  if (mods.heavyStagger) stats.heavyStagger = 1 + mods.heavyStagger;     // ترنّح الضربة القوية أطول (combat.js)
   if (champion && nation.ult) stats.ult = nation.ult;
   return stats;
 }
@@ -91,6 +95,12 @@ export function homeMods(player) {
 export function brotherMods(player) {
   const nation = nationOf(player.nation);
   return (nation && nation.trait.mods.brothers) || null;
+}
+
+// «الكتيبة» للاعب: {count, radius, reduce} إن كانت لأمته، وإلا null (abilities.js)
+export function phalanxMods(player) {
+  const nation = nationOf(player.nation);
+  return (nation && nation.trait.mods.phalanx) || null;
 }
 
 // نسبة تُضاف لسرعة استيلاء اللاعب على هذا الحي: حي مجاور لحي يملكه (0 لمن لا سمة له)

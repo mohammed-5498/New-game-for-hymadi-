@@ -13,7 +13,7 @@ import { nationStats, nationUnitName } from './nations.js';
 export function unitStats(gangId, heroId, champion = false, nationId = null) {
   if (gangId === 'police') return { ...UNIT_BASE, ...POLICE[heroId === 'captain' ? 'captain' : 'common'] };
   if (champion) return nationStats({ ...UNIT_BASE, ...CHAMPIONS[gangId].stats }, nationId, true);
-  if (heroId) return nationStats({ ...UNIT_BASE, ...HEROES[heroId].stats }, nationId, false);
+  if (heroId) return nationStats({ ...UNIT_BASE, ...HEROES[heroId].stats }, nationId, false, heroId);
   const gang = GANGS[gangId];
   return nationStats({ ...UNIT_BASE, ...(gang && gang.unit ? gang.unit : {}) }, nationId, false);
 }
@@ -93,6 +93,9 @@ export function createUnit(state, player, i, j, heroId = null, champion = false)
     awayUntil: 0,           // صقر الصقّار غائب عن ساعده في انقضاضه حتى هذا الزمن (الرسم فقط)
     lastSwingAt: -99,       // زمن آخر ضربة بدأتها الوحدة (الاستعراض: سمة اليابان)
     brothers: 0,            // عدد الشخصيات المميزة حول الفرد في هذا التحديث (الـ108: سمة الصين)
+    holdUntil: 0,           // داخل راية مغروسة: لا يُدفع حتى هذا الزمن (غرس الراية، ألمانيا)
+    bribedUntil: 0,         // شرطي مرتشٍ: لا يهاجم وحدات اللاعب bribedBy ولا تهاجمه حتى هذا الزمن (بريطانيا)
+    bribedBy: -1,
 
     // الشرطة المحايدة (القسم 3.8)
     stationId: -1,          // رقم حي المركز الذي تتبعه

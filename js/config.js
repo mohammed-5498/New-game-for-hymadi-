@@ -21,19 +21,22 @@ export const MAP_SIZES = {
 // --- طوابع المدن (القسم 3.9): شكل فقط، لا تغيّر قواعد اللعب ---
 export const CITIES = {
   // مدن الأمم (القسم 3.10) تُضاف بعد المدن العشر: شبام والدرعية والقاهرة القديمة (الدفعة العربية)،
-  // ثم كايفنغ وغيونغجو (الدفعة الآسيوية). إيدو هي المدينة اليابانية نفسها بمعلم جديد (المفتاح japan)
+  // ثم كايفنغ وغيونغجو (الدفعة الآسيوية). إيدو هي المدينة اليابانية نفسها بمعلم جديد (المفتاح japan)،
+  // ثم باريس وبرمنغهام وروتنبورغ (الدفعة الأوروبية)
   order: ['yamamah', 'arab', 'japan', 'china', 'europe', 'norway', 'hk', 'jaipur', 'mexico', 'chicago',
-          'shibam', 'diriyah', 'cairo', 'kaifeng', 'gyeongju'],
+          'shibam', 'diriyah', 'cairo', 'kaifeng', 'gyeongju', 'paris', 'birmingham', 'rothenburg'],
   defaultCity: 'random',
-  // ماء على حافة الخريطة بهذا العرض من المربعات (لا يُمشى عليه): مضيق النرويجية المتجمد، وقناة كايفنغ
+  // ماء على حافة الخريطة بهذا العرض من المربعات (لا يُمشى عليه): مضيق النرويجية المتجمد، وقناتا كايفنغ وبرمنغهام
   // huts: المباني المجاورة للماء أكواخ على أعمدة (النرويجية وحدها)
   water: { norway: { small: 2, medium: 2, large: 3, huts: true },
-           kaifeng: { small: 2, medium: 2, large: 3 } },
+           kaifeng: { small: 2, medium: 2, large: 3 },
+           birmingham: { small: 2, medium: 2, large: 3 } },
   rorbuChance: 0.55,            // نسبة المباني المجاورة للماء التي تصير أكواخاً على أعمدة
   // أسماء قصيرة لأزرار قائمة الإعداد (الاسم الكامل تحت الصورة المصغرة)
   short: { yamamah: 'اليمامة', arab: 'عربية', japan: 'إيدو', china: 'صينية', europe: 'أوروبية', norway: 'نرويجية',
            hk: 'هونغ كونغ', jaipur: 'جايبور', mexico: 'مكسيكية', chicago: 'شيكاغو',
-           shibam: 'شبام', diriyah: 'الدرعية', cairo: 'القاهرة', kaifeng: 'كايفنغ', gyeongju: 'غيونغجو' },
+           shibam: 'شبام', diriyah: 'الدرعية', cairo: 'القاهرة', kaifeng: 'كايفنغ', gyeongju: 'غيونغجو',
+           paris: 'باريس', birmingham: 'برمنغهام', rothenburg: 'روتنبورغ' },
   thumbCycleMs: 2000,           // "عشوائي": الصورة المصغرة تتبدل بين المدن
   thumbZoom: 1.4,               // تقريب الصورة المصغرة (تُقص الأطراف)
   // هالة خفيفة خلف الجنود: فاتحة في المدينة الداكنة (هونغ كونغ)، وداكنة في الصحراء الفاتحة (اليمامة)
@@ -63,6 +66,7 @@ export const CITIES = {
 // أنواع من pool المدن ليست مباني (أشجار وزينة): لا تُصبغ بلون المالك، كأشجار الطابع القديم
 // والسور وبواباته وأبراجه في صحراء اليمامة: ملك المدينة لا الحي
 export const CITY_UNTINTED = ['palm', 'cherry', 'lantern', 'willow', 'lanterns', 'pine', 'rack', 'banyan', 'neem', 'cactus', 'tree',
+  'ptree', 'rtree', 'lamp',
   'grove', 'well', 'cart', 'wallI', 'wallJ', 'gateI', 'gateJ', 'archI', 'archJ', 'wallTower', 'brokenI', 'brokenJ', 'brokenTower'];
 
 // تخزين الطبقة الثابتة (الأرض والمباني والزينة) في قطع مخفية: تُرسم مرة وتُعرض الظاهرة فقط
@@ -108,7 +112,11 @@ export const CITY_SPECIALS = {
   cairo:   { hq: 'house',   base: 'wikala' },
   // مدن الأمم الآسيوية (إيدو هي japan أعلاه)
   kaifeng:  { hq: 'tea',      base: 'shop' },
-  gyeongju: { hq: 'hanokBig', base: 'hanok' }
+  gyeongju: { hq: 'hanokBig', base: 'hanok' },
+  // مدن الأمم الأوروبية
+  paris:      { hq: 'haus',    base: 'haus' },
+  birmingham: { hq: 'factory', base: 'terrace' },
+  rothenburg: { hq: 'row',     base: 'fach' }
 };
 
 // --- الكاميرا ---
@@ -354,7 +362,7 @@ export const COMBAT_REALISM = {
     seconds: 1.1,
     max: 40,                   // أقصى عدد ظاهر معاً (الأقدم يُحذف)
     colors: { dodge: '#b8f0a8', block: '#8fd0ff', back: '#ff8a7a', bump: '#ffd66e', clash: '#ffe08a', down: '#ffffff',
-              show: '#ffb3c2' }   // show: «استعراض!» (سمة اليابان، القسم 3.10)
+              show: '#ffb3c2', bribe: '#9fe08a' }   // show: «استعراض!» (سمة اليابان)، bribe: «رُشي!» (القسم 3.10)
   },
   clashFxSeconds: 0.3,         // شرر التصادم
   burstSeconds: 0.22,          // نجمة الانفجار عند الارتطام (القسم 5.4.7)
@@ -513,11 +521,15 @@ export const CHAMPIONS = {
 //     brothers:        {radius, perHero, max} كل شخصية مميزة حية تعطي الأفراد حولها نسبة ضرر (الصين)
 //     showoff:         {idle, bonus, pop} أول ضربة بعد مدة بلا هجوم أقوى (اليابان)
 //     weatherProof:    الرماة لا يتأثرون بالليل ولا بالمطر (كوريا)
+//     kicks:           {damage, prefer} الركلات أقوى وتُختار أكثر (فرنسا)
+//     commonArmor:     درع يُضاف إلى الأفراد العاديين (بريطانيا)
+//     heavyStagger:    نسبة تُضاف إلى زمن ترنّح الضربة القوية (بريطانيا)
+//     phalanx:         {count, radius, reduce} ضرر متلقى أقل في المجموعة الكبيرة (ألمانيا)
 //   ult ضربة البطل الخاصة: تحل محل ضربة بطل النمط، وبقية أرقام البطل كما هي.
 //     ring (اختياري): لون حلقة تتسع حول مكان الضربة
 // "داخل أحيائك": منطقة الحي هي مربعاته ومعها الشوارع الأقرب إليه (game/nations.js).
 export const nations = {
-  order: ['yemen', 'saudi', 'egypt', 'china', 'japan', 'korea'],   // الأمم المتاحة في قائمة الإعداد، دفعةً دفعة (القسم 5 من NATIONS.md)
+  order: ['yemen', 'saudi', 'egypt', 'china', 'japan', 'korea', 'france', 'britain', 'germany'],   // الأمم المتاحة في قائمة الإعداد، دفعةً دفعة (القسم 5 من NATIONS.md)
 
   // ===== الدفعة العربية (المرحلة 9أ) =====
   yemen: {
@@ -581,6 +593,37 @@ export const nations = {
            name: 'مطر السهام', desc: 'وابل من السهام على مساحة' }
   },
 
+  // ===== الدفعة الأوروبية (المرحلة 9ب) =====
+  france: {
+    name: 'فرنسا', gangName: 'الأباتشي', style: 'crows', city: 'paris', secondary: '#c22f2f',   // أحمر المنديل
+    names: { common: 'أباتشي', spear: 'مقاتل العصا', dual: 'الراقص المقاتل', champion: 'ملك الأباتشي' },
+    // السافات: الركلتان (الأمامية والعالية) تضرّان أكثر بنسبة damage، وتزيد نقاط اختيارهما prefer (تُختاران أكثر)
+    trait: { name: 'السافات', desc: 'الركلات +25% ضرراً وتُختار أكثر', mods: { kicks: { damage: 0.25, prefer: 0.3 } } },
+    // رقصة الأباتشي: أقرب عدو داخل range يتلقى damage ويُقذف throw مربعاً ويسقط أرضاً
+    ult: { kind: 'throwdown', needs: 'enemy', range: 1.6, damage: 45, throw: 2.2,
+           name: 'رقصة الأباتشي', desc: 'يقذف خصمه ويسقطه أرضاً' }
+  },
+  britain: {
+    name: 'بريطانيا', gangName: 'فتيان سمول هيث', style: 'hammers', city: 'birmingham', secondary: '#3a3a3e',   // رمادي فحمي
+    names: { common: 'فتى سمول هيث', armored: 'حامل غطاء البرميل', smasher: 'صاحب القبضة', champion: 'زعيم الحي' },
+    // معاطف الصوف: الأفراد العاديون +commonArmor درع، وترنّح الضربة القوية لوحداتك أطول بنسبة heavyStagger
+    trait: { name: 'معاطف الصوف', desc: 'الأفراد العاديون +10% درع، والضربة القوية ترنّح أطول 25%',
+             mods: { commonArmor: 0.10, heavyStagger: 0.25 } },
+    // رشوة الشرطي (مبسّطة): الشرطة داخل radius منه لحظة الضربة لا تهاجم وحداتك ولا تهاجمها وحداتك duration ثانية
+    ult: { kind: 'bribe', needs: 'police', radius: 7, duration: 10,
+           name: 'رشوة الشرطي', desc: 'الشرطة القريبة تتجاهل وحداتك 10 ثوانٍ' }
+  },
+  germany: {
+    name: 'ألمانيا', gangName: 'اللاندسكنخت', style: 'hammers', city: 'rothenburg', secondary: '#d9a83a',   // أصفر ذهبي
+    names: { common: 'لاندسكنخت', armored: 'حامل الرمح الطويل', smasher: 'حامل السيف ذي اليدين', champion: 'حامل الراية' },
+    // الكتيبة: الوحدة التي حولها داخل radius (ومعها نفسها) count من وحدات لاعبها فأكثر تأخذ ضرراً أقل بنسبة reduce
+    trait: { name: 'الكتيبة', desc: 'وحداتك في مجموعة من 6 فأكثر تأخذ ضرراً أقل 12%',
+             mods: { phalanx: { count: 6, radius: 2.5, reduce: 0.12 } } },
+    // غرس الراية (مبسّطة): الراية تُغرس مكانه duration ثانية، وكل حليف داخل radius منها يصمد بلا ترنّح ولا سقوط ولا دفع
+    ult: { kind: 'banner', needs: 'enemy', radius: 3, duration: 8,
+           name: 'غرس الراية', desc: 'منطقة لا يتراجع منها أحد' }
+  },
+
   // الأنماط القتالية الأربعة (أسماؤها في قائمة الإعداد)
   styles: {
     crows:     { name: 'الخاطف', desc: 'سرعة والتفاف واستيلاء سريع' },
@@ -591,7 +634,9 @@ export const nations = {
   classicNote: 'كلاسيكية',       // السطر الصغير تحت العصابة الكلاسيكية في خانة اللاعب
   // آثار ضربات الأبطال: مدة الحلقة المتسعة وغبار ظهور الأفراد، وحلقة الصامدين تحت أقدامهم
   // rainArc: ارتفاع قوس سهام مطر السهام (بكسل) فتسقط من الأعلى، لا كالرمية العادية (COMBAT.projectileArc)
-  fx: { ringSeconds: 0.7, dustSeconds: 0.8, steadyRing: 'rgba(230,194,90,0.85)', rainArc: 30 },
+  // bribeRing: حلقة تحت الشرطي المرتشي، bribeColor: حلقة الرشوة حول البطل
+  fx: { ringSeconds: 0.7, dustSeconds: 0.8, steadyRing: 'rgba(230,194,90,0.85)', rainArc: 30,
+        bribeRing: 'rgba(120,200,110,0.9)', bribeColor: '#e8c56a' },
   noticeSeconds: 6               // إشعار سمة أمتك عند بداية المباراة
 };
 
@@ -1079,7 +1124,7 @@ export const UI = {
   // حفظ المباراة الجارية للعودة إليها لاحقاً (خانة واحدة)
   matchKey: 'gangcity.match',      // المباراة نفسها
   matchInfoKey: 'gangcity.matchInfo', // ملخص صغير يقرؤه زر "متابعة المباراة" بلا فك المباراة كلها
-  matchVersion: 4,               // يُرفع عند تغيّر شكل حالة المباراة، فتُهمل الحفظات القديمة (3: الأمم، 4: الدفعة الآسيوية)
+  matchVersion: 5,               // يُرفع عند تغيّر شكل حالة المباراة، فتُهمل الحفظات القديمة (3: الأمم، 4: الآسيوية، 5: الأوروبية)
   matchDecimals: 5,              // دقة الأعداد العشرية في الحفظ (تصغّر حجمه)
 
   // الخلفية الحية للقائمة الرئيسية: الخريطة نفسها وبضع وحدات تتجول

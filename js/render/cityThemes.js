@@ -16,6 +16,7 @@
 import { yamamah } from './yamamah.js';
 import { shibam, diriyah, cairo } from './citiesArab.js';
 import { kaifeng, gyeongju } from './citiesAsia.js';
+import { paris, birmingham, rothenburg } from './citiesEurope.js';
 let ctx=null,SEED=0;
 // تلوين كل لون قبل استعماله: صبغ المالك (القسم 8) والطقس. roofMode: الأسطح تُصبغ أكثر من الجدران
 // toneInfo: نفس الصبغ للصور الجاهزة (صحراء اليمامة) التي لا تمر ألوانها عبر paint(): { color, amount, snow }
@@ -456,6 +457,8 @@ THEMES.yamamah=yamamah;
 THEMES.shibam=shibam;THEMES.diriyah=diriyah;THEMES.cairo=cairo;
 /* ---------- مدن الأمم الآسيوية (المرحلة 9ب): كايفنغ وغيونغجو في js/render/citiesAsia.js، وإيدو هي japan أعلاه ---------- */
 THEMES.kaifeng=kaifeng;THEMES.gyeongju=gyeongju;
+/* ---------- مدن الأمم الأوروبية (المرحلة 9ب): باريس وبرمنغهام وروتنبورغ في js/render/citiesEurope.js ---------- */
+THEMES.paris=paris;THEMES.birmingham=birmingham;THEMES.rothenburg=rothenburg;
 
 export { THEMES, TAU, poly, circ, ln, rc, el, box, qL, qR, wL, wR, arch, ridgeRoof, hipRoof, dome, flag, glow,
-  damage, ruinTile, streetDebris, hsh, mixc, snowCap, stepGable, bellGable, neonSign, hexRgb };
+  damage, ruinTile, streetDebris, hsh, mixc, snowCap, stepGable, bellGable, neonSign, hexRgb, paint };

@@ -29,7 +29,10 @@ function chooseTarget(state, unit) {
 }
 
 // لا ضرر على وحدات نفس اللاعب ولا على الحلفاء (فريق 0 يعني بدون فريق: عدو للجميع)
+// والشرطي المرتشي (رشوة الشرطي، القسم 3.10) في هدنة مع وحدات من رشاه حتى bribedUntil
 export function isEnemy(state, a, b) {
+  if (a.bribedUntil > state.time && a.bribedBy === b.playerId) return false;
+  if (b.bribedUntil > state.time && b.bribedBy === a.playerId) return false;
   return isEnemyId(state, a.playerId, b.playerId);
 }
 
@@ -222,7 +225,8 @@ function resolveMove(state, unit, hit) {
     else if (m.down && target.cState !== 'down' && unit.rng() < m.down) {
       knockDown(state, target, unit.x, unit.y, (m.knock || 1) * 1.3);   // الركلة العالية والقوية قد تُسقطه
     } else if (m.stagger) {
-      stagger(state, target, m.stagger);                      // الضربة القوية تُترنّح وتدفع
+      // الضربة القوية تُترنّح وتدفع (وترنّح ضربات معاطف الصوف القوية أطول، القسم 3.10)
+      stagger(state, target, hit.move === 'heavy' && unit.stats.heavyStagger ? m.stagger * unit.stats.heavyStagger : m.stagger);
       knockback(target, unit.x, unit.y, m.knock);
     } else if (m.push) {
       flinch(target, unit.x, unit.y, zone === 'back', false); // الركلة الأمامية تدفعه ليصنع مسافة
@@ -468,6 +472,10 @@ function showoff(state, unit) {
   return 1 + show.bonus;
 }
 
+// «السافات» (سمة فرنسا، القسم 3.10): الركلتان أقوى (1 لغيرهما ولمن لا يملك السمة)
+const kickBonus = (unit, key) =>
+  unit.stats.kicks && (key === 'kick_front' || key === 'kick_high') ? 1 + unit.stats.kicks.damage : 1;
+
 // ضربة قريبة بالحركات الأربع (القسم 5.4)
 function meleeSwing(state, unit, target, dist, range, damage, attackTime, aimOff) {
   // لا تبدأ الضربة قبل أن يقترب وجهها من الهدف: هذا ما يجعل الالتفاف مفيداً
@@ -504,7 +512,7 @@ function meleeSwing(state, unit, target, dist, range, damage, attackTime, aimOff
 
   unit.pendingHit = {
     target, move: key, range,
-    damage: damage * unit.damageMultiplier * CR.moves[key].dmg * showoff(state, unit),
+    damage: damage * unit.damageMultiplier * CR.moves[key].dmg * showoff(state, unit) * kickBonus(unit, key),
     ranged: false,
     at: state.time + phases.wind + phases.strike * CR.strikeMoment
   };
