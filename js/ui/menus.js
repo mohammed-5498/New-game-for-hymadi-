@@ -1,8 +1,9 @@
 // القوائم (القسم 12): الرئيسية، الإعداد، الإعدادات، الإحصائيات، سؤال الخروج، وتبديل الشاشات
 import {
   MAP_SIZES, PLAYER_COLORS, GANGS, GANG_IDS, BOT, BOT_LEVELS,
-  WEATHER, WEATHER_KEYS, UNITS, MATCH_DEFAULTS, AUDIO, UI, CITIES, gameModes as GM
+  WEATHER, WEATHER_KEYS, UNITS, MATCH_DEFAULTS, AUDIO, UI, CITIES, gameModes as GM, nations as NATIONS
 } from '../config.js';
+import { SIDE_CHOICES, resolveSide, nationOf } from '../game/nations.js';
 import { sound, audioSettings, setAudioSettings, startMusic } from '../audio/sound.js';
 import { isNativeApp, exitApp } from '../platform.js';
 import { getPref, setPref } from '../prefs.js';
@@ -18,7 +19,8 @@ const el = (id) => document.getElementById(id);
 const MAP_SIZE_KEYS = ['small', 'medium', 'large'];
 const MAX_UNIT_CHOICES = [30, 50, 100, 150, 200, 250];
 const WEATHER_CHOICES = [...WEATHER_KEYS, 'random'];
-const GANG_CHOICES = [...GANG_IDS, 'random'];
+// خيار المدينة: المدن، ثم "مدينة المضيف" (مدينة أمة اللاعب الأول، القسم 3.10)، ثم عشوائي
+const CITY_CHOICES = [...CITIES.order, 'host', 'random'];
 const TEAM_CHOICES = [0, 1, 2, 3, 4];
 const SLOT_TYPES = { human: 'أنت', bot: 'بوت', closed: 'مغلقة' };
 const MAX_SLOTS = 8;
@@ -31,7 +33,7 @@ const setup = {
   allies: GM.survival.defaultAllies,
   survivalLevel: GM.survival.defaultLevel,
   mapSize: MATCH_DEFAULTS.mapSize,
-  city: CITIES.defaultCity,                   // طابع المدينة (القسم 3.9)، الافتراضي عشوائي
+  city: CITIES.defaultCity,                   // طابع المدينة (القسم 3.9)، الافتراضي عشوائي، أو 'host'
   maxUnits: UNITS.maxUnitsDefault,
   weather: 'day',
   slots: []
@@ -42,7 +44,7 @@ function defaultSlots() {
   for (let k = 0; k < MAX_SLOTS; k++) {
     slots.push({
       type: k === 0 ? 'human' : (k < 4 ? 'bot' : 'closed'),
-      gang: GANG_IDS[k % GANG_IDS.length],
+      side: GANG_IDS[k % GANG_IDS.length],      // الأمة أو العصابة الكلاسيكية أو 'random' (القسم 3.10)
       color: PLAYER_COLORS[k].id,
       team: 0,
       difficulty: 'medium'
@@ -103,7 +105,8 @@ export function setupMenus(handlers) {
     key => MAP_SIZES[key].name + ' (' + MAP_SIZES[key].maxPlayers + ')',
     () => setup.mapSize, key => { setup.mapSize = key; refresh(); });
 
-  buildOptions('optCity', [...CITIES.order, 'random'], key => key === 'random' ? 'عشوائي' : CITIES.short[key],
+  buildOptions('optCity', CITY_CHOICES,
+    key => key === 'random' ? 'عشوائي' : key === 'host' ? 'مدينة المضيف' : CITIES.short[key],
     () => setup.city, key => { setup.city = key; refresh(); showCity(); });
 
   buildOptions('optMaxUnits', MAX_UNIT_CHOICES, value => String(value),
@@ -149,8 +152,15 @@ export function showScreen(name) {
 }
 
 // الصورة المصغرة للمدينة المختارة (حية: في "عشوائي" تتبدل المدن ما دامت القائمة ظاهرة)
+// "مدينة المضيف": مدينة أمة اللاعب الأول، أو عشوائي إن كان عصابة كلاسيكية أو عشوائياً
 function showCity() {
-  updateCityThumb(el('cityThumb'), el('cityName'), setup.city, () => screen === 'setup');
+  const city = setup.city === 'host' ? hostCity(setup.slots[0].side) : setup.city;
+  updateCityThumb(el('cityThumb'), el('cityName'), city, () => screen === 'setup');
+}
+
+function hostCity(side) {
+  const nation = nationOf(side);
+  return nation && CITIES.order.includes(nation.city) ? nation.city : 'random';
 }
 
 // --- متابعة المباراة المحفوظة ---
@@ -259,7 +269,7 @@ function renderStats() {
     ['أكبر عدد أحياء', stats.bestDistricts],
     ['أسرع فوز', stats.fastestWin ? clock(stats.fastestWin) : '—'],
     ['وقت اللعب', playTime(stats.totalSeconds)],
-    ['عصابتك المفضلة', gang && GANGS[gang] ? GANGS[gang].name : '—']
+    ['عصابتك المفضلة', gang && nationOf(gang) ? nationOf(gang).gangName : gang && GANGS[gang] ? GANGS[gang].name : '—']
   ];
   el('statsEmpty').hidden = stats.played > 0;
   fillStatCards(el('statsList'), items);
@@ -292,7 +302,7 @@ function loadSetup() {
   if (GM.survival.allies.includes(saved.allies)) setup.allies = saved.allies;
   if (GM.survival.levels.includes(saved.survivalLevel)) setup.survivalLevel = saved.survivalLevel;
   if (MAP_SIZES[saved.mapSize]) setup.mapSize = saved.mapSize;
-  if (saved.city === 'random' || CITIES.order.includes(saved.city)) setup.city = saved.city;
+  if (CITY_CHOICES.includes(saved.city)) setup.city = saved.city;
   if (MAX_UNIT_CHOICES.includes(saved.maxUnits)) setup.maxUnits = saved.maxUnits;
   if (WEATHER_CHOICES.includes(saved.weather)) setup.weather = saved.weather;
   if (!Array.isArray(saved.slots)) return;
@@ -301,7 +311,8 @@ function loadSetup() {
     if (!s || typeof s !== 'object') return;
     const slot = setup.slots[k];
     if (k > 0 && (s.type === 'bot' || s.type === 'closed')) slot.type = s.type;
-    if (GANG_CHOICES.includes(s.gang)) slot.gang = s.gang;
+    const side = s.side || s.gang;                // gang: إعداد محفوظ قبل الأمم
+    if (SIDE_CHOICES.includes(side)) slot.side = side;
     if (PLAYER_COLORS.some(c => c.id === s.color)) slot.color = s.color;
     if (TEAM_CHOICES.includes(s.team)) slot.team = s.team;
     if (BOT_LEVELS.includes(s.difficulty)) slot.difficulty = s.difficulty;
@@ -363,10 +374,13 @@ function buildSlots() {
       return true;
     };
 
+    // الأمة (القسم 3.10): الأمم المتاحة ثم العصابات الكلاسيكية ثم عشوائي، وسطر يصف المختارة تحت الخانات
     row.appendChild(cell('gang', '', () => {
+      descSlot = index;
       if (openIfClosed()) return;
-      slot.gang = next(GANG_CHOICES, slot.gang);
+      slot.side = next(SIDE_CHOICES, slot.side);
       refresh();
+      if (index === 0 && setup.city === 'host') showCity();
     }));
 
     // اللمس على اللون ينتقل لأول لون غير مستخدم
@@ -403,6 +417,33 @@ function cell(className, text, onClick) {
 
 const next = (list, current) => list[(list.indexOf(current) + 1) % list.length];
 
+// الخانة التي يصفها سطر الأمة: آخر خانة لمس اللاعب أمتها (الافتراضي خانته)
+let descSlot = 0;
+
+// اسم الخيار في الخانة، وسطر صغير تحته: اسم عصابة الأمة، أو "كلاسيكية"
+function sideLabel(side) {
+  const nation = nationOf(side);
+  if (nation) return { text: nation.name, note: nation.gangName };
+  if (GANGS[side]) return { text: GANGS[side].name, note: NATIONS.classicNote };
+  return { text: 'عشوائي', note: '' };
+}
+
+// وصف الخيار: النمط القتالي، والسمة وضربة البطل للأمة
+function sideDesc(side) {
+  const nation = nationOf(side);
+  if (nation) {
+    const style = NATIONS.styles[nation.style];
+    return nation.name + ' «' + nation.gangName + '» — نمط ' + style.name + ': ' + style.desc +
+      ' • السمة «' + nation.trait.name + '»: ' + nation.trait.desc +
+      ' • البطل ' + nation.names.champion + ': «' + nation.ult.name + '» ' + nation.ult.desc;
+  }
+  if (GANGS[side]) {
+    const style = NATIONS.styles[side];
+    return GANGS[side].name + ' (' + NATIONS.classicNote + ') — نمط ' + style.name + ': ' + style.desc;
+  }
+  return 'عشوائي: أمة أو عصابة كلاسيكية تُختار عند بدء المباراة';
+}
+
 // أول لون لا يستخدمه لاعب آخر
 function firstFreeColor(index) {
   const used = new Set(setup.slots
@@ -436,7 +477,7 @@ function refresh() {
 
   const limit = MAP_SIZES[setup.mapSize].maxPlayers;
   el('slotsHint').textContent = survival
-    ? 'اختر عصابتك ولونك • الحلفاء من الخانات التالية'
+    ? 'اختر أمتك ولونك • الحلفاء من الخانات التالية'
     : 'الخانة الأولى أنت • الحد على هذه الخريطة ' + limit + ' لاعبين';
 
   for (const row of el('slots').children) {
@@ -445,7 +486,14 @@ function refresh() {
     row.classList.toggle('closed', slot.type === 'closed');
 
     row.querySelector('.type').textContent = SLOT_TYPES[slot.type];
-    row.querySelector('.gang').textContent = slot.gang === 'random' ? 'عشوائي' : GANGS[slot.gang].name;
+    const label = sideLabel(slot.side), sideCell = row.querySelector('.gang');
+    sideCell.textContent = label.text;
+    if (label.note) {
+      const note = document.createElement('small');
+      note.className = 'cell-note';
+      note.textContent = label.note;
+      sideCell.appendChild(note);
+    }
     row.querySelector('.team').textContent = slot.team === 0 ? 'بدون' : 'فريق ' + slot.team;
     // المجنون: سطر صغير تحته "يحصل على مزايا إضافية" حتى يعرف اللاعب أنه ليس عادلاً (11.3)
     const level = slot.type === 'bot' ? BOT[slot.difficulty] : null;
@@ -464,6 +512,8 @@ function refresh() {
     colorCell.title = color.name;
   }
 
+  const described = setup.slots[descSlot] && setup.slots[descSlot].type !== 'closed' ? descSlot : 0;
+  el('sideDesc').textContent = (described ? 'الخانة ' + (described + 1) + ': ' : '') + sideDesc(setup.slots[described].side);
   el('setupError').hidden = true;
 }
 
@@ -539,7 +589,7 @@ export function buildMatchSettings() {
   const slots = survival ? survivalSlots() : setup.slots.filter(s => s.type !== 'closed');
   const players = slots.map((slot, index) => ({
     name: index === 0 ? 'أنت' : 'بوت ' + index,
-    gang: slot.gang === 'random' ? GANG_IDS[Math.floor(Math.random() * GANG_IDS.length)] : slot.gang,
+    ...resolveSide(slot.side),                   // {gang: النمط، nation: الأمة أو null}
     color: slot.color,
     isHuman: index === 0,
     team: survival ? 1 : slot.team,              // الصمود: الجميع فريق واحد
@@ -555,7 +605,8 @@ export function buildMatchSettings() {
       level: setup.survivalLevel
     },
     mapSize: setup.mapSize,
-    city: setup.city,
+    // مدينة المضيف: مدينة أمة اللاعب الأول بعد حسم العشوائي، أو عشوائي للعصابة الكلاسيكية
+    city: setup.city === 'host' ? hostCity(players[0].nation) : setup.city,
     maxUnits: setup.maxUnits,
     weather: setup.weather === 'random'
       ? WEATHER_KEYS[Math.floor(Math.random() * WEATHER_KEYS.length)]

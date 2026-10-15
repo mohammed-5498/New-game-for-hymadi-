@@ -6,6 +6,7 @@ import { ownsSpecial } from './spawn.js';
 import { policeArmorBonus } from './police.js';
 import { forEachNearby } from './spatialHash.js';
 import { soundAt } from '../audio/sound.js';
+import { homeMods, inOwnArea } from './nations.js';
 
 const isAlive = (unit) => unit.state !== 'dead' && unit.hp > 0;
 const allied = (state, a, b) => a.playerId === b.playerId || !isEnemy(state, a, b);
@@ -23,6 +24,8 @@ function applyDamageBonuses(state) {
     ownsSpecial(state, p.id, 'armory') ? SPECIAL_BONUS.armory.damageBonus : 0);
   // +10% درع لكل مركز شرطة مملوك، بحد أقصى +20% (القسم 3.8)
   const armorBonus = state.players.map(p => policeArmorBonus(state, p.id));
+  // سمات الأمم "داخل أحيائك" (القسم 3.10): null لكل لاعب بلا سمة من هذا النوع
+  const home = state.players.map(homeMods);
 
   // نبدأ من الصفر (المضاعف النهائي يُحسب في الحلقة الأخيرة بنفس ترتيب الجمع)
   // كتابة العدد العشري في خاصية الوحدة تحجز ذاكرة: لا نكتب إلا ما تغيّر فعلاً
@@ -51,6 +54,14 @@ function applyDamageBonuses(state) {
     if (unit.aura) multiplier += unit.auraBonus;
     // تحفيز الزعيم أو بطل العقارب: مكافأة مؤقتة تُجمع فوق الباقي
     if (unit.buffUntil > state.time) multiplier += unit.buffDamage;
+    // سمة الأمة داخل أحيائها: ضرر أكبر، أو ضرر متلقى أقل
+    const mods = home[unit.playerId];
+    if (mods) {
+      const inside = inOwnArea(state.map, unit);
+      if (inside && mods.homeDamage) multiplier += mods.homeDamage;
+      const taken = inside && mods.homeDamageTaken ? 1 - mods.homeDamageTaken : 1;
+      if (unit.takenMul !== taken) unit.takenMul = taken;
+    }
     if (unit.damageMultiplier !== multiplier) unit.damageMultiplier = multiplier;
   }
 }

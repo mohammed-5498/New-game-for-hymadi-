@@ -5,35 +5,41 @@ import { clearCombatOrders } from './combat.js';
 import { moveSpeed } from './weather.js';
 import { initRealism, faceAngleTo } from './realism.js';
 import { hypot } from './hypot.js';
+import { nationStats, nationUnitName } from './nations.js';
 
 // إحصائيات الوحدة: الأساس + ميزة العصابة، أو الأساس + قيم الشخصية المميزة أو البطل
 // والشرطة المحايدة لها جدولها الخاص (القسم 3.8)
-export function unitStats(gangId, heroId, champion = false) {
+// nationId: أمة اللاعب (القسم 3.10): نمطها هو العصابة gangId بقواعدها، ثم سمتها وضربة بطلها
+export function unitStats(gangId, heroId, champion = false, nationId = null) {
   if (gangId === 'police') return { ...UNIT_BASE, ...POLICE[heroId === 'captain' ? 'captain' : 'common'] };
-  if (champion) return { ...UNIT_BASE, ...CHAMPIONS[gangId].stats };
-  if (heroId) return { ...UNIT_BASE, ...HEROES[heroId].stats };
+  if (champion) return nationStats({ ...UNIT_BASE, ...CHAMPIONS[gangId].stats }, nationId, true);
+  if (heroId) return nationStats({ ...UNIT_BASE, ...HEROES[heroId].stats }, nationId, false);
   const gang = GANGS[gangId];
-  return { ...UNIT_BASE, ...(gang && gang.unit ? gang.unit : {}) };
+  return nationStats({ ...UNIT_BASE, ...(gang && gang.unit ? gang.unit : {}) }, nationId, false);
 }
 
-// اسم الوحدة كما يظهر للاعب
-function unitName(gangId, heroId, champion) {
+// اسم الوحدة كما يظهر للاعب (وحدات الأمة بأسماء أمتها)
+function unitName(gangId, heroId, champion, nationId) {
   if (gangId === 'police') return POLICE[heroId === 'captain' ? 'captain' : 'common'].name;
+  const own = nationUnitName(nationId, heroId, champion);
+  if (own) return own;
   if (champion) return CHAMPIONS[gangId].name;
   return heroId ? HEROES[heroId].name : 'فرد';
 }
 
 // champion: بطل العصابة (القسم 6.6). رسمه جاهز، وقواعد ظهوره في المرحلة 4
 export function createUnit(state, player, i, j, heroId = null, champion = false) {
-  const stats = unitStats(player.gang, heroId, champion);
+  const nation = player.nation || null;
+  const stats = unitStats(player.gang, heroId, champion, nation);
   const unit = {
     id: state.nextUnitId++,
     playerId: player.id,
-    gang: player.gang,
+    gang: player.gang,                 // النمط القتالي: كل القواعد منه
+    nation,                            // الأمة (القسم 3.10): الاسم والمظهر والسمة، وnull للكلاسيكية
     color: player.color,
     hero: champion ? null : heroId,    // null للفرد العادي
     champion,                          // بطل اللاعب الوحيد
-    name: unitName(player.gang, heroId, champion),
+    name: unitName(player.gang, heroId, champion, nation),
     x: i, y: j,           // الموقع الحالي بالمربعات
     prevX: i, prevY: j,   // الموقع في التحديث السابق (لتنعيم الرسم)
     stats,
@@ -90,6 +96,7 @@ export function createUnit(state, player, i, j, heroId = null, champion = false)
     vanishAt: -1,           // بعد الاستيلاء على مركزها تختفي عند هذا الزمن
 
     armorBonus: 0,          // درع إضافي من مكافأة مراكز الشرطة المملوكة
+    takenMul: 1,            // مضاعف الضرر المتلقى من سمة الأمة (داخل أحيائك)، 1 لغيرها
 
     // المكافآت المحسوبة كل تحديث (الهالات، مخزن السلاح)
     damageMultiplier: 1,

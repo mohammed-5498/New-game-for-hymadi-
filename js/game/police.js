@@ -13,6 +13,7 @@ export function createPolicePlayer(players) {
     id: players.length,
     name: 'الشرطة',
     gang: 'police',
+    nation: null,
     gangName: 'الشرطة',
     color: UNIT_ART.policeColor,
     isHuman: false,

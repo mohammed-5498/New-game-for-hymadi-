@@ -1,5 +1,5 @@
 // حالة المباراة: اللاعبون، الوحدات، الخريطة، الكاميرا، التحديد
-import { CAMERA, PLAYER_COLORS, GANGS, UNITS, WEATHER } from './config.js';
+import { CAMERA, PLAYER_COLORS, UNITS, WEATHER } from './config.js';
 import { createMap } from './map/generator.js';
 import { findFreeTiles } from './map/pathfinding.js';
 import { createUnit } from './game/units.js';
@@ -10,13 +10,15 @@ import { createPolicePlayer, initPolice } from './game/police.js';
 import { tileToWorld } from './map/coords.js';
 import { buildArena } from './game/arena.js';
 import { initMode, prepareModeUnits } from './game/modes.js';
+import { nationOf, sideName, buildTerritory, traitNotice } from './game/nations.js';
 
 export function createMatch(settings) {
   const players = settings.players.map((p, index) => ({
     id: index,
     name: p.name,
-    gang: p.gang,
-    gangName: GANGS[p.gang].name,
+    gang: p.gang,                      // النمط القتالي (القسم 3.10)
+    nation: nationOf(p.nation) ? p.nation : null,   // الأمة، أو null للعصابة الكلاسيكية
+    gangName: sideName(p.gang, p.nation),
     color: (PLAYER_COLORS.find(c => c.id === p.color) || PLAYER_COLORS[index]).hex,
     isHuman: !!p.isHuman,
     team: p.team || 0,
@@ -77,6 +79,7 @@ export function createMatch(settings) {
 
   initMode(state);               // الطور وخياراته (القسم 9.5)
   buildCaptureZones(state);
+  buildTerritory(map);           // مناطق الأحياء وتجاورها لسمات الأمم (القسم 3.10)
   snapDistrictTints(state);      // الأحياء المنزلية ملوّنة من البداية
   spawnStartingUnits(state);
   prepareModeUnits(state);       // ما يخص الطور في الوحدات الأولى (دم الزعيم مثلاً)
@@ -84,6 +87,7 @@ export function createMatch(settings) {
   initPolice(state);
   initBots(state);
   centerCameraOnHome(state);
+  state.notice = traitNotice(players[state.humanId]) || state.notice;   // سمة أمتك (القسم 3.10)
   return state;
 }
 
@@ -172,7 +176,7 @@ export function resetMatch(state, settings = state.settings) {
   state.humanId = fresh.humanId;
   state.moveMarker = null;
   state.selectionBox = null;
-  state.notice = null;
+  state.notice = fresh.notice;
   state.matchResult = null;
   state.time = 0;
   state.combatSeed = fresh.combatSeed;      // بذرة جديدة: المباراة التالية تختلف

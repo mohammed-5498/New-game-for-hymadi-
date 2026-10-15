@@ -5,6 +5,7 @@ import { AUDIO } from '../config.js';
 import { sound, soundAt } from '../audio/sound.js';
 import { raiseAlert } from './alerts.js';
 import { hypot } from './hypot.js';
+import { captureBonus } from './nations.js';
 
 // منطقة الاستيلاء: دائرة نصف قطرها 1.5 مربع حول نقطة الاستيلاء
 // (تشمل مربعات الشارع المجاورة، وقد تتداخل منطقتان فيُحسب المربع للاثنتين)
@@ -86,7 +87,12 @@ export function updateCapture(state) {
 }
 
 function advanceProgress(state, district, playerId, power) {
-  const step = CAPTURE.pointsPerSecond * power * TICK_SEC;
+  let step = CAPTURE.pointsPerSecond * power * TICK_SEC;
+  // سمة الأمة (القسم 3.10): الاستيلاء على حي مجاور لحيك أسرع. لا على حيك ولا حي حليفك
+  if (district.owner === null || !allied(state, playerId, district.owner)) {
+    const bonus = captureBonus(state, district, playerId);
+    if (bonus) step *= 1 + bonus;
+  }
 
   // حي محايد بلا تقدم: يبدأ التقدم لصالح الواقف فيه
   if (district.progressOwner === null) district.progressOwner = playerId;

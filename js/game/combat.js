@@ -574,7 +574,7 @@ export function applyDamage(state, attacker, target, amount) {
   hitSound(state, target, amount);
   // درع الوحدة + مكافأة مراكز الشرطة المملوكة (القسم 3.8)
   const armor = Math.min(COMBAT.maxArmor, target.stats.armor + target.armorBonus);
-  const taken = amount * (1 - armor);
+  const taken = amount * (1 - armor) * target.takenMul;   // takenMul: سمة الأمة داخل أحيائها (القسم 3.10)
   target.hp -= taken;
   target.lastHitBy = attacker.playerId;            // من أسقط الزعيم (حماية الزعيم، القسم 9.5.3)
   chargeOnDamageTaken(state, target, taken);       // شحن عن كل 50 ضرراً

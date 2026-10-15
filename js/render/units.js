@@ -2,6 +2,7 @@
 import { TILE_HALF_W, TILE_HALF_H, COMBAT, COMBAT_REALISM, PERFORMANCE, UNIT_ART, ULT } from '../config.js';
 import { UI_LIGHT } from './colors.js';
 import { drawOne, stateLabel, drawSpeedLines } from './combatArt.js';
+import { nationArtKey } from './nationArt.js';
 
 // الأفراد العاديون بلا ضربة مميزة، فلا نجمة ولا شريط شحن لهم
 const hasUlt = (unit) => !!unit.stats.ult;
@@ -19,9 +20,12 @@ const ART_KEYS = {
 };
 
 // مفتاح غير معروف (عصابة لا تملك هذه الشخصية) يرجع لرسم الفرد العادي بدل ألا يُرسم شيء
+// وحدة الأمة (القسم 3.10) بمظهر أمتها، بنسخته المبسّطة خارج المستوى الكامل
 const artKey = (unit) => {
-  const gang = ART_KEYS[unit.gang] || ART_KEYS.crows;
   const kind = unit.champion ? 'champion' : (unit.hero || 'common');
+  const own = unit.nation ? nationArtKey(unit, kind) : null;
+  if (own) return own;
+  const gang = ART_KEYS[unit.gang] || ART_KEYS.crows;
   return gang[kind] || gang.common;
 };
 

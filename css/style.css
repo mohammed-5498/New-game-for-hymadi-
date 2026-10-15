@@ -414,6 +414,8 @@ button.wide.ghost { background: transparent; color: var(--text-dim); }
 .slots-head .label { margin: 0; }
 
 .hint { font-size: 14px; color: var(--text-dim); }
+/* وصف الأمة المختارة تحت خانات اللاعبين (القسم 3.10) */
+.side-desc { margin: 2px 2px 8px; line-height: 1.5; }
 
 .slot, .slot-cols {
   display: flex;
