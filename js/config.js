@@ -51,7 +51,9 @@ export const CITIES = {
   open: {
     chicago: { street: 2, spacing: [5, 7], lanes: 'center', scale: 1, roadProp: false },
     hk:      { street: 2, spacing: [5, 7], lanes: 'center', scale: 1, roundabout: { radius: 3 } },
-    europe:  { street: 2, spacing: [5, 6, 7], lanes: 'rows', scale: 0.86 }
+    europe:  { street: 2, spacing: [5, 6, 7], lanes: 'rows', scale: 0.86 },
+    // شبام (بطلب المستخدم): نفس توسعة شيكاغو وهونغ كونغ، وأشجار رصيفها نخيل صغير (openCity.js)
+    shibam:  { street: 2, spacing: [5, 7], lanes: 'center', scale: 1 }
   }
 };
 

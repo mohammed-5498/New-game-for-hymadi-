@@ -1,10 +1,10 @@
-// المدن المفتوحة (CITIES.open: شيكاغو وهونغ كونغ والأوروبية): تفاصيل الشوارع العريضة والممرات والدوار.
+// المدن المفتوحة (CITIES.open: شيكاغو وهونغ كونغ والأوروبية وشبام): تفاصيل الشوارع العريضة والممرات والدوار.
 // الأرض (تُرسم مع سطح الشوارع في القطع): أرصفة على حواف الشارع، ممرات مشاة عند التقاطعات،
 // رصف الممرات بين صفوف المباني، وخط حلقة الدوار. المحتوى (بترتيب الرسام): أعمدة إنارة وأحواض
 // زرع ومقاعد على الممرات، وجزيرة الدوار بنافورتها وعمودها المضيء.
 // كل الأشكال حتمية من hsh (نفس الخريطة ← نفس الرسم دائماً)، والألوان الثابتة شفافة فتتبع الطقس.
 import { CITIES } from '../config.js';
-import { poly, circ, ln, rc, el, box, glow, hsh, getCtx } from './cityThemes.js';
+import { THEMES, poly, circ, ln, rc, el, box, glow, hsh, getCtx } from './cityThemes.js';
 
 export const openOf = (map) => CITIES.open[map.city] || null;
 export const isLane = (map, k) => map.type[k] === '.' && (map.kind[k] === 'lane_i' || map.kind[k] === 'lane_j');
@@ -124,10 +124,25 @@ export function streetTree(map, i, j) {
 export function drawStreetTree(map, i, j, x, y) {
   const t = streetTree(map, i, j);
   if (!t) return;
-  const [px, py] = at(x, y, t.a, t.b), c = TREE[map.city] || TREE.europe;
+  const [px, py] = at(x, y, t.a, t.b);
+  if (THEMES[map.city] && THEMES[map.city].draw.tree === 'palm') { streetPalm(px, py, i, j); return; }
+  const c = TREE[map.city] || TREE.europe;
   el(px, py + 0.6, 4.2, 1.8, 'rgba(0,0,0,0.22)');
   rc(px - 0.8, py - 7, 1.6, 7, c[0]);
   circ(px, py - 10.5, 4.6, c[1]); circ(px - 2, py - 12, 3.2, c[2]); circ(px + 2.2, py - 9.6, 2.6, c[1]);
+}
+
+// نخلة صغيرة على رصيف مدن النخيل (شبام): كنخيل المدينة نفسه بثلثي حجمه
+function streetPalm(px, py, i, j) {
+  const o = ((i * 3 + j) % 3) - 1, c = getCtx();
+  el(px, py + 0.6, 3.6, 1.5, 'rgba(0,0,0,0.22)');
+  c.beginPath(); c.moveTo(px, py); c.quadraticCurveTo(px + o * 2, py - 8, px + o * 1.3, py - 14.5);
+  c.strokeStyle = '#8a6a45'; c.lineWidth = 1.3; c.lineCap = 'round'; c.stroke();
+  const tx = px + o * 1.3, ty = py - 14.5;
+  for (let k = 0; k < 7; k++) {
+    const a = k * 0.9 + 0.2, dx = Math.cos(a) * 6, dy = Math.sin(a) * 2.3 + 1.3;
+    poly([[tx, ty], [tx + dx, ty + dy], [tx + dx * 0.55, ty + dy - 1.1]], k % 2 ? '#5f8a3a' : '#4d7a30');
+  }
 }
 
 // إضاءة الليل لأعمدة الممرات (تجمعها chunkCache مع الإضاءات الثابتة)
