@@ -152,6 +152,7 @@ function announceCapture(state, district) {
   const player = state.players[district.owner];
   const mine = district.owner === state.humanId;
   if (mine) sound('capture_done');
+  if (!mine && state.notice && state.notice.keep) return;   // سمة أمتك في بداية المباراة تبقى ظاهرة
   const name = district.special ? specialName(district.special) : 'حي';
   state.notice = {
     text: mine ? 'استوليت على ' + name

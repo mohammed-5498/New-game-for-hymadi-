@@ -66,6 +66,7 @@ export function createMatch(settings) {
     pops: [],                  // الكلمات الطائرة: تفادى! صدّ! من الخلف! اصطدام! تصادم!
     clashes: [],               // شرر تصادم الأسلحة
     fx: [],                    // نجوم الانفجار عند الارتطام
+    ultFx: [],                 // آثار ضربات أبطال الأمم: حلقات وغبار (القسم 3.10)
     shakeAt: -99,              // زمن آخر ارتجاجة كاميرا (القسم 5.2)
     cameraTween: null,         // انتقال الكاميرا الناعم إلى مجموعة تحكم (القسم 4.4)
     alerts: [],                // أسهم الحافة الظاهرة الآن (القسم 12.3)
@@ -186,6 +187,7 @@ export function resetMatch(state, settings = state.settings) {
   state.pops = [];
   state.clashes = [];
   state.fx = [];
+  state.ultFx = [];
   state.alerts = [];
   state.alertSeen = [];
   state.shakeAt = -99;

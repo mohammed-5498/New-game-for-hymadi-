@@ -131,13 +131,24 @@ function poseDeath(){return P({py:-9,pl:0.3,cb:0.55,ht:0.65,fh:[4,-3],bh:[-2,-3]
    (المرحلة 9أ، من docs/nations/anim-v4.js) leg تعيد نقاط الورك والركبة والقدم {h,k,f}، ويحفظها drawBody
    في J.legB وJ.legF (ومعها J.elbowF وJ.pl) للخطافين الجديدين: robe بعد الساق الأمامية (ثوب يتمايل مع
    الساقين) وover بعده (حزام، صديري، جنبية). النقاط تُحسب فقط لوحدة تحتاجها (robe أو over أو legs):
-   العصابات الكلاسيكية بنفس الأوامر تماماً وبلا كائنات جديدة في كل إطار */
-function leg(c,hx,hy,th,fl,W,col,pts){const kx=hx+Math.sin(th)*5.8,ky=hy+Math.cos(th)*5.8;
+   العصابات الكلاسيكية بنفس الأوامر تماماً وبلا كائنات جديدة في كل إطار.
+   والنقاط نفسها في كائنين ثابتين يُعاد ملؤهما (تصلح أثناء رسم الوحدة فقط): لا كائنات جديدة في كل إطار */
+const LEG_B={h:[0,0],k:[0,0],f:[0,0]},LEG_F={h:[0,0],k:[0,0],f:[0,0]};
+function leg(c,hx,hy,th,fl,W,col,pts,from){const kx=hx+Math.sin(th)*5.8,ky=hy+Math.cos(th)*5.8;
   const fx=kx+Math.sin(th-fl)*6,fy=ky+Math.cos(th-fl)*6;
-  c.beginPath();c.moveTo(hx,hy);c.lineTo(kx,ky);c.lineTo(fx,fy);c.strokeStyle=col;c.lineWidth=W;
+  c.beginPath();
+  if(pts){   // وحدات الأمم: الساق والقدم خط واحد برسمة واحدة (نفس الشكل بزوايا مستديرة؛ يعوّض رسمة الثوب)
+    // from: في المستوى المبسّط تبدأ الساق من حاشية الثوب (ما فوقها مغطى به)، فلا يُرسم الجزء نفسه مرتين
+    if(from>0.5){const u=(from-0.5)/0.5;c.moveTo(kx+(fx-kx)*u,ky+(fy-ky)*u);}
+    else if(from>0){const u=from/0.5;c.moveTo(hx+(kx-hx)*u,hy+(ky-hy)*u);c.lineTo(kx,ky);}
+    else{c.moveTo(hx,hy);c.lineTo(kx,ky);}
+    c.lineTo(fx,fy);c.lineTo(fx+Math.sin(th-fl+1.1)*2,fy+Math.cos(th-fl+1.1)*0.9);c.strokeStyle=col;c.lineWidth=W;c.stroke();
+    pts.h[0]=hx;pts.h[1]=hy;pts.k[0]=kx;pts.k[1]=ky;pts.f[0]=fx;pts.f[1]=fy;return pts;}
+  c.moveTo(hx,hy);c.lineTo(kx,ky);c.lineTo(fx,fy);
+  c.strokeStyle=col;c.lineWidth=W;
   if(!roundSet){c.lineCap='round';c.lineJoin='round';}c.stroke();
   limb(c,fx,fy,fx+Math.sin(th-fl+1.1)*2,fy+Math.cos(th-fl+1.1)*0.9,W,col);
-  return pts?{h:[hx,hy],k:[kx,ky],f:[fx,fy]}:null;}
+  return null;}
 function drawBody(c,p,col,o){
   c.lineCap='round';c.lineJoin='round';roundSet=true;
   const W=o.lw||2,dc=dk(col,0.32),hp=[p.px,p.py],pts=!!(o.robe||o.over||o.legs);
@@ -145,13 +156,13 @@ function drawBody(c,p,col,o){
   const ha=a2+p.ht,H=add(add(N,rot(0,-3.1,ha)),[p.hdx,p.hdy]);
   const Sb=add(C,rot(-0.9,0.7,a2)),Sf=add(C,rot(0.9,0.5,a2));
   const J={hip:hp,mid:M,chest:C,neck:N,head:H,ha,Sf,Sb,a2,pl:p.pl,legB:null,legF:null};
-  J.legB=leg(c,p.px-1.2,p.py,p.tb,p.kb,W,dc,pts);
+  J.legB=leg(c,p.px-1.2,p.py,p.tb,p.kb,W,dc,pts&&LEG_B,o.legFrom);
   o.backWeapon&&o.backWeapon(c,J,p,col);
   const b=ik2(Sb,p.bh,3.7,3.7,true);bone3(c,Sb,b.j,b.e,W-0.1,dc);J.handB=b.e;
   o.back&&o.back(c,J,p,col);
   bone3(c,hp,M,C,W+0.5,col);limb(c,C[0],C[1],N[0],N[1],W*0.8,col);
   o.chest&&o.chest(c,J,p,col);
-  J.legF=leg(c,p.px+1.2,p.py,p.tf,p.kf,W,col,pts);
+  J.legF=leg(c,p.px+1.2,p.py,p.tf,p.kf,W,col,pts&&LEG_F,o.legFrom);
   o.robe&&o.robe(c,J,p,col);o.over&&o.over(c,J,p,col);
   c.save();c.translate(H[0],H[1]);c.rotate(ha);
   c.beginPath();c.arc(0,0,o.headR||3,0,TAU);Pf(c,col);c.lineWidth=0.7;c.strokeStyle=dk(col,0.4);c.stroke();

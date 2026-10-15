@@ -14,6 +14,7 @@
    - العشوائية حتمية عبر hsh(i,j,k) وبذرة الخريطة SEED: نفس الخريطة تُرسم دائماً بنفس الشكل، وهذا شرط للتخزين المؤقت.
    - drawMap() و buildMap() في آخر الملف للعرض التجريبي فقط (شبكة 11×11)، لا تُنقل كما هي. */
 import { yamamah } from './yamamah.js';
+import { shibam, diriyah, cairo } from './citiesArab.js';
 let ctx=null,SEED=0;
 // تلوين كل لون قبل استعماله: صبغ المالك (القسم 8) والطقس. roofMode: الأسطح تُصبغ أكثر من الجدران
 // toneInfo: نفس الصبغ للصور الجاهزة (صحراء اليمامة) التي لا تمر ألوانها عبر paint(): { color, amount, snow }
@@ -445,6 +446,8 @@ THEMES.chicago={name:'شيكاغو الثلاثينيات',ground:'#7d7a72',road
 
 /* ---------- صحراء اليمامة (بطلب المستخدم): صور مباني جاهزة بدل الرسم بالكود، في js/render/yamamah.js ---------- */
 THEMES.yamamah=yamamah;
+/* ---------- مدن الأمم العربية (المرحلة 9أ، القسم 3.10): في js/render/citiesArab.js ---------- */
+THEMES.shibam=shibam;THEMES.diriyah=diriyah;THEMES.cairo=cairo;
 
 export { THEMES, TAU, poly, circ, ln, rc, el, box, qL, qR, wL, wR, arch, ridgeRoof, hipRoof, dome, flag, glow,
   damage, ruinTile, streetDebris, hsh, mixc, snowCap, stepGable, bellGable, neonSign, hexRgb };

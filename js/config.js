@@ -20,14 +20,17 @@ export const MAP_SIZES = {
 
 // --- طوابع المدن (القسم 3.9): شكل فقط، لا تغيّر قواعد اللعب ---
 export const CITIES = {
-  order: ['yamamah', 'arab', 'japan', 'china', 'europe', 'norway', 'hk', 'jaipur', 'mexico', 'chicago'],
+  // مدن الأمم (القسم 3.10) تُضاف بعد المدن العشر: شبام والدرعية والقاهرة القديمة (الدفعة العربية)
+  order: ['yamamah', 'arab', 'japan', 'china', 'europe', 'norway', 'hk', 'jaipur', 'mexico', 'chicago',
+          'shibam', 'diriyah', 'cairo'],
   defaultCity: 'random',
   // النرويجية: مضيق متجمد على حافة الخريطة بهذا العرض من المربعات (لا يُمشى عليه)
   water: { norway: { small: 2, medium: 2, large: 3 } },
   rorbuChance: 0.55,            // نسبة المباني المجاورة للماء التي تصير أكواخاً على أعمدة
   // أسماء قصيرة لأزرار قائمة الإعداد (الاسم الكامل تحت الصورة المصغرة)
   short: { yamamah: 'اليمامة', arab: 'عربية', japan: 'يابانية', china: 'صينية', europe: 'أوروبية', norway: 'نرويجية',
-           hk: 'هونغ كونغ', jaipur: 'جايبور', mexico: 'مكسيكية', chicago: 'شيكاغو' },
+           hk: 'هونغ كونغ', jaipur: 'جايبور', mexico: 'مكسيكية', chicago: 'شيكاغو',
+           shibam: 'شبام', diriyah: 'الدرعية', cairo: 'القاهرة' },
   thumbCycleMs: 2000,           // "عشوائي": الصورة المصغرة تتبدل بين المدن
   thumbZoom: 1.4,               // تقريب الصورة المصغرة (تُقص الأطراف)
   // هالة خفيفة خلف الجنود: فاتحة في المدينة الداكنة (هونغ كونغ)، وداكنة في الصحراء الفاتحة (اليمامة)
@@ -93,7 +96,11 @@ export const CITY_SPECIALS = {
   hk:      { hq: 'tower',   base: 'shop' },
   jaipur:  { hq: 'haveli2', base: 'haveli' },
   mexico:  { hq: 'balcony', base: 'adobe' },
-  chicago: { hq: 'brick',   base: 'warehouse' }
+  chicago: { hq: 'brick',   base: 'warehouse' },
+  // مدن الأمم العربية: المقر أعلى مبانيها، والمباني الحاسمة على مبنى المدينة العادي
+  shibam:  { hq: 'tower',   base: 'towerLow' },
+  diriyah: { hq: 'najdiTall', base: 'najdi' },
+  cairo:   { hq: 'house',   base: 'wikala' }
 };
 
 // --- الكاميرا ---
@@ -497,7 +504,36 @@ export const CHAMPIONS = {
 //   ult ضربة البطل الخاصة: تحل محل ضربة بطل النمط، وبقية أرقام البطل كما هي.
 // "داخل أحيائك": منطقة الحي هي مربعاته ومعها الشوارع الأقرب إليه (game/nations.js).
 export const nations = {
-  order: [],                     // الأمم المتاحة في قائمة الإعداد، دفعةً دفعة (القسم 5 من NATIONS.md)
+  order: ['yemen', 'saudi', 'egypt'],   // الأمم المتاحة في قائمة الإعداد، دفعةً دفعة (القسم 5 من NATIONS.md)
+
+  // ===== الدفعة العربية (المرحلة 9أ) =====
+  yemen: {
+    name: 'اليمن', gangName: 'أبناء سبأ', style: 'scorpions', city: 'shibam', secondary: '#2f3f7a',   // نيلي
+    names: { common: 'مقاتل الجنبية', boss: 'شيخ الجنبية', medic: 'العطّار', champion: 'ملكة سبأ' },
+    trait: { name: 'أبراج الطين', desc: 'وحداتك داخل أحيائك تأخذ ضرراً أقل 15%', mods: { homeDamageTaken: 0.15 } },
+    // نداء القوافل: يظهر 3 أفراد فوراً حولها (ضمن الحد الأقصى للوحدات)، حين يكون عدو داخل radius
+    ult: { kind: 'caravan', needs: 'enemy', radius: 4, count: 3, spread: 2,
+           name: 'نداء القوافل', desc: 'يظهر 3 أفراد فوراً حولها' }
+  },
+  saudi: {
+    name: 'السعودية', gangName: 'حراس القوافل', style: 'vipers', city: 'diriyah', secondary: '#c0392b',   // أحمر الشماغ
+    names: { common: 'رامي المقلاع', sniper: 'القوّاس', firebomber: 'النفّاط', champion: 'الصقّار' },
+    trait: { name: 'عين الصقر', desc: 'مدى الرصد +2 مربع، والرماة +0.5 مربع مدى', mods: { vision: 2, rangedRange: 0.5 } },
+    // انقضاض الصقر: على أبعد عدو داخل range، ولا يُتفادى. زمن الطيران flightMin + flightPerTile × المسافة
+    // (حتى flightMax)، ويعود الصقر إلى ساعد الصقّار بنفس الزمن
+    ult: { kind: 'falcon', needs: 'enemy', range: 9, damage: 80, flightMin: 0.45, flightPerTile: 0.06, flightMax: 0.95,
+           name: 'انقضاض الصقر', desc: 'الصقر ينقضّ على أبعد عدو بضرر كبير' }
+  },
+  egypt: {
+    name: 'مصر', gangName: 'فتوات الحارة', style: 'hammers', city: 'cairo', secondary: '#e6d7bc',   // بيج الجلابية
+    names: { common: 'الفتوة', armored: 'حامل الدرع', smasher: 'صاحب النبّوت الكبير', champion: 'كبير الفتوات' },
+    trait: { name: 'رجالة الحارة', desc: '+20% ضرر داخل أحيائك، والاستيلاء على الحي المجاور لحيك أسرع 15%',
+             mods: { homeDamage: 0.20, adjacentCapture: 0.15 } },
+    // صيحة الحارة: كل حليف داخل radius (ومعه الكبير) يصمد duration ثانية بلا ترنّح ولا سقوط
+    ult: { kind: 'shout', needs: 'enemy', radius: 3.5, duration: 3,
+           name: 'صيحة الحارة', desc: 'كل فتوة حوله يصمد 3 ثوانٍ بلا ترنّح ولا سقوط' }
+  },
+
   // الأنماط القتالية الأربعة (أسماؤها في قائمة الإعداد)
   styles: {
     crows:     { name: 'الخاطف', desc: 'سرعة والتفاف واستيلاء سريع' },
@@ -506,6 +542,8 @@ export const nations = {
     scorpions: { name: 'الحشد',  desc: 'عدد وظهور أسرع وهالات ودعم' }
   },
   classicNote: 'كلاسيكية',       // السطر الصغير تحت العصابة الكلاسيكية في خانة اللاعب
+  // آثار ضربات الأبطال: مدة الحلقة المتسعة وغبار ظهور الأفراد، وحلقة الصامدين تحت أقدامهم
+  fx: { ringSeconds: 0.7, dustSeconds: 0.8, steadyRing: 'rgba(230,194,90,0.85)' },
   noticeSeconds: 6               // إشعار سمة أمتك عند بداية المباراة
 };
 
@@ -855,6 +893,9 @@ export const PERFORMANCE = {
   maxLights: 140,         // أقصى عدد إضاءات تُرسم في الإطار الواحد ليلاً
   detailZoom: 1.4,        // أقل من هذا التقريب: نتجاوز التفاصيل الصغيرة (نوافذ...)
   unitDetailZoom: 1.2,    // أقل من هذا: الوحدة نقطة بسيطة (حجمها أقل من 3 بكسل أصلاً)
+  nationFullZoom: 2.6,    // مظاهر الأمم (القسم 3.10): أقل من هذا التقريب تُرسم كلها بالنسخة المبسّطة، وفوقه
+                          // (عند تقريب الكاميرا) أقرب الوحدات بكامل تفاصيلها. التقريب الافتراضي 2.2 بالمبسّطة:
+                          // الخطوط والنقوش الصغيرة لا تكاد تُرى فيه، وتكلفة الرسم فيه كالعصابات الكلاسيكية
   fpsTaps: 3,             // لمسات شريط المعلومات لإظهار مؤشر الإطارات
   // إيقاع الإطارات (js/pacing.js): جهاز لا يلحق بكل إطارات الشاشة بانتظام يرسم كل إطار ثانٍ،
   // فالإيقاع الثابت (30 على شاشة 60) أنعم من المتقلب، ثم يجرّب العودة للإيقاع الكامل

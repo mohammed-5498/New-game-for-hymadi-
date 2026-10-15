@@ -295,3 +295,6 @@ export function tipOf(ud, J, p) {
   const d = wdir(p.wa), L = ud.tipLen || (ud.twoH ? 8.6 : ud.wlen);
   return [J.handF[0] + d[0] * L, J.handF[1] + d[1] * L];
 }
+
+// حلقتا البطل والهالة والقوس: تستعملها مظاهر الأمم أيضاً (nationArt.js) فتبقى علامات النمط واحدة
+export { heroRing, dashedRing, bow };

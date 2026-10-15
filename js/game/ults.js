@@ -1,11 +1,12 @@
 // الضربات المميزة (القسم 6.7): الشحن، شرط الإطلاق، والتأثير الفعلي
 // الأفراد العاديون لا يملكون ضربة مميزة، فلا شحن لهم.
 import { TICK_SEC, COMBAT, ULT, CAMERA, ai } from '../config.js';
-import { isEnemy, applyDamage, spawnProjectile } from './combat.js';
+import { isEnemy, applyDamage, spawnProjectile, spawnFalcon } from './combat.js';
 import { createFire } from './abilities.js';
-import { faceTowards } from './units.js';
+import { faceTowards, createUnit } from './units.js';
 import { forEachNearby } from './spatialHash.js';
-import { registerSight } from './realism.js';
+import { registerSight, addUltFx } from './realism.js';
+import { findFreeTiles } from '../map/pathfinding.js';
 import { soundAt } from '../audio/sound.js';
 import { onScreen } from './alerts.js';
 import { hypot } from './hypot.js';
@@ -163,6 +164,10 @@ export function resolveUlt(state, unit) {
     case 'arrows':  fireArrows(state, unit, ult, target); break;
     case 'bash':    bash(state, unit, ult, target); break;
     case 'summon':  if (summonHook) summonHook(state, unit, ult); break;
+    // ضربات أبطال الأمم (القسم 3.10)
+    case 'caravan': callCaravan(state, unit, ult); break;
+    case 'falcon':  falconDive(state, unit, ult, target); break;
+    case 'shout':   rallyShout(state, unit, ult); break;
   }
 }
 
@@ -328,4 +333,54 @@ function fireArrows(state, unit, ult, target) {
     const offset = (k - (ult.arrows - 1) / 2) * COMBAT.multiShotSpread;
     spawnProjectile(state, unit, targets[k] || target, ultDamage(unit, ult.damage), offset, ult.fire, false);
   }
+}
+
+// --- ضربات أبطال الأمم (القسم 3.10، الأرقام في config.js تحت nations) ---
+
+// نداء القوافل (ملكة سبأ): أفراد عاديون من أمتها يظهرون فوراً حولها، ضمن الحد الأقصى للوحدات
+function callCaravan(state, unit, ult) {
+  const player = state.players[unit.playerId];
+  let alive = 0;
+  for (const other of state.units) if (other.playerId === unit.playerId && other.state !== 'dead') alive++;
+  const room = Math.min(ult.count, state.maxUnits - alive);
+  const ci = Math.round(unit.x), cj = Math.round(unit.y);
+  const spots = findFreeTiles(state.map, ci, cj, ult.count + 1, ult.spread);
+  const around = spots.filter(([i, j]) => i !== ci || j !== cj);     // لا يظهر أحد فوقها إن وُجد غيره
+  const pick = (around.length >= room ? around : spots).slice(0, Math.max(0, room));
+  for (const [i, j] of pick) {
+    state.units.push(createUnit(state, player, i, j));
+    addUltFx(state, 'dust', i, j);
+  }
+  if (pick.length) soundAt(state, 'spawn', unit.x, unit.y);
+  addUltFx(state, 'ring', unit.x, unit.y, ult.spread + 0.5);
+}
+
+// انقضاض الصقر (الصقّار): على أبعد عدو داخل المدى، ثم يعود إلى ساعده
+function falconDive(state, unit, ult, fallback) {
+  let target = null, farthest = -1;
+  const rangeSq = ult.range * ult.range;
+  forEachNearby(state, unit.x, unit.y, ult.range, (other) => {
+    const d2 = distanceSq(unit, other);
+    if (d2 > rangeSq || d2 <= farthest) return;
+    if (!isAlive(other) || !isEnemy(state, unit, other)) return;
+    farthest = d2;
+    target = other;
+  });
+  if (!target) target = fallback;
+  if (!target) return;
+  const flight = Math.min(ult.flightMax, ult.flightMin + ult.flightPerTile * Math.sqrt(distanceSq(unit, target)));
+  spawnFalcon(state, unit, target, ultDamage(unit, ult.damage), flight);
+  unit.awayUntil = state.time + flight * 2;          // يغيب الصقر عن ساعده ذهاباً وإياباً
+  faceTowards(unit, target.x, target.y);
+}
+
+// صيحة الحارة (كبير الفتوات): كل حليف حوله، ومعه الكبير، يصمد بلا ترنّح ولا سقوط،
+// ومن كان يترنّح الآن يستعيد توازنه فوراً
+function rallyShout(state, unit, ult) {
+  const until = state.time + ult.duration;
+  forEachAlly(state, unit, ult.radius, (ally) => {
+    ally.steadyUntil = until;
+    if (ally.cState === 'stagger') { ally.cState = null; ally.cTimer = 0; }
+  });
+  addUltFx(state, 'ring', unit.x, unit.y, ult.radius);
 }

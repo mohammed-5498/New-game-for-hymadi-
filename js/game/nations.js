@@ -98,5 +98,6 @@ export function captureBonus(state, district, playerId) {
 export function traitNotice(player) {
   const nation = player && nationOf(player.nation);
   if (!nation) return null;
-  return { text: nation.gangName + ' — «' + nation.trait.name + '»: ' + nation.trait.desc, mine: true, t: NATIONS.noticeSeconds };
+  // keep: لا يحل محله إشعار استيلاء لاعب آخر قبل أن تنتهي مدته
+  return { text: nation.gangName + ' — «' + nation.trait.name + '»: ' + nation.trait.desc, mine: true, t: NATIONS.noticeSeconds, keep: true };
 }

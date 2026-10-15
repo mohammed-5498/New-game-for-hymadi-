@@ -16,9 +16,11 @@ export const MOVE_AR = {
 export const ST_AR = { dodge: 'تفادٍ', block: 'صدّ', stagger: 'ترنّح', down: 'على الأرض' };
 
 // الضربة المميزة تستعمل مفاتيح أقرب حركة للوحدة (مع الوهج الذهبي الموجود)
+// ضربات أبطال الأمم (القسم 3.10): النداء والصيحة برفع العصا، وإطلاق الصقر من القبضة كالرمي
 const ULT_MOVE = {
   pierce: 'thrust', flurry: 'quick', slam: 'heavy', shot: 'shoot', fire: 'throw',
-  buff: 'heavy', heal: 'heavy', arc: 'spin', arrows: 'shoot', bash: 'thrust', harden: 'block'
+  buff: 'heavy', heal: 'heavy', arc: 'spin', arrows: 'shoot', bash: 'thrust', harden: 'block',
+  caravan: 'heavy', falcon: 'throw', shout: 'heavy'
 };
 const RANGED = { shoot: true, throw: true };
 

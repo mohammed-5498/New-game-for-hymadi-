@@ -1,8 +1,9 @@
 // رسم الوحدات: نظام الوضعيات v2 (anim.js + bodies.js + combatArt.js) مربوطاً بحالة الوحدة
-import { TILE_HALF_W, TILE_HALF_H, COMBAT, COMBAT_REALISM, PERFORMANCE, UNIT_ART, ULT } from '../config.js';
+import { TILE_HALF_W, TILE_HALF_H, COMBAT, COMBAT_REALISM, PERFORMANCE, UNIT_ART, ULT, nations } from '../config.js';
 import { UI_LIGHT } from './colors.js';
 import { drawOne, stateLabel, drawSpeedLines } from './combatArt.js';
 import { nationArtKey } from './nationArt.js';
+import './nationsArab.js';                 // مظاهر الدفعة العربية تُسجَّل في سجل الأمم (القسم 3.10)
 
 // الأفراد العاديون بلا ضربة مميزة، فلا نجمة ولا شريط شحن لهم
 const hasUlt = (unit) => !!unit.stats.ult;
@@ -21,9 +22,9 @@ const ART_KEYS = {
 
 // مفتاح غير معروف (عصابة لا تملك هذه الشخصية) يرجع لرسم الفرد العادي بدل ألا يُرسم شيء
 // وحدة الأمة (القسم 3.10) بمظهر أمتها، بنسخته المبسّطة خارج المستوى الكامل
-const artKey = (unit) => {
+const artKey = (unit, time, zoom) => {
   const kind = unit.champion ? 'champion' : (unit.hero || 'common');
-  const own = unit.nation ? nationArtKey(unit, kind) : null;
+  const own = unit.nation ? nationArtKey(unit, kind, time, zoom) : null;
   if (own) return own;
   const gang = ART_KEYS[unit.gang] || ART_KEYS.crows;
   return gang[kind] || gang.common;
@@ -62,7 +63,7 @@ export function drawUnit(ctx, unit, alpha, zoom = 99, time = 0, debug = false, c
   }
 
   // نظام الوضعيات v2 لكل الوحدات (القسم 5.4.6). المستوى المبسّط بلا أثر السلاح وبلا شبحي التفادي
-  const key = artKey(unit), scale = artScale(unit), color = artColor(unit), walking = isWalking(unit);
+  const key = artKey(unit, time, zoom), scale = artScale(unit), color = artColor(unit), walking = isWalking(unit);
   const full = unit.lod === 'full';
   // خطوط السرعة خلف المندفع والمقذوف والمتفادي (القسم 5.4.7)
   if (!dead) {
@@ -80,6 +81,14 @@ export function drawUnit(ctx, unit, alpha, zoom = 99, time = 0, debug = false, c
     }
   }
   const ghosts = full ? (crowded ? COMBAT_REALISM.trailGhostsCrowded : COMBAT_REALISM.trailGhosts) : 0;
+  // صيحة الحارة (القسم 3.10): حلقة ذهبية تحت قدمي من يصمد بلا ترنّح ولا سقوط
+  if (!dead && unit.steadyUntil > time) {
+    ctx.beginPath();
+    ctx.ellipse(x, y + 0.6, 6.2 * scale, 2.5 * scale, 0, 0, 6.2832);
+    ctx.strokeStyle = nations.fx.steadyRing;
+    ctx.lineWidth = 0.9;
+    ctx.stroke();
+  }
   drawOne(ctx, unit, key, x, y, scale, color, time, walking, ghosts);
   if (dead) return;
 
@@ -184,6 +193,7 @@ export function drawProjectile(ctx, shot, alpha) {
   const y = (i + j) * TILE_HALF_H - 6 - Math.sin(progress * Math.PI) * COMBAT.projectileArc;
   const color = PROJECTILE_COLORS[shot.kind] || PROJECTILE_COLORS.stone;
 
+  if (shot.kind === 'falcon') { drawFalcon(ctx, shot, x, (i + j) * TILE_HALF_H, progress, t); return; }
   if (shot.kind === 'arrow') {
     ctx.beginPath();
     ctx.moveTo(x - 2, y + 1);
@@ -200,6 +210,40 @@ export function drawProjectile(ctx, shot, alpha) {
     ctx.lineWidth = 0.5;
     ctx.stroke();
   }
+}
+
+// صقر الصقّار (القسم 3.10): يرتفع من ساعده ثم ينقضّ بجناحين مضمومين على صدر الهدف،
+// ويعود بقوس ألطف وجناحين يرفرفان. ظل صغير على الأرض تحته
+function drawFalcon(ctx, shot, x, ground, progress, t) {
+  const back = shot.back;
+  const h = back ? 8 + 6 * progress + Math.sin(progress * Math.PI) * 14
+                 : 14 - 6 * progress + Math.sin(Math.min(1, progress / 0.8) * Math.PI) * 18;
+  const y = ground - h;
+  const sx = shot.startX - shot.startY, cx = shot.x - shot.y;
+  const dir = cx >= sx ? 1 : -1;
+  const dive = !back && progress > 0.62;
+  // ارتفاع طرفي الجناحين فوق الجسد: يرفرفان بين المنتصف والأعلى، ومضمومان في الانقضاض
+  const flap = dive ? 0.45 : 1.2 + 1.5 * (0.5 + 0.5 * Math.sin(t * 30));
+
+  ctx.globalAlpha = 0.25;
+  ctx.beginPath(); ctx.ellipse(x, ground, 2.4, 1, 0, 0, 6.2832); ctx.fillStyle = '#000'; ctx.fill();
+  ctx.globalAlpha = 1;
+
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(dir * 1.5, 1.5);
+  if (dive) ctx.rotate(0.75);                          // الرأس للأسفل في الانقضاض
+  const tri = (a, b, c, col) => {
+    ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.lineTo(c[0], c[1]); ctx.closePath();
+    ctx.fillStyle = col; ctx.fill();
+  };
+  tri([-0.4, 0], [-1.4, -flap * 0.85], [1.2, -0.3], '#5a3e28');        // الجناح البعيد
+  tri([-2, -0.2], [-3.8, -0.9], [-3.6, 0.9], '#5a3e28');                // الذيل
+  ctx.beginPath(); ctx.ellipse(0, 0, 2.3, 1.1, 0, 0, 6.2832); ctx.fillStyle = '#7a5a3e'; ctx.fill();
+  ctx.beginPath(); ctx.arc(2.1, -0.5, 0.95, 0, 6.2832); ctx.fillStyle = '#5a3e28'; ctx.fill();
+  tri([2.8, -0.8], [3.8, -0.3], [2.8, -0.1], '#e0b24a');                // المنقار
+  tri([0.2, 0], [-0.9, -flap], [1.6, -0.2], '#8e6a4a');                // الجناح القريب
+  ctx.restore();
 }
 
 // هالة الزعيم: دائرة منقطة عند قدميه

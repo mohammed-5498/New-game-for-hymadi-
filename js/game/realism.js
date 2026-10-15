@@ -3,10 +3,12 @@
 // الالتفاف، والاصطدام بالحلفاء. كل الأرقام في COMBAT_REALISM و COMBAT_STYLE.
 //
 // المرجع يعمل بالبكسل وبخطوة زمنية حرة؛ هنا كل المسافات بالمربعات والخطوة ثابتة (TICK_SEC).
-import { TICK_SEC, COMBAT_REALISM as CR, COMBAT_STYLE } from '../config.js';
+import { TICK_SEC, COMBAT_REALISM as CR, COMBAT_STYLE, nations } from '../config.js';
 import { forEachNearby } from './spatialHash.js';
 import { onScreen } from './alerts.js';
 import { hypot } from './hypot.js';
+
+const NATION_FX = nations.fx;
 
 // --- أدوات ---
 export const wrapAngle = (a) => {
@@ -232,6 +234,7 @@ export function knockback(unit, fromX, fromY, tiles) {
 // ترنّح: يُلغي الضربة والرؤية المعلّقة
 export function stagger(state, unit, seconds) {
   if (unit.invulnUntil > state.time) return;     // تصلّب: لا يترنّح
+  if (unit.steadyUntil > state.time) return;     // صيحة الحارة (القسم 3.10): يصمد بلا ترنّح
   cancelSwing(unit);
   unit.sight = null;
   unit.cState = 'stagger';
@@ -447,7 +450,17 @@ export function addPop(state, unit, text, kind) {
   if (state.pops.length > CR.pops.max) state.pops.shift();
 }
 
+// آثار ضربات أبطال الأمم (القسم 3.10): حلقة تتسع أو غبار، تُرسم فوق طبقة الليل (renderer.js)
+// r: نصف قطر الحلقة بالمربعات
+export function addUltFx(state, kind, x, y, r = 1, color = '#e6c25a') {
+  state.ultFx.push({ kind, x, y, r, color, t: 0 });
+}
+
 export function updatePops(state) {
+  if (state.ultFx.length) {
+    for (const fx of state.ultFx) fx.t += TICK_SEC;
+    state.ultFx = state.ultFx.filter(fx => fx.t < NATION_FX[fx.kind + 'Seconds']);
+  }
   if (state.pops.length) {
     for (const pop of state.pops) pop.t += TICK_SEC;
     state.pops = state.pops.filter(pop => pop.t < CR.pops.seconds);
@@ -496,6 +509,7 @@ export function tryClash(state, unit, target) {
 // --- السقوط على الأرض (القسم 5.4.7): يسقط على ظهره ثم ينهض بالركوع، لا يهاجم ولا يتفادى، ويمكن ضربه ---
 export function knockDown(state, unit, fromX, fromY, tiles) {
   if (unit.invulnUntil > state.time) return false;   // تصلّب: لا يسقط
+  if (unit.steadyUntil > state.time) return false;   // صيحة الحارة: لا يسقط
   cancelSwing(unit);
   unit.sight = null;
   unit.combo = false;

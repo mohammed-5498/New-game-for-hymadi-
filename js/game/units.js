@@ -89,6 +89,8 @@ export function createUnit(state, player, i, j, heroId = null, champion = false)
     buffAttackSpeed: 0,
     slowUntil: 0,           // إبطاء من الضربة الأرضية
     slowFactor: 0,
+    steadyUntil: 0,         // صيحة الحارة (القسم 3.10): لا ترنّح ولا سقوط حتى هذا الزمن
+    awayUntil: 0,           // صقر الصقّار غائب عن ساعده في انقضاضه حتى هذا الزمن (الرسم فقط)
 
     // الشرطة المحايدة (القسم 3.8)
     stationId: -1,          // رقم حي المركز الذي تتبعه

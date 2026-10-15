@@ -1,5 +1,5 @@
 // الكاميرا وترتيب الرسم الكامل لإطار واحد
-import { TILE_HALF_W, TILE_HALF_H, TICK_SEC, CAMERA, CAPTURE, PERFORMANCE, ALERTS, COMBAT_REALISM, UNIT_ART, CITIES, CITY_CACHE, gameModes as GM } from '../config.js';
+import { TILE_HALF_W, TILE_HALF_H, TICK_SEC, CAMERA, CAPTURE, PERFORMANCE, ALERTS, COMBAT_REALISM, UNIT_ART, CITIES, CITY_CACHE, gameModes as GM, nations } from '../config.js';
 import { enemyLeaders } from '../game/modes.js';
 import { onScreen } from '../game/alerts.js';
 import { BACKGROUND, UI_LIGHT } from './colors.js';
@@ -127,6 +127,31 @@ function drawCombatFx(ctx, state, visible) {
     const x = (fx.x - fx.y) * TILE_HALF_W, y = (fx.x + fx.y) * TILE_HALF_H - 14;
     if (visible(x, y)) drawClash(ctx, x, y, fx.t);
   }
+  // آثار ضربات أبطال الأمم (القسم 3.10): حلقة تتسع حول البطل، وغبار حيث يظهر فرد
+  for (const fx of state.ultFx) {
+    const x = (fx.x - fx.y) * TILE_HALF_W, y = (fx.x + fx.y) * TILE_HALF_H;
+    if (!visible(x, y)) continue;
+    const g = Math.min(1, fx.t / nations.fx[fx.kind + 'Seconds']);
+    if (fx.kind === 'ring') {
+      const k = 0.25 + 0.75 * g;
+      ctx.globalAlpha = 1 - g;
+      ctx.beginPath();
+      ctx.ellipse(x, y, fx.r * TILE_HALF_W * k, fx.r * TILE_HALF_H * k, 0, 0, 6.2832);
+      ctx.strokeStyle = fx.color;
+      ctx.lineWidth = 2.2 * (1 - g) + 0.6;
+      ctx.stroke();
+    } else {
+      ctx.globalAlpha = 0.65 * (1 - g);
+      ctx.fillStyle = '#d8c8a8';
+      for (let k = 0; k < 3; k++) {
+        const a = k * 2.1 + 0.4, d = 2 + g * 5;
+        ctx.beginPath();
+        ctx.ellipse(x + Math.cos(a) * d * 1.6, y + Math.sin(a) * d * 0.6 - 2 - g * 3, 2.4 + g * 2.6, 1.4 + g * 1.4, 0, 0, 6.2832);
+        ctx.fill();
+      }
+    }
+  }
+  ctx.globalAlpha = 1;
   if (!state.pops.length || !getPref('pops')) return;
   const z = state.camera.z;
   ctx.font = '600 ' + (12 / z).toFixed(2) + 'px system-ui, sans-serif';

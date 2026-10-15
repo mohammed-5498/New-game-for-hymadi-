@@ -633,9 +633,30 @@ export function spawnProjectile(state, unit, target, damage, offset = 0, fire = 
     x: unit.x + offset, y: unit.y - offset,
     prevX: unit.x + offset, prevY: unit.y - offset,
     t: 0, prevT: 0,
-    duration
+    duration,
+    returns: false,          // يعود إلى صاحبه بعد السقوط (صقر الصقّار)
+    back: false              // هو نفسه رحلة العودة (بلا ضرر)
   });
 }
+
+// انقضاض الصقر (الصقّار، القسم 3.10): لا يخطئ ولا يُتفادى، ثم يعود إلى ساعد صاحبه بنفس الزمن
+export function spawnFalcon(state, unit, target, damage, duration) {
+  soundAt(state, 'arrow', unit.x, unit.y);
+  state.projectiles.push({
+    kind: 'falcon', attacker: unit, target, damage, dodgeable: false, fire: null, hits: true,
+    missX: target.x, missY: target.y,
+    startX: unit.x, startY: unit.y, x: unit.x, y: unit.y, prevX: unit.x, prevY: unit.y,
+    t: 0, prevT: 0, duration, returns: true, back: false
+  });
+}
+
+// رحلة العودة من مكان السقوط إلى صاحب المقذوف
+const returnFlight = (shot) => ({
+  kind: shot.kind, attacker: shot.attacker, target: shot.attacker, damage: 0, dodgeable: false, fire: null, hits: true,
+  missX: shot.x, missY: shot.y,
+  startX: shot.x, startY: shot.y, x: shot.x, y: shot.y, prevX: shot.x, prevY: shot.y,
+  t: 0, prevT: 0, duration: shot.duration, returns: false, back: true
+});
 
 function updateProjectiles(state) {
   const remaining = [];
@@ -665,7 +686,10 @@ function updateProjectiles(state) {
           flinch(target, shot.startX, shot.startY, zoneOf(target, shot.startX, shot.startY) === 'back', false);
         }
         chargeOnHit(state, shot.attacker);
+        // ريش وانفجار عند انقضاض الصقر
+        if (shot.kind === 'falcon') state.fx.push({ x: target.x, y: target.y, t: 0, big: true, h: 14 });
       }
+      if (shot.returns && isAlive(shot.attacker)) remaining.push(returnFlight(shot));
       continue;
     }
     remaining.push(shot);
