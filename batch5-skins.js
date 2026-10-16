@@ -14,11 +14,11 @@ function berimbau(c,J,p){const s=staff(c,J,p,5,9,1,'#8a6a3e'),d=s.d,n=[-d[1],d[0
 function club(c,J,p,L){const s=staff(c,J,p,1.2,L,1.3,'#6a4a2a');circ2(c,s.B,1.1,'#5a3a22');}
 function knifeB(c,from,a,L){const d=wdir(a);limb(c,from[0]-d[0]*0.8,from[1]-d[1]*0.8,from[0]+d[0]*0.8,from[1]+d[1]*0.8,1.2,'#3a2a22');limb(c,from[0]+d[0]*0.8,from[1]+d[1]*0.8,from[0]+d[0]*L,from[1]+d[1]*L,0.9,STEEL2);}
 const capoPants=(c,J,col)=>{pants(c,J,mixHex(col,'#f6f3ec',0.72),3.6);};
-UNITS.bra_common={name:'كابويرا الشارع',sx:0.96,sy:1.04,lw:2.8,headR:3.4,head:(c,p)=>ribbonBand(c,'#f2efe6'),robe:(c,J,p,col)=>capoPants(c,J,col),over:(c,J)=>corda(c,J,'#e8c23a'),weapon:(c,J,p)=>club(c,J,p,5.4)};
-UNITS.bra_berim={name:'عازف البيريمباو',sx:0.97,sy:1.05,lw:2.8,headR:3.4,head:(c,p)=>ribbonBand(c,RED3),robe:(c,J,p,col)=>capoPants(c,J,col),over:(c,J)=>corda(c,J,'#2f8f5a'),weapon:(c,J,p)=>berimbau(c,J,p)};
-UNITS.bra_acro={name:'الأكروبات',sx:0.94,sy:1.05,lw:2.7,headR:3.4,head(c,p){ell(c,-0.4,-1.8,3.6,2,'#2a2220');},robe:(c,J,p,col)=>capoPants(c,J,col),over:(c,J)=>corda(c,J,'#3a7ac2'),
+UNITS.bra_common={name:'كابويرا الشارع',sx:0.96,sy:1.04,lw:2.8,headR:3.5,head:(c,p)=>ribbonBand(c,'#f2efe6'),robe:(c,J,p,col)=>capoPants(c,J,col),over:(c,J)=>corda(c,J,'#e8c23a'),weapon:(c,J,p)=>club(c,J,p,5.4)};
+UNITS.bra_berim={name:'عازف البيريمباو',sx:0.97,sy:1.05,lw:2.8,headR:3.5,head:(c,p)=>ribbonBand(c,RED3),robe:(c,J,p,col)=>capoPants(c,J,col),over:(c,J)=>corda(c,J,'#2f8f5a'),weapon:(c,J,p)=>berimbau(c,J,p)};
+UNITS.bra_acro={name:'الأكروبات',sx:0.94,sy:1.05,lw:2.7,headR:3.5,head(c,p){ell(c,-0.4,-1.8,3.6,2,'#2a2220');},robe:(c,J,p,col)=>capoPants(c,J,col),over:(c,J)=>corda(c,J,'#3a7ac2'),
   back:(c,J,p)=>knifeB(c,J.handB,p.wa+0.8,3.8),weapon:(c,J,p)=>knifeB(c,J.handF,p.wa,4.2)};
-UNITS.bra_hero={name:'المعلّم',hero:true,sx:1.0,sy:1.07,lw:2.9,headR:3.5,
+UNITS.bra_hero={name:'المعلّم',hero:true,sx:1.0,sy:1.07,lw:3.0,headR:3.5,
   head(c,p){ell(c,0,-2.2,5.6,1.1,'#e8d8a8');c.beginPath();c.ellipse(0,-2.4,3.4,2.8,0,Math.PI,0);c.fillStyle='#efe2b8';c.fill();ell(c,0,-2.6,3.4,0.6,RED3);},
   chest(c,J,p,col){const P=torso(c,J,'#f4f1ea',dk(col,0.25));limb(c,...lp(P[0],P[1],0.5),...lp(P[3],P[2],0.5),0.5,'#d8d2c4');limb(c,...add(J.chest,rot(0.4,-1,J.a2)),...add(J.chest,rot(1.2,1.6,J.a2)),0.9,col);},
   robe(c,J,p,col){pants(c,J,'#f4f1ea',3.4);},over:(c,J)=>belt(c,J,'#c9a04a',0.8),weapon:(c,J,p)=>knifeB(c,J.handF,p.wa,4.6)};
@@ -35,14 +35,14 @@ function poncho(c,J,col,stripe){const a=J.a2,S1=add(J.chest,rot(-3.2,-0.6,a)),S2
   pg(c,[S1,S2,[F[0]+2.6,F[1]],[(F[0]+B[0])/2,Math.max(F[1],B[1])+1.4],[B[0]-2.6,B[1]]],col,dk(col,0.3),0.5);
   for(let k=1;k<=2;k++){const A=lp(S1,[B[0]-2.6,B[1]],k*0.3),Bp=lp(S2,[F[0]+2.6,F[1]],k*0.3);limb(c,A[0],A[1],Bp[0],Bp[1],0.7,stripe);}}
 function bolas(c,J,p,t){const h=J.handF,d=wdir(p.wa-0.6);for(let k=0;k<3;k++){const a=Math.atan2(d[1],d[0])+(k-1)*0.5,E=[h[0]+Math.cos(a)*5.4,h[1]+Math.sin(a)*5.4];limb(c,h[0],h[1],E[0],E[1],0.4,'#8a6a44');circ2(c,E,1,'#7a6a5a');}}
-UNITS.arg_common={name:'كومبادريتو',sx:0.96,sy:1.05,lw:2.8,headR:3.4,head:(c,p)=>chambergo(c,TANGO),chest:(c,J,p,col)=>suitTorso(c,J,col),over:(c,J)=>silkScarf(c,J),
+UNITS.arg_common={name:'كومبادريتو',sx:0.96,sy:1.05,lw:2.8,headR:3.5,head:(c,p)=>chambergo(c,TANGO),chest:(c,J,p,col)=>suitTorso(c,J,col),over:(c,J)=>silkScarf(c,J),
   robe:(c,J,p,col)=>pants(c,J,dk(col,0.15),3.2),back:(c,J,p,col)=>wrappedCoat(c,J,'#3a3a40'),weapon:(c,J,p)=>facon(c,J,p,5.2)};
 UNITS.arg_gaucho={name:'الغاوتشو بالبولياداس',sx:0.98,sy:1.05,lw:2.9,headR:3.5,head(c,p){c.save();c.rotate(-0.1);ell(c,0,-2.6,4.2,1.6,'#2a2a2e');c.restore();},
   robe(c,J,p,col){pants(c,J,mixHex(col,'#f4f1ea',0.6),4.4,0.8);belt(c,J,RED3,1.8);},over:(c,J,p,col)=>poncho(c,J,mixHex(col,'#8a5a36',0.35),'#e8c23a'),weapon:(c,J,p)=>bolas(c,J,p)};
-UNITS.arg_shawl={name:'المبارز بالشال',sx:0.95,sy:1.05,lw:2.7,headR:3.4,head:(c,p)=>chambergo(c,'#4a3a2e'),chest:(c,J,p,col)=>suitTorso(c,J,col),over:(c,J)=>silkScarf(c,J),
+UNITS.arg_shawl={name:'المبارز بالشال',sx:0.95,sy:1.05,lw:2.7,headR:3.5,head:(c,p)=>chambergo(c,'#4a3a2e'),chest:(c,J,p,col)=>suitTorso(c,J,col),over:(c,J)=>silkScarf(c,J),
   robe:(c,J,p,col)=>pants(c,J,dk(col,0.15),3.2),back(c,J,p,col){const h=J.handB;pg(c,[h,[h[0]-4,h[1]+5],[h[0]+1,h[1]+6.4]],RED3);limb(c,h[0]-4,h[1]+5,h[0]+1,h[1]+6.4,0.5,'#e8c23a');},
   weapon:(c,J,p)=>facon(c,J,p,4.8)};
-UNITS.arg_hero={name:'المالِفو',hero:true,sx:1.0,sy:1.08,lw:2.9,headR:3.5,head:(c,p)=>chambergo(c,TANGO),
+UNITS.arg_hero={name:'المالِفو',hero:true,sx:1.0,sy:1.08,lw:3.0,headR:3.5,head:(c,p)=>chambergo(c,TANGO),
   back(c,J,p,col){const hb=lp(J.legB.h,J.legB.k,0.85);pg(c,[add(J.chest,rot(-2.6,-0.6,J.a2)),add(J.chest,rot(1.2,-0.4,J.a2)),[hb[0]+1.4,hb[1]],[hb[0]-3.6,hb[1]]],TANGO,dk(col,0.2),0.8);wrappedCoat(c,J,'#2a2a2e');},
   chest:(c,J,p,col)=>suitTorso(c,J,col),robe:(c,J,p,col)=>pants(c,J,TANGO,3.2),
   over(c,J,p,col){silkScarf(c,J);const A=add(J.chest,rot(1.6,1.6,J.a2)),B=add(J.hip,rot(2.4,-2,J.pl));c.beginPath();c.moveTo(A[0],A[1]);c.quadraticCurveTo(A[0]+1.6,(A[1]+B[1])/2,B[0],B[1]);c.strokeStyle='#c9a04a';c.lineWidth=0.5;c.stroke();
@@ -64,8 +64,7 @@ function slingM(c,J,p){const d=wdir(p.wa),n=[-d[1],d[0]],h=J.handF,Q=[h[0]+d[0]*
 function bowM(c,J,p,col){c.save();c.translate(J.handF[0],J.handF[1]);c.rotate(p.wa);c.beginPath();c.moveTo(0,-7.4);c.quadraticCurveTo(3.2,0,0,7.4);c.strokeStyle=col||'#6a4a2a';c.lineWidth=1.2;c.stroke();limb(c,-0.6,-7.2,-0.6,7.2,0.35,'#ece6d6');c.restore();}
 function atlatl(c,J,p){const d=wdir(p.wa),h=J.handF,A=[h[0]-d[0]*1,h[1]-d[1]*1],B=[h[0]+d[0]*3.6,h[1]+d[1]*3.6];limb(c,A[0],A[1],B[0],B[1],1.1,'#7a5a3a');
   const T=[h[0]+d[0]*8,h[1]+d[1]*8];limb(c,h[0]-d[0]*2.4,h[1]-d[1]*2.4,T[0],T[1],0.5,'#d8c8a8');
-  c.save();const g=c.createRadialGradient(T[0],T[1],0,T[0],T[1],4);g.addColorStop(0,'rgba(255,170,60,0.6)');g.addColorStop(1,'rgba(255,170,60,0)');c.fillStyle=g;c.beginPath();c.arc(T[0],T[1],4,0,TAU);c.fill();c.restore();
-  ell(c,T[0],T[1],1,1.3,'#f0902a');ell(c,T[0],T[1]-0.4,0.5,0.8,'#ffd45a');}
+  flame(c,T[0],T[1]+0.8,0.75);}
 function featherFan(c,J,big){const b=add(J.chest,rot(-1.8,-0.4,J.a2)),n=big?7:4,cols=[QUET,RED3,TURQ,'#e8b23a',QUET,RED3,TURQ];
   for(let k=0;k<n;k++){const a=-Math.PI/2-0.9+k*(1.8/(n-1)),L=big?13:8,E=[b[0]+Math.cos(a)*L-2,b[1]+Math.sin(a)*L];c.beginPath();c.moveTo(b[0],b[1]);c.quadraticCurveTo((b[0]+E[0])/2-1,(b[1]+E[1])/2,E[0],E[1]);c.strokeStyle=cols[k];c.lineWidth=big?1.6:1.2;c.stroke();}}
 function macuahuitl(c,J){const b=add(J.chest,rot(-2.4,0,J.a2)),E=add(J.mid,rot(-3.8,4,J.pl));limb(c,b[0],b[1]-3,E[0],E[1],1.2,'#6a4a2a');
@@ -75,9 +74,9 @@ UNITS.mex_common={name:'محارب التشينامبا',sx:0.97,sy:1.04,lw:2.8,
 UNITS.mex_jaguar={name:'فارس الجاغوار الرامي',sx:0.98,sy:1.05,lw:2.9,headR:3.5,head:(c,p)=>jaguarHelm(c),
   chest(c,J,p,col){const P=ichca(c,J,col);for(let k=0;k<4;k++){const Q=lp(lp(P[0],P[1],0.3+k*0.15),lp(P[3],P[2],0.3+k*0.15),0.3+(k%2)*0.4);c.beginPath();c.arc(Q[0],Q[1],0.6,0,TAU);c.strokeStyle='#3a2a1a';c.lineWidth=0.4;c.stroke();}},
   robe:(c,J,p,col)=>maxtlatl(c,J,col),back(c,J,p){featherFan(c,J,false);},weapon:(c,J,p)=>bowM(c,J,p)};
-UNITS.mex_atlatl={name:'رامي الأتلاتل',sx:0.99,sy:1.04,lw:2.9,headR:3.5,head:(c,p)=>featherHB(c),chest:(c,J,p,col)=>ichca(c,J,col),robe:(c,J,p,col)=>maxtlatl(c,J,col),
+UNITS.mex_atlatl={name:'رامي الأتلاتل',sx:0.98,sy:1.04,lw:2.9,headR:3.5,head:(c,p)=>featherHB(c),chest:(c,J,p,col)=>ichca(c,J,col),robe:(c,J,p,col)=>maxtlatl(c,J,col),
   back(c,J,p){for(let k=0;k<3;k++){const A=add(J.chest,rot(-2+k*0.6,-1.4,J.a2)),B=add(J.mid,rot(-2.6+k*0.6,2.6,J.pl));limb(c,A[0],A[1],B[0],B[1],0.5,'#d8c8a8');}},weapon:(c,J,p)=>atlatl(c,J,p)};
-UNITS.mex_hero={name:'قائد النسور',hero:true,sx:1.02,sy:1.08,lw:3,headR:3.6,head:(c,p)=>eagleHelm(c),
+UNITS.mex_hero={name:'قائد النسور',hero:true,sx:1.0,sy:1.08,lw:3.0,headR:3.5,head:(c,p)=>eagleHelm(c),
   back(c,J,p){featherFan(c,J,true);macuahuitl(c,J);},
   chest(c,J,p,col){const P=torso(c,J,'#8a6a46',dk(col,0.3));for(let r=0;r<3;r++)for(let k=0;k<3;k++){const Q=lp(lp(P[0],P[1],0.2+k*0.3),lp(P[3],P[2],0.2+k*0.3),0.2+r*0.3);tri(c,[Q[0]-0.6,Q[1]],[Q[0],Q[1]+1],[Q[0]+0.6,Q[1]],r%2?'#f2efe6':'#a87a4a');}},
   robe:(c,J,p,col)=>maxtlatl(c,J,col),weapon:(c,J,p)=>bowM(c,J,p,'#c9a04a')};

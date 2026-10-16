@@ -30,26 +30,26 @@ function sash(c,J,col){belt(c,J,col,1.4);const a=J.pl,o=add(J.hip,rot(-1.8,-1.3,
 /* --- الصين --- */
 UNITS.chn_common={name:'فتى الجبل',sx:0.98,sy:1.02,lw:2.9,headR:3.5,head:(c,p,col)=>kerchief(c,col),robe:(c,J,p,col)=>songRobe(c,J,col),
   over:(c,J)=>belt(c,J,CRIM,1.6),weapon:(c,J,p)=>dao(c,J,p,5.4)};
-UNITS.chn_boss={name:'شيخ العصا',aura:true,twoH:true,sx:1.05,sy:1.04,lw:3.1,headR:3.6,head:(c,p,col)=>headbandRibbon(c,CRIM),robe:(c,J,p,col)=>songRobe(c,J,col,0.6),
+UNITS.chn_boss={name:'شيخ العصا',aura:true,twoH:true,sx:0.98,sy:1.04,lw:2.9,headR:3.5,head:(c,p,col)=>headbandRibbon(c,CRIM),robe:(c,J,p,col)=>songRobe(c,J,col,0.6),
   over:(c,J)=>belt(c,J,JADE,1.8),weapon(c,J,p){const s=staff(c,J,p,6,8,1.4,'#7a5a3a');circ2(c,s.B,0.8,'#5a4632');circ2(c,s.A,0.8,'#5a4632');}};
 UNITS.chn_healer={name:'الطبيب الجوال',sx:0.98,sy:1.02,lw:2.8,headR:3.5,head:(c,p)=>douli(c),robe:(c,J,p,col)=>songRobe(c,J,col,0.8),
   back(c,J,p,col){const Q=add(J.mid,rot(-2.6,-0.6,J.pl));rrect(c,Q[0]-2.4,Q[1]-3,4.2,5,1,'#a8884e');for(let k=0;k<3;k++)limb(c,Q[0]-2.2,Q[1]-2+k*1.6,Q[0]+1.6,Q[1]-2+k*1.6,0.35,'#7a6234');},
   over(c,J,p,col){belt(c,J,JADE,1.4);const o=add(J.hip,rot(2.4,-0.6,J.pl));ell(c,o[0],o[1]+1.6,1.1,1.4,'#c98a3a');ell(c,o[0],o[1]-0.2,0.7,0.8,'#c98a3a');},
   weapon(c,J,p){const h=J.handF;ell(c,h[0]+0.4,h[1]-0.6,1.4,1.7,'#c98a3a');ell(c,h[0]+0.4,h[1]-2.6,0.9,1,'#c98a3a');limb(c,h[0]-0.6,h[1]-1.6,h[0]+1.4,h[1]-1.6,0.5,CRIM);}};
-UNITS.chn_hero={name:'زعيم ليانغشان',hero:true,twoH:true,sx:1.06,sy:1.06,lw:3.2,headR:3.6,head(c,p,col){ell(c,0,-2,4,2.4,INK);rrect(c,-1.8,-6.6,3.6,3.2,0.6,INK);limb(c,-1.6,-5,-5,-2,0.6,CRIM);},
+UNITS.chn_hero={name:'زعيم ليانغشان',hero:true,twoH:true,sx:1.0,sy:1.06,lw:3.0,headR:3.5,head(c,p,col){ell(c,0,-2,4,2.4,INK);rrect(c,-1.8,-6.6,3.6,3.2,0.6,INK);limb(c,-1.6,-5,-5,-2,0.6,CRIM);},
   back(c,J,p,col){const b=add(J.chest,rot(-1.6,-0.4,J.a2)),t=[b[0]-1.4,b[1]-15];limb(c,b[0],b[1]+3,t[0],t[1],0.9,'#5a4632');
     pg(c,[t,[t[0]-8,t[1]+1],[t[0]-8,t[1]+7.5],[t[0],t[1]+6.5]],APRI,CRIM,0.8);for(let k=0;k<3;k++)limb(c,t[0]-6.4+k*2.2,t[1]+2.4,t[0]-6.4+k*2.2,t[1]+5.6,0.5,CRIM);},
   robe:(c,J,p,col)=>songRobe(c,J,col,0.82),over:(c,J)=>belt(c,J,GOLD,2),
   weapon(c,J,p){const s=staff(c,J,p,4,9,1.3,'#5a3a22'),d=s.d,n=[-d[1],d[0]],B=s.B;pg(c,[B,[B[0]+d[0]*4.6+n[0]*0.6,B[1]+d[1]*4.6+n[1]*0.6],[B[0]+d[0]*2.4-n[0]*1.8,B[1]+d[1]*2.4-n[1]*1.8]],STEEL2);}};
 /* --- اليابان --- */
-UNITS.jpn_common={name:'كابوكيمونو',sx:0.96,sy:1.05,lw:2.8,headR:3.4,head:(c,p)=>wildHair(c),robe:(c,J,p,col)=>kimono(c,J,col,0.72,true),
+UNITS.jpn_common={name:'كابوكيمونو',sx:0.96,sy:1.05,lw:2.8,headR:3.5,head:(c,p)=>wildHair(c),robe:(c,J,p,col)=>kimono(c,J,col,0.72,true),
   over:(c,J)=>obi(c,J,GOLD),weapon:(c,J,p)=>katana(c,J.handF,p.wa,7)};
-UNITS.jpn_kiseru={name:'حامل الغليون',sx:0.97,sy:1.05,lw:2.8,headR:3.4,head:(c,p)=>wildHair(c),robe:(c,J,p,col)=>kimono(c,J,col,0.76,true),over:(c,J)=>obi(c,J,CRIM),
+UNITS.jpn_kiseru={name:'حامل الغليون',sx:0.97,sy:1.05,lw:2.8,headR:3.5,head:(c,p)=>wildHair(c),robe:(c,J,p,col)=>kimono(c,J,col,0.76,true),over:(c,J)=>obi(c,J,CRIM),
   weapon(c,J,p){const s=staff(c,J,p,3,11,1,'#3a2a26'),d=s.d,B=s.B;ell(c,B[0],B[1],1.3,0.9,GOLD);limb(c,s.A[0],s.A[1],s.A[0]+d[0]*1.4,s.A[1]+d[1]*1.4,1.2,GOLD);
     c.save();c.globalAlpha*=0.4;ell(c,B[0]+0.6,B[1]-2.6,1.2,1.2,'#d9d6cf');ell(c,B[0]+1.4,B[1]-4.8,1.6,1.6,'#d9d6cf');c.restore();}};
-UNITS.jpn_dual={name:'مبارز السيفين',sx:0.95,sy:1.05,lw:2.7,headR:3.4,head(c,p){wildHair(c);ell(c,0,-2.1,4,0.8,CRIM);},robe:(c,J,p,col)=>kimono(c,J,col,0.68,true),over:(c,J)=>obi(c,J,INK),
+UNITS.jpn_dual={name:'مبارز السيفين',sx:0.95,sy:1.05,lw:2.7,headR:3.5,head(c,p){wildHair(c);ell(c,0,-2.1,4,0.8,CRIM);},robe:(c,J,p,col)=>kimono(c,J,col,0.68,true),over:(c,J)=>obi(c,J,INK),
   back(c,J,p){katana(c,J.handB,p.wa+0.9,5,1);},weapon:(c,J,p)=>katana(c,J.handF,p.wa,6.5)};
-UNITS.jpn_hero={name:'زعيم الكابوكيمونو',hero:true,sx:1.0,sy:1.07,lw:3,headR:3.5,head(c,p){wildHair(c);rrect(c,-0.4,-8.2,0.8,2.4,0.3,GOLD);ell(c,0,-8.4,1,0.6,CRIM);},
+UNITS.jpn_hero={name:'زعيم الكابوكيمونو',hero:true,sx:1.0,sy:1.07,lw:3.0,headR:3.5,head(c,p){wildHair(c);rrect(c,-0.4,-8.2,0.8,2.4,0.3,GOLD);ell(c,0,-8.4,1,0.6,CRIM);},
   back(c,J,p,col){const hb=lp(J.legB.h,J.legB.k,0.9);pg(c,[add(J.chest,rot(-2.6,-0.6,J.a2)),add(J.chest,rot(1.2,-0.4,J.a2)),[hb[0]+1,hb[1]],[hb[0]-4.2,hb[1]]],INK,GOLD,0.8);
     for(let k=0;k<4;k++)ell(c,hb[0]-3.6+k*1.3,hb[1]+0.2,0.5,0.5,'#6a6a70');},
   robe:(c,J,p,col)=>kimono(c,J,col,0.82,true),over(c,J,p,col){obi(c,J,GOLD);const A=add(J.chest,rot(1.8,0,J.a2)),B=add(J.hip,rot(2.4,-1,J.pl));limb(c,A[0],A[1],B[0],B[1],1.2,INK);},
@@ -61,10 +61,8 @@ UNITS.kor_archer={name:'الرامي الدقيق',sx:0.97,sy:1.05,lw:2.8,headR:
   back(c,J,p,col){const A=add(J.chest,rot(-1.6,-1.2,J.a2)),B=add(J.mid,rot(-2.2,2,J.pl));limb(c,A[0],A[1],B[0],B[1],2,'#5a3a2a');for(let k=0;k<3;k++)tri(c,[A[0]-0.6+k*0.6,A[1]],[A[0]-0.2+k*0.6,A[1]-2],[A[0]+0.2+k*0.6,A[1]],'#f2f0e8');},
   over:(c,J)=>sash(c,J,SKY),weapon:(c,J,p)=>recurve(c,J,p)};
 UNITS.kor_fire={name:'رامي السهام المشتعلة',sx:0.98,sy:1.04,lw:2.9,headR:3.5,head:(c,p)=>topknotFlower(c),robe:(c,J,p,col)=>hanbok(c,J,col,0.46),over:(c,J)=>sash(c,J,CRIM),
-  weapon(c,J,p){recurve(c,J,p,'#5a2a22');const d=wdir(p.wa),h=J.handF,T=[h[0]+d[0]*5,h[1]+d[1]*5];limb(c,h[0]-d[0]*1,h[1]-d[1]*1,T[0],T[1],0.5,'#d8c8a8');
-    c.save();const g=c.createRadialGradient(T[0],T[1],0,T[0],T[1],4);g.addColorStop(0,'rgba(255,170,60,0.6)');g.addColorStop(1,'rgba(255,170,60,0)');c.fillStyle=g;c.beginPath();c.arc(T[0],T[1],4,0,TAU);c.fill();c.restore();
-    ell(c,T[0],T[1],1,1.3,'#f0902a');ell(c,T[0],T[1]-0.4,0.5,0.8,'#ffd45a');}};
-UNITS.kor_hero={name:'قائد الهوارانغ',hero:true,sx:1.0,sy:1.07,lw:2.9,headR:3.5,head:(c,p)=>topknotFlower(c,true),
+  weapon(c,J,p){recurve(c,J,p,'#5a2a22');const d=wdir(p.wa),h=J.handF,T=[h[0]+d[0]*5,h[1]+d[1]*5];limb(c,h[0]-d[0]*1,h[1]-d[1]*1,T[0],T[1],0.5,'#d8c8a8');flame(c,T[0],T[1]+0.8,0.75);}};
+UNITS.kor_hero={name:'قائد الهوارانغ',hero:true,sx:1.0,sy:1.07,lw:3.0,headR:3.5,head:(c,p)=>topknotFlower(c,true),
   back(c,J,p,col){const hb=lp(J.legB.k,J.legB.f,0.6);pg(c,[add(J.chest,rot(-2.4,-0.6,J.a2)),add(J.chest,rot(1.2,-0.4,J.a2)),[hb[0]+1,hb[1]],[hb[0]-4.6,hb[1]]],'#f2f0e8',SKY,0.9);},
   robe:(c,J,p,col)=>hanbok(c,J,col,0.62),over:(c,J)=>sash(c,J,PINK),weapon:(c,J,p)=>recurve(c,J,p,GOLD)};
 const NATIONS=[['chn','الصين','إخوة الجبل',['chn_common','chn_boss','chn_healer','chn_hero']],
