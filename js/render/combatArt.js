@@ -4,7 +4,7 @@
 import { COMBAT, COMBAT_REALISM as CR } from '../config.js';
 import {
   TAU, ease, limb, bone3, ell, tri, rot, add, keyPose, ATK, DODGE, BLOCK,
-  poseIdle, poseWalk, poseStagger, addFlinch, poseDeath, poseDown, downAngle, drawBody, wdir
+  poseIdle, poseWalk, poseStagger, addFlinch, poseDeath, poseDown, downAngle, drawBody, wdir, STYLE, softShadow
 } from './anim.js';
 import { BODIES, tipOf } from './bodies.js';
 import { ultGlow } from './unitsArt.js';
@@ -103,7 +103,8 @@ function twoHand(ud, p) {
 }
 
 // drawOne في المرجع. ghosts: عدد أشباح أثر السلاح (0 في المستوى المبسّط).
-export function drawOne(ctx, unit, key, x, y, scale, color, time, walking, ghosts, alpha = 1) {
+// shaded: النمط المظلَّل (المرحلة 9ج) يُشغَّل لعلامات القدمين والظل والجسد فقط، لا للآثار من حوله
+export function drawOne(ctx, unit, key, x, y, scale, color, time, walking, ghosts, alpha = 1, shaded = false) {
   const ud = BODIES[key] || BODIES.crow_common;
   const animT = time + (unit.id % 17) * 0.13;
   const dead = unit.state === 'dead';
@@ -133,10 +134,11 @@ export function drawOne(ctx, unit, key, x, y, scale, color, time, walking, ghost
     ell(ctx, -3, 0.6, 5.5, 1.8, 'rgba(0,0,0,0.3)');
     ctx.translate(an * 2.2, 0); ctx.rotate(an);
   } else {
-    if (ud.ground) ud.ground(ctx, color, animT);
+    if (ud.ground) { STYLE.on = shaded; ud.ground(ctx, color, animT); STYLE.on = false; }
     if (sw && sw.ult) ultGlow(ctx, { a });                             // الوهج الذهبي الموجود
-    const s = 1 - (p.air || 0) * 0.35;
-    ell(ctx, 0, 0.6, (ud.shadowW || (ud.twoH ? 4.6 : 3.8)) * s, 1.6 * s, 'rgba(0,0,0,' + (0.3 * s) + ')');
+    const s = 1 - (p.air || 0) * 0.35, sw0 = ud.shadowW || (ud.twoH ? 4.6 : 3.8);
+    if (shaded) softShadow(ctx, s, sw0 / 3.8);                         // ظل ناعم (style-v5)
+    else ell(ctx, 0, 0.6, sw0 * s, 1.6 * s, 'rgba(0,0,0,' + (0.3 * s) + ')');
   }
 
   // حلقة الضربة الدائرية
@@ -177,7 +179,9 @@ export function drawOne(ctx, unit, key, x, y, scale, color, time, walking, ghost
     }
   }
 
+  STYLE.on = shaded;
   const J = drawBody(ctx, p, color, ud);
+  STYLE.on = false;
 
   // الشرر عند الارتطام
   if (melee && a >= 0.42 && a < 0.6 && ud.weapon) {

@@ -2,6 +2,7 @@
 import { TILE_HALF_W, TILE_HALF_H, COMBAT, COMBAT_REALISM, PERFORMANCE, UNIT_ART, ULT, nations } from '../config.js';
 import { UI_LIGHT } from './colors.js';
 import { drawOne, stateLabel, drawSpeedLines } from './combatArt.js';
+import { flameLayers } from './anim.js';
 import { nationArtKey, shotLook } from './nationArt.js';
 import './nationsArab.js';                 // مظاهر الدفعة العربية تُسجَّل في سجل الأمم (القسم 3.10)
 import './nationsAsia.js';                 // والدفعة الآسيوية
@@ -26,9 +27,9 @@ const ART_KEYS = {
 
 // مفتاح غير معروف (عصابة لا تملك هذه الشخصية) يرجع لرسم الفرد العادي بدل ألا يُرسم شيء
 // وحدة الأمة (القسم 3.10) بمظهر أمتها، بنسخته المبسّطة خارج المستوى الكامل
-const artKey = (unit, time, zoom) => {
+const artKey = (unit, time) => {
   const kind = unit.champion ? 'champion' : (unit.hero || 'common');
-  const own = unit.nation ? nationArtKey(unit, kind, time, zoom) : null;
+  const own = unit.nation ? nationArtKey(unit, kind, time) : null;
   if (own) return own;
   const gang = ART_KEYS[unit.gang] || ART_KEYS.crows;
   return gang[kind] || gang.common;
@@ -67,8 +68,10 @@ export function drawUnit(ctx, unit, alpha, zoom = 99, time = 0, debug = false, c
   }
 
   // نظام الوضعيات v2 لكل الوحدات (القسم 5.4.6). المستوى المبسّط بلا أثر السلاح وبلا شبحي التفادي
-  const key = artKey(unit, time, zoom), scale = artScale(unit), color = artColor(unit), walking = isWalking(unit);
+  const key = artKey(unit, time), scale = artScale(unit), color = artColor(unit), walking = isWalking(unit);
   const full = unit.lod === 'full';
+  // النمط المظلَّل (المرحلة 9ج) لوحدات المستوى الكامل وحدها
+  const shaded = full && PERFORMANCE.shadedStyle;
   // خطوط السرعة خلف المندفع والمقذوف والمتفادي (القسم 5.4.7)
   if (!dead) {
     const vi = unit.cState === 'dodge' ? unit.dvx : unit.vx, vj = unit.cState === 'dodge' ? unit.dvy : unit.vy;
@@ -95,7 +98,7 @@ export function drawUnit(ctx, unit, alpha, zoom = 99, time = 0, debug = false, c
     ctx.lineWidth = 0.9;
     ctx.stroke();
   }
-  drawOne(ctx, unit, key, x, y, scale, color, time, walking, ghosts);
+  drawOne(ctx, unit, key, x, y, scale, color, time, walking, ghosts, 1, shaded);
   if (dead) return;
 
   // وضع التفاصيل (ثلاث لمسات على شريط المعلومات): اسم الحالة فوق الوحدة
@@ -210,6 +213,7 @@ export function drawProjectile(ctx, shot, alpha) {
   // السهم المشتعل (رامي السهام المشتعلة): شكل فقط، وقواعده قواعد زجاجة رامي النار
   if (look === 'firearrow') {
     const head = aimedArrow(ctx, shot, x, y, progress, COMBAT.projectileArc, PROJECTILE_COLORS.arrow);
+    if (PERFORMANCE.shadedStyle) { flameLayers(ctx, head.x, head.y + 0.8, 0.7); return; }    // لهب بطبقات (المرحلة 9ج)
     ctx.beginPath(); ctx.ellipse(head.x, head.y, 1.2, 1.5, 0, 0, 6.2832); ctx.fillStyle = '#f0902a'; ctx.fill();
     ctx.beginPath(); ctx.ellipse(head.x, head.y - 0.4, 0.6, 0.9, 0, 0, 6.2832); ctx.fillStyle = '#ffd45a'; ctx.fill();
     return;
@@ -219,6 +223,7 @@ export function drawProjectile(ctx, shot, alpha) {
     const a = progress * 9.4, cx = Math.cos(a) * 2, cy = Math.sin(a) * 1.2;
     ctx.beginPath(); ctx.moveTo(x - cx, y - cy); ctx.lineTo(x + cx, y + cy);
     ctx.strokeStyle = '#6a4a2a'; ctx.lineWidth = 1; ctx.stroke();
+    if (PERFORMANCE.shadedStyle) { flameLayers(ctx, x + cx, y + cy + 0.4, 0.8); return; }
     ctx.beginPath(); ctx.ellipse(x + cx, y + cy - 0.6, 1.5, 2, 0, 0, 6.2832); ctx.fillStyle = '#f0902a'; ctx.fill();
     ctx.beginPath(); ctx.ellipse(x + cx, y + cy - 0.9, 0.8, 1.2, 0, 0, 6.2832); ctx.fillStyle = '#ffd45a'; ctx.fill();
     return;
@@ -348,13 +353,14 @@ export function drawFire(ctx, fire, time) {
   ctx.fill();
   ctx.globalAlpha = 1;
 
-  // ألسنة لهب ترتعش
+  // ألسنة لهب ترتعش (بالنمط المظلَّل: لهب بطبقات وجمرات بنفس الارتفاع، المرحلة 9ج)
   for (let k = 0; k < 5; k++) {
     const angle = k * 1.257 + fire.x;
     const flicker = 0.6 + 0.4 * Math.sin(time * 9 + k * 2.1);
     const fx = x + Math.cos(angle) * rx * 0.55;
     const fy = y + Math.sin(angle) * ry * 0.55;
     const h = (3 + k % 2 * 2) * flicker * fade;
+    if (PERFORMANCE.shadedStyle) { flameLayers(ctx, fx, fy, (h + 3) / 4.4); continue; }
     ctx.beginPath();
     ctx.moveTo(fx - 1.6, fy);
     ctx.lineTo(fx, fy - h - 3);

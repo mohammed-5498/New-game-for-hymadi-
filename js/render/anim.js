@@ -29,11 +29,65 @@ let roundSet=false;
 function limb(c,x1,y1,x2,y2,w,col){c.beginPath();c.moveTo(x1,y1);c.lineTo(x2,y2);c.strokeStyle=col;c.lineWidth=w;if(!roundSet)c.lineCap='round';c.stroke();}
 function bone3(c,a,b,d,w,col){c.beginPath();c.moveTo(a[0],a[1]);c.lineTo(b[0],b[1]);c.lineTo(d[0],d[1]);
   c.strokeStyle=col;c.lineWidth=w;if(!roundSet){c.lineCap='round';c.lineJoin='round';}c.stroke();}
-function ell(c,x,y,rx,ry,f){c.beginPath();c.ellipse(x,y,rx,ry,0,0,TAU);Pf(c,f);}
+function ell(c,x,y,rx,ry,f){c.beginPath();c.ellipse(x,y,rx,ry,0,0,TAU);
+  if(STYLE.on&&rx*ry>2.5&&isHex(f)){shadeEll(c,x,y,rx,ry,f);return;}Pf(c,f);}
 function rrect(c,x,y,w,h,r,f){c.beginPath();c.roundRect?c.roundRect(x,y,w,h,r):c.rect(x,y,w,h);Pf(c,f);}
 function tri(c,a,b,d,f){c.beginPath();c.moveTo(a[0],a[1]);c.lineTo(b[0],b[1]);c.lineTo(d[0],d[1]);c.closePath();Pf(c,f);}
 const rot=(x,y,a)=>[x*Math.cos(a)-y*Math.sin(a),x*Math.sin(a)+y*Math.cos(a)];
 const add=(a,b)=>[a[0]+b[0],a[1]+b[1]];
+
+/* ===================== النمط المظلَّل v5 (المرحلة 9ج، من docs/nations/style-v5.js) =====================
+   أطراف وجذع كبسولية (حافة داكنة + لون أساسي + لمعتان من أعلى اليسار)، ورأس بتدرج دائري وأطراف أسمك،
+   والأشكال الكبيرة بلون واحد (ell هنا، وpg وrobe وbelt في nationArt.js) بتدرج وحافة خفيفة، ولهب بطبقات.
+   يُشغَّل لوحدات المستوى الكامل وحدها: drawOne (combatArt.js) يضبط STYLE.on حول رسم الوحدة ثم يطفئه،
+   والإطفاء يعيد الرسم القديم حرفياً (المستويان المبسّط والإحصائي بنفس البكسلات تماماً).
+   الإضافة على المرجع للأداء فقط: كل تدرج يُبنى مرة لكل لوحة رسم ولون وحجم ثم يُرسم بالإزاحة
+   (بدل تدرج جديد لكل شكل في كل إطار)، والأطراف بلا مصفوفات جديدة. */
+const STYLE={on:false,thick:1.16,head:1.06};
+const isHex=f=>typeof f==='string'&&f.length===7&&f[0]==='#';
+// مخازن التدرجات: لوحة الرسم ← اللون ← الحجم ← التدرج (لكل نوع مخزن مستقل)
+const GR_ELL=new WeakMap(),GR_HEAD=new WeakMap(),GR_LIN=new WeakMap(),GR_ONE=new WeakMap();
+function gradMap(W,c,f){let m=W.get(c);if(!m)W.set(c,m=new Map());let n=m.get(f);if(!n)m.set(f,n=new Map());return n;}
+// شكل بيضاوي كبير بلون واحد: تدرج دائري من أعلى اليسار وحافة داكنة (المسار مرسوم مسبقاً)
+function shadeEll(c,x,y,rx,ry,f){const m=gradMap(GR_ELL,c,f),key=rx*4096+ry;let g=m.get(key);
+  if(!g){g=c.createRadialGradient(-rx*0.35,-ry*0.45,0,0,0,Math.max(rx,ry)*1.05);
+    g.addColorStop(0,lt(f,0.32));g.addColorStop(0.6,f);g.addColorStop(1,dk(f,0.22));m.set(key,g);}
+  c.translate(x,y);c.fillStyle=g;c.fill();c.translate(-x,-y);
+  c.strokeStyle=dk(f,0.32);c.lineWidth=0.4;c.stroke();}
+// ملء المسار الجاري بتدرج خطي من (x0,y0) إلى (x1,y1) كما createLinearGradient في المرجع:
+// تدرج واحد مخزّن من (0,0) إلى (1,0) يُنقل ويُدار ويُكبَّر بتحويل واحد
+function fillLinear(c,f,x0,y0,x1,y1){const m=gradMap(GR_LIN,c,f);let g=m.get(0);
+  if(!g){g=c.createLinearGradient(0,0,1,0);g.addColorStop(0,lt(f,0.2));g.addColorStop(0.55,f);g.addColorStop(1,dk(f,0.2));m.set(0,g);}
+  c.save();c.transform(x1-x0,y1-y0,y0-y1,x1-x0,x0,y0);c.fillStyle=g;c.fill();c.restore();}
+// كبسولة مظللة على خط من نقطتين أو ثلاث (A ثم B ثم D إن وُجدت)
+function capLine(c,A,B,D,o,col,w){c.beginPath();c.moveTo(A[0]+o,A[1]+o);c.lineTo(B[0]+o,B[1]+o);if(D)c.lineTo(D[0]+o,D[1]+o);
+  c.strokeStyle=col;c.lineWidth=w;c.stroke();}
+function capsule(c,A,B,D,w,col){
+  capLine(c,A,B,D,0,dk(col,0.38),w+0.75);capLine(c,A,B,D,0,col,w);
+  const a=c.globalAlpha;
+  c.globalAlpha=a*0.9;capLine(c,A,B,D,-w*0.15,lt(col,0.3),w*0.4);
+  c.globalAlpha=a*0.55;capLine(c,A,B,D,-w*0.22,lt(col,0.6),w*0.13);
+  c.globalAlpha=a;}
+// وهج دائري بلون واحد ثابت (لهب، ظل): تدرج مخزّن نصف قطره 1 يُرسم بالإزاحة والتكبير
+function glowOne(c,key,stops,x,y,rx,ry){const m=gradMap(GR_ONE,c,key);let g=m.get(0);
+  if(!g){g=c.createRadialGradient(0,0,0,0,0,1);for(const [t,col] of stops)g.addColorStop(t,col);m.set(0,g);}
+  c.save();c.translate(x,y);c.scale(rx,ry);c.fillStyle=g;c.beginPath();c.arc(0,0,1,0,TAU);c.fill();c.restore();}
+const FLAME_GLOW=[[0,'rgba(255,180,70,0.55)'],[1,'rgba(255,140,40,0)']];
+const SHADOW_SOFT=[[0,'rgba(0,0,0,0.42)'],[1,'rgba(0,0,0,0)']];
+// لهب بطبقات وجمرات لكل النيران (النفّاط والمشاعل والسهام المشتعلة والزجاجات والأرض المشتعلة).
+// مطفأ النمط: مثلثان كما في المرجع
+function flame(c,x,y,s){if(STYLE.on)flameLayers(c,x,y,s);
+  else{tri(c,[x-1.2*s,y],[x,y-3.6*s],[x+1.2*s,y],'#f0902a');tri(c,[x-0.6*s,y],[x,y-2.2*s],[x+0.6*s,y],'#ffd45a');}}
+function flameLayers(c,x,y,s){
+  glowOne(c,'flame',FLAME_GLOW,x,y-1.6*s,5.5*s,5.5*s);
+  flameDrop(c,x,y,s,4.4,1.5,'#e8641e');flameDrop(c,x,y,s,3.4,1.1,'#f8a030');flameDrop(c,x,y,s,2.2,0.65,'#ffe27a');flameDrop(c,x,y,s,1.1,0.3,'#fffbe8');
+  c.beginPath();c.moveTo(x+1.18*s,y-4.6*s);c.arc(x+0.9*s,y-4.6*s,0.28*s,0,TAU);c.moveTo(x+0.58*s,y-6.2*s);c.arc(x+0.3*s,y-6.2*s,0.28*s,0,TAU);
+  c.fillStyle='#ff9a40';c.fill();
+  c.beginPath();c.arc(x-0.8*s,y-5.4*s,0.28*s,0,TAU);c.fillStyle='#ffd060';c.fill();}
+function flameDrop(c,x,y,s,h,w,col){c.beginPath();c.moveTo(x-w*s,y);c.bezierCurveTo(x-w*s,y-h*0.5*s,x-w*0.2*s,y-h*0.7*s,x,y-h*s);
+  c.bezierCurveTo(x+w*0.3*s,y-h*0.6*s,x+w*s,y-h*0.45*s,x+w*s,y);c.closePath();c.fillStyle=col;c.fill();}
+// ظل أرضي ناعم (groundFX في المرجع): k نسبة عرض ظل الوحدة إلى ظل الفرد العادي، s انكماشه في القفز
+function softShadow(c,s,k){c.save();c.scale(s*k,0.42*s*k);glowOne(c,'shadow',SHADOW_SOFT,0,0.6,5,5);c.restore();}
 function ik2(o,t,L1,L2,flip){let dx=t[0]-o[0],dy=t[1]-o[1],d=Math.hypot(dx,dy)||0.001;
   const cl=Math.max(Math.abs(L1-L2)+0.05,Math.min(d,L1+L2-0.05)),ex=o[0]+dx/d*cl,ey=o[1]+dy/d*cl,a=Math.atan2(ey-o[1],ex-o[0]);
   const A=Math.acos(Math.max(-1,Math.min(1,(L1*L1+cl*cl-L2*L2)/(2*L1*cl)))),g=a+(flip?A:-A);
@@ -150,6 +204,7 @@ function leg(c,hx,hy,th,fl,W,col,pts,from){const kx=hx+Math.sin(th)*5.8,ky=hy+Ma
   limb(c,fx,fy,fx+Math.sin(th-fl+1.1)*2,fy+Math.cos(th-fl+1.1)*0.9,W,col);
   return null;}
 function drawBody(c,p,col,o){
+  if(STYLE.on)return drawBodyStyled(c,p,col,o);
   c.lineCap='round';c.lineJoin='round';roundSet=true;
   const W=o.lw||2,dc=dk(col,0.32),hp=[p.px,p.py],pts=!!(o.robe||o.over||o.legs);
   const M=add(hp,rot(0,-4.6,p.pl)),a2=p.pl+p.cb,C=add(M,rot(0,-4.6,a2)),N=add(C,rot(0,-1.3,a2));
@@ -175,6 +230,45 @@ function drawBody(c,p,col,o){
   roundSet=false;
   return J;}
 
+/* (المرحلة 9ج) drawBody بالنمط المظلَّل (style-v5): نفس الهيكل والخطافات، والأطراف والجذع والرقبة كبسولات
+   أسمك بـ STYLE.thick، والرأس أكبر بـ STYLE.head بتدرج دائري ولمعة في العين، والقدم أغمق قليلاً.
+   نقاط الساقين تُحفظ لكل وحدة هنا (الكلاسيكية لا تقرؤها) */
+const TOE=[0,0];
+function legStyled(c,hx,hy,th,fl,W,col,pts){const h=pts.h,k=pts.k,f=pts.f;
+  h[0]=hx;h[1]=hy;k[0]=hx+Math.sin(th)*5.8;k[1]=hy+Math.cos(th)*5.8;f[0]=k[0]+Math.sin(th-fl)*6;f[1]=k[1]+Math.cos(th-fl)*6;
+  TOE[0]=f[0]+Math.sin(th-fl+1.1)*2;TOE[1]=f[1]+Math.cos(th-fl+1.1)*0.9;
+  capsule(c,h,k,f,W,col);capsule(c,f,TOE,null,W,dk(col,0.1));return pts;}
+function headGrad(c,col,hr){const m=gradMap(GR_HEAD,c,col);let g=m.get(hr);
+  if(!g){g=c.createRadialGradient(-hr*0.35,-hr*0.4,hr*0.1,0,0,hr*1.05);g.addColorStop(0,lt(col,0.38));g.addColorStop(0.6,col);g.addColorStop(1,dk(col,0.28));m.set(hr,g);}
+  return g;}
+function drawBodyStyled(c,p,col,o){
+  c.lineCap='round';c.lineJoin='round';roundSet=true;
+  const W=(o.lw||2)*STYLE.thick,dc=dk(col,0.32),hp=[p.px,p.py];
+  const M=add(hp,rot(0,-4.6,p.pl)),a2=p.pl+p.cb,C=add(M,rot(0,-4.6,a2)),N=add(C,rot(0,-1.3,a2));
+  const ha=a2+p.ht,H=add(add(N,rot(0,-3.1,ha)),[p.hdx,p.hdy]);
+  const Sb=add(C,rot(-0.9,0.7,a2)),Sf=add(C,rot(0.9,0.5,a2));
+  const J={hip:hp,mid:M,chest:C,neck:N,head:H,ha,Sf,Sb,a2,pl:p.pl,legB:null,legF:null};
+  J.legB=legStyled(c,p.px-1.2,p.py,p.tb,p.kb,W,dc,LEG_B);
+  o.backWeapon&&o.backWeapon(c,J,p,col);
+  const b=ik2(Sb,p.bh,3.7,3.7,true);capsule(c,Sb,b.j,b.e,W-0.1,dc);J.handB=b.e;
+  o.back&&o.back(c,J,p,col);
+  capsule(c,hp,M,C,W+0.5,col);capsule(c,C,N,null,W*0.8,col);
+  o.chest&&o.chest(c,J,p,col);
+  J.legF=legStyled(c,p.px+1.2,p.py,p.tf,p.kf,W,col,LEG_F);
+  o.robe&&o.robe(c,J,p,col);o.over&&o.over(c,J,p,col);
+  const hr=(o.headR||3)*STYLE.head;
+  c.save();c.translate(H[0],H[1]);c.rotate(ha);
+  c.beginPath();c.arc(0,0,hr,0,TAU);c.fillStyle=headGrad(c,col,hr);c.fill();c.lineWidth=0.7;c.strokeStyle=dk(col,0.4);c.stroke();
+  c.beginPath();c.arc(1.5,-0.3,0.6,0,TAU);Pf(c,dk(col,0.65));
+  c.beginPath();c.arc(1.3,-0.5,0.2,0,TAU);Pf(c,'rgba(255,255,255,0.7)');
+  o.head&&o.head(c,p,col);c.restore();
+  const f=ik2(Sf,p.fh,3.7,3.7,true);J.handF=f.e;J.elbowF=f.j;
+  o.weapon&&o.weapon(c,J,p,col);
+  capsule(c,Sf,f.j,f.e,W,col);
+  o.front&&o.front(c,J,p,col);
+  roundSet=false;
+  return J;}
+
 /* ===================== إضافات اللعبة (ليست في المرجع) =====================
    الرماة: مفاتيح على نفس الخط الزمني القياسي (0 حراسة، 0.34 قمة الاستعداد، 0.44 الإطلاق،
    0.53 نهاية التجمّد، 1 حراسة). الإطلاق الفعلي في اللعبة عند 0.47 (COMBAT.hitMoment). */
@@ -196,6 +290,7 @@ const wdir=a=>[Math.cos(a),Math.sin(a)];
 
 export {
   TAU, WOOD, STEEL, DARKW, SKIN, Pf, ease, dk, lt, limb, bone3, ell, rrect, tri, rot, add, ik2,
+  STYLE, isHex, shadeEll, fillLinear, capsule, glowOne, flame, flameLayers, softShadow,
   BASE, GUARD, P, mixPose, keyPose, G, ATK, DODGE, BLOCK,
   poseIdle, poseWalk, poseStagger, addFlinch, poseDeath, poseDown, downAngle, leg, drawBody, wdir
 };

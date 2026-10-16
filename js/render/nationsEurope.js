@@ -3,11 +3,15 @@
    حقول السلاح (wlen وtwoH وtipLen وbutt)، وحلقات الأبطال، ونسخة مبسّطة لكل وحدة (الجسد وغطاء الرأس والثياب
    والسلاح، بلا خطوط ولا نقوش صغيرة)، والنقاط أعداد مباشرة بلا مصفوفات جديدة في كل إطار (at وtorso في nationArt.js).
    - حامل الراية بلا رايته حين يغرسها (النوع champion_away، unit.awayUntil): يقاتل بالسيف القصير
-   - لوح الجذع torso مشترك بين الدفعات 3 و4 و5 (nationArt.js) */
+   - لوح الجذع torso مشترك بين الدفعات 3 و4 و5 (nationArt.js)
+   (المرحلة 9ج) بالنمط المظلَّل: المعطف والنصال وخطوط الراية أشكال مستقلة في النسخ الكاملة (تأخذ تدرجها)،
+   وكرات اللاندسكنخت المنفوخة أصغر (batch3 المحدث)، وتفاصيل skins-v6.js: حزام وأساور القميص لفرنسا، وشريط
+   القبعة النحاسي والياقة والأكمام لبريطانيا، وصدرية ألمانيا بخطوط ملونة وحزام بحقيبة وشقوق السراويل. */
 import { TAU, dk, lt, limb, ell, rrect } from './anim.js';
 import { heroRing } from './bodies.js';
 import {
-  registerNation, both, memo, STEEL2, pg, dot, belt, staff, ellTo, triTo, at, PT, torso, hStripes, vStripes
+  registerNation, both, memo, STEEL2, pg, dot, belt, staff, ellTo, triTo, at, PT, torso, hStripes, vStripes,
+  collarV, armband, cuff, pouchX
 } from './nationArt.js';
 
 const RED2 = '#c22f2f', COAL = '#3a3a3e', BRASS = '#c9a04a', LGOLD = '#d9a83a', CUIR = '#b8bec6';
@@ -66,12 +70,13 @@ function strap(c, J, cxo, cyo, hxo, hyo, w, col) {
   at(J.hip, hxo, hyo, J.pl); limb(c, ax, ay, PT.x, PT.y, w, col);
 }
 // معطف طويل خلف الجسد حتى الساق: من الكتف (back) إلى الحاشية عند (hbx, hby) بعرض hem خلفها
+// (الكاملة بحافتها مضلع pg يأخذ تدرجه بالنمط المظلَّل)
 function longCoat(c, J, hbx, hby, back, hem, fill, edge) {
   at(J.chest, back, -0.6, J.a2); const ax = PT.x, ay = PT.y;
   at(J.chest, 1.2, -0.4, J.a2);
+  if (edge) { pg(c, [[ax, ay], [PT.x, PT.y], [hbx + 1.4, hby], [hbx - hem, hby]], fill, edge, 0.8); return; }
   c.beginPath(); c.moveTo(ax, ay); c.lineTo(PT.x, PT.y); c.lineTo(hbx + 1.4, hby); c.lineTo(hbx - hem, hby); c.closePath();
   c.fillStyle = fill; c.fill();
-  if (edge) { c.strokeStyle = edge; c.lineWidth = 0.8; c.stroke(); }
 }
 
 // ---------- الأسلحة ----------
@@ -128,10 +133,12 @@ function barrelLid(c, J, lite) {
 function katzbalger(c, J, p, lite) {
   const dx = Math.cos(p.wa), dy = Math.sin(p.wa), nx = -dy, ny = dx, hx = J.handF[0], hy = J.handF[1];
   const ax = hx + dx, ay = hy + dy;
-  c.beginPath(); c.moveTo(ax, ay);
-  c.lineTo(hx + dx * 6 + nx * 0.6, hy + dy * 6 + ny * 0.6); c.lineTo(hx + dx * 6.8, hy + dy * 6.8);
-  c.lineTo(hx + dx * 6 - nx * 0.6, hy + dy * 6 - ny * 0.6); c.closePath();
-  c.fillStyle = STEEL2; c.fill();
+  if (lite) {
+    c.beginPath(); c.moveTo(ax, ay);
+    c.lineTo(hx + dx * 6 + nx * 0.6, hy + dy * 6 + ny * 0.6); c.lineTo(hx + dx * 6.8, hy + dy * 6.8);
+    c.lineTo(hx + dx * 6 - nx * 0.6, hy + dy * 6 - ny * 0.6); c.closePath();
+    c.fillStyle = STEEL2; c.fill();
+  } else pg(c, [[ax, ay], [hx + dx * 6 + nx * 0.6, hy + dy * 6 + ny * 0.6], [hx + dx * 6.8, hy + dy * 6.8], [hx + dx * 6 - nx * 0.6, hy + dy * 6 - ny * 0.6]], STEEL2);
   if (!lite) {
     c.beginPath(); c.moveTo(ax + nx * 1.8, ay + ny * 1.8);
     c.quadraticCurveTo(ax + nx * 0.6 - dx, ay + ny * 0.6 - dy, ax, ay);
@@ -162,6 +169,14 @@ function bigBanner(c, J, p, col, lite) {
   limb(c, hx - 0.6, hy + 6, tx, ty, 1, '#5a4632');
   dot(c, tx, ty, 0.9, BRASS);
   const t = (p.cb || 0) * 2;
+  if (!lite) {                                       // الكاملة: كل خط مضلع مستقل يأخذ تدرجه (كالمرجع)
+    for (let k = 0; k < 5; k++) {
+      const y0 = ty + 1 + k * 2, wv = Math.sin(k * 0.9 + t) * 0.8;
+      pg(c, [[tx - 0.2, y0], [tx - 11, y0 + wv], [tx - 11, y0 + 2 + wv], [tx - 0.2, y0 + 2]], k % 2 ? LGOLD : col);
+    }
+    pg(c, [[tx - 11, ty + 1], [tx - 14, ty + 3.5], [tx - 11, ty + 6]], LGOLD);
+    return;
+  }
   for (let pass = 0; pass < 2; pass++) {             // الخطوط بلونين: رسمة لكل لون
     c.beginPath();
     for (let k = pass; k < 5; k += 2) {
@@ -186,19 +201,35 @@ function puff(c, x, y, r, col, alt, lite) {
   c.strokeStyle = alt; c.lineWidth = 0.5; c.stroke();
 }
 const puffDark = memo(col => dk(col, 0.2));
+// الكرات المنفوخة على الفخذين، وفي الكاملة (skins-v6) شقوق ملونة فوقها
 function landsLegs(c, J, col, lite) {
   const B = J.legB, F = J.legF;
-  puff(c, B.h[0] + (B.k[0] - B.h[0]) * 0.45, B.h[1] + (B.k[1] - B.h[1]) * 0.45, 2.1, puffDark(col), LGOLD, lite);
-  puff(c, F.h[0] + (F.k[0] - F.h[0]) * 0.45, F.h[1] + (F.k[1] - F.h[1]) * 0.45, 2.2, col, CREAM_SHIRT, lite);
+  puff(c, B.h[0] + (B.k[0] - B.h[0]) * 0.45, B.h[1] + (B.k[1] - B.h[1]) * 0.45, 1.7, puffDark(col), LGOLD, lite);
+  puff(c, F.h[0] + (F.k[0] - F.h[0]) * 0.45, F.h[1] + (F.k[1] - F.h[1]) * 0.45, 1.8, col, CREAM_SHIRT, lite);
+  if (lite) return;
+  for (let n = 0; n < 2; n++) {
+    const L = n ? F : B, x = L.h[0] + (L.k[0] - L.h[0]) * 0.45, y = L.h[1] + (L.k[1] - L.h[1]) * 0.45;
+    limb(c, x - 0.9, y - 1.4, x - 0.6, y + 1.4, 0.55, n ? RED2 : CREAM_SHIRT);
+    limb(c, x + 0.8, y - 1.4, x + 1, y + 1.4, 0.55, LGOLD);
+  }
 }
 function landsSleeve(c, J, col, lite) {
-  if (J.elbowF) puff(c, (J.Sf[0] + J.elbowF[0]) / 2, (J.Sf[1] + J.elbowF[1]) / 2, 1.8, LGOLD, col, lite);
+  if (J.elbowF) puff(c, (J.Sf[0] + J.elbowF[0]) / 2, (J.Sf[1] + J.elbowF[1]) / 2, 1.5, LGOLD, col, lite);
 }
-const DOUBLET_SLASHES = [0.25, 0.5, 0.75], BRACES = [0.25, 0.75], MIDLINE = [0.5];
+const BRACES = [0.25, 0.75], MIDLINE = [0.5];
+// الصدرية المشقوقة: في الكاملة (skins-v6) أربعة خطوط طولية ملونة (أبيض وأحمر وذهبي وأبيض)
+const DOUBLET_BANDS = [[0, CREAM_SHIRT], [1, RED2], [2, LGOLD], [3, CREAM_SHIRT]];
 function landsDoublet(c, J, col, lite) {
   const T = torso(c, J, col, lite ? null : dk(col, 0.3));
-  if (!lite) vStripes(c, T, DOUBLET_SLASHES, LGOLD, 0.6);
+  if (lite) return;
+  for (const [k, band] of DOUBLET_BANDS) {
+    const u0 = 0.12 + k * 0.21, u1 = u0 + 0.09;
+    pg(c, [[T.x0 + (T.x1 - T.x0) * u0, T.y0 + (T.y1 - T.y0) * u0], [T.x0 + (T.x1 - T.x0) * u1, T.y0 + (T.y1 - T.y0) * u1],
+           [T.x3 + (T.x2 - T.x3) * u1, T.y3 + (T.y2 - T.y3) * u1], [T.x3 + (T.x2 - T.x3) * u0, T.y3 + (T.y2 - T.y3) * u0]], band);
+  }
 }
+// حزام بحقيبة (skins-v6)
+function landsBelt(c, J) { belt(c, J, '#5a3a22', 1.3); pouchX(c, J, -2, '#6a4428'); }
 
 // ---------- فرنسا «الأباتشي» (نمط الخاطف) ----------
 // القميص المخطط: أبيض بخطوط بلون اللاعب (المبسّطة: القميص بلا خطوط)
@@ -206,31 +237,37 @@ function stripedShirt(c, J, col, lite) {
   const T = torso(c, J, CREAM_SHIRT, lite ? null : dk(col, 0.3));
   if (!lite) hStripes(c, T, 4, col, 0.8);
 }
+// أساور القميص الأبيض على الساعد والعضد (skins-v6)
+function sleeves(c, J) { cuff(c, J, CREAM_SHIRT); armband(c, J, CREAM_SHIRT, null, 0.35); }
 function france(lite) {
+  const front = lite ? undefined : sleeves;
   return {
-    common: { sx: 0.96, sy: 1.04, lw: 2.8, headR: 3.4, wlen: 4.6,
+    common: { sx: 0.96, sy: 1.04, lw: 2.8, headR: 3.5, wlen: 4.6,
       head: apacheCap,
       chest: (c, J, p, col) => stripedShirt(c, J, col, lite),
-      over: lite ? undefined : (c, J) => neckerchief(c, J, RED2),
+      over: lite ? undefined : (c, J) => { neckerchief(c, J, RED2); belt(c, J, '#2b2b30', 1.3); },
+      front,
       weapon: (c, J, p) => knife(c, J, p.wa, 4.6, J.handF) },
-    spear: { sx: 0.97, sy: 1.05, lw: 2.8, headR: 3.4, wlen: 9, butt: 2.4,
+    spear: { sx: 0.97, sy: 1.05, lw: 2.8, headR: 3.5, wlen: 9, butt: 2.4,
       head: apacheCap,
       chest: (c, J, p, col) => stripedShirt(c, J, col, lite),
-      over: lite ? undefined : (c, J) => neckerchief(c, J, RED2),
+      over: lite ? undefined : (c, J) => { neckerchief(c, J, RED2); belt(c, J, '#2b2b30', 1.3); },
+      front,
       weapon: (c, J, p) => cane(c, J, p, 2.4, 9, 1, '#3a2a22', '#d9d4c8', 0.9) },
-    dual: { sx: 0.94, sy: 1.05, lw: 2.7, headR: 3.4, wlen: 4.4,
+    dual: { sx: 0.94, sy: 1.05, lw: 2.7, headR: 3.5, wlen: 4.4,
       head(c) { ell(c, -0.4, -1.6, 3.7, 2.3, '#2b2b30'); },
       chest(c, J, p, col) {                      // صدرية بلون اللاعب وحمالة بيضاء
         torso(c, J, col, lite ? null : dk(col, 0.3));
         if (!lite) strap(c, J, -1.8, 0, -1.8, -1, 0.6, CREAM_SHIRT);
       },
       over: lite ? undefined : (c, J) => { neckerchief(c, J, RED2); belt(c, J, RED2, 1.6); },
+      front,
       back(c, J, p) {                            // السكين الثانية في اليد الخلفية
         const a = p.wa + 0.8, hx = J.handB[0], hy = J.handB[1];
         limb(c, hx, hy, hx + Math.cos(a) * 4, hy + Math.sin(a) * 4, 1, STEEL2);
       },
       weapon: (c, J, p) => knife(c, J, p.wa, 4.4, J.handF) },
-    champion: { sx: 1.0, sy: 1.07, lw: 3, headR: 3.5, wlen: 5.6,
+    champion: { sx: 1.0, sy: 1.07, lw: 3.0, headR: 3.5, wlen: 5.6,
       ground: heroRing,
       head: (c) => bowler(c, lite),
       back(c, J, p, col) {                       // المعطف الطويل
@@ -238,7 +275,8 @@ function france(lite) {
         longCoat(c, J, hbx, hby, -2.6, 3.6, '#2b2b30', lite ? null : dk(col, 0.2));
       },
       chest: (c, J, p, col) => stripedShirt(c, J, col, lite),
-      over: lite ? undefined : (c, J) => { neckerchief(c, J, RED2); strap(c, J, 1.9, 0.4, 2.4, -1, 1.2, '#2b2b30'); },
+      over: lite ? undefined : (c, J) => { neckerchief(c, J, RED2); strap(c, J, 1.9, 0.4, 2.4, -1, 1.2, '#2b2b30'); belt(c, J, '#2b2b30', 1.3); },
+      front,
       weapon: (c, J, p) => apachePistol(c, J, p, lite) }
   };
 }
@@ -257,28 +295,37 @@ function waistcoat(c, J, col, lite) {
   c.fillStyle = BRASS; c.fill();
 }
 const scarfCol = memo(col => dk(col, 0.1));
+// القبعة المسطحة، وفي الكاملة (skins-v6) شريط نحاسي عليها
+function smallHeathCap(c, col, tilt, lite) {
+  flatCap(c, col, tilt);
+  if (lite) return;
+  c.rotate(0.18); ell(c, -0.3, -1.2, 4, 0.4, BRASS); c.rotate(-0.18);
+}
+const SLEEVE_ROLL = '#e8e0cc';
 function britain(lite) {
   return {
-    common: { sx: 1.04, sy: 1.0, lw: 3.1, headR: 3.6, wlen: 6,
-      head: (c) => flatCap(c, '#4a4640', 0.2),
+    common: { sx: 0.98, sy: 1.04, lw: 2.9, headR: 3.5, wlen: 6,
+      head: (c) => smallHeathCap(c, '#4a4640', 0.2, lite),
       chest: (c, J, p, col) => waistcoat(c, J, col, lite),
-      over: lite ? undefined : (c, J, p, col) => neckerchief(c, J, scarfCol(col)),
+      over: lite ? undefined : (c, J, p, col) => { neckerchief(c, J, scarfCol(col)); collarV(c, J, CREAM_SHIRT); },
+      front: lite ? undefined : (c, J) => cuff(c, J, SLEEVE_ROLL),
       weapon: (c, J, p) => buckleBelt(c, J, p, lite) },
-    armored: { sx: 1.1, sy: 0.98, lw: 3.4, headR: 3.7, wlen: 3,
-      head: (c) => flatCap(c, '#3e3a36', 0.15),
+    armored: { sx: 0.98, sy: 1.04, lw: 2.9, headR: 3.5, wlen: 3,
+      head: (c) => smallHeathCap(c, '#3e3a36', 0.15, lite),
       chest: (c, J, p, col) => waistcoat(c, J, col, lite),
-      front: (c, J) => barrelLid(c, J, lite) },
-    smasher: { sx: 1.14, sy: 1.0, lw: 3.6, headR: 3.8, wlen: 1.5,
+      over: lite ? undefined : (c, J) => collarV(c, J, CREAM_SHIRT),
+      front(c, J) { barrelLid(c, J, lite); if (!lite) cuff(c, J, SLEEVE_ROLL); } },
+    smasher: { sx: 0.98, sy: 1.04, lw: 2.9, headR: 3.5, wlen: 1.5,
       head(c) { ell(c, -0.6, -2.4, 3.2, 1.4, '#3a2e26'); },
       chest(c, J, p, col) {                      // قميص فاتح وحمالتان
         const T = torso(c, J, lt(col, 0.6), lite ? null : dk(col, 0.3));
         if (!lite) vStripes(c, T, BRACES, '#3a2e26', 0.8);
       },
-      front: (c, J) => knuckles(c, J.handF),
+      front(c, J) { knuckles(c, J.handF); if (!lite) cuff(c, J, SLEEVE_ROLL); },
       back: (c, J) => knuckles(c, J.handB) },
-    champion: { sx: 1.06, sy: 1.06, lw: 3.2, headR: 3.6, wlen: 8,
+    champion: { sx: 1.0, sy: 1.06, lw: 3.0, headR: 3.5, wlen: 8,
       ground: heroRing,
-      head: (c) => flatCap(c, '#2e2c2a', 0.22),
+      head: (c) => smallHeathCap(c, '#2e2c2a', 0.22, lite),
       back(c, J, p, col) {                       // المعطف الطويل
         const L = J.legB, hbx = L.k[0] + (L.f[0] - L.k[0]) * 0.55, hby = L.k[1] + (L.f[1] - L.k[1]) * 0.55;
         longCoat(c, J, hbx, hby, -2.8, 4, '#3a3632', lite ? null : dk(col, 0.2));
@@ -291,7 +338,7 @@ function britain(lite) {
         c.beginPath(); c.moveTo(ax, ay); c.quadraticCurveTo((ax + bx) / 2, (ay + by) / 2 + 1.2, bx, by);
         c.strokeStyle = BRASS; c.lineWidth = 0.5; c.stroke();
       },
-      over: lite ? undefined : (c, J) => neckerchief(c, J, '#7a1f2a'),
+      over: lite ? undefined : (c, J) => { neckerchief(c, J, '#7a1f2a'); collarV(c, J, CREAM_SHIRT); },
       weapon: (c, J, p) => cane(c, J, p, 1.6, 8, 0.9, '#2a2220', '#d9dde2', 1.1) }
   };
 }
@@ -303,30 +350,31 @@ function germany(lite) {
   const doublet = (c, J, p, col) => landsDoublet(c, J, col, lite);
   const legs = (c, J, p, col) => landsLegs(c, J, col, lite);
   const sleeve = (c, J, p, col) => landsSleeve(c, J, col, lite);
-  const bannerBearer = (planted) => ({ sx: 1.06, sy: 1.06, lw: 3.2, headR: 3.6,
+  const over = lite ? undefined : landsBelt;
+  const bannerBearer = (planted) => ({ sx: 1.0, sy: 1.06, lw: 3.0, headR: 3.5,
     ground: heroRing,
     head: (c, p, col) => landsHat(c, hat10(col), true, lite),
-    chest: doublet, robe: legs, front: sleeve,
+    chest: doublet, robe: legs, over, front: sleeve,
     // يحمل الراية بيديه، وحين يغرسها يقاتل بالسيف القصير
     ...(planted ? { wlen: 6.8, weapon: (c, J, p) => katzbalger(c, J, p, lite) }
                 : { wlen: 20, twoH: true, tipLen: 6, weapon: (c, J, p, col) => bigBanner(c, J, p, col, lite) }) });
   return {
-    common: { sx: 1.02, sy: 1.02, lw: 3, headR: 3.5, wlen: 6.8,
+    common: { sx: 0.98, sy: 1.04, lw: 2.9, headR: 3.5, wlen: 6.8,
       head: (c, p, col) => landsHat(c, hat15(col), false, lite),
-      chest: doublet, robe: legs, front: sleeve,
+      chest: doublet, robe: legs, over, front: sleeve,
       weapon: (c, J, p) => katzbalger(c, J, p, lite) },
-    armored: { sx: 1.08, sy: 1.0, lw: 3.3, headR: 3.6, wlen: 14, twoH: true, tipLen: 16.6, butt: 5,
+    armored: { sx: 0.98, sy: 1.04, lw: 2.9, headR: 3.5, wlen: 14, twoH: true, tipLen: 16.6, butt: 5,
       head: morion,
       chest(c, J, p, col) {                      // صدرية مشقوقة ودرع صدر فولاذي فوقها
         landsDoublet(c, J, col, lite);
         const T = torso(c, J, CUIR, lite ? null : '#7a8088', 0.4);
         if (!lite) vStripes(c, T, MIDLINE, '#e6eaee', 0.6);
       },
-      robe: legs, front: sleeve,
+      robe: legs, over, front: sleeve,
       weapon: pike },
-    smasher: { sx: 1.12, sy: 1.02, lw: 3.5, headR: 3.7, wlen: 13, twoH: true, tipLen: 13, butt: 3,
+    smasher: { sx: 0.98, sy: 1.04, lw: 2.9, headR: 3.5, wlen: 13, twoH: true, tipLen: 13, butt: 3,
       head: (c, p, col) => landsHat(c, hat20(col), false, lite),
-      chest: doublet, robe: legs, front: sleeve,
+      chest: doublet, robe: legs, over, front: sleeve,
       weapon: (c, J, p) => zweihander(c, J, p, lite) },
     champion: bannerBearer(false),
     champion_away: bannerBearer(true)

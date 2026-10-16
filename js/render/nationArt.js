@@ -6,8 +6,7 @@
    أدوات الرسم المشتركة هنا منقولة من docs/nations/batch1-skins.js (تتكرر في الدفعات الأخرى)،
    وتعريفات كل دفعة في ملفها (nationsArab.js للدفعة العربية). */
 import { BODIES, dashedRing } from './bodies.js';
-import { PERFORMANCE } from '../config.js';
-import { limb } from './anim.js';
+import { limb, dk, lt, rrect, tri, STYLE, isHex, shadeEll, fillLinear } from './anim.js';
 
 // أمة ← نوع الوحدة (common، الشخصيتان المميزتان، champion، و'<نوع>_away') ← [مفتاح الكامل، مفتاح المبسّط]
 export const NATION_ART = {};
@@ -46,13 +45,14 @@ export function both(make) {
 }
 
 // مفتاح رسم وحدة الأمة حسب مستوى تفصيلها، أو null (عصابة كلاسيكية أو أمة بلا مظهر بعد)
-// النسخة الكاملة لوحدات المستوى الكامل حين تكون الكاميرا قريبة بما يكفي لرؤية تفاصيلها
-export function nationArtKey(unit, kind, time, zoom) {
+// (المرحلة 9ج) النسخة الكاملة بكل تفاصيلها لوحدات المستوى الكامل (أقرب 60 وحدة، القسم 5.4.5) وتُرسم بالنمط
+// المظلَّل، والمبسّطة لغيرها بالرسم القديم
+export function nationArtKey(unit, kind, time) {
   const art = NATION_ART[unit.nation];
   if (!art) return null;
   const away = unit.awayUntil > time ? art[kind + '_away'] : null;
   const keys = away || art[kind] || art.common;
-  return unit.lod === 'full' && zoom >= PERFORMANCE.nationFullZoom ? keys[0] : keys[1];
+  return unit.lod === 'full' ? keys[0] : keys[1];
 }
 
 // ---------- ألوان ----------
@@ -86,13 +86,32 @@ export const auraHealRings = (c, col, t) => {
 // تُرسم مئات الوحدات في كل إطار: الأدوات تحسب نقاطها أعداداً مباشرة بلا مصفوفات جديدة،
 // والأشكال بلون واحد تُجمع في مسار واحد ورسمة واحدة (نفس الشكل تماماً بأوامر أقل)
 export const lp = (A, B, t) => [A[0] + (B[0] - A[0]) * t, A[1] + (B[1] - A[1]) * t];
+// (المرحلة 9ج) بالنمط المظلَّل: المضلع الكبير بلون واحد (مساحة إطاره أكثر من 10) يُملأ بتدرج من زاوية إطاره
+// العليا اليسرى إلى السفلى اليمنى وحافة داكنة خفيفة إن لم تكن له حافة، كما في style-v5
 export function pg(c, pts, f, st, w) {
   c.beginPath(); c.moveTo(pts[0][0], pts[0][1]);
-  for (let i = 1; i < pts.length; i++) c.lineTo(pts[i][0], pts[i][1]);
-  c.closePath(); c.fillStyle = f; c.fill();
+  let x0 = pts[0][0], y0 = pts[0][1], x1 = x0, y1 = y0;
+  for (let i = 1; i < pts.length; i++) {
+    const x = pts[i][0], y = pts[i][1];
+    c.lineTo(x, y);
+    if (x < x0) x0 = x; else if (x > x1) x1 = x;
+    if (y < y0) y0 = y; else if (y > y1) y1 = y;
+  }
+  c.closePath();
+  shadeFill(c, f, st, w, x0, y0, x1, y1);
+}
+// ملء المسار الجاري بلون f وحده st، أو بتدرج النمط المظلَّل إن كان مشغلاً والشكل كبيراً (إطاره x0,y0 إلى x1,y1)
+function shadeFill(c, f, st, w, x0, y0, x1, y1) {
+  if (STYLE.on && (x1 - x0) * (y1 - y0) > 10 && isHex(f)) {
+    fillLinear(c, f, x0, y0, x1, y1);
+    c.strokeStyle = st || dk(f, 0.35); c.lineWidth = st ? (w || 0.5) : 0.45; c.stroke();
+    return;
+  }
+  c.fillStyle = f; c.fill();
   if (st) { c.strokeStyle = st; c.lineWidth = w || 0.5; c.stroke(); }
 }
-export function circ(c, P, r, f) { c.beginPath(); c.arc(P[0], P[1], r, 0, 6.2831853); c.fillStyle = f; c.fill(); }
+// دائرة: بالنمط المظلَّل الكبيرة منها (نصف قطرها أكثر من 1.58) بتدرج دائري كالشكل البيضاوي (circ2 في المرجع)
+export function circ(c, P, r, f) { dot(c, P[0], P[1], r, f); }
 // نقطة على الساق: 0 الورك، 0.5 الركبة، 1 القدم
 export function legPt(L, t) { return t <= 0.5 ? lp(L.h, L.k, t / 0.5) : lp(L.k, L.f, (t - 0.5) / 0.5); }
 
@@ -121,10 +140,34 @@ export function robe(c, J, len, fill, edge, top, flare) {
   }
   c.lineTo(RB.fx, RB.fy); c.lineTo(RB.bx, RB.by);
   if (top === 'chest') c.lineTo(RB.w1x, RB.w1y);
-  c.closePath(); c.fillStyle = fill; c.fill();
+  c.closePath();
+  if (STYLE.on && isHex(fill)) { robeShaded(c, J, fill, edge, top); return RB; }
+  c.fillStyle = fill; c.fill();
   if (edge) { c.strokeStyle = edge; c.lineWidth = 0.5; c.stroke(); }
   return RB;
 }
+// الثوب بالنمط المظلَّل (robe في style-v5): تدرج وحافة، وطيّتان من الخصر إلى الحاشية، وخط داكن على الحاشية
+function robeShaded(c, J, fill, edge, top) {
+  let x0 = Math.min(RB.w1x, RB.w2x, RB.fx, RB.bx), x1 = Math.max(RB.w1x, RB.w2x, RB.fx, RB.bx);
+  let y0 = Math.min(RB.w1y, RB.w2y, RB.fy, RB.by), y1 = Math.max(RB.w1y, RB.w2y, RB.fy, RB.by);
+  if (top === 'chest') {
+    const cb = Math.cos(J.a2), sb = Math.sin(J.a2), cx = J.chest[0], cy = J.chest[1];
+    const ax = cx - 2.1 * cb - 0.5 * sb, ay = cy - 2.1 * sb + 0.5 * cb, bx = cx + 2.3 * cb - 0.5 * sb, by = cy + 2.3 * sb + 0.5 * cb;
+    x0 = Math.min(x0, ax, bx); x1 = Math.max(x1, ax, bx); y0 = Math.min(y0, ay, by); y1 = Math.max(y1, ay, by);
+  }
+  shadeFill(c, fill, edge, 0.5, x0, y0, x1, y1);
+  c.beginPath();
+  for (const t of ROBE_FOLDS) {
+    const u = t + (t - 0.5) * 0.3;
+    const ax = RB.w1x + (RB.w2x - RB.w1x) * t, ay = RB.w1y + (RB.w2y - RB.w1y) * t;
+    const bx = RB.bx + (RB.fx - RB.bx) * u, by = RB.by + (RB.fy - RB.by) * u;
+    c.moveTo(ax, ay + 0.6); c.quadraticCurveTo((ax + bx) / 2 + 0.5, (ay + by) / 2, bx, by - 0.3);
+  }
+  const a = c.globalAlpha;
+  c.strokeStyle = dk(fill, 0.16); c.lineWidth = 0.5; c.globalAlpha = a * 0.8; c.stroke(); c.globalAlpha = a;
+  limb(c, RB.bx, RB.by, RB.fx, RB.fy, 0.6, dk(fill, 0.22));
+}
+const ROBE_FOLDS = [0.3, 0.62];
 // خطوط عرضية على آخر ثوب (إزار مخطط، حاشية): ts مواضعها من الخصر إلى الحاشية، والخطوط بلون واحد في رسمة واحدة
 export function stripes(c, ts, cols, w) {
   c.lineWidth = w || 0.9; c.lineCap = 'round';
@@ -138,10 +181,20 @@ export function stripes(c, ts, cols, w) {
     c.strokeStyle = cols[k]; c.stroke();
   }
 }
+// حزام على الحوض. بالنمط المظلَّل (belt في style-v5): جلد بحافة داكنة ولمعة، وإبزيم نحاسي للعريض منه
 export function belt(c, J, col, w) {
   const ca = Math.cos(J.pl), sa = Math.sin(J.pl), hx = J.hip[0], hy = J.hip[1];
-  limb(c, hx - 2.5 * ca + 1.3 * sa, hy - 2.5 * sa - 1.3 * ca, hx + 2.7 * ca + 1.3 * sa, hy + 2.7 * sa - 1.3 * ca, w || 1.5, col);
+  const ax = hx - 2.5 * ca + 1.3 * sa, ay = hy - 2.5 * sa - 1.3 * ca, bx = hx + 2.7 * ca + 1.3 * sa, by = hy + 2.7 * sa - 1.3 * ca;
+  w = w || 1.5;
+  if (!STYLE.on) { limb(c, ax, ay, bx, by, w, col); return; }
+  limb(c, ax, ay, bx, by, w + 0.5, dk(col, 0.45)); limb(c, ax, ay, bx, by, w, col);
+  limb(c, ax, ay - w * 0.25, bx, by - w * 0.25, w * 0.25, lt(col, 0.3));
+  if (w >= 1.1) {
+    const kx = ax + (bx - ax) * 0.72, ky = ay + (by - ay) * 0.72;
+    rrect(c, kx - w * 0.6, ky - w * 0.75, w * 1.2, w * 1.5, 0.25, BRASS_BUCKLE); rrect(c, kx - w * 0.3, ky - w * 0.4, w * 0.6, w * 0.8, 0.15, dk(col, 0.2));
+  }
 }
+const BRASS_BUCKLE = '#d9b45a';
 // عصا في اليد الأمامية: back خلف اليد وfwd أمامها. تعيد رأسها في SB (كائن ثابت) لمن يرسم عليه مقبضاً
 export const SB = { ax: 0, ay: 0, bx: 0, by: 0, dx: 0, dy: 0 };
 export function staff(c, J, p, back, fwd, w, col) {
@@ -151,7 +204,11 @@ export function staff(c, J, p, back, fwd, w, col) {
   return SB;
 }
 // دائرة ممتلئة بإحداثيين (بلا مصفوفة)
-export function dot(c, x, y, r, f) { c.beginPath(); c.arc(x, y, r, 0, 6.2831853); c.fillStyle = f; c.fill(); }
+export function dot(c, x, y, r, f) {
+  c.beginPath(); c.arc(x, y, r, 0, 6.2831853);
+  if (STYLE.on && r * r > 2.5 && isHex(f)) shadeEll(c, x, y, r, r, f);
+  else { c.fillStyle = f; c.fill(); }
+}
 // شكل بيضاوي يضاف إلى المسار الجاري (بلا خط يصله بما قبله)
 export function ellTo(c, x, y, rx, ry) { c.moveTo(x + rx, y); c.ellipse(x, y, rx, ry, 0, 0, 6.2831853); }
 // مثلث يضاف إلى المسار الجاري بدوران الشكل البيضاوي نفسه (مع عقارب الساعة على الشاشة):
@@ -182,8 +239,8 @@ export function torso(c, J, fill, st, inset, out) {
   T.x2 = hx + (2.6 - i) * cb + sb;        T.y2 = hy + (2.6 - i) * sb - cb;            // add(J.hip, rot(2.6-i, -1, pl))
   T.x3 = hx + (-2.4 + i) * cb + sb;       T.y3 = hy + (-2.4 + i) * sb - cb;           // add(J.hip, rot(-2.4+i, -1, pl))
   c.beginPath(); c.moveTo(T.x0, T.y0); c.lineTo(T.x1, T.y1); c.lineTo(T.x2, T.y2); c.lineTo(T.x3, T.y3); c.closePath();
-  c.fillStyle = fill; c.fill();
-  if (st) { c.strokeStyle = st; c.lineWidth = 0.5; c.stroke(); }
+  shadeFill(c, fill, st, 0.5, Math.min(T.x0, T.x1, T.x2, T.x3), Math.min(T.y0, T.y1, T.y2, T.y3),
+            Math.max(T.x0, T.x1, T.x2, T.x3), Math.max(T.y0, T.y1, T.y2, T.y3));
   return T;
 }
 // n خطوط عرضية على اللوح (قميص مخطط) بلون واحد في رسمة واحدة: من الحد الخلفي إلى الأمامي
@@ -263,3 +320,127 @@ export function glowAt(c, x, y, r, color) {
   c.save(); c.translate(x, y); c.fillStyle = g; c.beginPath(); c.arc(0, 0, r, 0, 6.2831853); c.fill(); c.restore();
 }
 
+// ---------- أدوات الزخرفة (المرحلة 9ج، من docs/nations/skins-v6.js) ----------
+// للنسخ الكاملة وحدها. حواف الثوب تقرأ آخر ثوب رُسم (RB) وحلقات العصا آخر عصا (SB)، كـ LAST_ROBE وLAST_STAFF
+// في المرجع، والأشكال المتكررة بلون واحد في مسار واحد ورسمة واحدة
+const EA = [0, 0], EB = [0, 0];
+function edgeAt(t) {              // عرض الثوب عند t (0 الخصر، 1 الحاشية): من حده الخلفي EA إلى الأمامي EB
+  EA[0] = RB.w1x + (RB.bx - RB.w1x) * t; EA[1] = RB.w1y + (RB.by - RB.w1y) * t;
+  EB[0] = RB.w2x + (RB.fx - RB.w2x) * t; EB[1] = RB.w2y + (RB.fy - RB.w2y) * t;
+}
+// شريط عرضي على الثوب من t0 إلى t1
+export function hemBand(c, t0, t1, col) {
+  edgeAt(t0); const a = [EA[0], EA[1]], b = [EB[0], EB[1]];
+  edgeAt(t1); pg(c, [a, b, [EB[0], EB[1]], [EA[0], EA[1]]], col);
+}
+// خط عرضي واحد على الثوب عند t
+export function hemLine(c, t, col, w) { edgeAt(t); limb(c, EA[0], EA[1], EB[0], EB[1], w, col); }
+// حافة متعرجة: n مثلثات على عرض الثوب عند t بارتفاع h
+export function hemZig(c, col, t, n, h) {
+  edgeAt(t || 0.88);
+  const N = n || 7, H = h || 1.3, w = Math.hypot(EB[0] - EA[0], EB[1] - EA[1]) / N * 0.42;
+  c.beginPath();
+  for (let k = 0; k < N; k++) {
+    const u = (k + 0.5) / N, x = EA[0] + (EB[0] - EA[0]) * u, y = EA[1] + (EB[1] - EA[1]) * u;
+    c.moveTo(x - w, y + H * 0.4); c.lineTo(x, y - H * 0.6); c.lineTo(x + w, y + H * 0.4); c.closePath();
+  }
+  c.fillStyle = col; c.fill();
+}
+// n معينات صغيرة على عرض الثوب عند t
+export function hemDiamonds(c, col, t, n) {
+  edgeAt(t || 0.6);
+  const N = n || 4;
+  c.beginPath();
+  for (let k = 0; k < N; k++) {
+    const u = (k + 0.5) / N, x = EA[0] + (EB[0] - EA[0]) * u, y = EA[1] + (EB[1] - EA[1]) * u;
+    c.moveTo(x, y - 0.9); c.lineTo(x + 0.6, y); c.lineTo(x, y + 0.9); c.lineTo(x - 0.6, y); c.closePath();
+  }
+  c.fillStyle = col; c.fill();
+}
+// أربع سحب صغيرة (قوسان لكل سحابة) على عرض الثوب عند t
+export function hemCloud(c, col, t) {
+  edgeAt(t || 0.82);
+  c.beginPath();
+  for (let k = 0; k < 4; k++) {
+    const u = (k + 0.5) / 4, x = EA[0] + (EB[0] - EA[0]) * u, y = EA[1] + (EB[1] - EA[1]) * u;
+    c.moveTo(x - 0.9, y); c.arc(x, y, 0.9, Math.PI, 0); c.arc(x + 1, y, 0.6, Math.PI, 0);
+  }
+  c.strokeStyle = col; c.lineWidth = 0.45; c.stroke();
+}
+// مريلة من الخصر إلى قرب الحاشية، وبحافتين ومعين وسطها إن كان لها لون حافة
+export function apron(c, col, trim) {
+  const tx = RB.w1x + (RB.w2x - RB.w1x) * 0.58, ty = RB.w1y + (RB.w2y - RB.w1y) * 0.58;
+  const bx = RB.bx + (RB.fx - RB.bx) * 0.62, by = RB.by + (RB.fy - RB.by) * 0.62;
+  pg(c, [[tx - 1.1, ty + 0.6], [tx + 1.1, ty + 0.6], [bx + 1.4, by - 0.4], [bx - 1.4, by - 0.4]], col);
+  if (!trim) return;
+  c.beginPath(); c.moveTo(tx - 1.1, ty + 0.6); c.lineTo(bx - 1.4, by - 0.4); c.moveTo(tx + 1.1, ty + 0.6); c.lineTo(bx + 1.4, by - 0.4);
+  c.strokeStyle = trim; c.lineWidth = 0.45; c.stroke();
+  const mx = tx + (bx - tx) * 0.55, my = ty + (by - ty) * 0.55;
+  c.beginPath(); c.moveTo(mx, my - 1); c.lineTo(mx + 0.7, my); c.lineTo(mx, my + 1); c.lineTo(mx - 0.7, my); c.closePath();
+  c.fillStyle = trim; c.fill();
+}
+// ياقة على شكل V عند الرقبة، وخط ثانٍ تحتها إن كان لها لون ثانٍ
+export function collarV(c, J, c1, c2) {
+  at(J.chest, -1.5, -1.4, J.a2); const ax = PT.x, ay = PT.y;
+  at(J.chest, 1.7, -1.4, J.a2); const bx = PT.x, by = PT.y;
+  at(J.chest, 0.7, 2.4, J.a2); const mx = PT.x, my = PT.y;
+  c.beginPath(); c.moveTo(ax, ay); c.lineTo(mx, my); c.lineTo(bx, by); c.strokeStyle = c1; c.lineWidth = 1.3; c.stroke();
+  if (c2) { c.beginPath(); c.moveTo(ax, ay + 0.5); c.lineTo(mx, my + 0.3); c.lineTo(bx, by + 0.5); c.strokeStyle = c2; c.lineWidth = 0.5; c.stroke(); }
+}
+// شريط على أعلى الذراع الأمامية (بين الكتف والمرفق عند t)، وزر وسطه إن كان له لون
+export function armband(c, J, col, trim, t) {
+  const S = J.Sf, E = J.elbowF;
+  if (!E) return;
+  const u = t || 0.55, px = S[0] + (E[0] - S[0]) * u, py = S[1] + (E[1] - S[1]) * u;
+  const dx = E[0] - S[0], dy = E[1] - S[1], L = Math.hypot(dx, dy) || 1, nx = -dy / L * 1.9, ny = dx / L * 1.9;
+  limb(c, px - nx, py - ny, px + nx, py + ny, 1.2, col);
+  if (trim) dot(c, px, py, 0.45, trim);
+}
+// كُمّ عند الساعد الأمامي
+export function cuff(c, J, col) {
+  const E = J.elbowF, H = J.handF;
+  if (!E) return;
+  const px = E[0] + (H[0] - E[0]) * 0.62, py = E[1] + (H[1] - E[1]) * 0.62;
+  const dx = H[0] - E[0], dy = H[1] - E[1], L = Math.hypot(dx, dy) || 1, nx = -dy / L * 1.8, ny = dx / L * 1.8;
+  limb(c, px - nx, py - ny, px + nx, py + ny, 0.9, col);
+}
+// شرّابة: عقدة وثلاثة خيوط متدلية بطول len
+export function tassel(c, x, y, col, len, knot) {
+  dot(c, x, y, 0.7, knot || GOLD);
+  const L = len || 3;
+  c.beginPath();
+  for (let k = -1; k <= 1; k++) { c.moveTo(x + k * 0.3, y + 0.5); c.lineTo(x + k * 0.4, y + L); }
+  c.strokeStyle = col; c.lineWidth = 0.4; c.stroke();
+}
+// لفائف الصنادل المتقاطعة على الساقين من الركبة إلى القدم (الخلفية أغمق)
+export function legWraps(c, J, col) {
+  for (let n = 0; n < 2; n++) {
+    const L = n ? J.legF : J.legB, k = L.k, f = L.f;
+    const ax = k[0] + (f[0] - k[0]) * 0.15, ay = k[1] + (f[1] - k[1]) * 0.15;
+    const bx = k[0] + (f[0] - k[0]) * 0.95, by = k[1] + (f[1] - k[1]) * 0.95;
+    c.beginPath();
+    for (let q = 0; q < 4; q++) {
+      const px = ax + (bx - ax) * q / 4, py = ay + (by - ay) * q / 4, qx = ax + (bx - ax) * (q + 1) / 4, qy = ay + (by - ay) * (q + 1) / 4;
+      c.moveTo(px - 1.3, py); c.lineTo(qx + 1.3, qy); c.moveTo(px + 1.3, py); c.lineTo(qx - 1.3, qy);
+    }
+    c.strokeStyle = n ? col : dk(col, 0.2); c.lineWidth = 0.4; c.stroke();
+  }
+}
+// حلقات نحاسية على آخر عصا رُسمت عند المواضع ts (0 مؤخرتها، 1 رأسها)
+export function staffBands(c, ts, col) {
+  const nx = -SB.dy * 1.1, ny = SB.dx * 1.1;
+  c.beginPath();
+  for (const t of ts) { const x = SB.ax + (SB.bx - SB.ax) * t, y = SB.ay + (SB.by - SB.ay) * t; c.moveTo(x - nx, y - ny); c.lineTo(x + nx, y + ny); }
+  c.strokeStyle = col; c.lineWidth = 0.8; c.stroke();
+}
+// حقيبة جلدية صغيرة على الحزام (side: موضعها على الحوض) بغطاء أفتح وزر نحاسي
+export function pouchX(c, J, side, col) {
+  at(J.hip, side, -0.6, J.pl); const x = PT.x, y = PT.y, f = col || '#7a5232';
+  rrect(c, x - 1.5, y - 0.3, 3, 2.6, 0.5, f); rrect(c, x - 1.5, y - 0.3, 3, 1.1, 0.4, lt(f, 0.15)); dot(c, x, y + 0.5, 0.3, '#d9b45a');
+}
+// خيط دخان متموج فوق نقطة (المبخرة)
+export function smokeWisp(c, x, y) {
+  const a = c.globalAlpha; c.globalAlpha = a * 0.55;
+  c.beginPath(); c.moveTo(x, y); c.bezierCurveTo(x + 1.6, y - 1.6, x - 1.4, y - 3, x + 0.4, y - 4.6); c.bezierCurveTo(x + 1.8, y - 5.8, x - 0.6, y - 7, x + 0.8, y - 8.4);
+  c.strokeStyle = '#c8c4bc'; c.lineWidth = 0.7; c.stroke(); c.globalAlpha = a;
+}
