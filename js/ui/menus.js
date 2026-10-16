@@ -12,7 +12,7 @@ import { savedMatchInfo } from '../matchSave.js';
 import { fadeIn, fadeOut, isShown } from './transition.js';
 import { showMenuScene, hideMenuScene } from './menuScene.js';
 import { setupBattleScreen } from './battleScreen.js';
-import { updateCityThumb } from './cityThumb.js';
+import { updateCityThumb, drawCardThumb } from './cityThumb.js';
 import { setupPicker, openPicker, isPickerOpen } from './picker.js';
 import { THEMES } from '../render/cityThemes.js';
 
@@ -185,11 +185,13 @@ function showCity() {
   updateCityThumb(el('cityThumb'), el('cityName'), city, () => screen === 'setup' && !isPickerOpen());
 }
 
-// لوحة المدن: تبويب لكل منطقة، وبجانب الخانة صورة المدينة المختارة الحية، وفي الأسفل عشوائي ومدينة المضيف
+// لوحة المدن: تبويب لكل منطقة، وفي كل خانة صورة صغيرة لمدينتها، وبجانب الخانة صورة المختارة الحية،
+// وفي الأسفل عشوائي ومدينة المضيف
 function openCityPicker() {
   openPicker({
     title: 'اختر المدينة',
     groups: CITY_GROUPS,
+    art: drawCardThumb,
     extras: [{ value: 'random', text: 'عشوائي' }, { value: 'host', text: 'مدينة المضيف' }],
     current: () => setup.city,
     pick: (city) => { setup.city = city; refresh(); },

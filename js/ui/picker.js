@@ -13,7 +13,7 @@ const el = (id) => document.getElementById(id);
 //   extras: [{ value, text }]: خيارات خارج المناطق،
 //   current(): القيمة المختارة الآن، pick(value): اختيارها،
 //   aside(node, value): المعاينة بجانب الخانة، tabFor(value): تبويب الخيارات العامة (اختياري)،
-//   close(): بعد الإغلاق (اختياري)
+//   art(canvas, value): صورة داخل كل عنصر (اختياري، صور المدن)، close(): بعد الإغلاق (اختياري)
 // }
 let spec = null;
 let tab = 0;
@@ -78,12 +78,21 @@ function render() {
   el('pickerBoxTitle').textContent = group.title;
   const items = el('pickerItems');
   items.innerHTML = '';
+  const arts = [];
   for (const item of group.items) {
-    const node = button('picker-item' + (item.value === current ? ' selected' : ''), () => { spec.pick(item.value); render(); });
+    const node = button('picker-item' + (spec.art ? ' art' : '') + (item.value === current ? ' selected' : ''),
+      () => { spec.pick(item.value); render(); });
+    if (spec.art) {
+      const canvas = document.createElement('canvas');
+      canvas.className = 'picker-art';
+      node.appendChild(canvas);
+      arts.push([canvas, item.value]);
+    }
     node.appendChild(text('b', item.text));
     if (item.note) node.appendChild(text('small', item.note));
     items.appendChild(node);
   }
+  for (const [canvas, value] of arts) spec.art(canvas, value);   // بعد وضع العناصر: تُرسم بمقاسها
 
   const extras = el('pickerExtras');
   extras.innerHTML = '';

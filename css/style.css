@@ -450,6 +450,29 @@ button.wide.ghost { background: transparent; color: var(--text-dim); }
 .picker-item small { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--text-dim); }
 .picker-item.selected { background: var(--gold); border-color: var(--gold); color: var(--gold-dark); }
 .picker-item.selected small { color: rgba(36, 26, 16, .75); }
+/* خانة بصورة (المدن): الصورة تملأ الخانة، والاسم في أسفلها فوق تدرج داكن، والمختارة بإطار ذهبي يلمع */
+.picker-item.art {
+  position: relative;
+  overflow: hidden;
+  min-height: 64px;
+  justify-content: flex-end;
+  gap: 0;
+  padding: 0 4px 4px;
+  background: #2a2622;
+}
+.picker-art { position: absolute; inset: 0; width: 100%; height: 100%; }
+.picker-item.art::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(20, 15, 10, .88), rgba(20, 15, 10, .3) 60%, rgba(20, 15, 10, 0));
+}
+.picker-item.art b, .picker-item.art small { position: relative; z-index: 1; text-shadow: 0 1px 3px rgba(0, 0, 0, .9); }
+.picker-item.art b { color: #fff; }
+.picker-item.art small { color: #eadfca; }
+.picker-item.art.selected { background: #2a2622; border: 2px solid var(--gold); box-shadow: 0 0 10px rgba(224, 176, 74, .6); }
+.picker-item.art.selected b { color: var(--gold); }
+.picker-item.art.selected small { color: #f3e3c0; }
 .picker-aside { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 14px; line-height: 1.55; color: var(--text-dim); }
 .picker-aside[data-kind="side"] { display: block; text-align: right; }
 #pickerThumb { width: 236px; height: 118px; max-width: 100%; border-radius: 10px; border: 1px solid var(--line); background: #2a2622; }
@@ -463,6 +486,20 @@ button.wide.ghost { background: transparent; color: var(--text-dim); }
   border-color: #f1cf7e;
   color: var(--gold-dark);
   font-weight: 700;
+}
+/* شاشة قصيرة بالعرض (جوال صغير): اللوحة كلها بلا تمرير، وزر "تم" ظاهر دائماً */
+@media (orientation: landscape) and (max-height: 400px) {
+  .panel.picker { padding: 10px 12px; }
+  .picker h2 { margin-bottom: 6px; font-size: 19px; }
+  .picker-tab { min-height: 46px; }
+  .picker-body { grid-template-columns: minmax(0, 1fr) 208px; margin-top: 8px; }
+  .picker-box { padding: 6px 8px 8px; }
+  .picker-box-title { margin-bottom: 6px; }
+  .picker-item { min-height: 52px; }
+  .picker-item.art { min-height: 56px; }
+  #pickerThumb { width: 208px; height: 104px; }
+  .picker-footer { margin-top: 8px; }
+  .picker-footer .opt { min-height: 46px; }
 }
 /* شاشة ضيقة (طولية): التبويبات تلتف، والمعاينة تحت الخانة */
 @media (max-width: 640px) {

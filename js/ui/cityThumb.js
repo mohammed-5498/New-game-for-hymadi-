@@ -10,7 +10,11 @@ import { onSpritesReady } from '../render/sprites.js';
 const thumbs = new Map();     // مدينة -> لوحة جاهزة
 let timer = 0, shown = '';
 let waiting = null;           // صورة مصغرة طُلبت قبل تحميل صور مبانيها: تُرسم حين تكتمل
-onSpritesReady(() => { if (waiting) { const w = waiting; waiting = null; show(...w); } });
+const cardWaiting = [];       // خانات لوحة الاختيار التي تنتظر صور مباني مدينتها
+onSpritesReady(() => {
+  if (waiting) { const w = waiting; waiting = null; show(...w); }
+  for (const job of cardWaiting.splice(0)) drawCardThumb(...job);
+});
 
 const THUMB = { w: 260, h: 130, tiles: 'small' };
 
@@ -65,4 +69,41 @@ export function updateCityThumb(target, nameEl, city, isVisible) {
   };
   next();
   timer = setInterval(next, CITIES.thumbCycleMs);
+}
+
+// صورة خانة المدينة في لوحة الاختيار (picker.js): وسط الصورة المصغرة نفسها مكبّراً قليلاً (CITIES.cardZoom)
+// ومقصوصاً بشكل الخانة. الجاهزة تُرسم فوراً، والجديدة واحدة في كل إطار حتى لا تتجمد اللوحة
+// عند فتح منطقة بمدن كثيرة (تُبنى مرة لكل مدينة وتبقى للمعاينة الكبيرة أيضاً)
+const cardQueue = [];
+let pumping = false;
+
+export function drawCardThumb(canvas, city) {
+  const ready = thumbs.get(city);
+  if (ready) { fillCard(canvas, ready); return; }
+  cardQueue.push([canvas, city]);
+  if (!pumping) { pumping = true; requestAnimationFrame(pumpCards); }
+}
+
+function pumpCards() {
+  while (cardQueue.length) {
+    const [canvas, city] = cardQueue.shift();
+    if (!canvas.isConnected) continue;          // أُعيد رسم الخانات أو أُغلقت اللوحة
+    const thumb = thumbs.get(city) || buildThumb(city);
+    if (thumb) fillCard(canvas, thumb);
+    else cardWaiting.push([canvas, city]);      // صور مباني المدينة لم تُحمّل بعد (اليمامة)
+    break;
+  }
+  if (cardQueue.length) requestAnimationFrame(pumpCards);
+  else pumping = false;
+}
+
+function fillCard(canvas, thumb) {
+  const box = canvas.getBoundingClientRect();
+  const aspect = box.width > 0 && box.height > 0 ? box.width / box.height : 2.9;
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  canvas.width = Math.max(1, Math.round((box.width || 180) * dpr));
+  canvas.height = Math.max(1, Math.round(canvas.width / aspect));
+  const sw = Math.min(thumb.width / CITIES.cardZoom, thumb.height * aspect), sh = sw / aspect;
+  canvas.getContext('2d').drawImage(thumb, (thumb.width - sw) / 2, (thumb.height - sh) / 2, sw, sh,
+    0, 0, canvas.width, canvas.height);
 }
