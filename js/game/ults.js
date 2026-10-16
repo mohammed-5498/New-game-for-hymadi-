@@ -182,10 +182,12 @@ export function resolveUlt(state, unit) {
     case 'caravan': callCaravan(state, unit, ult); break;
     case 'falcon':  falconDive(state, unit, ult, target); break;
     case 'shout':   rallyShout(state, unit, ult); break;
-    case 'whirl':   startFlurry(state, unit, ult, null, ult.radius); break;
+    case 'whirl':                                                      // رقصة الشارع والروضة (بالركل)
+    case 'roda':    startFlurry(state, unit, ult, null, ult.radius); break;
     case 'rain':    arrowRain(state, unit, ult, target); break;
     case 'throwdown':
-    case 'knockout': throwdown(state, unit, ult, target); break;     // رقصة الأباتشي والضربة القاضية
+    case 'knockout':
+    case 'tango':   throwdown(state, unit, ult, target); break;      // رقصة الأباتشي والضربة القاضية وتانغو الموت
     case 'haste':   hasteAllies(state, unit, ult); break;
     case 'bribe':   bribePolice(state, unit, ult); break;
     case 'banner':  plantBanner(state, unit, ult); break;

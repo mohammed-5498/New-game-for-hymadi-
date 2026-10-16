@@ -22,23 +22,27 @@ export const MAP_SIZES = {
 export const CITIES = {
   // مدن الأمم (القسم 3.10) تُضاف بعد المدن العشر: شبام والدرعية والقاهرة القديمة (الدفعة العربية)،
   // ثم كايفنغ وغيونغجو (الدفعة الآسيوية). إيدو هي المدينة اليابانية نفسها بمعلم جديد (المفتاح japan)،
-  // ثم باريس وبرمنغهام وروتنبورغ (الدفعة الأوروبية)، ثم غوندر وكانو ومروي (الدفعة الأفريقية)
+  // ثم باريس وبرمنغهام وروتنبورغ (الدفعة الأوروبية)، ثم غوندر وكانو ومروي (الدفعة الأفريقية)،
+  // ثم ريو ولا بوكا وتينوتشتيتلان (الدفعة اللاتينية؛ المكسيكية الاستعمارية mexico تبقى للعصابات الكلاسيكية)
   order: ['yamamah', 'arab', 'japan', 'china', 'europe', 'norway', 'hk', 'jaipur', 'mexico', 'chicago',
           'shibam', 'diriyah', 'cairo', 'kaifeng', 'gyeongju', 'paris', 'birmingham', 'rothenburg',
-          'gondar', 'kano', 'meroe'],
+          'gondar', 'kano', 'meroe', 'rio', 'laboca', 'tenoch'],
   defaultCity: 'random',
   // ماء على حافة الخريطة بهذا العرض من المربعات (لا يُمشى عليه): مضيق النرويجية المتجمد، وقناتا كايفنغ وبرمنغهام،
-  // ونيل مروي. huts: المباني المجاورة للماء أكواخ على أعمدة (النرويجية وحدها)
+  // ونيل مروي، وميناء لا بوكا، وبحيرة تينوتشتيتلان. huts: المباني المجاورة للماء أكواخ على أعمدة (النرويجية وحدها)
   water: { norway: { small: 2, medium: 2, large: 3, huts: true },
            kaifeng: { small: 2, medium: 2, large: 3 },
            birmingham: { small: 2, medium: 2, large: 3 },
-           meroe: { small: 2, medium: 2, large: 3 } },
+           meroe: { small: 2, medium: 2, large: 3 },
+           laboca: { small: 2, medium: 2, large: 3 },
+           tenoch: { small: 2, medium: 2, large: 3 } },
   rorbuChance: 0.55,            // نسبة المباني المجاورة للماء التي تصير أكواخاً على أعمدة
   // أسماء قصيرة لأزرار قائمة الإعداد (الاسم الكامل تحت الصورة المصغرة)
   short: { yamamah: 'اليمامة', arab: 'عربية', japan: 'إيدو', china: 'صينية', europe: 'أوروبية', norway: 'نرويجية',
            hk: 'هونغ كونغ', jaipur: 'جايبور', mexico: 'مكسيكية', chicago: 'شيكاغو',
            shibam: 'شبام', diriyah: 'الدرعية', cairo: 'القاهرة', kaifeng: 'كايفنغ', gyeongju: 'غيونغجو',
-           paris: 'باريس', birmingham: 'برمنغهام', rothenburg: 'روتنبورغ', gondar: 'غوندر', kano: 'كانو', meroe: 'مروي' },
+           paris: 'باريس', birmingham: 'برمنغهام', rothenburg: 'روتنبورغ', gondar: 'غوندر', kano: 'كانو', meroe: 'مروي',
+           rio: 'ريو', laboca: 'لا بوكا', tenoch: 'تينوتشتيتلان' },
   thumbCycleMs: 2000,           // "عشوائي": الصورة المصغرة تتبدل بين المدن
   thumbZoom: 1.4,               // تقريب الصورة المصغرة (تُقص الأطراف)
   // هالة خفيفة خلف الجنود: فاتحة في المدينة الداكنة (هونغ كونغ)، وداكنة في الصحراء الفاتحة (اليمامة)
@@ -68,7 +72,7 @@ export const CITIES = {
 // أنواع من pool المدن ليست مباني (أشجار وزينة): لا تُصبغ بلون المالك، كأشجار الطابع القديم
 // والسور وبواباته وأبراجه في صحراء اليمامة: ملك المدينة لا الحي
 export const CITY_UNTINTED = ['palm', 'cherry', 'lantern', 'willow', 'lanterns', 'pine', 'rack', 'banyan', 'neem', 'cactus', 'tree',
-  'ptree', 'rtree', 'lamp', 'acacia', 'baobab', 'dye',
+  'ptree', 'rtree', 'lamp', 'acacia', 'baobab', 'dye', 'crane', 'chinampa', 'ahuejote',
   'grove', 'well', 'cart', 'wallI', 'wallJ', 'gateI', 'gateJ', 'archI', 'archJ', 'wallTower', 'brokenI', 'brokenJ', 'brokenTower'];
 
 // تخزين الطبقة الثابتة (الأرض والمباني والزينة) في قطع مخفية: تُرسم مرة وتُعرض الظاهرة فقط
@@ -122,7 +126,11 @@ export const CITY_SPECIALS = {
   // مدن الأمم الأفريقية
   gondar: { hq: 'stone',     base: 'stone' },
   kano:   { hq: 'hausaTall', base: 'hausa' },
-  meroe:  { hq: 'nubian',    base: 'nubian' }
+  meroe:  { hq: 'nubian',    base: 'nubian' },
+  // مدن الأمم اللاتينية
+  rio:    { hq: 'colonial', base: 'colonial' },
+  laboca: { hq: 'conv',     base: 'conv' },
+  tenoch: { hq: 'house',    base: 'house' }
 };
 
 // --- الكاميرا ---
@@ -535,12 +543,18 @@ export const CHAMPIONS = {
 //     punches:         {damage, stagger, staggerTime} اللكمات أقوى وقد ترنّح (نيجيريا)
 //     armorAll:        درع يُضاف إلى كل الوحدات (نيجيريا)
 //     rangedDamage:    نسبة تُضاف إلى ضرر رمي الرماة (السودان)
+//     dodge:           نقاط تُضاف إلى فرصة التفادي الأساسية (البرازيل: 0.18 ← 0.26)
+//     capture:         نسبة تُضاف إلى سرعة الاستيلاء على أي حي (البرازيل)
+//     duel:            {radius, bonus, clash} ضرر أكبر حين لا عدو حولك غير خصم واحد، وتصادم أسلحة أكثر (الأرجنتين)
+//     slowShots:       {factor, duration} كل مقذوف يصيب يُبطئ المصاب (المكسيك)
+//   heroMods (اختياري): معدِّلات شخصية مميزة واحدة بمفتاحها، خارج السمة:
+//     slowHits:        {factor, duration} ضربتها القريبة تُبطئ المصاب (غاوتشو الأرجنتين)
 //   ult ضربة البطل الخاصة: تحل محل ضربة بطل النمط، وبقية أرقام البطل كما هي.
 //     ring (اختياري): لون حلقة تتسع حول مكان الضربة
 // "داخل أحيائك": منطقة الحي هي مربعاته ومعها الشوارع الأقرب إليه (game/nations.js).
 export const nations = {
   order: ['yemen', 'saudi', 'egypt', 'china', 'japan', 'korea', 'france', 'britain', 'germany',
-          'ethiopia', 'nigeria', 'sudan'],   // الأمم المتاحة في قائمة الإعداد، دفعةً دفعة (القسم 5 من NATIONS.md)
+          'ethiopia', 'nigeria', 'sudan', 'brazil', 'argentina', 'mexico'],   // الأمم المتاحة في قائمة الإعداد، دفعةً دفعة (القسم 5 من NATIONS.md)
 
   // ===== الدفعة العربية (المرحلة 9أ) =====
   yemen: {
@@ -664,6 +678,40 @@ export const nations = {
     // وابل الملكة: arrows سهماً لا تُتفادى، كل سهم على عدو مختلف حول الهدف إن وُجد، بضرر damage
     ult: { kind: 'arrows', needs: 'enemy', range: 7.5, arrows: 6, damage: 22,
            name: 'وابل الملكة', desc: 'ستة سهام دفعة واحدة على الأعداء' }
+  },
+
+  // ===== الدفعة اللاتينية (المرحلة 9ب) =====
+  brazil: {
+    name: 'البرازيل', gangName: 'المالتاس', style: 'crows', city: 'rio', secondary: '#f2efe6',   // أبيض الكابويرا
+    names: { common: 'كابويرا الشارع', spear: 'عازف البيريمباو', dual: 'الأكروبات', champion: 'المعلّم' },
+    // الجينغا: فرصة التفادي الأساسية +dodge، والركلات تُختار أكثر (prefer) بلا ضرر زائد، والاستيلاء أسرع بنسبة capture
+    trait: { name: 'الجينغا', desc: 'فرصة التفادي +8%، والركلات أكثر، والاستيلاء أسرع 10%',
+             mods: { dodge: 0.08, kicks: { damage: 0, prefer: 0.3 }, capture: 0.10 } },
+    // الروضة: hits ركلات خلال duration ثانية، كل ركلة على كل عدو داخل radius (كرقصة الشارع، بالركل)
+    ult: { kind: 'roda', needs: 'enemy', radius: 2, hits: 4, damage: 8, duration: 1.2,
+           name: 'الروضة', desc: 'دائرة يرقص فيها ويركل كل من فيها' }
+  },
+  argentina: {
+    name: 'الأرجنتين', gangName: 'الكومبادريتوس', style: 'crows', city: 'laboca', secondary: '#1e1e22',   // أسود التانغو
+    names: { common: 'كومبادريتو', spear: 'الغاوتشو بالبولياداس', dual: 'المبارز بالشال', champion: 'المالِفو' },
+    // مبارزة الفاكون: ضرر +bonus للوحدة التي لا عدو داخل radius حولها غير خصم واحد، واحتمال تصادم الأسلحة +clash
+    trait: { name: 'مبارزة الفاكون', desc: '+20% ضرر في المواجهة الفردية، وتصادم الأسلحة أكثر',
+             mods: { duel: { radius: 2.5, bonus: 0.20, clash: 0.25 } } },
+    // الغاوتشو بالبولياداس: ضربته القريبة تُبطئ المصاب بنسبة factor مدة duration ثانية
+    heroMods: { spear: { slowHits: { factor: 0.2, duration: 1.5 } } },
+    // تانغو الموت: يدور بأقرب عدو داخل range ثم يطرحه: ضرر damage ويقذفه throw مربعاً ويسقطه أرضاً
+    ult: { kind: 'tango', needs: 'enemy', range: 1.6, damage: 45, throw: 1.8,
+           name: 'تانغو الموت', desc: 'يدور بخصمه ثم يطرحه أرضاً' }
+  },
+  mexico: {
+    name: 'المكسيك', gangName: 'فرسان النسر والجاغوار', style: 'vipers', city: 'tenoch', secondary: '#2fa8a0',   // فيروزي
+    names: { common: 'محارب التشينامبا', sniper: 'فارس الجاغوار الرامي', firebomber: 'رامي الأتلاتل', champion: 'قائد النسور' },
+    // رمية الأتلاتل: كل مقذوف يصيب يُبطئ المصاب بنسبة factor مدة duration ثانية
+    trait: { name: 'رمية الأتلاتل', desc: 'المقذوفات تُبطئ الهدف 20% لثانية ونصف',
+             mods: { slowShots: { factor: 0.2, duration: 1.5 } } },
+    // صيحة النسر: كهجوم عدوة، حين يكون عدو داخل range كل حليف داخل radius أسرع بنسبة bonus مدة duration ثانية
+    ult: { kind: 'haste', needs: 'enemy', range: 7, radius: 5, bonus: 0.15, duration: 6, ring: '#2fa8a0',
+           name: 'صيحة النسر', desc: 'كل وحداته حوله +15% سرعة' }
   },
 
   // الأنماط القتالية الأربعة (أسماؤها في قائمة الإعداد)

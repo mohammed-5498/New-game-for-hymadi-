@@ -39,6 +39,11 @@ export function nationStats(stats, nationId, champion, heroId = null) {
   if (mods.punches) stats.punches = mods.punches;                        // اليد الملفوفة (combat.js)
   if (mods.armorAll) stats.armor += mods.armorAll;                       // درع كل الوحدات
   if (mods.rangedDamage && stats.projectile) stats.damage *= 1 + mods.rangedDamage;   // ضرر الرمي (لا القريب)
+  if (mods.dodge) stats.dodge = mods.dodge;                              // الجينغا: تفادٍ أكثر (realism.js)
+  if (mods.duel) stats.clashBonus = mods.duel.clash;                     // مبارزة الفاكون: تصادم أكثر (realism.js)
+  if (mods.slowShots && stats.projectile) stats.slowShots = mods.slowShots;   // رمية الأتلاتل (combat.js)
+  const hero = heroId && nation.heroMods && nation.heroMods[heroId];
+  if (hero && hero.slowHits) stats.slowHits = hero.slowHits;            // ضربة الغاوتشو تُبطئ (combat.js)
   if (champion && nation.ult) stats.ult = nation.ult;
   return stats;
 }
@@ -106,19 +111,27 @@ export function outnumberedMods(player) {
   return (nation && nation.trait.mods.outnumbered) || null;
 }
 
+// «مبارزة الفاكون» للاعب: {radius, bonus, clash} إن كانت لأمته، وإلا null (abilities.js)
+export function duelMods(player) {
+  const nation = nationOf(player.nation);
+  return (nation && nation.trait.mods.duel) || null;
+}
+
 // «الكتيبة» للاعب: {count, radius, reduce} إن كانت لأمته، وإلا null (abilities.js)
 export function phalanxMods(player) {
   const nation = nationOf(player.nation);
   return (nation && nation.trait.mods.phalanx) || null;
 }
 
-// نسبة تُضاف لسرعة استيلاء اللاعب على هذا الحي: حي مجاور لحي يملكه (0 لمن لا سمة له)
+// نسبة تُضاف لسرعة استيلاء اللاعب على هذا الحي: على أي حي (capture، الجينغا)،
+// وعلى حي مجاور لحي يملكه (adjacentCapture، مصر). 0 لمن لا سمة له
 export function captureBonus(state, district, playerId) {
   const nation = nationOf(state.players[playerId].nation);
-  const bonus = nation && nation.trait.mods.adjacentCapture;
-  if (!bonus || !district.adj) return 0;
-  for (const id of district.adj) if (state.map.districts[id].owner === playerId) return bonus;
-  return 0;
+  if (!nation) return 0;
+  const mods = nation.trait.mods, all = mods.capture || 0, bonus = mods.adjacentCapture;
+  if (!bonus || !district.adj) return all;
+  for (const id of district.adj) if (state.map.districts[id].owner === playerId) return all + bonus;
+  return all;
 }
 
 // إشعار بداية المباراة: سمة أمة اللاعب (حتى يعرف ما الذي يميّزه)

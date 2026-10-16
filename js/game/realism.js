@@ -217,8 +217,10 @@ export function tryReact(state, unit, attacker, ranged) {
   }
 
   if (ranged) mul *= CR.projectileDodge;                 // المقذوف بنصف الاحتمال
+  // الجينغا (البرازيل، القسم 3.10): نقاط تُضاف إلى فرصة التفادي الأساسية
+  const base = unit.stats.dodge ? CR.dodgeBase * unit.traits.skill + unit.stats.dodge : CR.dodgeBase * unit.traits.skill;
   if (unit.stamina >= CR.dodgeCost && unit.dodgeCd <= 0 &&
-      unit.rng() < CR.dodgeBase * unit.traits.skill * mul) {
+      unit.rng() < base * mul) {
     beginDodge(state, unit, attacker);
   }
 }
@@ -493,7 +495,9 @@ export function tryClash(state, unit, target) {
   if (zoneOf(target, unit.x, unit.y) !== 'front' || zoneOf(unit, target.x, target.y) !== 'front') return false;
   const hitAt = target.cPhases.wind + target.cPhases.strike * CR.strikeMoment;
   if (Math.abs(target.cMoveT - hitAt) > CR.clashWindow) return false;
-  if (unit.rng() >= CR.clashChance) return false;
+  // مبارزة الفاكون (الأرجنتين، القسم 3.10): تصادم أكثر إن كان أحدهما يملكها
+  const bonus = Math.max(unit.stats.clashBonus || 0, target.stats.clashBonus || 0);
+  if (unit.rng() >= (bonus ? CR.clashChance + bonus : CR.clashChance)) return false;
 
   for (const [a, b] of [[unit, target], [target, unit]]) {
     stagger(state, a, CR.clashStagger);                   // يُلغي ضربة الهدف أيضاً

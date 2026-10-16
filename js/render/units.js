@@ -7,6 +7,7 @@ import './nationsArab.js';                 // مظاهر الدفعة العرب
 import './nationsAsia.js';                 // والدفعة الآسيوية
 import './nationsEurope.js';               // والدفعة الأوروبية
 import './nationsAfrica.js';               // والدفعة الأفريقية
+import './nationsLatin.js';                // والدفعة اللاتينية
 
 // الأفراد العاديون بلا ضربة مميزة، فلا نجمة ولا شريط شحن لهم
 const hasUlt = (unit) => !!unit.stats.ult;

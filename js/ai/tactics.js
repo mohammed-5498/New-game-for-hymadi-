@@ -90,7 +90,7 @@ export function ultAllowed(state, unit, ult, target) {
 
 function goodMoment(state, unit, ult, target, full) {
   // رقصة الشارع (اليابان) دائرية حوله مثل الضربة الأرضية، والراية المغروسة (ألمانيا) حين يكثر الأعداء حوله
-  if (ult.kind === 'slam' || ult.kind === 'arc' || ult.kind === 'whirl' || ult.kind === 'banner') {
+  if (ult.kind === 'slam' || ult.kind === 'arc' || ult.kind === 'whirl' || ult.kind === 'roda' || ult.kind === 'banner') {
     return countAround(state, unit, unit, ult.radius, true) >= ai.aoeMinEnemies;
   }
   if (ult.kind === 'fire') {

@@ -237,8 +237,16 @@ function resolveMove(state, unit, hit) {
     } else {
       flinch(target, unit.x, unit.y, zone === 'back');        // ارتداد مع كل ضربة عادية
     }
+    if (unit.stats.slowHits && !died && isAlive(target)) slowDown(state, target, unit.stats.slowHits);   // ضربة الغاوتشو
   }
   if (landed) chargeOnHit(state, unit);
+}
+
+// إبطاء من ضربة أو مقذوف (رمية الأتلاتل وضربة الغاوتشو، القسم 3.10): لا يحل محل إبطاء أقوى قائم
+function slowDown(state, target, slow) {
+  if (target.slowUntil > state.time && target.slowFactor > slow.factor) return;
+  target.slowFactor = slow.factor;
+  target.slowUntil = state.time + slow.duration;
 }
 
 // طلقة واحدة، أو ثلاثة سهام متفرقة لبطل الأفاعي (القسم 6.6)
@@ -741,6 +749,7 @@ function updateProjectiles(state) {
         if (isAlive(target) && !target.cState) {
           flinch(target, shot.startX, shot.startY, zoneOf(target, shot.startX, shot.startY) === 'back', false);
         }
+        if (shot.attacker.stats.slowShots && isAlive(target)) slowDown(state, target, shot.attacker.stats.slowShots);   // رمية الأتلاتل
         chargeOnHit(state, shot.attacker);
         // ريش وانفجار عند انقضاض الصقر
         if (shot.kind === 'falcon') state.fx.push({ x: target.x, y: target.y, t: 0, big: true, h: 14 });

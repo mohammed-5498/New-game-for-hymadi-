@@ -18,6 +18,7 @@ import { shibam, diriyah, cairo } from './citiesArab.js';
 import { kaifeng, gyeongju } from './citiesAsia.js';
 import { paris, birmingham, rothenburg } from './citiesEurope.js';
 import { gondar, kano, meroe } from './citiesAfrica.js';
+import { rio, laboca, tenoch } from './citiesLatin.js';
 let ctx=null,SEED=0;
 // تلوين كل لون قبل استعماله: صبغ المالك (القسم 8) والطقس. roofMode: الأسطح تُصبغ أكثر من الجدران
 // toneInfo: نفس الصبغ للصور الجاهزة (صحراء اليمامة) التي لا تمر ألوانها عبر paint(): { color, amount, snow }
@@ -468,6 +469,8 @@ THEMES.kaifeng=kaifeng;THEMES.gyeongju=gyeongju;
 THEMES.paris=paris;THEMES.birmingham=birmingham;THEMES.rothenburg=rothenburg;
 /* ---------- مدن الأمم الأفريقية (المرحلة 9ب): غوندر وكانو ومروي في js/render/citiesAfrica.js ---------- */
 THEMES.gondar=gondar;THEMES.kano=kano;THEMES.meroe=meroe;
+/* ---------- مدن الأمم اللاتينية (المرحلة 9ب): ريو ولا بوكا وتينوتشتيتلان في js/render/citiesLatin.js ---------- */
+THEMES.rio=rio;THEMES.laboca=laboca;THEMES.tenoch=tenoch;
 
 export { THEMES, TAU, poly, circ, ln, rc, el, box, qL, qR, wL, wR, arch, ridgeRoof, hipRoof, dome, flag, glow,
   damage, ruinTile, streetDebris, hsh, mixc, snowCap, stepGable, bellGable, neonSign, hexRgb, paint, cyl, cone, asRoof };
