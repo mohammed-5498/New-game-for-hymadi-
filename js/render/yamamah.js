@@ -42,7 +42,7 @@ const ART = {
 const SET = 'yamamah';
 loadSpriteSet(SET, new URL('../../assets/yamamah/', import.meta.url), ART);
 
-const art = (name, x, y) => drawSprite(getCtx(), getSprite(SET, name), x, y, getToneInfo());
+export const art = (name, x, y) => drawSprite(getCtx(), getSprite(SET, name), x, y, getToneInfo());   // تُستعمل أيضاً في localArab.js
 // ارتفاع مركز الحلقة العليا للرواق فوق مركز قاعدته (من صورته: أعلاها 19.3 وحدة ونصف ارتفاع الحلقة 5.5)
 const ROTUNDA_TOP = 13.8;
 const pick = (a, b, i, j, k) => (hsh(i, j, k) < 0.5 ? a : b);

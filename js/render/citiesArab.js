@@ -28,9 +28,9 @@ export const shibam={name:'شبام — اليمن',ground:'#c9a979',road:'#b897
     roadProp(x,y,i,j){if(hsh(i,j,710)<0.12){ln(x-14,y-26,x+14,y-38,'rgba(70,50,30,0.6)',0.4);}},tree:'palm'}};
 
 /* ---------- الدرعية: طين نجدي، شرفات مثلثة متدرجة، فتحات تهوية مثلثة، أبواب خشبية ملونة، أبراج مراقبة مخروطية، نخيل؛ والمعلم واجهة نبطية صخرية ---------- */
-function najdiTop(x,y,w,d,h,col){const qa=qL(x,y,w,d),qb=qR(x,y,w,d);
+export function najdiTop(x,y,w,d,h,col){const qa=qL(x,y,w,d),qb=qR(x,y,w,d);
   for(let k=0;k<6;k++){const u=(k+0.5)/6;let P=qa(u,h),Q=qa(u-0.07,h),R=qa(u+0.07,h);poly([Q,[P[0],P[1]-2.8],R],col);P=qb(u,h);Q=qb(u-0.07,h);R=qb(u+0.07,h);poly([Q,[P[0],P[1]-2.8],R],col);}}
-function triVents(f,u0,v,n,col){for(let k=0;k<n;k++){const u=u0+k*0.12;const A=f(u,v),B=f(u+0.07,v),C=f(u+0.035,v+1.8);poly([A,B,C],col);}}
+export function triVents(f,u0,v,n,col){for(let k=0;k<n;k++){const u=u0+k*0.12;const A=f(u,v),B=f(u+0.07,v),C=f(u+0.035,v+1.8);poly([A,B,C],col);}}
 function najdi(x,y,i,j,T,tall){const h=tall?22:13+Math.floor(hsh(i,j,720)*2)*4,w=14,d=7,L='#b98c5e',R='#cfa274';box(x,y,w,d,h,L,R,'#c49868');
   const qb=qR(x,y,w,d),qa=qL(x,y,w,d);triVents(qb,0.12,h-4.5,6,'#5a3e26');triVents(qa,0.12,h-4.5,6,'#4e3620');if(tall){triVents(qb,0.2,h-11,5,'#5a3e26');}
   for(let k=0;k<4;k++){const P=qa(0.15+k*0.24,h-1.2);ln(P[0],P[1],P[0]-2.4,P[1]+1.2,'#6a4a2e',1.1);}
@@ -58,9 +58,9 @@ export const diriyah={name:'الدرعية — السعودية',ground:'#d4b48c
     roadProp(x,y,i,j){if(hsh(i,j,730)<0.15){ln(x+9,y+2,x+9,y-13,'#5a4632',1);el(x+9,y-14,1.6,2,'#e8b24a');}},tree:'palm'}};
 
 /* ---------- القاهرة القديمة: حارات، قاعدة حجرية وجدران ملونة بالجص، مشربيات بارزة، أبراج حمام على الأسطح، قهوة شعبية، وكالة بأقواس؛ والمعلم بوابة الفتوح ---------- */
-const CAI=['#d9b98a','#e3c79c','#cfae86','#c9a27a','#dcc4a2'];
+export const CAI=['#d9b98a','#e3c79c','#cfae86','#c9a27a','#dcc4a2'];
 const lpx=(A,B,t)=>[A[0]+(B[0]-A[0])*t,A[1]+(B[1]-A[1])*t];
-function mashrabiya(P){const X=P[0]+2,Y=P[1]+1.2;box(X,Y,3.6,1.8,7,'#4e3220','#654128','#3e2818');
+export function mashrabiya(P){const X=P[0]+2,Y=P[1]+1.2;box(X,Y,3.6,1.8,7,'#4e3220','#654128','#3e2818');
   for(let r=0;r<4;r++)for(let k=0;k<3;k++){const u=0.15+k*0.28,v=1+r*1.5;wR(X,Y,3.6,1.8,u,v,0.12,0.7,'#8a6a44');}}
 function cairoHouse(x,y,i,j,T){const c=CAI[Math.floor(hsh(i,j,740)*CAI.length)],h=22+Math.floor(hsh(i,j,741)*3)*5,w=13,d=6.5;box(x,y,w,d,h,mixc(c,'#000000',0.18),c,mixc(c,'#000000',0.08));
   wL(x,y,w,d,0,0,1,5,'#b3a07c');wR(x,y,w,d,0,0,1,5,'#c9b590');const qb=qR(x,y,w,d),qa=qL(x,y,w,d);

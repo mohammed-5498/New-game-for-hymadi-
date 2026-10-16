@@ -84,6 +84,7 @@ function collectStatics(state) {
     else if (!special && debrisLight(map, i, j)) cache.lights.push({ x, y: y - 7, r: 34, c: '255,150,60', a: 0.65 });
     else if (!special && isLane(map, k)) { const l = laneLight(map, i, j, x, y); if (l) cache.lights.push(l); }
     else if (map.type[k] === 'Y' && roundaboutAnchor(map, i, j)) cache.lights.push(...roundaboutLights(x, y, map.city));
+    else if (map.kind[k] === 'monument') cache.lights.push(T.monumentLight ? T.monumentLight(x, y) : { x, y: y - 16, r: 30, c: '255,215,140', a: 0.4 });
     else if (T.lightsAt) { const l = T.lightsAt(map, i, j, x, y); if (l) cache.lights.push(...l); }   // مشاعل بوابات اليمامة
   }
 }

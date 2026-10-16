@@ -19,6 +19,8 @@ import { kaifeng, gyeongju } from './citiesAsia.js';
 import { paris, birmingham, rothenburg } from './citiesEurope.js';
 import { gondar, kano, meroe } from './citiesAfrica.js';
 import { rio, laboca, tenoch } from './citiesLatin.js';
+import { installLocal } from './localParts.js';
+import { LOCAL_ARAB } from './localArab.js';
 let ctx=null,SEED=0;
 // تلوين كل لون قبل استعماله: صبغ المالك (القسم 8) والطقس. roofMode: الأسطح تُصبغ أكثر من الجدران
 // toneInfo: نفس الصبغ للصور الجاهزة (صحراء اليمامة) التي لا تمر ألوانها عبر paint(): { color, amount, snow }
@@ -471,6 +473,9 @@ THEMES.paris=paris;THEMES.birmingham=birmingham;THEMES.rothenburg=rothenburg;
 THEMES.gondar=gondar;THEMES.kano=kano;THEMES.meroe=meroe;
 /* ---------- مدن الأمم اللاتينية (المرحلة 9ب): ريو ولا بوكا وتينوتشتيتلان في js/render/citiesLatin.js ---------- */
 THEMES.rio=rio;THEMES.laboca=laboca;THEMES.tenoch=tenoch;
+/* ---------- المباني المحلية ومعالم المدن (بطلب المستخدم، كفكرة باريس): متاجر وأسواق ومقاهٍ بطابع كل مدينة،
+   ومعلم يميز منطقتها وسط المدينة (المولّد: placeMonument). في js/render/local*.js، وأوزانها مقتطعة من المبنى الرئيسي ---------- */
+installLocal(THEMES,LOCAL_ARAB);
 
 export { THEMES, TAU, poly, circ, ln, rc, el, box, qL, qR, wL, wR, arch, ridgeRoof, hipRoof, dome, flag, glow,
   damage, ruinTile, streetDebris, hsh, mixc, snowCap, stepGable, bellGable, neonSign, hexRgb, paint, cyl, cone, asRoof };

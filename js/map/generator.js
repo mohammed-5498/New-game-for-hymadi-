@@ -1,5 +1,5 @@
 // توليد الخريطة العشوائية: شوارع، أحياء، نقاط استيلاء، مباني
-import { MAP_SIZES, MAP_GEN, POLICE, CITIES } from '../config.js';
+import { MAP_SIZES, MAP_GEN, POLICE, CITIES, CITY_UNTINTED } from '../config.js';
 import { THEMES as CITY_THEMES } from '../render/cityThemes.js';
 import { D4, D8 } from './pathfinding.js';
 import { hypot } from '../game/hypot.js';
@@ -69,7 +69,31 @@ function buildMap(size, players, cityKey) {
   if (map.land < map.n && CITIES.water[cityKey].huts) placeRorbu(map);   // أكواخ الماء للنرويجية وحدها
   repairIsolatedPockets(map);     // القسم 3.4.1: لا يبقى فراغ محاصر بالمباني
   decorateRoads(map);
+  placeMonument(map);
   return map;
+}
+
+// معلم المنطقة المميز (بطلب المستخدم): يحل محل مبنى عادي قرب وسط المدينة، فلا يتغير ما يُمشى عليه
+// (كان مبنى ويبقى مبنى) ولا يُستهلك رقم عشوائي، فبقية الخريطة والمباراة كما هما. يُفضَّل الركن الأمامي
+// للحي (شارعان أمامه من الجهتين القريبتين من الشاشة) فلا يحجبه مبنى أمامه، ثم ما أمامه شارع من جهة،
+// ثم ما يلاصق شارعاً. المدن ذات الدوار (CITIES.open[city].roundabout) لا تحتاجه: الدوار معلمها
+function placeMonument(map) {
+  const city = CITY_THEMES[map.city], open = CITIES.open[map.city];
+  if (!city || typeof city.draw.monument !== 'function' || (open && open.roundabout)) return;
+  const n = map.n, ci = (map.land - 1) / 2, cj = (n - 1) / 2;
+  const road = (i, j) => map.inBounds(i, j) && map.road[map.idx(i, j)] === 1;
+  let best = -1, bestScore = Infinity;
+  for (let j = 0; j < n; j++) {
+    for (let i = 0; i < map.land; i++) {
+      const k = map.idx(i, j), kind = map.kind[k];
+      if (map.type[k] !== 'H' || !kind || CITY_UNTINTED.includes(kind)) continue;   // مبنى عادي لا شجرة ولا سور
+      const front = (road(i + 1, j) ? 1 : 0) + (road(i, j + 1) ? 1 : 0);
+      if (!front && !road(i - 1, j) && !road(i, j - 1)) continue;
+      const score = (2 - front) * 1e6 + (i - ci) * (i - ci) + (j - cj) * (j - cj);
+      if (score < bestScore) { bestScore = score; best = k; }
+    }
+  }
+  if (best >= 0) map.kind[best] = 'monument';
 }
 
 // دوال الخريطة: منفصلة عن بياناتها حتى تُعاد إليها بعد تحميل مباراة محفوظة
