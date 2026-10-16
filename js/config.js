@@ -65,7 +65,11 @@ export const CITIES = {
     hk:      { street: 2, spacing: [5, 7], lanes: 'center', scale: 1, roundabout: { radius: 3 } },
     europe:  { street: 2, spacing: [5, 6, 7], lanes: 'rows', scale: 0.86 },
     // شبام (بطلب المستخدم): نفس توسعة شيكاغو وهونغ كونغ، وأشجار رصيفها نخيل صغير (openCity.js)
-    shibam:  { street: 2, spacing: [5, 7], lanes: 'center', scale: 1 }
+    shibam:  { street: 2, spacing: [5, 7], lanes: 'center', scale: 1 },
+    // باريس وروتنبورغ (بطلب المستخدم): توسعة هونغ كونغ بدوارها، وكثافة أقل (ممر بين كل صفين ومبانٍ أصغر)،
+    // ودوار كل مدينة بطابعها: مسلة بين نافورتين في باريس، ونافورة السوق بتمثالها في روتنبورغ (openCity.js)
+    paris:      { street: 2, spacing: [5, 7], lanes: 'rows', scale: 0.86, roundabout: { radius: 3 } },
+    rothenburg: { street: 2, spacing: [5, 7], lanes: 'rows', scale: 0.86, roundabout: { radius: 3 } }
   }
 };
 

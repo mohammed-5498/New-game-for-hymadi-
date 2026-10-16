@@ -116,7 +116,7 @@ export function drawCityTile(state, i, j, x, y) {
     }
     return true;
   }
-  if (type === 'Y') { if (roundaboutAnchor(map, i, j)) drawRoundaboutIsland(x, y); return true; }
+  if (type === 'Y') { if (roundaboutAnchor(map, i, j)) drawRoundaboutIsland(x, y, map.city); return true; }
   if (type === 'R') { (T.draw.ruin || ruinTile)(x, y, i, j, T); return true; }   // صحراء اليمامة: بيت طين منهار
   if (type === '~') { if (T.draw.water) T.draw.water(x, y, i, j); return true; }
   if (type === 'H') {
