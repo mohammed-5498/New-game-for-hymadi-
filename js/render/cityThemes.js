@@ -23,6 +23,7 @@ import { installLocal } from './localParts.js';
 import { LOCAL_ARAB } from './localArab.js';
 import { LOCAL_ASIA } from './localAsia.js';
 import { LOCAL_EUROPE } from './localEurope.js';
+import { LOCAL_AFRICA } from './localAfrica.js';
 let ctx=null,SEED=0;
 // تلوين كل لون قبل استعماله: صبغ المالك (القسم 8) والطقس. roofMode: الأسطح تُصبغ أكثر من الجدران
 // toneInfo: نفس الصبغ للصور الجاهزة (صحراء اليمامة) التي لا تمر ألوانها عبر paint(): { color, amount, snow }
@@ -477,7 +478,7 @@ THEMES.gondar=gondar;THEMES.kano=kano;THEMES.meroe=meroe;
 THEMES.rio=rio;THEMES.laboca=laboca;THEMES.tenoch=tenoch;
 /* ---------- المباني المحلية ومعالم المدن (بطلب المستخدم، كفكرة باريس): متاجر وأسواق ومقاهٍ بطابع كل مدينة،
    ومعلم يميز منطقتها وسط المدينة (المولّد: placeMonument). في js/render/local*.js، وأوزانها مقتطعة من المبنى الرئيسي ---------- */
-installLocal(THEMES,LOCAL_ARAB);installLocal(THEMES,LOCAL_ASIA);installLocal(THEMES,LOCAL_EUROPE);
+installLocal(THEMES,LOCAL_ARAB);installLocal(THEMES,LOCAL_ASIA);installLocal(THEMES,LOCAL_EUROPE);installLocal(THEMES,LOCAL_AFRICA);
 
 export { THEMES, TAU, poly, circ, ln, rc, el, box, qL, qR, wL, wR, arch, ridgeRoof, hipRoof, dome, flag, glow,
   damage, ruinTile, streetDebris, hsh, mixc, snowCap, stepGable, bellGable, neonSign, hexRgb, paint, cyl, cone, asRoof };
