@@ -1,7 +1,7 @@
 // القوائم (القسم 12): الرئيسية، الإعداد، الإعدادات، الإحصائيات، سؤال الخروج، وتبديل الشاشات
 import {
   MAP_SIZES, PLAYER_COLORS, GANGS, GANG_IDS, BOT, BOT_LEVELS,
-  WEATHER, WEATHER_KEYS, UNITS, MATCH_DEFAULTS, AUDIO, UI, CITIES, gameModes as GM, nations as NATIONS
+  WEATHER, WEATHER_KEYS, UNITS, MATCH_DEFAULTS, AUDIO, UI, CITIES, REGIONS, gameModes as GM, nations as NATIONS
 } from '../config.js';
 import { SIDE_CHOICES, resolveSide, nationOf } from '../game/nations.js';
 import { sound, audioSettings, setAudioSettings, startMusic } from '../audio/sound.js';
@@ -13,6 +13,8 @@ import { fadeIn, fadeOut, isShown } from './transition.js';
 import { showMenuScene, hideMenuScene } from './menuScene.js';
 import { setupBattleScreen } from './battleScreen.js';
 import { updateCityThumb } from './cityThumb.js';
+import { setupPicker, openPicker, isPickerOpen } from './picker.js';
+import { THEMES } from '../render/cityThemes.js';
 
 const el = (id) => document.getElementById(id);
 
@@ -24,6 +26,32 @@ const CITY_CHOICES = [...CITIES.order, 'host', 'random'];
 const TEAM_CHOICES = [0, 1, 2, 3, 4];
 const SLOT_TYPES = { human: 'أنت', bot: 'بوت', closed: 'مغلقة' };
 const MAX_SLOTS = 8;
+
+// --- لوحتا الاختيار حسب المنطقة (picker.js): تبويب لكل منطقة بمدنها أو عصاباتها ---
+// تحت اسم المدينة بلدها (الجزء بعد "—" من اسمها الكامل)، أو اسمها الكامل إن لم يكن لها بلد
+const cityNote = (city) => {
+  const name = THEMES[city] ? THEMES[city].name : '';
+  return name.includes('—') ? name.split('—')[1].trim() : name;
+};
+// تبويب "أخرى" لما لم يُذكر في أي منطقة (مدينة أو أمة جديدة)، فلا تختفي من القائمة
+function regionGroups(key, all, title, item) {
+  const groups = REGIONS.order.map(r => ({
+    name: REGIONS[r].name, title: REGIONS[r][title],
+    items: REGIONS[r][key].filter(v => all.includes(v)).map(item)
+  }));
+  const rest = all.filter(v => !REGIONS.order.some(r => REGIONS[r][key].includes(v)));
+  if (rest.length) groups.push({ name: REGIONS.other.name, title: REGIONS.other[title], items: rest.map(item) });
+  return groups;
+}
+const CITY_GROUPS = regionGroups('cities', CITIES.order, 'cityTitle',
+  city => ({ value: city, text: CITIES.short[city], note: cityNote(city) }));
+const SIDE_GROUPS = [
+  ...regionGroups('nations', NATIONS.order, 'nationTitle',
+    id => ({ value: id, text: NATIONS[id].name, note: NATIONS[id].gangName + ' • ' + NATIONS.styles[NATIONS[id].style].name })),
+  { name: REGIONS.classic.name, title: REGIONS.classic.nationTitle,
+    items: GANG_IDS.map(id => ({ value: id, text: GANGS[id].name, note: NATIONS.styles[id].name })) }
+];
+const regionOf = (groups, value) => groups.find(group => group.items.some(item => item.value === value));
 
 // إعدادات قائمة الإعداد (تتحول إلى إعدادات مباراة عند الضغط على "ابدأ")
 const setup = {
@@ -105,9 +133,7 @@ export function setupMenus(handlers) {
     key => MAP_SIZES[key].name + ' (' + MAP_SIZES[key].maxPlayers + ')',
     () => setup.mapSize, key => { setup.mapSize = key; refresh(); });
 
-  buildOptions('optCity', CITY_CHOICES,
-    key => key === 'random' ? 'عشوائي' : key === 'host' ? 'مدينة المضيف' : CITIES.short[key],
-    () => setup.city, key => { setup.city = key; refresh(); showCity(); });
+  onTap('btnCity', openCityPicker);
 
   buildOptions('optMaxUnits', MAX_UNIT_CHOICES, value => String(value),
     () => setup.maxUnits, value => { setup.maxUnits = value; refresh(); });
@@ -116,6 +142,7 @@ export function setupMenus(handlers) {
     key => key === 'random' ? 'عشوائي' : WEATHER[key].name,
     () => setup.weather, key => { setup.weather = key; refresh(); });
 
+  setupPicker();
   buildSlots();
   refresh();
   setupSettings();
@@ -155,7 +182,47 @@ export function showScreen(name) {
 // "مدينة المضيف": مدينة أمة اللاعب الأول، أو عشوائي إن كان عصابة كلاسيكية أو عشوائياً
 function showCity() {
   const city = setup.city === 'host' ? hostCity(setup.slots[0].side) : setup.city;
-  updateCityThumb(el('cityThumb'), el('cityName'), city, () => screen === 'setup');
+  updateCityThumb(el('cityThumb'), el('cityName'), city, () => screen === 'setup' && !isPickerOpen());
+}
+
+// لوحة المدن: تبويب لكل منطقة، وبجانب الخانة صورة المدينة المختارة الحية، وفي الأسفل عشوائي ومدينة المضيف
+function openCityPicker() {
+  openPicker({
+    title: 'اختر المدينة',
+    groups: CITY_GROUPS,
+    extras: [{ value: 'random', text: 'عشوائي' }, { value: 'host', text: 'مدينة المضيف' }],
+    current: () => setup.city,
+    pick: (city) => { setup.city = city; refresh(); },
+    tabFor: (choice) => CITY_GROUPS.indexOf(regionOf(CITY_GROUPS, choice === 'host' ? hostCity(setup.slots[0].side) : choice)),
+    aside: (node, choice) => {
+      if (node.dataset.kind !== 'city') {
+        node.dataset.kind = 'city';
+        node.innerHTML = '<canvas id="pickerThumb"></canvas><span id="pickerThumbName" class="hint"></span>';
+      }
+      const city = choice === 'host' ? hostCity(setup.slots[0].side) : choice;
+      updateCityThumb(el('pickerThumb'), el('pickerThumbName'), city, isPickerOpen);
+    },
+    close: showCity
+  });
+}
+
+// لوحة الأمم لخانة: تبويب لكل منطقة بعصاباتها ثم الكلاسيكية، وبجانب الخانة وصف المختارة
+function openSidePicker(index) {
+  const slot = setup.slots[index];
+  openPicker({
+    title: 'اختر الأمة — الخانة ' + (index + 1) + (index === 0 ? ' (أنت)' : ''),
+    groups: SIDE_GROUPS,
+    extras: [{ value: 'random', text: 'عشوائي' }],
+    current: () => slot.side,
+    pick: (side) => {
+      slot.side = side;
+      descSlot = index;
+      refresh();
+      if (index === 0 && setup.city === 'host') showCity();
+    },
+    aside: (node, side) => { node.dataset.kind = 'side'; node.textContent = sideDesc(side); },
+    close: null
+  });
 }
 
 function hostCity(side) {
@@ -374,13 +441,11 @@ function buildSlots() {
       return true;
     };
 
-    // الأمة (القسم 3.10): الأمم المتاحة ثم العصابات الكلاسيكية ثم عشوائي، وسطر يصف المختارة تحت الخانات
+    // الأمة (القسم 3.10): لوحة مرتبة حسب المنطقة (العصابات العربية...) ثم الكلاسيكية، وسطر يصف المختارة تحت الخانات
     row.appendChild(cell('gang', '', () => {
       descSlot = index;
       if (openIfClosed()) return;
-      slot.side = next(SIDE_CHOICES, slot.side);
-      refresh();
-      if (index === 0 && setup.city === 'host') showCity();
+      openSidePicker(index);
     }));
 
     // اللمس على اللون ينتقل لأول لون غير مستخدم
@@ -463,12 +528,15 @@ function firstFreeColor(index) {
 function refresh() {
   for (const id of ['optMode', 'optPointsMinutes', 'optKingMinutes', 'optAllies', 'optSurvivalLevel']) refreshOptions(id);
   refreshOptions('optMapSize');
-  refreshOptions('optCity');
   refreshOptions('optMaxUnits');
   refreshOptions('optWeather');
 
   // سطر يشرح الطور المختار، وخياراته وحدها ظاهرة
   el('modeDesc').textContent = GM[setup.mode].desc;
+  // زر المدينة: الخيار ومنطقته (الاسم الكامل تحته من الصورة المصغرة)
+  const cityGroup = regionOf(CITY_GROUPS, setup.city);
+  el('cityChoice').textContent = setup.city === 'random' ? 'عشوائي' : setup.city === 'host' ? 'مدينة المضيف'
+    : CITIES.short[setup.city] + (cityGroup ? ' • ' + cityGroup.name : '');
   for (const row of document.querySelectorAll('#screenSetup .row[data-mode]')) {
     row.hidden = row.dataset.mode !== setup.mode;
   }

@@ -18,6 +18,7 @@ import {
   openExitDialog, closeExitDialog, isExitDialogOpen
 } from './ui/menus.js';
 import { setupMenuScene, menuSceneFrame } from './ui/menuScene.js';
+import { isPickerOpen, closePicker } from './ui/picker.js';
 import { initSound, startMusic } from './audio/sound.js';
 import { saveMatch, loadMatch, clearSavedMatch, canSaveMatch } from './matchSave.js';
 import { onBackButton, keepScreenAwake } from './platform.js';
@@ -76,6 +77,7 @@ window.addEventListener('pagehide', () => { if (canSaveMatch(state)) saveMatch(s
 // وفي القائمة الرئيسية يسأل "هل تريد الخروج؟" (القسم 2.1). في المتصفح لا يفعل شيئاً.
 onBackButton(() => {
   if (isExitDialogOpen()) { closeExitDialog(); return; }
+  if (isPickerOpen()) { closePicker(); return; }         // لوحة المدن أو الأمم في الإعداد: تُغلق وحدها
 
   if (currentScreen() === 'game') {
     if (isEndOpen()) { leaveToMain(state); return; }    // شاشة النهاية: رجوع للقائمة الرئيسية

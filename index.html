@@ -140,14 +140,17 @@
             <div id="optMapSize" class="options"></div>
           </div>
 
-          <!-- طابع المدينة (القسم 3.9): شكل فقط، مع صورة مصغرة حية -->
+          <!-- طابع المدينة (القسم 3.9): شكل فقط. زر بصورة مصغرة حية يفتح لوحة المدن مرتبة حسب المنطقة -->
           <div class="row">
             <span class="label">المدينة</span>
-            <div id="optCity" class="options city-options"></div>
-            <div class="city-preview">
+            <button id="btnCity" class="pick-btn">
               <canvas id="cityThumb"></canvas>
-              <span id="cityName" class="hint"></span>
-            </div>
+              <span class="pick-text">
+                <b id="cityChoice"></b>
+                <span id="cityName" class="hint"></span>
+                <span class="pick-more">اختر من المناطق ◂</span>
+              </span>
+            </button>
           </div>
 
           <div class="row">
@@ -267,6 +270,25 @@
   </div>
 
   <!-- سؤال الخروج: زر الرجوع في القائمة الرئيسية أو زر خروج (القسم 2.1) -->
+  <!-- لوحة الاختيار المرتبة حسب المنطقة: المدينة وأمة كل خانة (js/ui/picker.js) -->
+  <div id="picker" class="overlay" hidden>
+    <div class="panel picker">
+      <h2 id="pickerTitle"></h2>
+      <div id="pickerTabs" class="picker-tabs"></div>
+      <div class="picker-body">
+        <div class="picker-box">
+          <span id="pickerBoxTitle" class="picker-box-title"></span>
+          <div id="pickerItems" class="picker-items"></div>
+        </div>
+        <div id="pickerAside" class="picker-aside"></div>
+      </div>
+      <div class="picker-footer">
+        <div id="pickerExtras" class="picker-extras"></div>
+        <button id="pickerDone" class="opt done">تم</button>
+      </div>
+    </div>
+  </div>
+
   <div id="exitDialog" class="overlay" hidden>
     <div class="panel">
       <h1>هل تريد الخروج؟</h1>

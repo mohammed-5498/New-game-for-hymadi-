@@ -371,10 +371,106 @@ button.wide.ghost { background: transparent; color: var(--text-dim); }
 .mode-desc { margin: 6px 0 0; line-height: 1.5; }
 .row[data-mode][hidden] { display: none; }
 
-/* المدينة (القسم 3.9): عشرة أزرار في صفين، وتحتها صورة مصغرة حية واسمها الكامل */
-.city-options .opt { flex: 1 1 18%; }
-.city-preview { display: flex; flex-direction: column; align-items: center; gap: 4px; margin-top: 8px; }
-#cityThumb { width: 260px; height: 130px; max-width: 100%; border-radius: 10px; border: 1px solid var(--line); background: #2a2622; }
+/* المدينة (القسم 3.9): زر بصورة مصغرة حية، والمدينة ومنطقتها واسمها الكامل، يفتح لوحة المدن حسب المنطقة */
+.pick-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 6px;
+  background: var(--btn);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  color: var(--text);
+  font: inherit;
+  text-align: right;
+}
+#cityThumb { flex: 0 0 auto; width: 168px; height: 84px; border-radius: 10px; border: 1px solid var(--line); background: #2a2622; }
+.pick-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.pick-text b { font-size: 18px; color: var(--gold); }
+.pick-text .hint { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pick-more { font-size: 13px; color: var(--text-dim); }
+
+/* لوحة الاختيار حسب المنطقة (picker.js): تبويبات المناطق، وخانة المنطقة المفتوحة، ومعاينة بجانبها */
+.panel.picker { max-width: 860px; padding: 14px; text-align: right; }
+.picker h2 { margin-bottom: 10px; }
+.picker-tabs { display: flex; gap: 6px; }
+.picker-tab {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 4px;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.picker-tab small { padding: 1px 6px; border-radius: 8px; background: rgba(255, 255, 255, .08); font-size: 11px; font-weight: 400; }
+.picker-tab.open { background: var(--btn); border-color: var(--gold); color: var(--gold); }
+/* نقطة ذهبية على تبويب المنطقة التي فيها الخيار الحالي */
+.picker-tab.has::after {
+  content: '';
+  position: absolute;
+  top: 6px;
+  left: 7px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--gold);
+  box-shadow: 0 0 6px var(--gold);
+}
+.picker-body { display: grid; grid-template-columns: minmax(0, 1fr) 236px; gap: 10px; margin-top: 10px; align-items: start; }
+.picker-box { padding: 8px 10px 10px; border: 1px solid rgba(224, 176, 74, .45); border-radius: 14px; background: rgba(255, 255, 255, .03); }
+.picker-box-title { display: block; margin-bottom: 8px; font-size: 15px; font-weight: 700; color: var(--gold); }
+.picker-items { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.picker-item {
+  min-height: 56px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 4px;
+  background: var(--btn);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--text);
+  font: inherit;
+}
+.picker-item b { font-size: 16px; }
+.picker-item small { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--text-dim); }
+.picker-item.selected { background: var(--gold); border-color: var(--gold); color: var(--gold-dark); }
+.picker-item.selected small { color: rgba(36, 26, 16, .75); }
+.picker-aside { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 14px; line-height: 1.55; color: var(--text-dim); }
+.picker-aside[data-kind="side"] { display: block; text-align: right; }
+#pickerThumb { width: 236px; height: 118px; max-width: 100%; border-radius: 10px; border: 1px solid var(--line); background: #2a2622; }
+#pickerThumbName { text-align: center; }
+.picker-footer { display: flex; align-items: center; gap: 6px; margin-top: 10px; }
+.picker-extras { display: flex; flex: 1 1 auto; gap: 6px; }
+.picker-extras .opt { flex: 0 1 150px; }
+.picker-footer .done {
+  flex: 0 0 120px;
+  background: linear-gradient(#ebc165, #c99632);
+  border-color: #f1cf7e;
+  color: var(--gold-dark);
+  font-weight: 700;
+}
+/* شاشة ضيقة (طولية): التبويبات تلتف، والمعاينة تحت الخانة */
+@media (max-width: 640px) {
+  .picker-tabs { flex-wrap: wrap; }
+  .picker-tab { flex: 1 1 30%; }
+  .picker-body { grid-template-columns: minmax(0, 1fr); }
+  .picker-items { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 
 /* معركة البوتات (القسم 11.4): أداة قياس خفية */
 .menu.battle { max-width: 560px; text-align: right; }

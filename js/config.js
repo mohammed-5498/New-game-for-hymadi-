@@ -73,6 +73,25 @@ export const CITIES = {
   }
 };
 
+// مناطق قائمة الإعداد (بطلب المستخدم): المدن والأمم مرتبة حسب المنطقة، لكل منطقة تبويب وخانة خاصة
+// (js/ui/picker.js). cities: مدن أمم المنطقة أولاً ثم بقية المدن بطابعها، nations: أمم المنطقة.
+// المدينة أو الأمة التي لا تظهر في أي منطقة تُجمع في تبويب "أخرى" فلا تختفي من القائمة
+export const REGIONS = {
+  order: ['arabic', 'asian', 'european', 'african', 'american'],
+  arabic:   { name: 'العربية', cityTitle: 'المدن العربية', nationTitle: 'العصابات العربية',
+              cities: ['shibam', 'diriyah', 'cairo', 'yamamah', 'arab'], nations: ['yemen', 'saudi', 'egypt'] },
+  asian:    { name: 'الآسيوية', cityTitle: 'المدن الآسيوية', nationTitle: 'العصابات الآسيوية',
+              cities: ['kaifeng', 'japan', 'gyeongju', 'china', 'hk', 'jaipur'], nations: ['china', 'japan', 'korea'] },
+  european: { name: 'الأوروبية', cityTitle: 'المدن الأوروبية', nationTitle: 'العصابات الأوروبية',
+              cities: ['paris', 'birmingham', 'rothenburg', 'europe', 'norway'], nations: ['france', 'britain', 'germany'] },
+  african:  { name: 'الأفريقية', cityTitle: 'المدن الأفريقية', nationTitle: 'العصابات الأفريقية',
+              cities: ['gondar', 'kano', 'meroe'], nations: ['ethiopia', 'nigeria', 'sudan'] },
+  american: { name: 'الأمريكتان', cityTitle: 'مدن الأمريكتين', nationTitle: 'عصابات الأمريكتين',
+              cities: ['rio', 'laboca', 'tenoch', 'mexico', 'chicago'], nations: ['brazil', 'argentina', 'mexico'] },
+  classic:  { name: 'الكلاسيكية', nationTitle: 'العصابات الكلاسيكية' },   // تبويب العصابات الأربع في اختيار الأمة
+  other:    { name: 'أخرى', cityTitle: 'مدن أخرى', nationTitle: 'عصابات أخرى' }
+};
+
 // أنواع من pool المدن ليست مباني (أشجار وزينة): لا تُصبغ بلون المالك، كأشجار الطابع القديم
 // والسور وبواباته وأبراجه في صحراء اليمامة: ملك المدينة لا الحي
 export const CITY_UNTINTED = ['palm', 'cherry', 'lantern', 'willow', 'lanterns', 'pine', 'rack', 'banyan', 'neem', 'cactus', 'tree',
