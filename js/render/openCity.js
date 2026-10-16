@@ -76,8 +76,9 @@ export function drawRoundaboutRing(ctx, x, y) {
 // --- المحتوى ---
 
 // زينة الممر (حتمية): عمود إنارة أو حوض زرع أو مقعد على أحد جانبيه، ولا شيء في أغلب المربعات.
-// وبطابع المدينة في بعض الفارغ منها: طاولة مقهى بمظلة (باريس) أو بسطة سوق (روتنبورغ)
-const LANE_LOCAL = { paris: 'terrace', rothenburg: 'stall' };
+// وبطابع المدينة في بعض الفارغ منها: طاولة مقهى بمظلة (باريس والأوروبية)، أو بسطة سوق (روتنبورغ)،
+// أو بسطة بهارات وتمر (شبام)، أو كشك صحف (شيكاغو)
+const LANE_LOCAL = { paris: 'terrace', europe: 'terrace', rothenburg: 'stall', shibam: 'souq', chicago: 'newsstand' };
 export function laneDecor(map, i, j) {
   const h = hsh(i, j, 520);
   const kind = h < 0.3 ? 'lamp' : h < 0.5 ? 'planter' : h < 0.6 ? 'bench' : h < 0.72 ? LANE_LOCAL[map.city] || null : null;
@@ -103,7 +104,36 @@ export function drawLaneDecor(map, i, j, x, y) {
     box(px, py, 3.4, 1.7, 1.3, '#5e4634', '#76583f', '#8a6a4c');
     ln(px - 3.4, py - 3.6, px, py - 1.9, '#5e4634', 0.8);
   } else if (d.kind === 'terrace') terraceTable(px, py, i, j);
+  else if (d.kind === 'souq') souqStall(px, py, i, j);
+  else if (d.kind === 'newsstand') newsstand(px, py, i, j);
   else marketStall(px, py, i, j);
+}
+
+// بسطة سوق عربية (شبام): سلال بهارات وتمر تحت قماش ترابي مخطط بالأحمر
+const SOUQ_GOODS = ['#c8462e', '#e8b83a', '#6f8a3a', '#5a2e1a'];
+function souqStall(px, py, i, j) {
+  const g = Math.floor(hsh(i, j, 525) * SOUQ_GOODS.length);
+  el(px, py + 0.5, 4.2, 1.8, 'rgba(0,0,0,0.18)');
+  box(px, py, 3.6, 1.8, 2, '#7a5a3a', '#8e6a46', '#a07a52');
+  for (let k = 0; k < 3; k++) {
+    const bx = px - 1.8 + k * 1.8, by = py - 2.1 + (k - 1) * 0.15;
+    poly([[bx - 0.75, by], [bx, by - 1.2], [bx + 0.75, by]], SOUQ_GOODS[(g + k) % SOUQ_GOODS.length]);
+  }
+  ln(px - 3.4, py - 0.2, px - 3.4, py - 6.4, '#5a4030', 0.5);
+  ln(px + 3.4, py - 0.2, px + 3.4, py - 6.4, '#5a4030', 0.5);
+  poly([[px - 4.2, py - 6.6], [px + 4.2, py - 6.6], [px + 3.4, py - 8.2], [px - 3.4, py - 8.2]], '#d6c08a');
+  for (const o of [-1.8, 0, 1.8]) ln(px + o - 0.4, py - 6.6, px + o * 0.8, py - 8.2, '#a8322a', 0.6);
+}
+
+// كشك صحف بطراز الثلاثينيات (شيكاغو): صندوق أخضر بمجلات ملونة ولافتة بيضاء
+const MAGS = ['#c8322a', '#e8c23a', '#2f6aa8', '#f2ede0'];
+function newsstand(px, py, i, j) {
+  el(px, py + 0.5, 3.8, 1.7, 'rgba(0,0,0,0.18)');
+  box(px, py, 3.2, 1.6, 5.2, '#2f4a3a', '#3a5a46', '#2a3a30');
+  for (let k = 0; k < 4; k++) rc(px + 0.4 + k * 0.65, py - 3.8 + 1.6 - k * 0.33, 0.5, 1.5, MAGS[(k + Math.floor(hsh(i, j, 526) * 4)) % 4]);
+  poly([[px - 3.8, py - 5.2], [px, py - 7.3], [px + 3.8, py - 5.2], [px, py - 3.1]], '#26382e');
+  rc(px - 2.4, py - 8.6, 4.8, 1.3, '#f2ede0');
+  ln(px - 1.6, py - 8, px + 1.6, py - 8, '#2a2a2e', 0.4);
 }
 
 // طاولة مقهى باريسي مستديرة بكرسيين من الخيزران ومظلة حمراء أو خضراء
