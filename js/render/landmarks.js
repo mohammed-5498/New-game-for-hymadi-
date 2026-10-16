@@ -5,7 +5,7 @@
 // - مخزن السلاح: مبنى المدينة + شعار سلاحين متقاطعين
 // - برج الساعة والتلة: معلم المدينة (landmark) + ساعة، أو تاج ذهبي فوق علم التلة
 // العلامات لا تُصبغ بلون المالك حتى تبقى واضحة دائماً.
-import { CITY_SPECIALS } from '../config.js';
+import { CITY_SPECIALS, CAPTURE } from '../config.js';
 import { THEMES, getCtx, setThemeContext, setTone, getTone, getToneInfo, poly, circ, ln, box, el } from './cityThemes.js';
 
 const cityOf = (map) => THEMES[map.city] || THEMES.arab;
@@ -162,10 +162,17 @@ export function drawLandmark(map, type, x, y, i, j, ownerColor, flagColor, light
       c.setLineDash([3, 2]);
       c.stroke();
       c.setLineDash([]);
+      // دائرة ذهبية تلمع حول قاعدة العلم (بطلب المستخدم): توهج شفاف ثم خط ذهبي، فيُرى العلم في كل مدينة
+      const M = CAPTURE.flagMark, R = M.ring;
+      c.beginPath();
+      c.ellipse(x, y, R.rx, R.ry, 0, 0, 6.2832);
+      c.strokeStyle = 'rgba(' + M.glow + ',' + R.glowAlpha + ')'; c.lineWidth = R.glowWidth; c.stroke();
+      c.strokeStyle = M.color; c.lineWidth = R.width; c.stroke();
       ln(x, y, x, y - 22, '#2b2825', 1.2);
       poly([[x, y - 22], [x + 10, y - 19], [x, y - 16]], ownerColor || '#e8e2d6');
     });
-    if (lights) lights.push({ x, y: y - 4, r: 18, c: '255,235,190', a: 0.25 });
+    // ليلاً: ضوء ذهبي عند العلم
+    if (lights) lights.push({ x, y: y - 4, r: CAPTURE.flagMark.light.r, c: CAPTURE.flagMark.glow, a: CAPTURE.flagMark.light.alpha });
     return null;
   }
 

@@ -827,7 +827,19 @@ export const CAPTURE = {
   border: { width: 1.5, inset: 1.3, alpha: 0.95, under: 'rgba(24,18,12,0.45)', underWidth: 2.6 },
   tintSeconds: 0.5,           // زمن الانتقال اللوني عند تغيّر المالك
   tintSteps: 10,              // درجات الانتقال (تقليل عدد الألوان المخلوطة)
-  noticeSeconds: 2.5          // مدة ظهور إشعار الاستيلاء
+  noticeSeconds: 2.5,         // مدة ظهور إشعار الاستيلاء
+  // علامة العلم (بطلب المستخدم): سهم ذهبي يلمع فوق كل علم استيلاء ودائرة ذهبية صغيرة حول قاعدته فيُرى العلم
+  // في كل مدينة. السهم فوق طبقة الليل والمباني (يلمع: pulse)، والدائرة مع العلم في الطبقة الثابتة وتضيء ليلاً (light).
+  // arrow: نصف عرض رأس السهم half (ولا يصغر على الشاشة عن
+  // minScreen ÷ التقريب)، ورأسه فوق الأرض بـ lift، ويتمايل bob بسرعة bobSpeed. ring: نصفا قطري الدائرة
+  // وعرضها. glow لون توهج السهم. pulseSpeed سرعة اللمعان، وpulseMin أخفت شدة له (0..1)
+  flagMark: { color: '#ffd34d', outline: 'rgba(70,45,8,0.85)', glow: '255,205,70',
+              // السهم بثلاث طبقات: توهج مكبَّر glowScale شفافيته glowAlpha × النبض، وحد داكن مكبَّر edgeScale، ثم الذهبي
+              arrow: { half: 3.6, minScreen: 6, lift: 31, bob: 1.4, bobSpeed: 2.6, glowScale: 1.6, glowAlpha: 0.55, edgeScale: 1.22 },
+              // الدائرة مرسومة مع العلم في الطبقة الثابتة: توهج عرضه glowWidth بشفافية glowAlpha، ثم خط ذهبي width
+              ring: { rx: 7, ry: 3.5, width: 1.3, glowWidth: 3.6, glowAlpha: 0.4 },
+              light: { r: 20, alpha: 0.45 },  // ضوء العلم ليلاً
+              pulseSpeed: 3.2, pulseMin: 0.35 }
 };
 
 // --- الظهور ---

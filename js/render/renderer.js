@@ -103,6 +103,7 @@ export function render(ctx, state, alpha, cityBudgetMs = CITY_CACHE.frameBudgetM
     if (unit.selected) drawSelectionRing(ctx, unit, alpha);
   }
   drawMoveMarker(ctx, state);
+  drawFlagArrows(ctx, state, visible);
   drawHillCrown(ctx, state, visible);
   drawGroupTags(ctx, state, alpha, visible);
   drawCombatFx(ctx, state, visible);
@@ -400,6 +401,39 @@ function drawCaptureBars(ctx, state, visible) {
       ctx.lineWidth = 0.6;
       ctx.strokeRect(x - w / 2, top, w, h);
     }
+  }
+}
+
+// علامة العلم (بطلب المستخدم): السهم الذهبي فوق كل علم استيلاء، يلمع ويتمايل (والدائرة الذهبية حول قاعدته
+// مرسومة مع العلم في الطبقة الثابتة، landmarks.js). فوق طبقة الليل وفوق المباني فيدل على العلم المختبئ خلفها،
+// والتلة في طور ملك الحي يعلوها تاجها بدل السهم. الأرقام في CAPTURE.flagMark
+// كل الأسهم في مسار واحد لكل طبقة: توهج واسع شفاف، ثم حد داكن، ثم السهم الذهبي (ثلاث رسمات ملء مهما كان عدد الأعلام)
+const ARROW_LAYERS = [['glowScale', 'glow'], ['edgeScale', 'edge'], [null, 'core']];
+function drawFlagArrows(ctx, state, visible) {
+  const M = CAPTURE.flagMark, A = M.arrow, time = state.time;
+  const pulse = M.pulseMin + (1 - M.pulseMin) * (0.5 + 0.5 * Math.sin(time * M.pulseSpeed));
+  const hillId = state.mode === 'king' && state.modeState ? state.modeState.hillId : -1;
+  const s = Math.max(A.half, A.minScreen / state.camera.z), bob = Math.sin(time * A.bobSpeed) * A.bob;
+  for (const [scaleKey, layer] of ARROW_LAYERS) {
+    const k = scaleKey ? A[scaleKey] : 1;
+    ctx.beginPath();
+    let any = false;
+    for (const district of state.map.districts) {
+      if (!district.capture || district.id === hillId) continue;
+      const { i, j } = district.capture;
+      const x = (i - j) * TILE_HALF_W, y = (i + j) * TILE_HALF_H;
+      if (!visible(x, y)) continue;
+      // السهم حول مركزه (cy) مكبَّراً k مرة: رأس مثلث نحو العلم وساق
+      const tip0 = y - A.lift + bob, cy = tip0 - s * 1.15, ks = s * k;
+      const tip = cy + (tip0 - cy) * k, neck = tip - ks * 1.1, end = tip - ks * 2.3, w = ks * 0.38;
+      ctx.moveTo(x, tip); ctx.lineTo(x + ks, neck); ctx.lineTo(x + w, neck); ctx.lineTo(x + w, end);
+      ctx.lineTo(x - w, end); ctx.lineTo(x - w, neck); ctx.lineTo(x - ks, neck); ctx.closePath();
+      any = true;
+    }
+    if (!any) return;
+    ctx.fillStyle = layer === 'glow' ? 'rgba(' + M.glow + ',' + (A.glowAlpha * pulse).toFixed(2) + ')'
+      : layer === 'edge' ? M.outline : M.color;
+    ctx.fill();
   }
 }
 
