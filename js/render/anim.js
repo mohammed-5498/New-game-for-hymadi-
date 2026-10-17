@@ -68,6 +68,9 @@ function capsule(c,A,B,D,w,col){
   c.globalAlpha=a*0.9;capLine(c,A,B,D,-w*0.15,lt(col,0.3),w*0.4);
   c.globalAlpha=a*0.55;capLine(c,A,B,D,-w*0.22,lt(col,0.6),w*0.13);
   c.globalAlpha=a;}
+// كبسولة بحافتها وحدها بلا لمعة: للطرفين الخلفيين (في الظل أصلاً، ولمعتهما لا تكاد تُرى) وللقدمين والرقبة
+// (أقصر من أن تُرى لمعتها). نفس الشكل بنصف الخطوط: الكبسولة الكاملة أغلى رسم في النمط
+function capsuleFlat(c,A,B,D,w,col){capLine(c,A,B,D,0,dk(col,0.38),w+0.75);capLine(c,A,B,D,0,col,w);}
 // وهج دائري بلون واحد ثابت (لهب، ظل): تدرج مخزّن نصف قطره 1 يُرسم بالإزاحة والتكبير
 function glowOne(c,key,stops,x,y,rx,ry){const m=gradMap(GR_ONE,c,key);let g=m.get(0);
   if(!g){g=c.createRadialGradient(0,0,0,0,0,1);for(const [t,col] of stops)g.addColorStop(t,col);m.set(0,g);}
@@ -232,12 +235,13 @@ function drawBody(c,p,col,o){
 
 /* (المرحلة 9ج) drawBody بالنمط المظلَّل (style-v5): نفس الهيكل والخطافات، والأطراف والجذع والرقبة كبسولات
    أسمك بـ STYLE.thick، والرأس أكبر بـ STYLE.head بتدرج دائري ولمعة في العين، والقدم أغمق قليلاً.
+   للأداء: اللمعتان على الأطراف الأمامية والجذع فقط (capsuleFlat للباقي)، 22 خطاً للجسد بدل 32.
    نقاط الساقين تُحفظ لكل وحدة هنا (الكلاسيكية لا تقرؤها) */
 const TOE=[0,0];
-function legStyled(c,hx,hy,th,fl,W,col,pts){const h=pts.h,k=pts.k,f=pts.f;
+function legStyled(c,hx,hy,th,fl,W,col,pts,shine){const h=pts.h,k=pts.k,f=pts.f;
   h[0]=hx;h[1]=hy;k[0]=hx+Math.sin(th)*5.8;k[1]=hy+Math.cos(th)*5.8;f[0]=k[0]+Math.sin(th-fl)*6;f[1]=k[1]+Math.cos(th-fl)*6;
   TOE[0]=f[0]+Math.sin(th-fl+1.1)*2;TOE[1]=f[1]+Math.cos(th-fl+1.1)*0.9;
-  capsule(c,h,k,f,W,col);capsule(c,f,TOE,null,W,dk(col,0.1));return pts;}
+  (shine?capsule:capsuleFlat)(c,h,k,f,W,col);capsuleFlat(c,f,TOE,null,W,dk(col,0.1));return pts;}
 function headGrad(c,col,hr){const m=gradMap(GR_HEAD,c,col);let g=m.get(hr);
   if(!g){g=c.createRadialGradient(-hr*0.35,-hr*0.4,hr*0.1,0,0,hr*1.05);g.addColorStop(0,lt(col,0.38));g.addColorStop(0.6,col);g.addColorStop(1,dk(col,0.28));m.set(hr,g);}
   return g;}
@@ -248,13 +252,13 @@ function drawBodyStyled(c,p,col,o){
   const ha=a2+p.ht,H=add(add(N,rot(0,-3.1,ha)),[p.hdx,p.hdy]);
   const Sb=add(C,rot(-0.9,0.7,a2)),Sf=add(C,rot(0.9,0.5,a2));
   const J={hip:hp,mid:M,chest:C,neck:N,head:H,ha,Sf,Sb,a2,pl:p.pl,legB:null,legF:null};
-  J.legB=legStyled(c,p.px-1.2,p.py,p.tb,p.kb,W,dc,LEG_B);
+  J.legB=legStyled(c,p.px-1.2,p.py,p.tb,p.kb,W,dc,LEG_B,false);
   o.backWeapon&&o.backWeapon(c,J,p,col);
-  const b=ik2(Sb,p.bh,3.7,3.7,true);capsule(c,Sb,b.j,b.e,W-0.1,dc);J.handB=b.e;
+  const b=ik2(Sb,p.bh,3.7,3.7,true);capsuleFlat(c,Sb,b.j,b.e,W-0.1,dc);J.handB=b.e;
   o.back&&o.back(c,J,p,col);
-  capsule(c,hp,M,C,W+0.5,col);capsule(c,C,N,null,W*0.8,col);
+  capsule(c,hp,M,C,W+0.5,col);capsuleFlat(c,C,N,null,W*0.8,col);
   o.chest&&o.chest(c,J,p,col);
-  J.legF=legStyled(c,p.px+1.2,p.py,p.tf,p.kf,W,col,LEG_F);
+  J.legF=legStyled(c,p.px+1.2,p.py,p.tf,p.kf,W,col,LEG_F,true);
   o.robe&&o.robe(c,J,p,col);o.over&&o.over(c,J,p,col);
   const hr=(o.headR||3)*STYLE.head;
   c.save();c.translate(H[0],H[1]);c.rotate(ha);
@@ -290,7 +294,7 @@ const wdir=a=>[Math.cos(a),Math.sin(a)];
 
 export {
   TAU, WOOD, STEEL, DARKW, SKIN, Pf, ease, dk, lt, limb, bone3, ell, rrect, tri, rot, add, ik2,
-  STYLE, isHex, shadeEll, fillLinear, capsule, glowOne, flame, flameLayers, softShadow,
+  STYLE, isHex, shadeEll, fillLinear, capsule, capsuleFlat, glowOne, flame, flameLayers, softShadow,
   BASE, GUARD, P, mixPose, keyPose, G, ATK, DODGE, BLOCK,
   poseIdle, poseWalk, poseStagger, addFlinch, poseDeath, poseDown, downAngle, leg, drawBody, wdir
 };

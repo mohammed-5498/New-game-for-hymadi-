@@ -11,6 +11,7 @@ import { getPref } from '../prefs.js';
 import { drawCityLayer, cityStatics } from './chunkCache.js';
 import { drawPoliceLamp } from './landmarks.js';
 import { drawUnitsOccluded } from './occlusion.js';
+import { shadedCount } from '../pacing.js';
 
 export function resizeCanvas(canvas, state) {
   const view = state.view;
@@ -358,6 +359,7 @@ function drawUnitsLayer(ctx, state, alpha, visible) {
     entries.push({ unit, x, y, key: Math.round(i + j), size: unitSizeFactor(unit) });
   }
   entries.sort((a, b) => a.key - b.key);
+  pickShaded(entries, state.camera);
   const halo = CITIES.unitHalo[state.map.city];
   drawUnitsOccluded(ctx, state, entries, (c, e) => {
     const unit = e.unit;
@@ -368,8 +370,27 @@ function drawUnitsLayer(ctx, state, alpha, visible) {
       c.fillStyle = halo.color;
       c.fill();
     }
-    drawUnit(c, unit, alpha, state.camera.z, state.time, state.debugView, state.lodCrowded);
+    drawUnit(c, unit, alpha, state.camera.z, state.time, state.debugView, state.lodCrowded, e.shaded);
   });
+}
+
+// النمط المظلَّل ومظاهر الأمم الكاملة (المرحلة 9ج) لأقرب وحدات المستوى الكامل إلى وسط الشاشة، بعدد يتكيف مع
+// الجهاز (shadedCount في pacing.js). رسم فقط: مستويات التفصيل للقتال كما هي، والباقي بالرسم القديم
+const SHADED = [];
+function pickShaded(entries, cam) {
+  const max = shadedCount();
+  if (!max) return;
+  SHADED.length = 0;
+  for (const e of entries) {
+    if (e.unit.lod !== 'full') continue;
+    const dx = e.x - cam.x, dy = e.y - cam.y;
+    e.d = dx * dx + dy * dy;
+    SHADED.push(e);
+  }
+  const n = Math.min(SHADED.length, max);
+  if (SHADED.length > n) SHADED.sort((a, b) => a.d - b.d);
+  for (let k = 0; k < n; k++) SHADED[k].shaded = true;
+  SHADED.length = 0;
 }
 
 // شريط تقدم الاستيلاء فوق العلم بلون المستولي

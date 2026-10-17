@@ -44,15 +44,15 @@ export function both(make) {
   return out;
 }
 
-// مفتاح رسم وحدة الأمة حسب مستوى تفصيلها، أو null (عصابة كلاسيكية أو أمة بلا مظهر بعد)
-// (المرحلة 9ج) النسخة الكاملة بكل تفاصيلها لوحدات المستوى الكامل (أقرب 60 وحدة، القسم 5.4.5) وتُرسم بالنمط
-// المظلَّل، والمبسّطة لغيرها بالرسم القديم
-export function nationArtKey(unit, kind, time) {
+// مفتاح رسم وحدة الأمة، أو null (عصابة كلاسيكية أو أمة بلا مظهر بعد)
+// (المرحلة 9ج) النسخة الكاملة بكل تفاصيلها للوحدة المظللة (أقرب وحدات المستوى الكامل، renderer.js) وتُرسم
+// بالنمط المظلَّل، والمبسّطة لغيرها بالرسم القديم
+export function nationArtKey(unit, kind, time, shaded) {
   const art = NATION_ART[unit.nation];
   if (!art) return null;
   const away = unit.awayUntil > time ? art[kind + '_away'] : null;
   const keys = away || art[kind] || art.common;
-  return unit.lod === 'full' ? keys[0] : keys[1];
+  return shaded ? keys[0] : keys[1];
 }
 
 // ---------- ألوان ----------

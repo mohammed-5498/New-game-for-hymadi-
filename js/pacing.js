@@ -82,6 +82,7 @@ function measureVsync() {
 function judge(now) {
   measureVsync();
   const lateShare = pace.frames ? pace.late / pace.frames : 0;
+  judgeShaded(now, lateShare);
   if (pace.probing) {
     if (lateShare > P.enterLate) {           // التجربة فشلت: نرجع وننتظر ضعف المدة
       pace.div = pace.probing;
@@ -113,4 +114,30 @@ function judge(now) {
 }
 
 // للاختبارات ومؤشر الإطارات
-export const pacingState = () => ({ div: pace.div, vsync: pace.vsync, probing: pace.probing, hold: pace.hold });
+export const pacingState = () => ({ div: pace.div, vsync: pace.vsync, probing: pace.probing, hold: pace.hold, shaded: shade.count });
+
+// --- عدد الوحدات بالنمط المظلَّل (المرحلة 9ج، PERFORMANCE.shaded) ---
+// يحكم مع نافذة الإيقاع، والهدف 60 إطاراً/ث (أو إيقاع الشاشة إن كانت أبطأ) بهامش ثابت: يقل فوراً إن تأخرت
+// إطارات (عتبته أقل من enterLate فيسبق الإيقاع إلى الإبطاء) أو صار الإيقاع أبطأ من الهدف أو زاد عمل الإطار
+// عن workShrink من زمنه، ويزيد تدريجياً ما دام العمل أقل من workGrow ولا تأخر. فلا يدفع اللعبة أبداً إلى
+// إيقاع أبطأ مما كانت عليه بلا النمط، ولا يزيد أثناء تجربة الإيقاع الأسرع
+const SH = PERFORMANCE.shaded;
+const shade = { count: SH.start, cap: SH.max, capUntil: 0 };
+export const shadedCount = () => PERFORMANCE.shadedStyle ? shade.count : 0;
+// للاختبارات: عدد ثابت يبدأ منه
+export function setShadedCount(n) { shade.count = n; shade.cap = SH.max; shade.capUntil = 0; }
+function judgeShaded(now, lateShare) {
+  if (!pace.work.length) return;
+  const target = Math.max(pace.vsync, 1000 / 60), work = quantile(pace.work, 0.75);
+  const slow = pace.vsync * pace.div > target * 1.05;
+  if (lateShare > SH.lateShare || slow || work > target * SH.workShrink) {
+    if (lateShare > SH.lateShare && shade.count > SH.min) {   // لا يعود قريباً إلى العدد الذي أبطأ الإطارات
+      shade.cap = Math.max(SH.min, shade.count - SH.growStep);
+      shade.capUntil = now + SH.capMs;
+    }
+    shade.count = Math.max(SH.min, Math.floor(shade.count * SH.shrink));
+  } else if (lateShare === 0 && !pace.probing && work < target * SH.workGrow) {
+    const cap = now < shade.capUntil ? shade.cap : SH.max;
+    shade.count = Math.min(cap, shade.count + SH.growStep);
+  }
+}
