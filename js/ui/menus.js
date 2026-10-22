@@ -1,7 +1,7 @@
-// القوائم (القسم 12): الرئيسية، الإعداد، الإعدادات، الإحصائيات، سؤال الخروج، وتبديل الشاشات
+// القوائم (القسم 12): الرئيسية، الإعداد، المتجر، الإعدادات، الإحصائيات، سؤال الخروج، وتبديل الشاشات
 import {
   MAP_SIZES, PLAYER_COLORS, GANGS, GANG_IDS, BOT, BOT_LEVELS, COMBAT_REALISM,
-  WEATHER, WEATHER_KEYS, UNITS, MATCH_DEFAULTS, AUDIO, UI, CITIES, REGIONS, gameModes as GM, nations as NATIONS
+  WEATHER, WEATHER_KEYS, UNITS, MATCH_DEFAULTS, AUDIO, UI, CITIES, gameModes as GM, nations as NATIONS
 } from '../config.js';
 import { SIDE_CHOICES, resolveSide, nationOf } from '../game/nations.js';
 import { sound, audioSettings, setAudioSettings, startMusic } from '../audio/sound.js';
@@ -14,8 +14,9 @@ import { showMenuScene, hideMenuScene } from './menuScene.js';
 import { setupBattleScreen } from './battleScreen.js';
 import { updateCityThumb, drawCardThumb, shownCity, stopCard } from './cityThumb.js';
 import { setupPicker, openPicker, isPickerOpen, refreshPicker } from './picker.js';
+import { CITY_GROUPS, SIDE_GROUPS, regionOf } from './regions.js';
 import { drawModeIcon, drawSizeIcon, drawUnitsIcon, drawWeatherIcon } from './icons.js';
-import { THEMES } from '../render/cityThemes.js';
+import { showStore } from './storeScreen.js';
 
 const el = (id) => document.getElementById(id);
 
@@ -27,32 +28,6 @@ const CITY_CHOICES = [...CITIES.order, 'host', 'random'];
 const TEAM_CHOICES = [0, 1, 2, 3, 4];
 const SLOT_TYPES = { human: 'أنت', bot: 'بوت', closed: 'مغلقة' };
 const MAX_SLOTS = 8;
-
-// --- لوحتا الاختيار حسب المنطقة (picker.js): تبويب لكل منطقة بمدنها أو عصاباتها ---
-// تحت اسم المدينة بلدها (الجزء بعد "—" من اسمها الكامل)، أو اسمها الكامل إن لم يكن لها بلد
-const cityNote = (city) => {
-  const name = THEMES[city] ? THEMES[city].name : '';
-  return name.includes('—') ? name.split('—')[1].trim() : name;
-};
-// تبويب "أخرى" لما لم يُذكر في أي منطقة (مدينة أو أمة جديدة)، فلا تختفي من القائمة
-function regionGroups(key, all, title, item) {
-  const groups = REGIONS.order.map(r => ({
-    name: REGIONS[r].name, title: REGIONS[r][title],
-    items: REGIONS[r][key].filter(v => all.includes(v)).map(item)
-  }));
-  const rest = all.filter(v => !REGIONS.order.some(r => REGIONS[r][key].includes(v)));
-  if (rest.length) groups.push({ name: REGIONS.other.name, title: REGIONS.other[title], items: rest.map(item) });
-  return groups;
-}
-const CITY_GROUPS = regionGroups('cities', CITIES.order, 'cityTitle',
-  city => ({ value: city, text: CITIES.short[city], note: cityNote(city) }));
-const SIDE_GROUPS = [
-  ...regionGroups('nations', NATIONS.order, 'nationTitle',
-    id => ({ value: id, text: NATIONS[id].name, note: NATIONS[id].gangName + ' • ' + NATIONS.styles[NATIONS[id].style].name })),
-  { name: REGIONS.classic.name, title: REGIONS.classic.nationTitle,
-    items: GANG_IDS.map(id => ({ value: id, text: GANGS[id].name, note: NATIONS.styles[id].name })) }
-];
-const regionOf = (groups, value) => groups.find(group => group.items.some(item => item.value === value));
 
 // إعدادات قائمة الإعداد (تتحول إلى إعدادات مباراة عند الضغط على "ابدأ")
 const setup = {
@@ -104,11 +79,13 @@ export function setupMenus(handlers) {
   // القائمة الرئيسية (القسم 12.1)
   onTap('btnContinue', continuePressed);
   onTap('btnPlay', () => showScreen('setup'));
+  onTap('btnStore', () => showScreen('store'));
   onTap('btnSettings', () => showScreen('settings'));
   onTap('btnStats', () => showScreen('stats'));
   onTap('btnBackToMain', () => showScreen('main'));
   onTap('btnSettingsBack', () => showScreen('main'));
   onTap('btnStatsBack', () => showScreen('main'));
+  onTap('btnStoreBack', () => showScreen('main'));
   el('btnStart').addEventListener('click', startPressed);
   el('btnArena').addEventListener('click', arenaPressed);
 
@@ -134,7 +111,7 @@ export function setupMenus(handlers) {
 
 // --- تبديل الشاشات بتلاشٍ قصير (القسم 12.0) ---
 const SCREENS = {
-  main: 'screenMain', setup: 'screenSetup', settings: 'screenSettings',
+  main: 'screenMain', setup: 'screenSetup', store: 'screenStore', settings: 'screenSettings',
   stats: 'screenStats', game: 'screenGame', battle: 'screenBattle'
 };
 
@@ -153,6 +130,7 @@ export function showScreen(name) {
     else fadeOut(el(id));
   }
   if (name === 'setup') drawSetupIcons();      // بعد الظهور: الأيقونات بمقاسها الحقيقي
+  if (name === 'store') showStore();           // وصور المتجر بمقاس خاناتها
   // الخلفية الحية لكل القوائم، وتتوقف تماماً أثناء المباراة
   if (name === 'game') {
     hideMenuScene();

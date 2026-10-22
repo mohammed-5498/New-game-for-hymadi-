@@ -93,8 +93,8 @@ function poseOf(unit, time, animT, walking, sw) {
   return p;
 }
 
-// السلاح ذو اليدين يضع اليد الخلفية على المقبض تلقائياً
-function twoHand(ud, p) {
+// السلاح ذو اليدين يضع اليد الخلفية على المقبض تلقائياً (وصور الشخصيات في المتجر)
+export function twoHand(ud, p) {
   if (!ud.twoH) return p;
   const d = wdir(p.wa);
   p = Object.assign({}, p);

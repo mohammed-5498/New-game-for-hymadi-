@@ -344,6 +344,11 @@ button.wide.ghost { background: transparent; color: var(--text-dim); }
   .brand, .main-buttons { flex: 1 1 0; min-width: 0; }
   .title { font-size: clamp(30px, 5.6vw, 50px); }
 }
+/* شاشة قصيرة جداً: الأزرار الستة (مع متابعة المباراة وخروج) بلا تمرير */
+@media (orientation: landscape) and (max-height: 400px) {
+  .main-buttons { gap: 8px; }
+  .main-buttons button.wide { min-height: 46px; }
+}
 
 /* --- قائمة الإعداد (القسم 12.2) --- */
 .menu.setup { max-width: 520px; text-align: right; padding-bottom: 0; }
@@ -556,6 +561,85 @@ button.wide.ghost { background: transparent; color: var(--text-dim); }
   .picker-items[data-cols="4"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .picker-items[data-cols="3"], .picker-items[data-cols="5"], .picker-items[data-cols="6"] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .aside-art:not(.wide) { max-height: 110px; }
+}
+
+/* --- المتجر (بطلب المستخدم): الأقسام في عمود جانبي، وتبويبات المناطق وخاناتها ومعاينة المختار كلوحة المدن --- */
+.menu.store { max-width: 980px; text-align: right; }
+.menu.store h2 { margin-bottom: 2px; }
+.store-note { margin: 0 0 10px; text-align: center; }
+.store-layout { display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: 12px; align-items: start; }
+.store-side { display: flex; flex-direction: column; gap: 8px; }
+.store-main { min-width: 0; }
+.store-tabs { display: flex; flex-direction: column; gap: 8px; }
+.store-tab {
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 0 12px;
+  background: var(--btn);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--text);
+  font-size: 17px;
+  font-weight: 700;
+}
+.store-tab small { padding: 1px 7px; border-radius: 8px; background: rgba(255, 255, 255, .08); font-size: 12px; font-weight: 400; color: var(--text-dim); }
+.store-tab.selected { background: var(--gold); border-color: var(--gold); color: var(--gold-dark); }
+.store-tab.selected small { background: rgba(36, 26, 16, .15); color: var(--gold-dark); }
+.store-side button.wide { margin-top: 0; }
+#storeRegions .picker-tab { font-size: 15px; }
+/* خانة المتجر: الصورة (المدينة أو البطل) فوق الاسم، وتحته شارة "مجانية" ذهبية أو "السعر لاحقاً" داكنة */
+.picker-item.store-card { justify-content: flex-start; padding: 4px 4px 6px; background: #2a2622; }
+.store-art { width: 100%; height: 70px; margin-bottom: 2px; border-radius: 8px; }
+.picker-item.store-card.selected { background: #2a2622; border: 2px solid var(--gold); box-shadow: 0 0 10px rgba(224, 176, 74, .6); color: var(--gold); }
+.picker-item.store-card.selected small { color: #f3e3c0; }
+.store-badge {
+  margin-top: 3px;
+  padding: 0 8px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  background: rgba(255, 255, 255, .06);
+  border: 1px solid rgba(160, 190, 230, .4);
+  color: #d9e6f5;
+}
+.store-badge.free { background: var(--gold); border-color: var(--gold); color: var(--gold-dark); }
+.store-thumb { width: 236px; height: 118px; max-width: 100%; border-radius: 10px; border: 1px solid var(--line); background: #2a2622; }
+.store-lineup { width: 100%; max-width: 236px; aspect-ratio: 2 / 1; }
+.store-names { text-align: center; font-size: 12px; }
+.store-status {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-top: 4px;
+  padding: 6px 10px;
+  border: 1px solid rgba(160, 190, 230, .35);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .04);
+}
+.store-status b { font-size: 15px; color: var(--text); }
+.store-status.free { border-color: rgba(224, 176, 74, .6); }
+.store-status.free b { color: var(--gold); }
+.store-empty { padding: 34px 16px; text-align: center; border: 1px dashed var(--line); border-radius: 14px; }
+.store-empty b { display: block; margin-bottom: 6px; font-size: 22px; color: var(--gold); }
+@media (orientation: landscape) and (max-height: 400px) {
+  .store-tab { min-height: 46px; }
+  .store-art { height: 60px; }
+  .store-thumb { width: 208px; height: 104px; }
+  .store-lineup { max-width: 208px; }
+}
+/* شاشة ضيقة (طولية): الأقسام صف فوق المحتوى، و"رجوع" في الأسفل */
+@media (max-width: 640px) {
+  .store-layout { display: flex; flex-direction: column; }
+  .store-side { display: contents; }
+  .store-tabs { flex-direction: row; }
+  .store-tab { flex: 1 1 0; justify-content: center; padding: 0 6px; }
+  .store-main { order: 1; }
+  .store-side button.wide { order: 2; }
 }
 
 /* معركة البوتات (القسم 11.4): أداة قياس خفية */

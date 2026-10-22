@@ -15,9 +15,9 @@ import './nationsLatin.js';                // والدفعة اللاتينية
 const hasUlt = (unit) => !!unit.stats.ult;
 const ultReady = (unit) => hasUlt(unit) && unit.ultCharge >= ULT.max;
 
-// مفاتيح الرسم (القسم 13): عصابة الوحدة + نوعها
+// مفاتيح الرسم (القسم 13): عصابة الوحدة + نوعها (وصور الشخصيات في المتجر)
 // common فرد عادي، ثم شخصيتان مميزتان، ثم البطل champion
-const ART_KEYS = {
+export const ART_KEYS = {
   crows:     { common: 'crow_common',   spear: 'crow_spear',     dual: 'crow_dual',        champion: 'crow_hero' },
   hammers:   { common: 'hammer_common', armored: 'hammer_shield', smasher: 'hammer_breaker', champion: 'hammer_hero' },
   vipers:    { common: 'viper_common',  sniper: 'viper_sniper',  firebomber: 'viper_firebomber', champion: 'viper_hero' },

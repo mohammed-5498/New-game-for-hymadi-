@@ -92,6 +92,7 @@
           <span id="continueInfo" class="hint"></span>
         </button>
         <button id="btnPlay" class="wide gold">لعب</button>
+        <button id="btnStore" class="wide">المتجر</button>
         <button id="btnSettings" class="wide">الإعدادات</button>
         <button id="btnStats" class="wide">الإحصائيات</button>
         <!-- زر الخروج: داخل التطبيق فقط، المتصفح لا يسمح بإغلاق الصفحة (القسم 2.1) -->
@@ -186,6 +187,35 @@
         <div class="footer-row">
           <button id="btnStart" class="wide gold">ابدأ</button>
           <button id="btnBackToMain" class="wide ghost">رجوع</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- المتجر (بطلب المستخدم): الخرائط والعصابات والمظاهر، مرتبة حسب المنطقة (js/ui/storeScreen.js) -->
+  <div id="screenStore" class="screen" hidden>
+    <div class="menu store">
+      <h2>المتجر</h2>
+      <p class="hint store-note">فترة الاختبار: كل الخرائط والعصابات متاحة لك الآن، والأسعار تُحدد لاحقاً.</p>
+      <div class="store-layout">
+        <!-- الأقسام في عمود جانبي (صف في الشاشة الطولية)، و"رجوع" تحتها -->
+        <div class="store-side">
+          <div id="storeTabs" class="store-tabs"></div>
+          <button id="btnStoreBack" class="wide ghost">رجوع</button>
+        </div>
+        <div class="store-main">
+          <div id="storeRegions" class="picker-tabs"></div>
+          <div id="storeBody" class="picker-body">
+            <div class="picker-box">
+              <span id="storeBoxTitle" class="picker-box-title"></span>
+              <div id="storeItems" class="picker-items"></div>
+            </div>
+            <div id="storeAside" class="picker-aside"></div>
+          </div>
+          <div id="storeEmpty" class="store-empty" hidden>
+            <b>قريباً</b>
+            <p class="hint">لا توجد مظاهر بعد، وستُضاف هنا لاحقاً.</p>
+          </div>
         </div>
       </div>
     </div>
