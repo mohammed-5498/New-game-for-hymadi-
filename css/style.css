@@ -367,17 +367,16 @@ button.wide.ghost { background: transparent; color: var(--text-dim); }
 
 .opt.selected { background: var(--gold); border-color: var(--gold); color: var(--gold-dark); }
 
-/* طور اللعب: سطر الشرح تحت الأزرار، وخيارات الطور المختار فقط */
-.mode-desc { margin: 6px 0 0; line-height: 1.5; }
-.row[data-mode][hidden] { display: none; }
-
-/* المدينة (القسم 3.9): زر بصورة مصغرة حية، والمدينة ومنطقتها واسمها الكامل، يفتح لوحة المدن حسب المنطقة */
+/* خيارات المباراة (بطلب المستخدم): كل خيار زر عليه اختياره الحالي، يفتح لوحته (picker.js).
+   طور اللعب والمدينة زران عريضان، وحجم الخريطة والطقس والحد الأقصى ثلاث خانات في صف */
 .pick-btn {
   display: flex;
   align-items: center;
   gap: 10px;
   width: 100%;
-  padding: 6px;
+  min-height: 62px;
+  margin-bottom: 8px;
+  padding: 6px 10px 6px 8px;
   background: var(--btn);
   border: 1px solid var(--line);
   border-radius: 14px;
@@ -385,14 +384,35 @@ button.wide.ghost { background: transparent; color: var(--text-dim); }
   font: inherit;
   text-align: right;
 }
-#cityThumb { flex: 0 0 auto; width: 168px; height: 84px; border-radius: 10px; border: 1px solid var(--line); background: #2a2622; }
-.pick-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.pick-icon { flex: 0 0 auto; width: 60px; height: 40px; }
+#cityThumb { flex: 0 0 auto; width: 144px; height: 72px; border-radius: 10px; border: 1px solid var(--line); background: #2a2622; }
+.pick-text { flex: 1 1 auto; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pick-label { font-size: 13px; font-weight: 700; color: var(--text-dim); }
 .pick-text b { font-size: 18px; color: var(--gold); }
-.pick-text .hint { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pick-more { font-size: 13px; color: var(--text-dim); }
+.pick-text .hint { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pick-arrow { flex: 0 0 auto; font-size: 18px; color: var(--text-dim); }
+
+.pick-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-bottom: 12px; }
+.pick-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  min-width: 0;
+  padding: 6px 4px 7px;
+  background: var(--btn);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  color: var(--text);
+  font: inherit;
+}
+.tile-icon { width: 54px; height: 36px; margin-bottom: 2px; }
+.pick-tile b { font-size: 16px; color: var(--gold); }
+.pick-tile .pick-label, .pick-tile b, .pick-tile small { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pick-tile small { font-size: 11px; color: var(--text-dim); }
 
 /* لوحة الاختيار حسب المنطقة (picker.js): تبويبات المناطق، وخانة المنطقة المفتوحة، ومعاينة بجانبها */
-.panel.picker { max-width: 860px; padding: 14px; text-align: right; }
+.panel.picker { max-width: 860px; padding: 14px; text-align: right; display: flex; flex-direction: column; max-height: 100%; }
 .picker h2 { margin-bottom: 10px; }
 .picker-tabs { display: flex; gap: 6px; }
 .picker-tab {
@@ -429,9 +449,14 @@ button.wide.ghost { background: transparent; color: var(--text-dim); }
   box-shadow: 0 0 6px var(--gold);
 }
 .picker-body { display: grid; grid-template-columns: minmax(0, 1fr) 236px; gap: 10px; margin-top: 10px; align-items: start; }
+/* اللوحة لا تتجاوز الشاشة: محتواها يُمرَّر داخلها، والعنوان وزر "تم" ظاهران دائماً */
+.picker-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .picker-box { padding: 8px 10px 10px; border: 1px solid rgba(224, 176, 74, .45); border-radius: 14px; background: rgba(255, 255, 255, .03); }
 .picker-box-title { display: block; margin-bottom: 8px; font-size: 15px; font-weight: 700; color: var(--gold); }
 .picker-items { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.picker-items[data-cols="4"] { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.picker-items[data-cols="5"] { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.picker-items[data-cols="6"] { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 .picker-item {
   min-height: 56px;
   display: flex;
@@ -473,8 +498,24 @@ button.wide.ghost { background: transparent; color: var(--text-dim); }
 .picker-item.art.selected { background: #2a2622; border: 2px solid var(--gold); box-shadow: 0 0 10px rgba(224, 176, 74, .6); }
 .picker-item.art.selected b { color: var(--gold); }
 .picker-item.art.selected small { color: #f3e3c0; }
+/* خانة بأيقونة (الأطوار والأحجام والحد الأقصى): الأيقونة فوق الاسم، والمختارة بإطار ذهبي كخانات الصور */
+.picker-item.icon { padding: 6px 4px; }
+.picker-icon { width: 57px; height: 38px; margin-bottom: 2px; }
+.picker-item.icon.selected { background: #2a2622; border: 2px solid var(--gold); box-shadow: 0 0 10px rgba(224, 176, 74, .6); color: var(--gold); }
+.picker-item.icon.selected small { color: #f3e3c0; }
+/* خيارات الطور المختار تحت الأطوار (مدة المباراة، زمن التلة، الحلفاء وصعوبة الشرطة) */
+.picker-more { display: flex; flex-wrap: wrap; gap: 0 12px; margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(224, 176, 74, .25); }
+.picker-more .row { flex: 1 1 200px; margin-bottom: 4px; }
+.picker-more .label { font-size: 14px; }
+.picker-more .opt { flex: 1 1 0; min-height: 46px; }
 .picker-aside { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 14px; line-height: 1.55; color: var(--text-dim); }
 .picker-aside[data-kind="side"] { display: block; text-align: right; }
+/* معاينة لوحات الخيارات: صورة المختار أو أيقونته، واسمه، ووصفه */
+.aside-art { width: 100%; max-width: 236px; aspect-ratio: 3 / 2; }
+.aside-art.wide { aspect-ratio: 2 / 1; border-radius: 10px; border: 1px solid var(--line); background: #2a2622; }
+.aside-title { font-size: 17px; color: var(--gold); text-align: center; }
+.aside-lines { align-self: stretch; text-align: right; }
+.aside-lines p { margin: 2px 0; }
 #pickerThumb { width: 236px; height: 118px; max-width: 100%; border-radius: 10px; border: 1px solid var(--line); background: #2a2622; }
 #pickerThumbName { text-align: center; }
 .picker-footer { display: flex; align-items: center; gap: 6px; margin-top: 10px; }
@@ -497,6 +538,11 @@ button.wide.ghost { background: transparent; color: var(--text-dim); }
   .picker-box-title { margin-bottom: 6px; }
   .picker-item { min-height: 52px; }
   .picker-item.art { min-height: 56px; }
+  .picker-icon { width: 48px; height: 32px; margin-bottom: 0; }
+  .picker-item.icon { padding: 3px 4px; }
+  .picker-more { margin-top: 6px; padding-top: 4px; }
+  .aside-art { max-width: 208px; }
+  .aside-art:not(.wide) { max-height: 84px; }
   #pickerThumb { width: 208px; height: 104px; }
   .picker-footer { margin-top: 8px; }
   .picker-footer .opt { min-height: 46px; }
@@ -507,6 +553,9 @@ button.wide.ghost { background: transparent; color: var(--text-dim); }
   .picker-tab { flex: 1 1 30%; }
   .picker-body { grid-template-columns: minmax(0, 1fr); }
   .picker-items { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .picker-items[data-cols="4"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .picker-items[data-cols="3"], .picker-items[data-cols="5"], .picker-items[data-cols="6"] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .aside-art:not(.wide) { max-height: 110px; }
 }
 
 /* معركة البوتات (القسم 11.4): أداة قياس خفية */
@@ -519,9 +568,6 @@ button.wide.ghost { background: transparent; color: var(--text-dim); }
 .menu.setup.survival #slots .slot:not(:first-child) { display: none; }
 .menu.setup.survival .slot .team, .menu.setup.survival .slot .difficulty,
 .menu.setup.survival .slot-cols .team, .menu.setup.survival .slot-cols .difficulty { visibility: hidden; }
-
-/* أزرار الحد الأقصى قصيرة: كلها في صف واحد */
-#optMaxUnits .opt { flex: 1 1 12%; padding: 0 4px; }
 
 /* بالعرض على شاشة كافية: الخيارات في عمود والخانات في عمود */
 @media (orientation: landscape) and (min-width: 700px) {

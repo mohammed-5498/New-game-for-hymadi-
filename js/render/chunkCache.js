@@ -445,7 +445,8 @@ export function measureChunkCost(state, scale, count = 20) {
 }
 
 // رسم الخريطة كاملة مرة واحدة على لوحة (الصورة المصغرة للمدينة في قائمة الإعداد)
-export function drawWholeMap(ctx, state) {
+// lights: مصفوفة تُجمع فيها إضاءة الليل (صورة الطقس في لوحة الطقس)، أو null
+export function drawWholeMap(ctx, state, lights = null) {
   const map = state.map, all = [];
   for (let j = 0; j < map.n; j++) for (let i = 0; i < map.n; i++) all.push(i, j);
   drawGround(ctx, state, all);
@@ -453,7 +454,7 @@ export function drawWholeMap(ctx, state) {
   for (let s = 0; s <= 2 * map.n - 2; s++) {
     for (let i = Math.max(0, s - map.n + 1); i <= Math.min(map.n - 1, s); i++) {
       const j = s - i;
-      drawTileStatic(state, i, j, tileX(i, j), tileY(i, j), null, null);
+      drawTileStatic(state, i, j, tileX(i, j), tileY(i, j), lights, null);
     }
   }
 }

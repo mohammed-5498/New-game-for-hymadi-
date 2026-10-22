@@ -108,59 +108,49 @@
 
       <div class="setup-cols">
         <div class="setup-options">
-          <!-- طور اللعب أول خيار (القسم 9.5)، وتحته سطر يشرحه، ثم خيارات الطور المختار فقط -->
-          <div class="row">
-            <span class="label">طور اللعب</span>
-            <div id="optMode" class="options"></div>
-            <p id="modeDesc" class="hint mode-desc"></p>
-          </div>
+          <!-- خيارات المباراة (بطلب المستخدم): كل خيار زر عليه اختياره الحالي، يفتح لوحته (js/ui/picker.js).
+               طور اللعب أول خيار (القسم 9.5)، وخيارات الطور المختار داخل لوحة الأطوار -->
+          <button id="pickMode" class="pick-btn">
+            <canvas id="modeIcon" class="pick-icon"></canvas>
+            <span class="pick-text">
+              <span class="pick-label">طور اللعب</span>
+              <b id="modeChoice"></b>
+              <span id="modeNote" class="hint"></span>
+            </span>
+            <span class="pick-arrow">◂</span>
+          </button>
 
-          <div class="row" data-mode="points">
-            <span class="label">مدة المباراة (دقيقة)</span>
-            <div id="optPointsMinutes" class="options"></div>
-          </div>
+          <!-- طابع المدينة (القسم 3.9): شكل فقط. صورة مصغرة حية، ولوحة المدن مرتبة حسب المنطقة -->
+          <button id="btnCity" class="pick-btn">
+            <canvas id="cityThumb"></canvas>
+            <span class="pick-text">
+              <span class="pick-label">المدينة</span>
+              <b id="cityChoice"></b>
+              <span id="cityName" class="hint"></span>
+            </span>
+            <span class="pick-arrow">◂</span>
+          </button>
 
-          <div class="row" data-mode="king">
-            <span class="label">زمن السيطرة على التلة للفوز (دقيقة)</span>
-            <div id="optKingMinutes" class="options"></div>
-          </div>
-
-          <div class="row" data-mode="survival">
-            <span class="label">عدد الحلفاء من البوتات</span>
-            <div id="optAllies" class="options"></div>
-          </div>
-
-          <div class="row" data-mode="survival">
-            <span class="label">صعوبة الشرطة</span>
-            <div id="optSurvivalLevel" class="options"></div>
-          </div>
-
-          <div class="row">
-            <span class="label">حجم الخريطة</span>
-            <div id="optMapSize" class="options"></div>
-          </div>
-
-          <!-- طابع المدينة (القسم 3.9): شكل فقط. زر بصورة مصغرة حية يفتح لوحة المدن مرتبة حسب المنطقة -->
-          <div class="row">
-            <span class="label">المدينة</span>
-            <button id="btnCity" class="pick-btn">
-              <canvas id="cityThumb"></canvas>
-              <span class="pick-text">
-                <b id="cityChoice"></b>
-                <span id="cityName" class="hint"></span>
-                <span class="pick-more">اختر من المناطق ◂</span>
-              </span>
+          <!-- حجم الخريطة والطقس والحد الأقصى للوحدات: ثلاث خانات صغيرة بأيقوناتها -->
+          <div class="pick-tiles">
+            <button id="pickSize" class="pick-tile">
+              <canvas id="sizeIcon" class="tile-icon"></canvas>
+              <span class="pick-label">حجم الخريطة</span>
+              <b id="sizeChoice"></b>
+              <small id="sizeNote"></small>
             </button>
-          </div>
-
-          <div class="row">
-            <span class="label">الحد الأقصى للوحدات</span>
-            <div id="optMaxUnits" class="options"></div>
-          </div>
-
-          <div class="row">
-            <span class="label">الطقس</span>
-            <div id="optWeather" class="options"></div>
+            <button id="pickWeather" class="pick-tile">
+              <canvas id="weatherIcon" class="tile-icon"></canvas>
+              <span class="pick-label">الطقس</span>
+              <b id="weatherChoice"></b>
+              <small id="weatherNote"></small>
+            </button>
+            <button id="pickUnits" class="pick-tile">
+              <canvas id="unitsIcon" class="tile-icon"></canvas>
+              <span class="pick-label">الحد الأقصى</span>
+              <b id="unitsChoice"></b>
+              <small id="unitsNote"></small>
+            </button>
           </div>
 
           <div class="row">
@@ -270,7 +260,7 @@
   </div>
 
   <!-- سؤال الخروج: زر الرجوع في القائمة الرئيسية أو زر خروج (القسم 2.1) -->
-  <!-- لوحة الاختيار المرتبة حسب المنطقة: المدينة وأمة كل خانة (js/ui/picker.js) -->
+  <!-- لوحة الاختيار: خيارات قائمة الإعداد، والمدن والأمم مرتبة حسب المنطقة (js/ui/picker.js) -->
   <div id="picker" class="overlay" hidden>
     <div class="panel picker">
       <h2 id="pickerTitle"></h2>
@@ -279,6 +269,7 @@
         <div class="picker-box">
           <span id="pickerBoxTitle" class="picker-box-title"></span>
           <div id="pickerItems" class="picker-items"></div>
+          <div id="pickerMore" class="picker-more" hidden></div>
         </div>
         <div id="pickerAside" class="picker-aside"></div>
       </div>

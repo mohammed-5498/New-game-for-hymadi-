@@ -1,6 +1,6 @@
 // القوائم (القسم 12): الرئيسية، الإعداد، الإعدادات، الإحصائيات، سؤال الخروج، وتبديل الشاشات
 import {
-  MAP_SIZES, PLAYER_COLORS, GANGS, GANG_IDS, BOT, BOT_LEVELS,
+  MAP_SIZES, PLAYER_COLORS, GANGS, GANG_IDS, BOT, BOT_LEVELS, COMBAT_REALISM,
   WEATHER, WEATHER_KEYS, UNITS, MATCH_DEFAULTS, AUDIO, UI, CITIES, REGIONS, gameModes as GM, nations as NATIONS
 } from '../config.js';
 import { SIDE_CHOICES, resolveSide, nationOf } from '../game/nations.js';
@@ -12,8 +12,9 @@ import { savedMatchInfo } from '../matchSave.js';
 import { fadeIn, fadeOut, isShown } from './transition.js';
 import { showMenuScene, hideMenuScene } from './menuScene.js';
 import { setupBattleScreen } from './battleScreen.js';
-import { updateCityThumb, drawCardThumb } from './cityThumb.js';
-import { setupPicker, openPicker, isPickerOpen } from './picker.js';
+import { updateCityThumb, drawCardThumb, shownCity, stopCard } from './cityThumb.js';
+import { setupPicker, openPicker, isPickerOpen, refreshPicker } from './picker.js';
+import { drawModeIcon, drawSizeIcon, drawUnitsIcon, drawWeatherIcon } from './icons.js';
 import { THEMES } from '../render/cityThemes.js';
 
 const el = (id) => document.getElementById(id);
@@ -117,30 +118,12 @@ export function setupMenus(handlers) {
   onTap('btnExitYes', exitApp);
   onTap('btnExitNo', closeExitDialog);
 
-  // طور اللعب وخياراته: تظهر خيارات الطور المختار فقط
-  buildOptions('optMode', GM.order, key => GM[key].name,
-    () => setup.mode, key => { setup.mode = key; refresh(); });
-  buildOptions('optPointsMinutes', GM.points.minutes, v => String(v),
-    () => setup.pointsMinutes, v => { setup.pointsMinutes = v; refresh(); });
-  buildOptions('optKingMinutes', GM.king.holdMinutes, v => String(v),
-    () => setup.kingMinutes, v => { setup.kingMinutes = v; refresh(); });
-  buildOptions('optAllies', GM.survival.allies, v => String(v),
-    () => setup.allies, v => { setup.allies = v; refresh(); });
-  buildOptions('optSurvivalLevel', GM.survival.levels, key => BOT[key].name,
-    () => setup.survivalLevel, key => { setup.survivalLevel = key; refresh(); });
-
-  buildOptions('optMapSize', MAP_SIZE_KEYS,
-    key => MAP_SIZES[key].name + ' (' + MAP_SIZES[key].maxPlayers + ')',
-    () => setup.mapSize, key => { setup.mapSize = key; refresh(); });
-
+  // خيارات المباراة: كل زر يفتح لوحته (طور اللعب وخياراته، المدينة، حجم الخريطة، الطقس، الحد الأقصى)
+  onTap('pickMode', openModePicker);
   onTap('btnCity', openCityPicker);
-
-  buildOptions('optMaxUnits', MAX_UNIT_CHOICES, value => String(value),
-    () => setup.maxUnits, value => { setup.maxUnits = value; refresh(); });
-
-  buildOptions('optWeather', WEATHER_CHOICES,
-    key => key === 'random' ? 'عشوائي' : WEATHER[key].name,
-    () => setup.weather, key => { setup.weather = key; refresh(); });
+  onTap('pickSize', openSizePicker);
+  onTap('pickWeather', openWeatherPicker);
+  onTap('pickUnits', openUnitsPicker);
 
   setupPicker();
   buildSlots();
@@ -169,6 +152,7 @@ export function showScreen(name) {
     if (key === name) fadeIn(el(id));
     else fadeOut(el(id));
   }
+  if (name === 'setup') drawSetupIcons();      // بعد الظهور: الأيقونات بمقاسها الحقيقي
   // الخلفية الحية لكل القوائم، وتتوقف تماماً أثناء المباراة
   if (name === 'game') {
     hideMenuScene();
@@ -223,13 +207,202 @@ function openSidePicker(index) {
       if (index === 0 && setup.city === 'host') showCity();
     },
     aside: (node, side) => { node.dataset.kind = 'side'; node.textContent = sideDesc(side); },
-    close: null
+    close: showCity                      // صورة المدينة "عشوائي" تعود للتبدل بعد الإغلاق
   });
 }
 
 function hostCity(side) {
   const nation = nationOf(side);
   return nation && CITIES.order.includes(nation.city) ? nation.city : 'random';
+}
+
+// --- لوحات خيارات المباراة (بطلب المستخدم): بنفس لوحة المدن، خانة واحدة بعناصر بأيقوناتها أو صورها،
+// وبجانبها صورة المختار واسمه ووصفه ---
+const single = (items) => [{ name: '', title: '', items }];
+
+// العدد مع المعدود بالعربية: 1 لاعب، لاعبان، 3-10 لاعبين، 11 فأكثر لاعباً
+function count(n, one, two, few, many) {
+  if (n === 1) return one;
+  if (n === 2) return two;
+  return n + ' ' + (n <= 10 ? few : many);
+}
+const minutesText = (n) => count(n, 'دقيقة', 'دقيقتان', 'دقائق', 'دقيقة');
+const playersText = (n) => count(n, 'لاعب', 'لاعبان', 'لاعبين', 'لاعباً');
+
+// معاينة لوحات الخيارات: صورة المختار (أو أيقونته)، واسمه، وسطور تصفه
+function infoAside(node, draw, value, title, lines, wide = false) {
+  if (node.dataset.kind !== 'info') {
+    node.dataset.kind = 'info';
+    node.innerHTML = '<canvas class="aside-art"></canvas><b class="aside-title"></b><div class="aside-lines"></div>';
+  }
+  const canvas = node.querySelector('canvas');
+  canvas.classList.toggle('wide', wide);          // قبل الرسم: الصورة تُرسم بمقاس اللوحة
+  draw(canvas, value);
+  node.querySelector('.aside-title').textContent = title;
+  const list = node.querySelector('.aside-lines');
+  list.innerHTML = '';
+  for (const line of lines) {
+    const p = document.createElement('p');
+    p.textContent = line;
+    list.appendChild(p);
+  }
+}
+
+// طور اللعب: الأطوار الخمسة، وتحتها خيارات الطور المختار فقط (القسم 9.5)
+const MODE_OPTIONS = {
+  points: [{ key: 'pointsMinutes', label: 'مدة المباراة (دقيقة)', values: GM.points.minutes, text: String }],
+  king: [{ key: 'kingMinutes', label: 'زمن السيطرة على التلة للفوز (دقيقة)', values: GM.king.holdMinutes, text: String }],
+  survival: [
+    { key: 'allies', label: 'عدد الحلفاء من البوتات', values: GM.survival.allies, text: String },
+    { key: 'survivalLevel', label: 'صعوبة الشرطة', values: GM.survival.levels, text: key => BOT[key].name }
+  ]
+};
+
+function modeOptions(node, mode) {
+  for (const option of MODE_OPTIONS[mode] || []) {
+    const row = document.createElement('div');
+    row.className = 'row';
+    const label = document.createElement('span');
+    label.className = 'label';
+    label.textContent = option.label;
+    const list = document.createElement('div');
+    list.className = 'options';
+    for (const value of option.values) {
+      const button = document.createElement('button');
+      button.className = 'opt' + (setup[option.key] === value ? ' selected' : '');
+      button.textContent = option.text(value);
+      button.addEventListener('click', () => { sound('ui_tap'); setup[option.key] = value; refresh(); refreshPicker(); });
+      list.appendChild(button);
+    }
+    row.append(label, list);
+    node.appendChild(row);
+  }
+}
+
+// سطر تحت اسم الطور في زره: خياراته المختارة، أو شرحه إن لم تكن له خيارات
+function modeNote() {
+  if (setup.mode === 'points') return 'مدة المباراة: ' + minutesText(setup.pointsMinutes);
+  if (setup.mode === 'king') return 'السيطرة على التلة: ' + minutesText(setup.kingMinutes);
+  if (setup.mode === 'survival') return 'الحلفاء: ' + setup.allies + ' • صعوبة الشرطة: ' + BOT[setup.survivalLevel].name;
+  return GM[setup.mode].desc;
+}
+
+function openModePicker() {
+  openPicker({
+    title: 'اختر طور اللعب',
+    groups: single(GM.order.map(key => ({ value: key, text: GM[key].name, note: GM[key].short }))),
+    icon: drawModeIcon,
+    columns: 5,
+    current: () => setup.mode,
+    pick: (mode) => { setup.mode = mode; refresh(); },
+    more: modeOptions,
+    aside: (node, mode) => infoAside(node, drawModeIcon, mode, GM[mode].name, [GM[mode].desc]),
+    close: showCity
+  });
+}
+
+// حجم الخريطة: حد اللاعبين وعدد الأحياء المميزة ومراكز الشرطة (القسم 3.2)
+function openSizePicker() {
+  openPicker({
+    title: 'اختر حجم الخريطة',
+    groups: single(MAP_SIZE_KEYS.map(key => ({ value: key, text: MAP_SIZES[key].name, note: 'حتى ' + playersText(MAP_SIZES[key].maxPlayers) }))),
+    icon: drawSizeIcon,
+    columns: 3,
+    current: () => setup.mapSize,
+    pick: (key) => { setup.mapSize = key; refresh(); },
+    aside: (node, key) => {
+      const size = MAP_SIZES[key];
+      infoAside(node, drawSizeIcon, key, 'خريطة ' + size.name, [
+        'مدينة ' + size.n + '×' + size.n + ' مربعاً، حتى ' + playersText(size.maxPlayers) + '.',
+        'فيها ' + count(size.specialDistricts, 'حي مميز', 'حيّان مميزان', 'أحياء مميزة', 'حياً مميزاً') +
+          ' و' + count(size.policeStations, 'مركز شرطة', 'مركزا شرطة', 'مراكز شرطة', 'مركز شرطة') + '.'
+      ]);
+    },
+    close: showCity
+  });
+}
+
+// الحد الأقصى للوحدات: لكل لاعب، ومعه مجموع المدينة بعدد اللاعبين الحالي
+function activePlayers() {
+  return setup.mode === 'survival' ? 1 + setup.allies : setup.slots.filter(s => s.type !== 'closed').length;
+}
+
+function openUnitsPicker() {
+  openPicker({
+    title: 'الحد الأقصى للوحدات',
+    groups: single(MAX_UNIT_CHOICES.map(v => ({ value: v, text: String(v), note: v === UNITS.maxUnitsDefault ? 'الافتراضي' : '' }))),
+    icon: drawUnitsIcon,
+    columns: 6,
+    current: () => setup.maxUnits,
+    pick: (v) => { setup.maxUnits = v; refresh(); },
+    aside: (node, v) => {
+      const players = activePlayers(), total = players * v;
+      const lines = [
+        'يشمل العاديين والمميزين والبطل، ويتوقف الظهور عند بلوغه.',
+        'مع ' + playersText(players) + ': حتى ' + total + ' وحدة في المدينة.'
+      ];
+      if (total > COMBAT_REALISM.lod.crowdedAbove) lines.push('معارك ضخمة: أثقل على الجوالات الضعيفة.');
+      infoAside(node, drawUnitsIcon, v, v + ' وحدة لكل لاعب', lines);
+    },
+    close: showCity
+  });
+}
+
+// الطقس (القسم 10): صورة المدينة المختارة بكل طقس، وتأثيره على اللعب من أرقامه في config.js
+const percentLess = (mul) => Math.round((1 - mul) * 100) + '%';
+
+function weatherEffects(key) {
+  const w = WEATHER[key], list = [];
+  if (w.visionMul < 1) list.push('مدى رصد الوحدات أقل ' + percentLess(w.visionMul) + '.');
+  if (w.speedMul < 1) list.push('حركة كل الوحدات أبطأ ' + percentLess(w.speedMul) + '.');
+  if (w.rangedHitChance < 1) list.push('الرمي (حجارة، قوس، زجاجات) يصيب ' + Math.round(w.rangedHitChance * 100) + '% فقط.');
+  return list.length ? list : ['بلا تأثير على اللعب.'];
+}
+
+function weatherShort(key) {
+  if (key === 'random') return 'يُختار عند البدء';
+  const w = WEATHER[key];
+  if (w.visionMul < 1) return 'رؤية أقل ' + percentLess(w.visionMul);
+  if (w.speedMul < 1) return 'حركة أبطأ ' + percentLess(w.speedMul);
+  if (w.rangedHitChance < 1) return 'إصابة الرمي ' + Math.round(w.rangedHitChance * 100) + '%';
+  return 'بلا تأثير';
+}
+
+// مدينة صور الطقس: المختارة، أو الظاهرة الآن في صورة "عشوائي"
+function previewCity() {
+  const city = setup.city === 'host' ? hostCity(setup.slots[0].side) : setup.city;
+  if (CITIES.order.includes(city)) return city;
+  return CITIES.order.includes(shownCity()) ? shownCity() : CITIES.order[0];
+}
+
+function openWeatherPicker() {
+  const city = previewCity();
+  const scene = (canvas, key) => {
+    if (key !== 'random') { drawCardThumb(canvas, city, key); return; }
+    stopCard(canvas);
+    drawWeatherIcon(canvas, key);
+  };
+  openPicker({
+    title: 'اختر الطقس',
+    groups: single(WEATHER_KEYS.map(key => ({ value: key, text: WEATHER[key].name, note: weatherShort(key) }))),
+    art: scene,
+    columns: 4,
+    extras: [{ value: 'random', text: 'عشوائي' }],
+    current: () => setup.weather,
+    pick: (key) => { setup.weather = key; refresh(); },
+    aside: (node, key) => key === 'random'
+      ? infoAside(node, scene, key, 'طقس عشوائي', ['يُختار عند بدء المباراة، ويبقى ثابتاً حتى نهايتها.'], true)
+      : infoAside(node, scene, key, WEATHER[key].name, [...weatherEffects(key), 'المعاينة على مدينة ' + CITIES.short[city] + '.'], true),
+    close: showCity
+  });
+}
+
+// أيقونات أزرار الخيارات (تُعاد عند كل تغيير، وبعد ظهور القائمة بمقاسها الحقيقي)
+function drawSetupIcons() {
+  drawModeIcon(el('modeIcon'), setup.mode);
+  drawSizeIcon(el('sizeIcon'), setup.mapSize);
+  drawWeatherIcon(el('weatherIcon'), setup.weather);
+  drawUnitsIcon(el('unitsIcon'), setup.maxUnits);
 }
 
 // --- متابعة المباراة المحفوظة ---
@@ -392,7 +565,7 @@ function saveSetup() {
   try { localStorage.setItem(UI.setupKey, JSON.stringify(setup)); } catch { /* لا تخزين: يبقى للجلسة */ }
 }
 
-// --- صفوف الخيارات (حجم الخريطة، الحد الأقصى، الطقس) ---
+// --- صفوف الخيارات (شاشة معركة البوتات) ---
 export function buildOptions(containerId, values, label, getCurrent, onPick) {
   const container = el(containerId);
   container.innerHTML = '';
@@ -528,20 +701,22 @@ function firstFreeColor(index) {
 
 // --- تحديث كل الواجهة بعد أي تغيير ---
 function refresh() {
-  for (const id of ['optMode', 'optPointsMinutes', 'optKingMinutes', 'optAllies', 'optSurvivalLevel']) refreshOptions(id);
-  refreshOptions('optMapSize');
-  refreshOptions('optMaxUnits');
-  refreshOptions('optWeather');
-
-  // سطر يشرح الطور المختار، وخياراته وحدها ظاهرة
-  el('modeDesc').textContent = GM[setup.mode].desc;
+  // أزرار الخيارات: الاختيار الحالي وسطر تحته
+  el('modeChoice').textContent = GM[setup.mode].name;
+  el('modeNote').textContent = modeNote();
   // زر المدينة: الخيار ومنطقته (الاسم الكامل تحته من الصورة المصغرة)
   const cityGroup = regionOf(CITY_GROUPS, setup.city);
   el('cityChoice').textContent = setup.city === 'random' ? 'عشوائي' : setup.city === 'host' ? 'مدينة المضيف'
     : CITIES.short[setup.city] + (cityGroup ? ' • ' + cityGroup.name : '');
-  for (const row of document.querySelectorAll('#screenSetup .row[data-mode]')) {
-    row.hidden = row.dataset.mode !== setup.mode;
-  }
+  const size = MAP_SIZES[setup.mapSize];
+  el('sizeChoice').textContent = size.name;
+  el('sizeNote').textContent = 'حتى ' + playersText(size.maxPlayers);
+  el('weatherChoice').textContent = setup.weather === 'random' ? 'عشوائي' : WEATHER[setup.weather].name;
+  el('weatherNote').textContent = weatherShort(setup.weather);
+  el('unitsChoice').textContent = setup.maxUnits + ' وحدة';
+  el('unitsNote').textContent = 'لكل لاعب';
+  drawSetupIcons();
+
   const survival = setup.mode === 'survival';
   el('screenSetup').querySelector('.menu.setup').classList.toggle('survival', survival);
 
