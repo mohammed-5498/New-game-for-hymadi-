@@ -29,11 +29,12 @@ function chargeFactor(state, unit) {
   return (lvl && lvl.chargeFactor) || 1;
 }
 
-// نغمة اكتمال الشحن تُسمع مرة واحدة عند امتلاء الشريط لا في كل تحديث
+// نغمة اكتمال الشحن تُسمع مرة واحدة عند امتلاء الشريط لا في كل تحديث، ولوحدات اللاعب وحده:
+// شحن وحدات الخصوم لا يعنيه، وتكراره في المعركة الكبيرة رنين بلا معنى (المرحلة 5ب)
 function announceReady(state, unit) {
   if (unit.ultCharge < ULT.max || unit.ultAnnounced) return;
   unit.ultAnnounced = true;
-  soundAt(state, 'ult_ready', unit.x, unit.y);
+  if (unit.playerId === state.humanId) soundAt(state, 'ult_ready', unit.x, unit.y);
 }
 
 export function chargeOverTime(state, unit) {

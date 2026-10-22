@@ -10,7 +10,7 @@ import { updateSpawn } from './spawn.js';
 import { updatePolice } from './police.js';
 import { updateVictory } from './victory.js';
 import { updateBots } from '../ai/bot.js';
-import { updateMusicIntensity } from '../audio/sound.js';
+import { updateMusicIntensity, flushSounds } from '../audio/sound.js';
 import { updateAlerts } from './alerts.js';
 import { updateArena } from './arena.js';
 import { updateMode, updateFades } from './modes.js';
@@ -39,6 +39,7 @@ export function updateMatch(state) {
   updateNotice(state);
   updateAlerts(state);           // أسهم الحافة تختفي بانتهاء عمرها أو بدخولها الشاشة
   updateMusicIntensity(state);   // الطبول تشتد مع اشتباك وحدات اللاعب
+  flushSounds();                 // مؤثرات القتال: يُسمع أهم ما طُلب في هذا التحديث (المرحلة 5ب)
 
   if (state.moveMarker) {
     state.moveMarker.t += TICK_SEC;

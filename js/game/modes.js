@@ -478,6 +478,7 @@ function spawnWave(state, n) {
     mine: false, t: S.noticeSeconds
   };
   sound('alert');
+  sound('whistle');                    // صافرة الشرطة مع وصول كل موجة
 }
 
 // المصادر: مراكز الشرطة وحواف الخريطة؛ الجبهات من اتجاهات متباعدة قدر الإمكان

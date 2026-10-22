@@ -192,8 +192,11 @@ function resolveMove(state, unit, hit) {
     if (distance(unit, target) <= reach && off <= m.arc * Math.PI / 360 + CR.arcTolerance) targets.push(target);
   }
 
-  // تصادم الأسلحة: الهدف يضربني في نفس اللحظة تقريباً ونحن متقابلان (القسم 5.4.4ب)
-  if (targets.length === 1 && hit.move !== 'spin' && unit.lod !== 'stat' && tryClash(state, unit, targets[0])) return;
+  // تصادم الأسلحة: الهدف يضربني في نفس اللحظة تقريباً ونحن متقابلان (القسم 5.4.4ب)، بصوت ارتطام معدني
+  if (targets.length === 1 && hit.move !== 'spin' && unit.lod !== 'stat' && tryClash(state, unit, targets[0])) {
+    soundAt(state, 'hit_shield', targets[0].x, targets[0].y);
+    return;
+  }
 
   let landed = false;
   for (const target of targets) {
@@ -202,6 +205,7 @@ function resolveMove(state, unit, hit) {
 
     if (target.cState === 'block' && zone === 'front') {      // صدّ: المهاجم يرتد ويترنّح
       blockedBy(state, unit, target);
+      soundAt(state, 'hit_shield', target.x, target.y);
       return;
     }
 
