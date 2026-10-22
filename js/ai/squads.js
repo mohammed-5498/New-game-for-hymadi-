@@ -114,6 +114,20 @@ function sidePowers(state, player, district) {
   return { enemy, mine };
 }
 
+// تهديد الحي: قوة الأعداء وقوة جانب اللاعب حوله. خريطة القوى (5 مربعات)، أو threatRadius أضيق
+// (الصعب فما فوق): عدو يمر على بعد 5 مربعات ليس هجوماً، والدفاع عنه يستنزف الجيش وحدة وحدة
+function districtPowers(state, player, lvl, district) {
+  const radius = param(lvl, 'threatRadius');
+  if (radius === ai.powerRadius) return sidePowers(state, player, district);
+  const near = unitsAround(state, district.capture.i, district.capture.j, radius);
+  let enemy = 0, mine = 0;
+  for (let k = 0; k < near.ids.length; k++) {
+    if (isEnemyId(state, player.id, near.ids[k])) enemy += near.values[k];
+    else mine += near.values[k];
+  }
+  return { enemy, mine };
+}
+
 // قوة الأعداء حول نقطة (للانسحاب والتوسع والهجوم)، محفوظة طوال التحديث الواحد:
 // نفس السؤال يتكرر كثيراً بين الأهداف والفرق، والجواب لا يتغير داخل التحديث
 let aroundCache = { state: null, time: -1, map: new Map() };
@@ -346,7 +360,7 @@ function updateSquads(state, player, lvl, brain, byId, owned, pool) {
 
     if (squad.type === 'defend') {
       // انتهى التهديد أو سقط الحي: تعود حرة
-      const still = district && district.owner === player.id && sidePowers(state, player, district).enemy > 0;
+      const still = district && district.owner === player.id && districtPowers(state, player, lvl, district).enemy > 0;
       if (!still) { disband(members); pool.push(...members.filter(u => u.state !== 'attacking')); continue; }
     } else if (!district || district.owner === player.id ||
                (district.owner !== null && !isEnemyId(state, player.id, district.owner))) {
@@ -448,9 +462,11 @@ function nextTarget(state, player, lvl, members, c, type) {
 }
 
 // --- الدفاع بلا إفراط: 1.2 × قوة المهاجم، بالهجوم المتحرك ---
+// defendRange (الصعب فما فوق): المدافعون من القريبين وحدهم، لا وحدات تعبر الخريطة فرادى فتموت في الطريق
 function defend(state, player, lvl, brain, pool, owned) {
+  const range = param(lvl, 'defendRange');
   for (const district of owned) {
-    const { enemy, mine } = sidePowers(state, player, district);
+    const { enemy, mine } = districtPowers(state, player, lvl, district);
     if (enemy <= 0) continue;
     // فرق الدفاع المتجهة إليه ولم تصل بعد تُحسب أيضاً
     let coming = 0;
@@ -460,7 +476,8 @@ function defend(state, player, lvl, brain, pool, owned) {
     let deficit = ai.defenseRatio * enemy - mine - coming;
     if (deficit <= 0) continue;
     const group = [];
-    const sorted = sortedBy(pool, (u) => distU(u, district.capture));
+    const near = range ? pool.filter(u => distU(u, district.capture) <= range) : pool;
+    const sorted = sortedBy(near, (u) => distU(u, district.capture));
     for (const unit of sorted) {
       if (deficit <= 0) break;
       group.push(unit);
