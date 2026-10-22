@@ -637,7 +637,7 @@ button.wide.ghost { background: transparent; color: var(--text-dim); }
   .store-layout { display: flex; flex-direction: column; }
   .store-side { display: contents; }
   .store-tabs { flex-direction: row; }
-  .store-tab { flex: 1 1 0; justify-content: center; padding: 0 6px; }
+  .store-tab { flex: 1 1 0; min-width: 0; flex-direction: column; justify-content: center; gap: 1px; padding: 4px; font-size: 16px; }
   .store-main { order: 1; }
   .store-side button.wide { order: 2; }
 }
