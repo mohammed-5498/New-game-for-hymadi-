@@ -1,5 +1,5 @@
 // اللمس والتحديد والأوامر (إصبع واحد، إصبعان، وعجلة الماوس)
-import { CAMERA, INPUT, ALERTS, TILE_HALF_W, TILE_HALF_H } from '../config.js';
+import { CAMERA, INPUT, ALERTS, TILE_HALF_W, TILE_HALF_H, EMPIRE } from '../config.js';
 import { screenToWorld, worldToTile, worldToScreen, tileToWorld } from '../map/coords.js';
 import { clampCamera } from '../render/renderer.js';
 import { commandMove, commandAttackMove } from '../game/units.js';
@@ -8,8 +8,7 @@ import { selectedUnits, selectUnitsAround, clearSelection } from '../state.js';
 import { sound } from '../audio/sound.js';
 import { setInputMode } from './hud.js';
 import { unitWorldPos } from '../render/units.js';
-import { roofTop, empireKind } from '../render/landmarks.js';
-import { tileOf } from '../game/empire.js';
+import { badgeOf } from '../render/empireArt.js';
 import { openEmpireMenu, closeEmpireMenu, isEmpireMenuOpen } from './empireMenu.js';
 
 export function setupInput(canvas, state) {
@@ -117,6 +116,19 @@ export function setupInput(canvas, state) {
       longPressTimer = null;
       if (moved || pointers.size !== 1) return;
 
+      // طور الإمبراطورية (بطلب المستخدم): ضغطة مطوّلة على مبناك أو أي حي لك تفتح قائمته، ولو كان معك جنود محددون
+      if (state.mode === 'empire') {
+        const target = ownBuildingAt(p.x, p.y) || ownAreaAt(p.x, p.y);
+        if (target) {
+          longPressFired = true;
+          lastDistrictTap = null;
+          clearSelection(state);
+          sound('ui_tap');
+          openEmpireMenu(state, target.id);
+          return;
+        }
+      }
+
       const group = selectedUnits(state);
       if (!group.length) return;
       if (findUnitAt(p.x, p.y)) return;          // الضغط على وحدة ليس أمر أرض
@@ -203,23 +215,36 @@ export function setupInput(canvas, state) {
     if (commandMove(state, tile.i, tile.j, group)) sound('command');
   }
 
-  // ما تفتح لمستاه قائمة (طور الإمبراطورية): مبنى تملكه (صورته كلها مع علمها، فهي أعلى من مربعها)،
-  // أو حي تملكه بلا مبنى (منطقته تحت الإصبع: مربعاته والشوارع الأقرب إليه). أرض حي فيه مبنى للحركة فقط
+  // ما تفتح لمستاه قائمة (طور الإمبراطورية): مبنى تملكه، أو حي تملكه بلا مبنى. أرض حي فيه مبنى للحركة فقط
   function menuDistrictAt(sx, sy) {
-    const map = state.map, z = state.camera.z;
-    for (const d of map.districts) {
+    const building = ownBuildingAt(sx, sy);
+    if (building) return building;
+    const area = ownAreaAt(sx, sy);
+    return area && !area.building ? area : null;
+  }
+
+  // مبنى تملكه تحت الإصبع: صورته كلها مع شارتها فوقها (فهي أعلى من مربعها)، والقاعدة بقلعتها كلها
+  function ownBuildingAt(sx, sy) {
+    const z = state.camera.z;
+    for (const d of state.map.districts) {
       if (d.owner !== state.humanId || !d.building || d.buildTile === undefined) continue;
-      const at = tileOf(map, d.buildTile), type = map.type[d.buildTile];
-      const base = worldToScreen((at.i - at.j) * TILE_HALF_W, (at.i + at.j) * TILE_HALF_H, state.camera, state.view);
-      const top = base.y - (roofTop(map, empireKind(map, type), at.i, at.j) + 20) * z;
-      if (Math.abs(sx - base.x) <= TILE_HALF_W * z && sy >= top && sy <= base.y + TILE_HALF_H * z) return d;
+      const b = badgeOf(state, d), wide = d.building === 'hq' ? EMPIRE.menu.hqTapBox : 1;
+      const base = worldToScreen(b.x, b.y, state.camera, state.view);
+      const top = base.y - (b.y - b.cy + b.r) * z;
+      if (Math.abs(sx - base.x) <= TILE_HALF_W * wide * z && sy >= top && sy <= base.y + TILE_HALF_H * wide * z) return d;
     }
+    return null;
+  }
+
+  // حي تملكه تحت الإصبع: مربعاته والشوارع الأقرب إليه (map.areaAt)
+  function ownAreaAt(sx, sy) {
+    const map = state.map;
     const world = screenToWorld(sx, sy, state.camera, state.view);
     const tile = worldToTile(world.x, world.y);
     const i = Math.round(tile.i), j = Math.round(tile.j);
     if (i < 0 || j < 0 || i >= map.n || j >= map.n || !map.areaAt) return null;
     const d = map.districts[map.areaAt[j * map.n + i]];
-    return d && d.owner === state.humanId && !d.building ? d : null;
+    return d && d.owner === state.humanId ? d : null;
   }
 
   // لمسة على سهم الحافة: تنقل الكاميرا إلى مكان الحدث ويختفي السهم

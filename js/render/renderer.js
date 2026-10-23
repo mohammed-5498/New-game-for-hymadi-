@@ -12,7 +12,7 @@ import { drawCityLayer, cityStatics } from './chunkCache.js';
 import { drawPoliceLamp } from './landmarks.js';
 import { drawUnitsOccluded } from './occlusion.js';
 import { shadedCount } from '../pacing.js';
-import { drawEmpireShots, drawEmpireMarks } from './empireArt.js';
+import { drawEmpireShots, drawEmpireMarks, drawEmpireHalos, drawEmpireBadges } from './empireArt.js';
 
 export function resizeCanvas(canvas, state) {
   const view = state.view;
@@ -83,6 +83,7 @@ export function render(ctx, state, alpha, cityBudgetMs = CITY_CACHE.frameBudgetM
                   r: fire.radius * 28, c: '255,150,60', a: 0.7 });
   }
   for (const zone of state.zones) drawZone(ctx, zone, state.time);   // الراية المغروسة (القسم 3.10)
+  drawEmpireHalos(ctx, state, visible);             // هالة ذهبية حول القواعد الرئيسية (طور الإمبراطورية)
   drawUnitsLayer(ctx, state, alpha, visible);
   // المصابيح الزرقاء الوامضة فوق أسطح الشرطة: بعد الوحدات حتى لا تغطيها قصاصات المباني
   for (const lamp of statics.lamps) if (visible(lamp.x, lamp.y)) drawPoliceLamp(ctx, lamp, state.time, lights);
@@ -107,6 +108,7 @@ export function render(ctx, state, alpha, cityBudgetMs = CITY_CACHE.frameBudgetM
   }
   drawMoveMarker(ctx, state);
   drawFlagArrows(ctx, state, visible);
+  drawEmpireBadges(ctx, state, visible);            // تاج القاعدة وقوس البرج وصليب المستشفى
   drawEmpireMarks(ctx, state, visible, state.empireOpen);   // شريط الإنتاج ودائرة مدى المبنى المفتوح
   drawHillCrown(ctx, state, visible);
   drawGroupTags(ctx, state, alpha, visible);

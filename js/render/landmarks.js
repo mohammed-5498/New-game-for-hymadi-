@@ -14,7 +14,7 @@ const specialsOf = (map) => CITY_SPECIALS[map.city] || CITY_SPECIALS.arab;
 // نوع صورة مبنى طور الإمبراطورية بحرفه (Q قاعدة، T برج، M مستشفى): لقياس ارتفاعه خارج هذا الملف
 export function empireKind(map, type) {
   const S = specialsOf(map);
-  return type === 'T' ? EMPIRE.art.tower : type === 'Q' ? S.hq : S.base;
+  return type === 'T' ? EMPIRE.art.tower : type === 'Q' ? S.hq : EMPIRE.art.hospital;
 }
 
 // --- ارتفاع سطح المبنى الحقيقي: يُقاس مرة واحدة لكل مربع برسمه في لوحة صغيرة مخفية ---
@@ -70,7 +70,8 @@ function plain(draw) {
 // type: Q مقر، N شرطة، S مستشفى، G مخزن سلاح، C برج ساعة، O نافورة، L معلم التلة،
 // وفي طور الإمبراطورية: Q القاعدة الرئيسية (المقر نفسه)، T برج الرماية، M المستشفى (كمستشفى الأطوار الأخرى)
 // يعيد نقطة السطح { x, y } لما يُرسم فوقه كل إطار (المصباح الوامض)
-export function drawLandmark(map, type, x, y, i, j, ownerColor, flagColor, lights) {
+// badges: طور الإمبراطورية، شارة المبنى تُرسم فوقه كل إطار (empireArt.js) بدل العلم ولوحة الصليب القائمة
+export function drawLandmark(map, type, x, y, i, j, ownerColor, flagColor, lights, badges = false) {
   const S = specialsOf(map);
   const T = cityOf(map);
 
@@ -79,10 +80,12 @@ export function drawLandmark(map, type, x, y, i, j, ownerColor, flagColor, light
     const kind = type === 'T' ? EMPIRE.art.tower : S.hq;
     drawKind(map, kind, x, y, i, j);
     const top = y - roofTop(map, kind, i, j);
-    plain(() => {
-      ln(x, top + 1, x, top - 20, '#2b2825', 1.3);
-      poly([[x, top - 20], [x + 12, top - 16], [x, top - 12]], ownerColor || flagColor);
-    });
+    if (!badges) {
+      plain(() => {
+        ln(x, top + 1, x, top - 20, '#2b2825', 1.3);
+        poly([[x, top - 20], [x + 12, top - 16], [x, top - 12]], ownerColor || flagColor);
+      });
+    }
     if (lights && ownerColor) lights.push({ x, y: top - 16, r: 14, c: '255,235,190', a: 0.25 });
     return null;
   }
@@ -105,16 +108,18 @@ export function drawLandmark(map, type, x, y, i, j, ownerColor, flagColor, light
   }
 
   if (type === 'S' || type === 'M') {
-    drawKind(map, S.base, x, y, i, j);
-    // مستشفى طور الإمبراطورية فوق بيت اليمامة بسطحه المستوي: اللوحة في وسط السطح لا عند ركنه الخلفي
-    const top = y - roofTop(map, S.base, i, j) + (type === 'M' ? EMPIRE.art.hospitalRoof : 0);
+    // مستشفى طور الإمبراطورية: قاعة اليمامة بسقفها المقوّس (EMPIRE.art)، واللوحة في وسط السطح لا عند حافته الخلفية
+    const kind = type === 'M' ? EMPIRE.art.hospital : S.base;
+    drawKind(map, kind, x, y, i, j);
+    const top = y - roofTop(map, kind, i, j) + (type === 'M' ? EMPIRE.art.hospitalRoof : 0);
     plain(() => {
       // صليب أحمر على لوحة بيضاء فوق السطح، كبير يُرى من بعيد
       poly([[x - 8, top - 2], [x, top - 6], [x + 8, top - 2], [x, top + 2]], '#f4f1ea');
       poly([[x - 6.5, top - 2], [x, top - 5.2], [x + 6.5, top - 2], [x, top + 1.2]], '#ffffff');
       poly([[x - 4.6, top - 3.4], [x - 1.6, top - 4.9], [x + 4.6, top - 1.8], [x + 1.6, top - 0.3]], '#d0322a');
       poly([[x - 4.6, top - 0.6], [x + 1.6, top - 3.7], [x + 4.6, top - 2.2], [x - 1.6, top + 0.9]], '#d0322a');
-      // ولوحة واضحة قائمة فوقه
+      // ولوحة واضحة قائمة فوقه (في طور الإمبراطورية مكانها الشارة: empireArt.js)
+      if (badges) return;
       ln(x, top - 2, x, top - 12, '#5a5650', 0.9);
       el(x, top - 15, 4.6, 4.6, '#ffffff');
       poly([[x - 1.2, top - 18.6], [x + 1.2, top - 18.6], [x + 1.2, top - 16.2], [x + 3.6, top - 16.2], [x + 3.6, top - 13.8],

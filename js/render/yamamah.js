@@ -212,6 +212,11 @@ export const yamamah = {
     brokenI(x, y, i, j, T) { broken(pick('wall_i1', 'wall_i2', i, j, 705), x, y, i, j, T, 0.5); },
     brokenJ(x, y, i, j, T) { broken(pick('wall_j1', 'wall_j2', i, j, 706), x, y, i, j, T, -0.5); },
     brokenTower(x, y, i, j, T) { broken('round_tower', x, y, i, j, T, 0); },
+    // قلعة القاعدة الرئيسية في طور الإمبراطورية (empire.js: fortify): سور على جوانبها وأبراج على زواياها
+    // بصور سور المدينة نفسها، لكنها تُصبغ بلون صاحب القاعدة (ليست في CITY_UNTINTED)
+    fortI(x, y, i, j) { art(pick('wall_i1', 'wall_i2', i, j, 705), x, y); },
+    fortJ(x, y, i, j) { art(pick('wall_j1', 'wall_j2', i, j, 706), x, y); },
+    fortTower(x, y) { art('round_tower', x, y); },
     // القبة الكبرى وحدها داخل مربعها (لا جزء منها في مربع جار يختلط ترتيب رسمه)
     landmark(x, y) { art('great_dome', x, y); },
     plazaProp(x, y) { art('well', x, y); },

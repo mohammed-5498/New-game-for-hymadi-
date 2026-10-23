@@ -22,7 +22,25 @@ const isAlive = (unit) => unit && unit.state !== 'dead' && unit.hp > 0;
 export const BUILDING_TILE = { hq: 'Q', tower: 'T', hospital: 'M' };
 
 // مربعات لا يُبنى عليها: السور وبواباته ومعلم المدينة (ملك المدينة لا الحي)
-const FIXED_KINDS = ['wallI', 'wallJ', 'gateI', 'gateJ', 'archI', 'archJ', 'wallTower', 'brokenI', 'brokenJ', 'brokenTower', 'monument'];
+const FIXED_KINDS = ['wallI', 'wallJ', 'gateI', 'gateJ', 'archI', 'archJ', 'wallTower', 'brokenI', 'brokenJ', 'brokenTower', 'monument',
+                     'fortI', 'fortJ', 'fortTower'];
+
+// القلعة (بطلب المستخدم): برج القاعدة في وسطها، وما حوله من مباني الحي نفسه سور على الجوانب وأبراج على
+// الزوايا (صور اليمامة، yamamah.js). على مربعات المباني وحدها: لا يتغير ما يُمشى عليه، والساحة والشوارع مداخلها
+function fortify(map, district) {
+  const at = tileOf(map, district.buildTile);
+  for (let dj = -1; dj <= 1; dj++) {
+    for (let di = -1; di <= 1; di++) {
+      const i = at.i + di, j = at.j + dj;
+      if ((!di && !dj) || !map.inBounds(i, j)) continue;
+      const k = map.idx(i, j);
+      if (map.road[k] || map.districtAt[k] !== district.id || (map.type[k] !== 'H' && map.type[k] !== 'R')) continue;
+      if (FIXED_KINDS.includes(map.kind[k])) continue;            // سور المدينة ومعلمها لا يُمسّان
+      map.type[k] = 'H';
+      map.kind[k] = di && dj ? 'fortTower' : di ? 'fortJ' : 'fortI';
+    }
+  }
+}
 
 // --- البداية: النقاط والمستويات، وكل حي منزلي قاعدة رئيسية بمبنى المقر نفسه ---
 export function initEmpire(state, modeState) {
@@ -41,6 +59,7 @@ export function initEmpire(state, modeState) {
     home.building = 'hq';
     home.buildTile = k;
     home.blv = {};
+    fortify(state.map, home);
   }
 }
 
@@ -335,6 +354,7 @@ export function buildDistrict(state, playerId, districtId, type) {
   district.blv = {};
   district.cool = 0;
   state.map.type[k] = BUILDING_TILE[type];        // المبنى في الطبقة الثابتة (الحي يُعاد رسمه)
+  if (type === 'hq') fortify(state.map, district);
   soundAt(state, 'capture_done', district.capture.i, district.capture.j);
   return OK;
 }
