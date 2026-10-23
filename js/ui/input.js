@@ -1,5 +1,5 @@
 // اللمس والتحديد والأوامر (إصبع واحد، إصبعان، وعجلة الماوس)
-import { CAMERA, INPUT, ALERTS } from '../config.js';
+import { CAMERA, INPUT, ALERTS, TILE_HALF_W, TILE_HALF_H } from '../config.js';
 import { screenToWorld, worldToTile, worldToScreen, tileToWorld } from '../map/coords.js';
 import { clampCamera } from '../render/renderer.js';
 import { commandMove, commandAttackMove } from '../game/units.js';
@@ -8,6 +8,9 @@ import { selectedUnits, selectUnitsAround } from '../state.js';
 import { sound } from '../audio/sound.js';
 import { setInputMode } from './hud.js';
 import { unitWorldPos } from '../render/units.js';
+import { roofTop, empireKind } from '../render/landmarks.js';
+import { tileOf } from '../game/empire.js';
+import { openEmpireMenu, closeEmpireMenu, isEmpireMenuOpen } from './empireMenu.js';
 
 export function setupInput(canvas, state) {
   const pointers = new Map();
@@ -17,6 +20,10 @@ export function setupInput(canvas, state) {
   let lastUnitTap = null;  // آخر نقرة على جندي: للكشف عن النقرة المزدوجة
   let longPressTimer = null;   // مؤقت الضغطة المطوّلة (أمر الهجوم المتحرك)
   let longPressFired = false;  // نفّذنا الأمر فلا نكرره عند رفع الإصبع
+  // طور الإمبراطورية: لمستان على حي تملكه تفتحان قائمته. أمر الحركة إلى حيك ينتظر مدة اللمسة المزدوجة،
+  // فإن جاءت الثانية فُتحت القائمة بلا حركة (لا يعود جيشك المحدد إلى القاعدة حين تفتح قائمتها)
+  let lastDistrictTap = null;  // { id, time }
+  let pendingMove = null;      // { timer, run }
 
   const pointFromEvent = (e) => {
     const rect = canvas.getBoundingClientRect();
@@ -138,11 +145,32 @@ export function setupInput(canvas, state) {
 
   // لمسة سريعة: على وحدتك تحددها، وعلى عدو أمر هجوم، وعلى الأرض أمر حركة
   function handleTap(sx, sy) {
+    // أمر حركة ينتظر لمسة ثانية على حيك: لمسة في مكان آخر تنفذه الآن قبلها
+    const waiting = pendingMove;
+    if (waiting) { clearTimeout(waiting.timer); pendingMove = null; }
+
     // سهم التنبيه أولاً: لمسته تنقل الكاميرا إلى مكان الاشتباك (القسم 12.3)
-    if (tapAlertArrow(sx, sy)) return;
+    if (tapAlertArrow(sx, sy)) { if (waiting) waiting.run(); return; }
 
     const group = selectedUnits(state);
     const hit = findUnitAt(sx, sy);
+
+    // طور الإمبراطورية: اللمسة الثانية على حيك تفتح قائمته، واللمسة على الخريطة تغلق المفتوحة
+    const own = state.mode === 'empire' && !(hit && hit.playerId === state.humanId) ? ownDistrictAt(sx, sy) : null;
+    const now = performance.now();
+    if (own && lastDistrictTap && lastDistrictTap.id === own.id && now - lastDistrictTap.time <= INPUT.doubleTapMs) {
+      lastDistrictTap = null;
+      lastUnitTap = null;
+      sound('ui_tap');
+      openEmpireMenu(state, own.id);
+      return;                            // والحركة المنتظرة لا تُنفذ
+    }
+    if (waiting) waiting.run();
+    lastDistrictTap = own ? { id: own.id, time: now } : null;
+    if (isEmpireMenuOpen()) {
+      closeEmpireMenu(state);
+      return;                            // لمسة الإغلاق لا تصدر أمراً
+    }
 
     // نقرة ثانية قرب الجندي نفسه حتى لو لم تصبه بدقة: تحديد المجموعة
     const doubleTarget = lastUnitTap && isSecondTapOn(lastUnitTap.unit, sx, sy)
@@ -175,7 +203,32 @@ export function setupInput(canvas, state) {
 
     const world = screenToWorld(sx, sy, state.camera, state.view);
     const tile = worldToTile(world.x, world.y);
-    if (commandMove(state, tile.i, tile.j, group)) sound('command');
+    const move = () => { if (commandMove(state, tile.i, tile.j, group)) sound('command'); };
+    if (!own) { move(); return; }
+    const units = state.units;           // مباراة جديدة قبل انتهاء الانتظار: لا أمر لجنود المباراة السابقة
+    pendingMove = {
+      run: move,
+      timer: setTimeout(() => { pendingMove = null; if (state.units === units) move(); }, INPUT.doubleTapMs)
+    };
+  }
+
+  // الحي الذي تملكه تحت اللمسة (طور الإمبراطورية): مبنى الحي نفسه أولاً (صورته أعلى من مربعه)،
+  // ثم منطقة الحي تحت الإصبع (مربعاته والشوارع الأقرب إليه)
+  function ownDistrictAt(sx, sy) {
+    const map = state.map, z = state.camera.z;
+    for (const d of map.districts) {
+      if (d.owner !== state.humanId || !d.building || d.buildTile === undefined) continue;
+      const at = tileOf(map, d.buildTile), type = map.type[d.buildTile];
+      const base = worldToScreen((at.i - at.j) * TILE_HALF_W, (at.i + at.j) * TILE_HALF_H, state.camera, state.view);
+      const top = base.y - (roofTop(map, empireKind(map, type), at.i, at.j) + 20) * z;
+      if (Math.abs(sx - base.x) <= TILE_HALF_W * z && sy >= top && sy <= base.y + TILE_HALF_H * z) return d;
+    }
+    const world = screenToWorld(sx, sy, state.camera, state.view);
+    const tile = worldToTile(world.x, world.y);
+    const i = Math.round(tile.i), j = Math.round(tile.j);
+    if (i < 0 || j < 0 || i >= map.n || j >= map.n || !map.areaAt) return null;
+    const id = map.areaAt[j * map.n + i];
+    return id >= 0 && map.districts[id].owner === state.humanId ? map.districts[id] : null;
   }
 
   // لمسة على سهم الحافة: تنقل الكاميرا إلى مكان الحدث ويختفي السهم

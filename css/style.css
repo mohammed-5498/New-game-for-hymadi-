@@ -396,6 +396,11 @@ button.wide.ghost { background: transparent; color: var(--text-dim); }
 .pick-text b { font-size: 18px; color: var(--gold); }
 .pick-text .hint { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pick-arrow { flex: 0 0 auto; font-size: 18px; color: var(--text-dim); }
+/* زر المدينة في طور يفرض مدينته (الإمبراطورية): بلا سهم، ولمسه يومض اسم المدينة */
+.pick-btn.locked .pick-arrow { visibility: hidden; }
+.pick-btn.locked .pick-text b { color: var(--text); }
+#cityName.flash { animation: city-flash .6s ease-out; }
+@keyframes city-flash { 0%, 50% { color: var(--gold); } }
 
 .pick-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-bottom: 12px; }
 .pick-tile {
@@ -982,3 +987,95 @@ input[type=range].muted { opacity: .4; }
 /* المهزوم: اسمه مشطوب ووضوحه منخفض */
 .power-row.out { opacity: .4; }
 .power-row.out .power-name { text-decoration: line-through; }
+
+/* --- طور الإمبراطورية: قائمة الحي (js/ui/empireMenu.js) — صغيرة أسفل الوسط، واللعب مستمر خلفها --- */
+#empireMenu {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: max(8px, env(safe-area-inset-bottom));
+  margin: 0 auto;                /* في الوسط بعرض محتواها (left: 50% كان يحصرها في نصف الشاشة) */
+  width: fit-content;
+  min-width: 300px;
+  max-width: calc(100% - 16px);
+  max-height: calc(100% - 100px); /* لا تغطي زر الإيقاف وشريط الطور */
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  box-sizing: border-box;
+  padding: 6px 8px 8px;
+  background: rgba(27, 22, 18, .94);
+  border: 1px solid rgba(224, 176, 74, .45);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .45);
+  color: var(--text);
+}
+.em-head { display: flex; align-items: center; gap: 8px; }
+#emTitle { font-size: 15px; color: var(--gold); white-space: nowrap; }
+/* النقاط بعلامة ذهبية كالكلفة في الخانات */
+#emPoints, .em-cost { font-variant-numeric: tabular-nums; white-space: nowrap; }
+#emPoints { flex: 1 1 auto; font-size: 13px; font-weight: 700; }
+#emPoints::before, .em-cost::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-left: 4px;
+  border-radius: 50%;
+  background: var(--gold);
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, .35);
+}
+#emClose {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 34px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text-dim);
+  font-size: 16px;
+  line-height: 1;
+}
+.em-title { margin: 5px 2px 3px; font-size: 12px; font-weight: 700; color: var(--text-dim); }
+.em-note { font-weight: 400; }
+.em-stats { margin: 0 2px 4px; font-size: 12px; color: var(--text); }
+.em-slots { display: flex; flex-wrap: wrap; justify-content: center; gap: 5px; }
+.em-slot {
+  flex: 0 0 92px;
+  min-height: 54px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  padding: 4px 3px;
+  background: var(--btn);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--text);
+  font: inherit;
+  line-height: 1.25;
+}
+.em-slot b, .em-slot small { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.em-slot b { font-size: 13px; }
+.em-art { width: 40px; height: 30px; }
+.em-desc { font-size: 10px; color: var(--text-dim); }
+.em-cost { font-size: 13px; font-weight: 700; color: var(--gold); }
+.em-why { font-size: 10px; color: var(--danger); }
+.em-why:empty { display: none; }
+/* معطلة: باهتة وتبقى قابلة للمس (اللمس يومض سببها) */
+.em-slot.off { opacity: .55; }
+.em-slot.max { opacity: .8; }
+.em-slot.max .em-cost { color: var(--text-dim); font-weight: 400; font-size: 11px; }
+.em-slot.max .em-cost::before { display: none; }
+.em-slot.deny .em-why { animation: em-deny .5s ease-out; }
+@keyframes em-deny { 0%, 60% { color: #fff; text-shadow: 0 0 6px var(--danger); } }
+/* المستويات: دائرة لكل مستوى، والمكتمل ممتلئ */
+.em-pips { display: flex; gap: 3px; margin: 1px 0; }
+.em-pips i { width: 7px; height: 7px; border-radius: 50%; border: 1px solid var(--gold); box-sizing: border-box; }
+.em-pips i.on { background: var(--gold); }
+/* طابور القاعدة: تقدم أول طلب */
+.em-queue { display: flex; align-items: center; gap: 6px; margin: 5px 2px 0; font-size: 11px; color: var(--text-dim); white-space: nowrap; }
+.em-bar { flex: 1 1 auto; min-width: 40px; height: 5px; border-radius: 3px; background: rgba(243, 236, 224, .12); overflow: hidden; }
+.em-bar i { display: block; height: 100%; width: 0; background: var(--gold); }

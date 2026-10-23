@@ -19,6 +19,7 @@ import {
 } from './ui/menus.js';
 import { setupMenuScene, menuSceneFrame } from './ui/menuScene.js';
 import { isPickerOpen, closePicker } from './ui/picker.js';
+import { setupEmpireMenu, updateEmpireMenu, isEmpireMenuOpen, closeEmpireMenu } from './ui/empireMenu.js';
 import { initSound, startMusic } from './audio/sound.js';
 import { saveMatch, loadMatch, clearSavedMatch, canSaveMatch } from './matchSave.js';
 import { onBackButton, keepScreenAwake } from './platform.js';
@@ -36,6 +37,7 @@ setupInput(canvas, state);
 setupHud(state);
 setupPower(state);
 setupGroups(state);
+setupEmpireMenu(state);
 // الخلفية الحية للقوائم: مدينة مستقلة على لوحتها الخاصة (القسم 12.0)
 setupMenuScene(document.getElementById('menuBg'), document.getElementById('menuBack'));
 setupMenus({
@@ -57,6 +59,7 @@ setupMenus({
   },
   // تُستدعى عند ظهور شاشة المباراة: اللوحة تأخذ مقاسها الآن
   openGame() {
+    closeEmpireMenu(state);          // قائمة حي من مباراة سابقة لا تظهر لحظة في الجديدة
     resizeCanvas(canvas, state);
     state.hudAvoid = hudRects();     // أسهم التحذير تتجنب عناصر الواجهة
     clampCamera(state);
@@ -82,6 +85,7 @@ onBackButton(() => {
   if (currentScreen() === 'game') {
     if (isEndOpen()) { leaveToMain(state); return; }    // شاشة النهاية: رجوع للقائمة الرئيسية
     if (isPauseOpen()) { closePause(state); return; }   // الإيقاف مفتوح: رجوع خطوة
+    if (isEmpireMenuOpen()) { closeEmpireMenu(state); return; }   // قائمة الحي (طور الإمبراطورية)
     openPause(state);                                   // أثناء المباراة: فتح الإيقاف
     return;
   }
@@ -164,6 +168,7 @@ function loop(now) {
   updateHud(state);
   updatePower(state);          // شريط القوة يتحدث كل ثانية لا كل إطار
   updateGroups(state, frameMs); // أعداد المجموعات وانتقال الكاميرا إليها
+  updateEmpireMenu(state, now); // قائمة الحي المفتوحة (طور الإمبراطورية)
   reportFrame(frameMs);
   paceWork(performance.now() - workStart);
 

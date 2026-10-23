@@ -147,7 +147,7 @@ export function updateGroups(state, frameMs) {
 }
 
 // مستطيلات عناصر الواجهة الظاهرة على الشاشة: أسهم التحذير تتجنبها (القسم 12.3)
-const HUD_IDS = ['groups', 'info', 'btnMode', 'btnPause', 'modeBar', 'btnAll', 'btnClear', 'power'];
+const HUD_IDS = ['groups', 'info', 'btnMode', 'btnPause', 'modeBar', 'btnAll', 'btnClear', 'power', 'empireMenu'];
 
 export function hudRects() {
   const rects = [];

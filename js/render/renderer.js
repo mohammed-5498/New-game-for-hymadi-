@@ -12,6 +12,7 @@ import { drawCityLayer, cityStatics } from './chunkCache.js';
 import { drawPoliceLamp } from './landmarks.js';
 import { drawUnitsOccluded } from './occlusion.js';
 import { shadedCount } from '../pacing.js';
+import { drawEmpireShots, drawEmpireMarks } from './empireArt.js';
 
 export function resizeCanvas(canvas, state) {
   const view = state.view;
@@ -87,6 +88,7 @@ export function render(ctx, state, alpha, cityBudgetMs = CITY_CACHE.frameBudgetM
   for (const lamp of statics.lamps) if (visible(lamp.x, lamp.y)) drawPoliceLamp(ctx, lamp, state.time, lights);
 
   for (const shot of state.projectiles) drawProjectile(ctx, shot, alpha);
+  drawEmpireShots(ctx, state, alpha);              // سهام أبراج الرماية (طور الإمبراطورية)
   drawCaptureBars(ctx, state, visible);
 
   // طبقة الطقس فوق المشهد
@@ -105,6 +107,7 @@ export function render(ctx, state, alpha, cityBudgetMs = CITY_CACHE.frameBudgetM
   }
   drawMoveMarker(ctx, state);
   drawFlagArrows(ctx, state, visible);
+  drawEmpireMarks(ctx, state, visible, state.empireOpen);   // شريط الإنتاج ودائرة مدى المبنى المفتوح
   drawHillCrown(ctx, state, visible);
   drawGroupTags(ctx, state, alpha, visible);
   drawCombatFx(ctx, state, visible);

@@ -156,7 +156,7 @@ export function debrisLight(map, i, j) {
 
 // --- الطبقة الثابتة لمربع واحد: كل ما لا يتحرك (يُرسم مرة واحدة في القطع المخزنة) ---
 // lights: مصادر الإضاءة الثابتة ليلاً، lamps: نقاط المصابيح الوامضة (تُرسم كل إطار)
-const SPECIAL_TYPES = 'QNSGCOP';
+const SPECIAL_TYPES = 'QNSGCOPTM';   // TM: برج الرماية والمستشفى في طور الإمبراطورية (empire.js)
 
 export function specialType(state, k) {
   if (state.mode === 'king' && hillLandmarkTile(state) === k) return 'L';

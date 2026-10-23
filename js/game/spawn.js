@@ -53,6 +53,8 @@ export function heroInterval(state, player) {
 }
 
 export function updateSpawn(state) {
+  // طور الإمبراطورية: لا ظهور تلقائي ولا عودة للبطل، الجنود من القاعدة الرئيسية بالنقاط (empire.js)
+  if (state.mode === 'empire') return;
   for (const player of state.players) {
     if (player.neutral) continue;       // الشرطة لها إنتاجها الخاص (القسم 3.8)
     const districts = ownedDistricts(state, player.id);

@@ -11,6 +11,8 @@ import { setUltGate } from '../game/ults.js';
 import { decideSquads, levelOf, squadOf } from './squads.js';
 import { pickTarget, ultAllowed, updateTactics } from './tactics.js';
 import { hypot } from '../game/hypot.js';
+import { empireEconomy } from './empireBot.js';
+import { isHospital, healPoint } from '../game/empire.js';
 
 // الطبقة التكتيكية تختار الأهداف وتمسك الضربات المميزة عبر بوابتين في كود القتال
 setTargetPicker(pickTarget);
@@ -31,6 +33,8 @@ export function updateBots(state) {
     if (state.botTimers[player.id] > 0) continue;
     state.botTimers[player.id] = config.decisionInterval;
 
+    // طور الإمبراطورية: لا ظهور تلقائي، فالبوت يشتري جيشه ومبانيه بنقاطه أولاً
+    if (state.mode === 'empire') empireEconomy(state, player);
     decide(state, player, modeConfig(state, config));
   }
   updateTactics(state);      // كل 0.25 ث لكل فرقة مشتبكة فقط
@@ -356,14 +360,15 @@ function attack(state, player, config, pool, armySize) {
 
 // --- سحب المصابين إلى المستشفى (الصعب فقط) ---
 function retreatWounded(state, player, config, pool, owned) {
-  const hospital = owned.find(d => d.special === 'hospital');
+  const hospital = owned.find(isHospital);
   if (!hospital) return;
 
+  const at = healPoint(state.map, hospital);
   const wounded = pool.units.filter(u => u.hp < u.maxHp * config.retreatHpRatio);
   for (const unit of wounded) {
     pool.units.splice(pool.units.indexOf(unit), 1);
     unit.botTask = { type: 'heal', districtId: hospital.id };
-    commandMove(state, hospital.capture.i, hospital.capture.j, [unit], false);   // أوامر البوت بلا حلقة
+    commandMove(state, at.i, at.j, [unit], false);   // أوامر البوت بلا حلقة
   }
 }
 

@@ -11,6 +11,7 @@ import { findFreeTiles } from '../map/pathfinding.js';
 import { setSummonHook } from './ults.js';
 import { sound } from '../audio/sound.js';
 import { hypot } from './hypot.js';
+import { initEmpire, updateEmpire, incomeOf } from './empire.js';
 
 export const modeOf = (state) => (state.mode && GM[state.mode]) ? state.mode : 'conquest';
 
@@ -57,6 +58,8 @@ export function initMode(state) {
     modeState.retargetAt = 0;
     modeState.record = null;                  // يُملأ عند النهاية: { best, newRecord }
   }
+
+  if (state.mode === 'empire') initEmpire(state, modeState);   // النقاط والقواعد الرئيسية (empire.js)
   state.modeState = modeState;
 }
 
@@ -80,6 +83,7 @@ export function updateMode(state) {
   else if (state.mode === 'king') updateKing(state);
   else if (state.mode === 'regicide') updateRegicide(state);
   else if (state.mode === 'survival') updateSurvival(state);
+  else if (state.mode === 'empire') updateEmpire(state);
 }
 
 // ================= 9.5.2 الوقت بالنقاط =================
@@ -612,6 +616,11 @@ export function modeBar(state) {
       bars: sides.map(s => ({ color: s.color, ratio: s.held / ms.target, me: isHumanSide(state, s) }))
     };
   }
+  if (state.mode === 'empire') {
+    // نقاطك ودخلك في الثانية (الدخل من أحيائك وقواعدك الآن)
+    const points = Math.floor(state.modeState.points[state.humanId] || 0);
+    return { text: 'النقاط: ' + points + ' • +' + incomeOf(state, state.humanId).toFixed(1) + ' في الثانية' };
+  }
   if (state.mode === 'survival') {
     const ms = state.modeState;
     const left = nextWaveIn(state);
@@ -626,6 +635,14 @@ export function modeBar(state) {
 
 // عمود شريط القوة: قيمة كل لاعب حسب الطور، وعنوان الطي
 export function powerColumn(state) {
+  if (state.mode === 'empire') {
+    const points = state.modeState.points;
+    return {
+      value: (playerId) => Math.floor(points[playerId]),
+      sortValue: (playerId) => points[playerId],
+      folded: 'نقاطي: ' + Math.floor(points[state.humanId] || 0)
+    };
+  }
   if (state.mode === 'points') {
     const scores = state.modeState.scores;
     return {
@@ -682,6 +699,10 @@ export function modeExtras(state) {
   }
   if (state.mode === 'regicide') {
     return [['زعماء أسقطتهم', state.modeState.leaderKills]];
+  }
+  if (state.mode === 'empire') {
+    const ms = state.modeState;
+    return [['نقاط جمعتها', Math.floor(ms.earned[state.humanId] || 0)], ['زعماء أسقطتهم', ms.leaderKills[state.humanId] || 0]];
   }
   if (state.mode === 'survival') {
     const ms = state.modeState;

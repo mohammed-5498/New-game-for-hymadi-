@@ -11,7 +11,7 @@ import { restoreRng } from './game/realism.js';
 import { districtsOwnedBy } from './state.js';
 
 // حقول لا تُحفظ: تخص الشاشة الحالية، أو تُبنى من جديد في كل تحديث
-const SKIP_STATE_KEYS = new Set(['view', 'inputMode', 'debugView', 'selectionBox', 'running', 'paused', 'unitHash', 'cameraTween', 'hudAvoid']);
+const SKIP_STATE_KEYS = new Set(['view', 'inputMode', 'debugView', 'selectionBox', 'running', 'paused', 'unitHash', 'cameraTween', 'hudAvoid', 'empireOpen']);
 
 const TYPED = {
   Uint8Array, Int8Array, Uint8ClampedArray, Uint16Array, Int16Array,

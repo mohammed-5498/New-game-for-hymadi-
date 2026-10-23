@@ -8,6 +8,7 @@ import { isEnemy } from '../game/combat.js';
 import { forEachNearby } from '../game/spatialHash.js';
 import { levelOf, note } from './squads.js';
 import { hypot } from '../game/hypot.js';
+import { isHospital, healPoint } from '../game/empire.js';
 
 const isAlive = (unit) => unit && unit.state !== 'dead' && unit.hp > 0;
 
@@ -211,9 +212,10 @@ function healSpot(state, player, unit) {
     if (d < bestD) { bestD = d; best = { i: other.x, j: other.y }; }
   }
   for (const d of state.map.districts) {
-    if (d.special !== 'hospital' || d.owner !== player.id || !d.capture) continue;
-    const dd = hypot(d.capture.i - unit.x, d.capture.j - unit.y);
-    if (dd < bestD) { bestD = dd; best = { i: d.capture.i, j: d.capture.j }; }
+    if (!isHospital(d) || d.owner !== player.id || !d.capture) continue;
+    const at = healPoint(state.map, d);
+    const dd = hypot(at.i - unit.x, at.j - unit.y);
+    if (dd < bestD) { bestD = dd; best = { i: at.i, j: at.j }; }
   }
   return best && bestD > MAP_GEN.captureRadius ? best : null;
 }

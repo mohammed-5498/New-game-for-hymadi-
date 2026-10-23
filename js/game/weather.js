@@ -1,5 +1,6 @@
 // تأثير الطقس على اللعب: الرصد ليلاً، السرعة في الثلج، ودقة الرمي في المطر
 import { WEATHER } from '../config.js';
+import { empireSpeedMul } from './empire.js';
 
 // مدى رصد الوحدة بعد تأثير الطقس (ليلاً × 0.75)
 // رماة الهوارانغ (سمة كوريا، القسم 3.10) لا يتأثرون بالليل
@@ -13,6 +14,7 @@ export function moveSpeed(state, unit) {
   // traits.spd: تنويع بسيط بين الأفراد (القسم 5.4) فلا تسير الصفوف كآلة واحدة
   let speed = unit.stats.speed * WEATHER[state.weather].speedMul * (unit.traits ? unit.traits.spd : 1);
   if (unit.hasteUntil > state.time) speed *= 1 + unit.hasteFactor;    // اندفاع ضربة بطل (القسم 3.10)
+  if (state.mode === 'empire') speed *= empireSpeedMul(state, unit.playerId);   // ترقية سرعة المشي
   if (unit.slowUntil > state.time) return speed * (1 - unit.slowFactor);
   return speed;
 }

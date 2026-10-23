@@ -1,5 +1,5 @@
 // حالة المباراة: اللاعبون، الوحدات، الخريطة، الكاميرا، التحديد
-import { CAMERA, PLAYER_COLORS, UNITS, WEATHER } from './config.js';
+import { CAMERA, PLAYER_COLORS, UNITS, WEATHER, CITIES } from './config.js';
 import { createMap } from './map/generator.js';
 import { findFreeTiles } from './map/pathfinding.js';
 import { createUnit } from './game/units.js';
@@ -26,7 +26,11 @@ export function createMatch(settings) {
     homeDistrictId: -1
   }));
 
-  const map = createMap(settings.mapSize, players, settings.city);   // طابع المدينة (القسم 3.9)
+  // طابع المدينة (القسم 3.9). طور الإمبراطورية في مدينته وحدها وبلا أحياء مميزة،
+  // والمدينة المحصورة فيه لا تُلعب في غيره (حفظ إعداد قديم اختارها مثلاً): تصير عشوائياً
+  const forced = Object.keys(CITIES.modeOnly).find(city => CITIES.modeOnly[city] === settings.mode);
+  const city = forced || (CITIES.modeOnly[settings.city] ? 'random' : settings.city);
+  const map = createMap(settings.mapSize, players, city, { specials: settings.mode !== 'empire' });
   if (!map) throw new Error('تعذر توليد خريطة صالحة');
 
   // الشرطة طرف محايد يُضاف بعد توزيع الأحياء المنزلية فلا يأخذ حياً ولا مقراً

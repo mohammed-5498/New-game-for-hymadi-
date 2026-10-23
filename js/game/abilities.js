@@ -7,6 +7,7 @@ import { policeArmorBonus } from './police.js';
 import { forEachNearby } from './spatialHash.js';
 import { soundAt } from '../audio/sound.js';
 import { homeMods, inOwnArea, brotherMods, phalanxMods, outnumberedMods, duelMods } from './nations.js';
+import { empireDamageBonus, empireArmorBonus } from './empire.js';
 
 const isAlive = (unit) => unit.state !== 'dead' && unit.hp > 0;
 const allied = (state, a, b) => a.playerId === b.playerId || !isEnemy(state, a, b);
@@ -23,8 +24,10 @@ export function updateAbilities(state) {
 function applyDamageBonuses(state) {
   const armoryBonus = state.players.map(p =>
     ownsSpecial(state, p.id, 'armory') ? SPECIAL_BONUS.armory.damageBonus : 0);
-  // +10% درع لكل مركز شرطة مملوك، بحد أقصى +20% (القسم 3.8)
-  const armorBonus = state.players.map(p => policeArmorBonus(state, p.id));
+  // +10% درع لكل مركز شرطة مملوك، بحد أقصى +20% (القسم 3.8)، وترقيتا الدفاع والضرر في طور الإمبراطورية
+  const empire = state.mode === 'empire';
+  const armorBonus = state.players.map(p => policeArmorBonus(state, p.id) + (empire ? empireArmorBonus(state, p.id) : 0));
+  const upDamage = state.players.map(p => (empire ? empireDamageBonus(state, p.id) : 0));
   // سمات الأمم "داخل أحيائك" (القسم 3.10): null لكل لاعب بلا سمة من هذا النوع
   const home = state.players.map(homeMods);
   // «الـ108» (الصين) و«الكتيبة» (ألمانيا): null لكل لاعب بلا هذه السمة
@@ -65,7 +68,7 @@ function applyDamageBonuses(state) {
   for (let k = 0, units = state.units; k < units.length; k++) {
     const unit = units[k];
     if (!isAlive(unit)) continue;
-    let multiplier = 1 + armoryBonus[unit.playerId];
+    let multiplier = 1 + armoryBonus[unit.playerId] + upDamage[unit.playerId];
     if (unit.aura) multiplier += unit.auraBonus;
     // تحفيز الزعيم أو بطل العقارب: مكافأة مؤقتة تُجمع فوق الباقي
     if (unit.buffUntil > state.time) multiplier += unit.buffDamage;

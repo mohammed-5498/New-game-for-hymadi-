@@ -33,21 +33,25 @@ function pickWeighted(table) {
 
 // ينشئ خريطة صالحة، ويعيد المحاولة إذا فشل الشرط (شوارع متصلة، أحياء منزلية كافية)
 // city: مفتاح طابع المدينة (القسم 3.9)، أو 'random'. المدينة شكل فقط: الشوارع والأحياء كما هي
+// "عشوائي" لا يختار مدينة محصورة في طور واحد (CITIES.modeOnly: اليمامة لطور الإمبراطورية)
+export const OPEN_CITIES = CITIES.order.filter(city => !CITIES.modeOnly[city]);
+
 export function resolveCity(city) {
-  return CITY_THEMES[city] ? city : CITIES.order[ri(CITIES.order.length)];
+  return CITY_THEMES[city] ? city : OPEN_CITIES[ri(OPEN_CITIES.length)];
 }
 
-export function createMap(sizeKey, players, city = 'random') {
+// options.specials: false بلا أحياء مميزة (طور الإمبراطورية: مبانيه تُبنى بالنقاط)
+export function createMap(sizeKey, players, city = 'random', options = {}) {
   const size = MAP_SIZES[sizeKey] || MAP_SIZES.medium;
   const cityKey = resolveCity(city);
   for (let attempt = 0; attempt < MAP_GEN.maxTries; attempt++) {
-    const map = buildMap(size, players, cityKey);
+    const map = buildMap(size, players, cityKey, options);
     if (map) return map;
   }
   return null;
 }
 
-function buildMap(size, players, cityKey) {
+function buildMap(size, players, cityKey, options) {
   const map = createEmptyMap(size);
   map.city = cityKey;
   map.seed = ri(1e9);                // بذرة الرسم: نفس الخريطة تُرسم دائماً بنفس الشكل
@@ -60,7 +64,7 @@ function buildMap(size, players, cityKey) {
 
   const districts = findDistricts(map);
   if (!assignHomeDistricts(map, districts, players)) return null;
-  assignSpecialDistricts(map, districts, size, players);
+  if (options.specials !== false) assignSpecialDistricts(map, districts, size, players);
   assignPoliceDistricts(map, districts, size);
   fillDistricts(map, districts);
   map.districts = districts;

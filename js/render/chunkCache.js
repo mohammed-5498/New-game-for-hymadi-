@@ -4,7 +4,7 @@
 // - تُعاد قطعة فقط حين يتغير مالك حي فيها (وعلى 3 مراحل أثناء انتقال اللون)
 // - رسم القطع على دفعات محدودة بوقت في كل إطار؛ وحتى تجهز يظهر مكانها نسختها الأقدم أو خريطة أرض منخفضة الدقة
 // - المصابيح الوامضة وإضاءة الليل طبقة خفيفة تُرسم كل إطار
-import { TILE_HALF_W, TILE_HALF_H, CITY_CACHE as CC, CAPTURE } from '../config.js';
+import { TILE_HALF_W, TILE_HALF_H, CITY_CACHE as CC, CAPTURE, EMPIRE } from '../config.js';
 import { tintAmount } from '../game/capture.js';
 import { beginCity, groundColor, drawRoadSurface, drawTileStatic, debrisLight, specialType, cityOf, cityReady } from './cityRender.js';
 import { isLane, drawLanePaving, roundaboutAnchor, drawRoundaboutRing, laneLight, roundaboutLights } from './openCity.js';
@@ -66,10 +66,12 @@ function setup(state) {
   buildBase(state);
 }
 
-// مفتاح لون الحي: المالك ومرحلة انتقال اللون (3 مراحل لا 10، حتى لا تُعاد القطع كثيراً)
+// مفتاح لون الحي: المالك ومرحلة انتقال اللون (3 مراحل لا 10، حتى لا تُعاد القطع كثيراً)،
+// ومبناه في طور الإمبراطورية: بناؤه يعيد رسم قطع الحي
 function tintKey(d) {
-  if (!d.tintColor) return '';
-  return d.tintColor + '|' + Math.round(d.tintMix * CC.tintSteps);
+  const building = d.building ? '|' + d.building : '';
+  if (!d.tintColor) return building;
+  return d.tintColor + '|' + Math.round(d.tintMix * CC.tintSteps) + building;
 }
 
 // إضاءة الليل الثابتة والمصابيح الوامضة: تُحسب مرة واحدة بلا رسم
@@ -203,7 +205,7 @@ function drawGround(ctx, state, tiles) {
     else if (isLane(map, k)) drawLanePaving(ctx, map, i, j, x, y);            // المدن المفتوحة
     else if (map.type[k] === 'Y' && roundaboutAnchor(map, i, j)) drawRoundaboutRing(ctx, x, y);
   }
-  drawBorders(ctx, map, tiles);
+  drawBorders(ctx, map, tiles, state.mode === 'empire' ? EMPIRE.halo : null);
   for (let t = 0; t < tiles.length; t += 2) {
     const i = tiles[t], j = tiles[t + 1], k = map.idx(i, j);
     if (!map.dash[k]) continue;
@@ -236,7 +238,8 @@ const EDGES = [
   return [di, dj, a[0] + sx, a[1] + sy, b[0] + sx, b[1] + sy];
 });
 
-function drawBorders(ctx, map, tiles) {
+// halo (طور الإمبراطورية): هالة خفيفة بلون المالك على الحد نفسه، أعرض منه وتحته
+function drawBorders(ctx, map, tiles, halo) {
   const B = CAPTURE.border, groups = new Map();
   for (let t = 0; t < tiles.length; t += 2) {
     const i = tiles[t], j = tiles[t + 1], k = map.idx(i, j);
@@ -261,6 +264,12 @@ function drawBorders(ctx, map, tiles) {
   for (const g of groups.values()) {
     ctx.beginPath();
     for (let n = 0; n < g.lines.length; n += 4) { ctx.moveTo(g.lines[n], g.lines[n + 1]); ctx.lineTo(g.lines[n + 2], g.lines[n + 3]); }
+    if (halo) {
+      ctx.globalAlpha = g.amount * halo.alpha;
+      ctx.strokeStyle = g.color;
+      ctx.lineWidth = halo.width;
+      ctx.stroke();
+    }
     ctx.globalAlpha = g.amount;
     ctx.strokeStyle = B.under;
     ctx.lineWidth = B.underWidth;
