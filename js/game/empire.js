@@ -50,7 +50,7 @@ export function updateEmpire(state) {
   // تلميح مرة واحدة في البداية (بعد إشعار سمة الأمة إن وُجد): كيف تُفتح قائمة الحي
   if (!ms.hinted && !state.notice) {
     ms.hinted = true;
-    state.notice = { text: 'المس قاعدتك أو أي حي تملكه مرتين: الإنتاج والترقيات والمباني', mine: true, t: E.hintSeconds, keep: true };
+    state.notice = { text: 'المس مبنى قاعدتك مرتين بسرعة لقائمته، وأي حي لك بلا مبنى لتبني فيه', mine: true, t: E.hintSeconds, keep: true };
   }
   collectIncome(state, ms);
   rewardLeaderKills(state, ms);
