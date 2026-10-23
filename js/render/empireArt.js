@@ -46,7 +46,7 @@ export function drawEmpireMarks(ctx, state, visible, openDistrict) {
     const top = y - roofTop(map, empireKind(map, 'Q'), at.i, at.j) - 26;
     const w = 22, h = Math.max(2.2, 3 / z);
     const item = queue[0];
-    const done = Math.min(1, item.t / productionTime(state, district.owner, item.kind));
+    const done = Math.min(1, item.t / productionTime(state, district, item.kind));
     ctx.fillStyle = 'rgba(20,14,8,0.75)';
     ctx.fillRect(x - w / 2 - 0.6, top - 0.6, w + 1.2, h + 1.2);
     ctx.fillStyle = '#e8c45a';

@@ -1,5 +1,5 @@
 // قائمة الحي في طور الإمبراطورية (بطلب المستخدم): لمستان على حي تملكه تفتحانها، واللعب لا يتوقف خلفها.
-// - القاعدة الرئيسية: إنتاج الجنود الأربعة بالنقاط (وطابورها)، وترقيات العصابة
+// - القاعدة الرئيسية: إنتاج الجنود الأربعة بالنقاط (وطابورها) وسرعة إنتاجها، وترقيات العصابة
 // - حي بلا مبنى: بناء برج رماية أو مستشفى أو قاعدة رئيسية (المبنى لا يتغير بعد بنائه)
 // - البرج والمستشفى: خانتا ترقيتهما
 // كل خيار خانة باسمه وكلفته (ومستواه)، والمعطلة تكتب سببها. تُغلق بزرها أو بلمسة على الخريطة
@@ -69,13 +69,14 @@ function sectionsFor(state, district) {
   if (district.building === 'hq') {
     const art = (kind) => artOf(player, kind);
     return [
-      { title: 'الإنتاج', queue: true, slots: E.units.order.map(kind => ({
+      // الجنود، وبعدهم سرعة إنتاج هذه القاعدة (ترقيتها هي: تبقى فيها لمن يحتلها)
+      { title: 'الإنتاج', queue: true, slots: [...E.units.order.map(kind => ({
         name: unitName(side, art(kind)), art: art(kind), side, color: player.color,
         cost: () => E.units[kind].cost,
         check: () => canQueue(state, pid, district, kind),
         act: () => queueUnit(state, pid, district.id, kind)
-      })) },
-      { title: 'ترقيات العصابة', slots: E.upgrades.order.map(key => ({
+      })), ...buildingSlots(state, pid, district)] },
+      { title: 'ترقيات العصابة', note: 'لكل جنودك', slots: E.upgrades.order.map(key => ({
         name: E.upgrades[key].name, max: E.upgrades[key].costs.length,
         level: () => levels[key],
         cost: () => (nextUpgrade(state, pid, key) || {}).cost,
@@ -95,14 +96,19 @@ function sectionsFor(state, district) {
     })) }];
   }
 
-  const B = E.buildings[district.building];
-  return [{ title: 'ترقيات ' + B.name, stats: true, slots: B.upgrades.order.map(key => ({
-    name: B.upgrades[key].name, max: B.upgrades[key].costs.length,
+  return [{ title: 'ترقيات ' + E.buildings[district.building].name, stats: true, slots: buildingSlots(state, pid, district) }];
+}
+
+// ترقيات المبنى نفسه (سرعة إنتاج القاعدة، وخانتا البرج والمستشفى): مستوياتها في district.blv
+function buildingSlots(state, pid, district) {
+  const U = E.buildings[district.building].upgrades;
+  return U.order.map(key => ({
+    name: U[key].name, max: U[key].costs.length,
     level: () => (district.blv && district.blv[key]) || 0,
     cost: () => (nextBuildingUpgrade(district, key) || {}).cost,
     check: () => canUpgradeBuilding(state, pid, district, key),
     act: () => upgradeBuilding(state, pid, district.id, key)
-  })) }];
+  }));
 }
 
 const TITLES = { hq: E.buildings.hq.name, tower: E.buildings.tower.name, hospital: E.buildings.hospital.name };
@@ -210,7 +216,7 @@ function refresh(state) {
     open.queue.text.textContent = item
       ? 'الطابور ' + queue.length + '/' + E.queueMax + ': ' + unitName(player.nation || player.gang, artOf(player, item.kind))
       : 'الطابور فارغ';
-    const done = item ? Math.min(1, item.t / productionTime(state, pid, item.kind)) : 0;
+    const done = item ? Math.min(1, item.t / productionTime(state, district, item.kind)) : 0;
     open.queue.fill.style.width = (done * 100).toFixed(1) + '%';
   }
 }

@@ -1,8 +1,10 @@
 // طور الإمبراطورية (بطلب المستخدم، طور تجريبي مستقل في صحراء اليمامة وحدها):
 // - النقاط: كل حي مملوك 0.5 في الثانية، والقاعدة الرئيسية 2 بدل ذلك، ومن يُسقط زعيم عصابة يأخذ 50
 // - الجنود من القاعدة الرئيسية بالنقاط وبطابور (لا ظهور تلقائي)، والزعيم (البطل) واحد فقط لكل عصابة
-// - ترقيات العصابة بثلاثة مستويات: الدم والضرر والدفاع وسرعة المشي، وسرعة الإنتاج
+// - ترقيات العصابة بثلاثة مستويات: الدم والضرر والدفاع وسرعة المشي (تبقى للعصابة مهما سقطت قواعدها)
 // - بناء الأحياء: قاعدة رئيسية أو برج رماية أو مستشفى، وفئة المبنى لا تتغير بعد بنائه
+// - ترقيات المباني ملكها: سرعة إنتاج القاعدة، وضرر البرج وسرعته، ومدى المستشفى وسرعته. من يحتل الحي يأخذ
+//   مبناه بترقياته كما هي، ولا تعود نقاط لأحد (وطلبات الجنود في طابور القاعدة الساقطة تضيع)
 // الحالة كلها بيانات بسيطة في state.modeState وحقول الأحياء (building وbuildTile وblv)، فتُحفظ مع المباراة.
 // الأرقام كلها في EMPIRE داخل config.js
 import { TICK_SEC, EMPIRE as E, SPAWN, GANGS, ai } from '../config.js';
@@ -28,7 +30,7 @@ export function initEmpire(state, modeState) {
   modeState.points = players.map(() => E.startPoints);
   modeState.earned = players.map(() => 0);          // كل ما جمعه (لشاشة النهاية)
   modeState.leaderKills = players.map(() => 0);
-  modeState.levels = players.map(() => ({ hp: 0, damage: 0, armor: 0, speed: 0, production: 0 }));
+  modeState.levels = players.map(() => ({ hp: 0, damage: 0, armor: 0, speed: 0 }));
   modeState.queues = {};                             // رقم حي القاعدة -> [{ kind, t, payer }]
   modeState.shots = [];                              // سهام الأبراج في الهواء
   for (const player of players) {
@@ -90,28 +92,29 @@ function botFactor(player) {
   return (lvl && lvl.spawnFactor) || 1;
 }
 
-export const productionTime = (state, playerId, kind) =>
-  E.units[kind].seconds * E.upgrades.production.times[state.modeState.levels[playerId].production] *
-  botFactor(state.players[playerId]);
+// سرعة الإنتاج ترقية القاعدة نفسها (district.blv.production)
+export function productionTime(state, district, kind) {
+  const level = (district.blv && district.blv.production) || 0;
+  const owner = state.players[district.owner];
+  return E.units[kind].seconds * E.buildings.hq.upgrades.production.times[level] * (owner ? botFactor(owner) : 1);
+}
 
 function updateQueues(state, ms) {
   for (const id of Object.keys(ms.queues)) {
     const queue = ms.queues[id];
     if (!queue.length) continue;
     const district = state.map.districts[id];
-    // القاعدة سقطت بيد غير من دفع: يعود ثمن طلباته إليه
+    // القاعدة سقطت (صارت محايدة أو بيد غيره): طلبات من دفع تضيع بلا إرجاع نقاط (بقرار المستخدم)
     for (let k = queue.length - 1; k >= 0; k--) {
-      if (district.building === 'hq' && district.owner === queue[k].payer) continue;
-      ms.points[queue[k].payer] += E.units[queue[k].kind].cost;
-      queue.splice(k, 1);
+      if (district.building !== 'hq' || district.owner !== queue[k].payer) queue.splice(k, 1);
     }
     if (!queue.length) continue;
     const item = queue[0], owner = district.owner;
     if (countUnits(state, owner) >= state.maxUnits) continue;      // بلغ الحد الأقصى: الإنتاج ينتظر
     item.t += TICK_SEC;
-    if (item.t < productionTime(state, owner, item.kind)) continue;
-    queue.shift();
-    if (!produce(state, state.players[owner], district, item.kind)) ms.points[owner] += E.units[item.kind].cost;
+    if (item.t < productionTime(state, district, item.kind)) continue;
+    // لا مكان حول العلم الآن: يبقى الطلب أول الطابور ويُعاد في التحديث التالي
+    if (produce(state, state.players[owner], district, item.kind)) queue.shift();
   }
 }
 

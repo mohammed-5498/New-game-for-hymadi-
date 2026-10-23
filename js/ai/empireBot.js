@@ -79,7 +79,8 @@ function pickNext(state, player, memo) {
   return bestTech(state, pid, owned, hqs, plain, enemyDist) || unit;
 }
 
-// الترقية أو المبنى التالي: الأقل رتبة (البرج الناقص، ثم القاعدة الثانية، ثم ترقيات العصابة بمستوياتها بين المباني)
+// الترقية أو المبنى التالي: الأقل رتبة (البرج الناقص، ثم القاعدة الثانية، ثم ترقيات العصابة وسرعة إنتاج قواعده
+// بمستوياتها بين المباني)
 function bestTech(state, pid, owned, hqs, plain, enemyDist) {
   const items = [];
   const add = (rank, cost, buy) => items.push({ rank, cost, tech: true, buy });
@@ -105,13 +106,19 @@ function bestTech(state, pid, owned, hqs, plain, enemyDist) {
     const spot = nearest(plain.filter(d => d !== front), d => hypot(d.cx - home.cx, d.cy - home.cy));
     if (spot) add(3, E.buildings.hospital.cost, () => buildDistrict(state, pid, spot.id, 'hospital'));
   }
-  for (const d of [...towers].sort((a, b) => enemyDist(a) - enemyDist(b)).concat(hospitals)) {
-    const keys = E.buildings[d.building].upgrades.order.map(key => ({ key, next: nextBuildingUpgrade(d, key) })).filter(u => u.next);
-    if (!keys.length) continue;
-    const low = Math.min(...keys.map(u => u.next.level));
-    const up = keys.find(u => u.next.level === low);
-    add((d.building === 'tower' ? 3 : 6) + 2 * low, up.next.cost, () => upgradeBuilding(state, pid, d.id, up.key));
-    break;                                   // مبنى واحد في كل مرة: الأقرب للأعداء
+  // ترقيات المباني: مبنى واحد من كل نوع في كل مرة (القاعدة الأقل مستوى، والبرج الأقرب للأعداء، ثم المستشفى)
+  // وسرعة الإنتاج قبل ترقيات العصابة من نفس المستوى
+  const RANK = { hq: -0.5, tower: 3, hospital: 6 };
+  const byLevel = (d) => Math.min(...E.buildings.hq.upgrades.order.map(key => (d.blv && d.blv[key]) || 0));
+  for (const list of [[...hqs].sort((a, b) => byLevel(a) - byLevel(b)), [...towers].sort((a, b) => enemyDist(a) - enemyDist(b)), hospitals]) {
+    for (const d of list) {
+      const keys = E.buildings[d.building].upgrades.order.map(key => ({ key, next: nextBuildingUpgrade(d, key) })).filter(u => u.next);
+      if (!keys.length) continue;
+      const low = Math.min(...keys.map(u => u.next.level));
+      const up = keys.find(u => u.next.level === low);
+      add(RANK[d.building] + 2 * low, up.next.cost, () => upgradeBuilding(state, pid, d.id, up.key));
+      break;
+    }
   }
   if (!items.length) return null;
   return items.reduce((a, b) => (b.rank < a.rank ? b : a));
