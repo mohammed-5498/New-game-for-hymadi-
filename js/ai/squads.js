@@ -207,7 +207,7 @@ export function decideSquads(state, player, config, pool, units, owned, helpers)
   if (param(lvl, 'reinforce')) reinforce(state, player, lvl, brain, byId, pool);
 
   const rally = rallyPoint(state, player, brain, owned);
-  if (!rally) return;
+  if (!rally || !pool.length) return;      // لا وحدة حرة: يكفي تحديث الفرق القائمة
   const targets = targetList(state, player, lvl, units.length, helpers);
 
   // الأهداف السهلة (أحياء خالية من المدافعين): فرقة صغيرة من أقرب الوحدات، بلا انتظار التجمع
@@ -462,9 +462,7 @@ function nextTarget(state, player, lvl, members, c, type) {
 }
 
 // --- الدفاع بلا إفراط: 1.2 × قوة المهاجم، بالهجوم المتحرك ---
-// defendRange (الصعب فما فوق): المدافعون من القريبين وحدهم، لا وحدات تعبر الخريطة فرادى فتموت في الطريق
 function defend(state, player, lvl, brain, pool, owned) {
-  const range = param(lvl, 'defendRange');
   for (const district of owned) {
     const { enemy, mine } = districtPowers(state, player, lvl, district);
     if (enemy <= 0) continue;
@@ -476,8 +474,7 @@ function defend(state, player, lvl, brain, pool, owned) {
     let deficit = ai.defenseRatio * enemy - mine - coming;
     if (deficit <= 0) continue;
     const group = [];
-    const near = range ? pool.filter(u => distU(u, district.capture) <= range) : pool;
-    const sorted = sortedBy(near, (u) => distU(u, district.capture));
+    const sorted = sortedBy(pool, (u) => distU(u, district.capture));
     for (const unit of sorted) {
       if (deficit <= 0) break;
       group.push(unit);

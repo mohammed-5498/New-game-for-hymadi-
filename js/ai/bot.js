@@ -69,10 +69,15 @@ function decide(state, player, config) {
     unit.botTask = null;                 // مهمة قديمة لم تعد صالحة
     if (unit.state !== 'attacking') free.push(unit);
   }
-  if (!free.length) return;
+  const owned = ownedDistricts(state, player.id);
+  if (!free.length) {
+    // لا وحدة حرة: الفرق القائمة تُتابع مع ذلك في كل قرار (انسحاب، هدف تالٍ بعد الاحتلال، نهاية الدفاع)،
+    // وإلا بقيت فرقة احتلت هدفها واقفة، وفرقة تخسر بلا انسحاب، حتى تظهر وحدة جديدة
+    if (levelOf(player).squads) decideSquads(state, player, config, [], units, owned, { strongestPlayer });
+    return;
+  }
 
   const pool = { units: free };
-  const owned = ownedDistricts(state, player.id);
 
   // حماية الزعيم: الزعيم خلف الجيش، ومطاردة زعيم العدو المعزول أو الضعيف
   if (state.mode === 'regicide') regicidePlan(state, player, config, pool, units);

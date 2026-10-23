@@ -952,15 +952,17 @@ export const ai = {
     medium: { squads: true, minSquad: 6,  focus: true, flank: true, smartUlts: 'partial',
               policeArmy: 8,
               responseRadius: 0,      // المتوسط يرى خريطة القوى وحدها (5 مربعات)، لا من يلحق للنجدة
-              reinforce: false, stage: false },   // ولا ينجد فرقه المشتبكة ولا يلتئم قبل الاقتحام
+              reinforce: false },   // ولا ينجد فرقه المشتبكة
+    // الصعب فما فوق: يدافع عن حيه حين يصل العدو قرب نقطة استيلائه (3 مربعات)، لا حين يقف عدو في حيه المجاور،
+    // وفرقة توسع صغيرة واحدة في وقت واحد (الباقون يتوسعون معاً) — بالقياس (5د-2)
     hard:   { squads: true, minSquad: 8,  focus: true, flank: true, smartUlts: 'full',
               retreat: true, twoFronts: true, raids: true, protectRanged: true, pullWounded: true,
               policeEarly: true,
-              strictDefense: true, preferWeak: 3 },
+              strictDefense: true, preferWeak: 3, threatRadius: 3, maxSmallSquads: 1 },
     insane: { squads: true, minSquad: 10, focus: true, flank: true, smartUlts: 'full',
               retreat: true, twoFronts: true, raids: true, protectRanged: true, pullWounded: true,
               policeEarly: true,
-              strictDefense: true, preferWeak: 3,
+              strictDefense: true, preferWeak: 3, threatRadius: 3, maxSmallSquads: 1,
               spawnFactor: 0.75,       // ظهور أسرع 25% (زمن الظهور × 0.75)
               chargeFactor: 1.25 }     // شحن الضربات أسرع 25%
   },
@@ -972,7 +974,6 @@ export const ai = {
   retreatRatio: 0.6,          // تنسحب الفرقة إن نقصت قوتها عن 0.6 × قوة الأعداء حولها
   defenseRatio: 1.2,          // الدفاع بلا إفراط: 1.2 × قوة المهاجم
   threatRadius: 5,            // يُدافَع عن الحي إن كان عدو ضمن هذا البعد عن نقطة استيلائه (= خريطة القوى)
-  defendRange: 0,             // المدافعون من الوحدات ضمن هذا البعد عن الحي فقط (0 = من أي مكان)
   specialValue: 2,            // قيمة الحي المميز
   stationValue: 1.5,          // قيمة مركز الشرطة (صعب فما فوق)
   snowballValue: 3,           // أحياء صاحب 40% تتضاعف قيمتها (القسم 9)
@@ -985,7 +986,7 @@ export const ai = {
   maxSmallSquads: 3,          // أقصى عدد لفرق التوسع والإغارة الصغيرة في وقت واحد
   expandAwayWeight: 0.5,      // التوسع يفضّل الأحياء البعيدة عن العدو (نقاتل قرب أحيائنا)
   reinforce: true,            // نجدة الفرق المشتبكة (يمكن تعطيلها لمستوى بعينه)
-  stage: true,                // الالتئام قبل الاقتحام
+  stage: false,               // الالتئام قبل الاقتحام: مطفأ (القياس: الاقتحام المباشر أقوى، 5د-2)
   groupExpand: true,          // المتجمعون قبل اكتمال فرقة الهجوم يتوسعون معاً
   reinforceRange: 14,         // الوحدات الحرة ضمن هذا البعد تنجد فرقة مشتبكة لا تتفوق
   stageDistance: 5,           // فرقة الهجوم تلتئم أولاً عند نقطة قبل الهدف بهذا البعد
