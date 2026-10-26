@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>تجربة عظام فتى الجبل</title>
+<style>
+  html, body { margin: 0; background: #1b1712; color: #f3e3b5; font: 16px sans-serif; }
+  canvas { display: block; max-width: 100%; height: auto; }
+  #pick { position: fixed; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center;
+          gap: 14px; padding: 16px; text-align: center; }
+  #pick label { background: #c9a24a; color: #1b1712; padding: 14px 22px; border-radius: 10px; font-weight: bold; }
+  #pick input { display: none; }
+</style>
+</head>
+<body>
+<canvas id="c" width="1280" height="720"></canvas>
+<div id="pick">
+  <div>الصورة ليست في المستودع: ضعها في docs/rig-test/src/char.png أو اخترها من جهازك (1144×1375)</div>
+  <label>اختر الصورة<input type="file" accept="image/*"></label>
+</div>
+<!-- تجربة فقط (انظر README.md): بلا ?capture تتحرك وحدها، ومعه يرسم shot.mjs إطاراً إطاراً -->
+<script type="module">
+import '../../js/render/units.js';
+import { BODIES } from '../../js/render/bodies.js';
+import { NATION_ART } from '../../js/render/nationArt.js';
+import { twoHand } from '../../js/render/combatArt.js';
+import { poseIdle, poseWalk, poseStagger, keyPose, mixPose, ATK, DODGE, drawBody, STYLE, softShadow, ease, BASE } from '../../js/render/anim.js';
+import { buildParts, rigTransforms, drawRig, J } from './rig.js';
+
+const CAPTURE = new URLSearchParams(location.search).has('capture');
+
+const canvas = document.getElementById('c'), ctx = canvas.getContext('2d');
+const UD = BODIES[NATION_ART.china.common[0]];
+const COLOR = '#2f6fd6';
+let parts = null, img = null;
+
+// الخط الزمني: [اسم، مدة، دالة الوضعية]
+const ATT = 1.05;
+const SEG = [
+  ['وقوف', 1.6, t => poseIdle(t, false)],
+  ['مشي', 2.6, t => poseWalk(t, 1.0, false)],
+  ['وقفة القتال', 1.0, t => poseIdle(t, true)],
+  ['ضربة سريعة', ATT, t => keyPose(ATK.quick, t / ATT)],
+  ['ضربة قوية', ATT, t => keyPose(ATK.heavy, t / ATT)],
+  ['طعنة', ATT, t => keyPose(ATK.thrust, t / ATT)],
+  ['لكمة', ATT, t => keyPose(ATK.punch, t / ATT)],
+  ['ركلة أمامية', ATT, t => keyPose(ATK.kick_front, t / ATT)],
+  ['ركلة عالية', ATT, t => keyPose(ATK.kick_high, t / ATT)],
+  ['تفادٍ بالانحناء', 0.9, t => keyPose(DODGE.duck, t / 0.9)],
+  ['قفزة للخلف', 0.9, t => keyPose(DODGE.leap, t / 0.9)],
+  ['ترنّح', 0.9, t => poseStagger(t, Math.min(1, t / 0.15) * Math.min(1, (0.9 - t) / 0.3 + 0.0001))],
+  ['مشي قتالي', 1.8, t => poseWalk(t, 1.0, true)],
+  ['وقفة القتال', 0.8, t => poseIdle(t, true)]
+];
+const TOTAL = SEG.reduce((s, x) => s + x[1], 0);
+const BLEND = 0.18;
+
+function poseAt(time) {
+  let t = time, k = 0;
+  while (k < SEG.length - 1 && t >= SEG[k][1]) { t -= SEG[k][1]; k++; }
+  let p = SEG[k][2](t);
+  if (k > 0 && t < BLEND) {
+    const prev = SEG[k - 1], q = prev[2](prev[1]);
+    p = mixPose(q, p, ease(t / BLEND));
+  }
+  return { p, name: SEG[k][0], k };
+}
+
+// فتى الجبل كما في اللعبة (النمط المظلل)
+function drawGame(c, p, x, y, s) {
+  c.save();
+  c.translate(x, y);
+  c.scale(s * UD.sx, s * UD.sy);
+  STYLE.on = true;
+  softShadow(c, 1, (UD.shadowW || 3.8) / 3.8);
+  drawBody(c, twoHand(UD, p), COLOR, UD);
+  STYLE.on = false;
+  c.restore();
+}
+
+// الصورة المركبة على العظام: الورك في x، والأرض في y
+const SOLE = 1362;
+function drawImageRig(c, p, x, y, scale, time, prev) {
+  const rig = rigTransforms(p, { time, prev, dt: 0.1 });
+  // ظل ناعم تحت القدمين
+  c.save();
+  c.translate(x, y);
+  c.scale(scale * 280 / 5, scale * 280 / 5);
+  softShadow(c, 1, 1);
+  c.restore();
+  drawRig(c, parts, rig, x - J.HIP[0] * scale, y - SOLE * scale, scale);
+  return rig;
+}
+
+function background(c) {
+  const g = c.createLinearGradient(0, 0, 0, 720);
+  g.addColorStop(0, '#3a3128'); g.addColorStop(1, '#1d1813');
+  c.fillStyle = g; c.fillRect(0, 0, 1280, 720);
+  c.fillStyle = '#c9b48a'; c.fillRect(0, 620, 1280, 100);
+  c.fillStyle = 'rgba(0,0,0,0.18)'; c.fillRect(0, 620, 1280, 4);
+}
+
+function label(c, text, x, y, size = 30, col = '#f3e3b5') {
+  c.save();
+  c.direction = 'rtl'; c.textAlign = 'center';
+  c.font = `bold ${size}px "DejaVu Sans", sans-serif`;
+  c.lineWidth = 6; c.strokeStyle = 'rgba(0,0,0,0.55)'; c.strokeText(text, x, y);
+  c.fillStyle = col; c.fillText(text, x, y);
+  c.restore();
+}
+
+window.frame = (time) => {
+  const { p, name } = poseAt(time);
+  const prev = poseAt(Math.max(0, time - 0.1)).p;
+  background(ctx);
+  // يمين الشاشة: الصورة، يسارها: اللعبة (القراءة من اليمين)
+  drawImageRig(ctx, p, 880, 632, 0.42, time, prev);
+  drawGame(ctx, p, 330, 632, 17.5);
+  // حجم المباراة تقريباً (تقريب 2.2)
+  ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(1120, 20, 140, 120);
+  drawImageRig(ctx, p, 1205, 128, 0.075, time, prev);
+  drawGame(ctx, p, 1160, 128, 3.4);
+  label(ctx, 'بحجم المباراة', 1190, 160, 15, '#d8c9a3');
+  label(ctx, name, 640, 60, 34);
+  label(ctx, 'فتى الجبل في اللعبة', 330, 700, 22, '#3b2e1e');
+  label(ctx, 'صورتك على نفس العظام', 880, 700, 22, '#3b2e1e');
+};
+window.TOTAL = TOTAL;
+window.SEG = SEG.map(s => [s[0], s[1]]);
+
+// ---- ورقة الفحص: الأصل، وإعادة التركيب في الوقفة الأساسية، والأجزاء ومفاصلها، ووضعيات مفتاحية ----
+window.sheet = (which) => {
+  if (which === 'rest') {
+    canvas.width = 1600; canvas.height = 1000;
+    ctx.fillStyle = '#d9c7a1'; ctx.fillRect(0, 0, 1600, 1000);
+    const s = 0.68;
+    ctx.drawImage(img, 20, 20, img.width * s, img.height * s);
+    // الوقفة الأساسية تماماً
+    drawRig(ctx, parts, rigTransforms(window.BASEPOSE, {}), 820, 20, s);
+    label(ctx, 'الأصل', 400, 990, 26, '#222');
+    label(ctx, 'إعادة التركيب (الوقفة الأساسية)', 1200, 990, 26, '#222');
+    return;
+  }
+  if (which === 'diff') {
+    // الفرق بين الأصل وإعادة التركيب بالحجم الكامل: الأحمر = بكسلات مختلفة
+    canvas.width = 1144; canvas.height = 1375;
+    const a = document.createElement('canvas'); a.width = 1144; a.height = 1375;
+    const ax = a.getContext('2d'); ax.fillStyle = '#d9c7a1'; ax.fillRect(0, 0, 1144, 1375); ax.drawImage(img, 0, 0);
+    const b = document.createElement('canvas'); b.width = 1144; b.height = 1375;
+    const bx = b.getContext('2d'); bx.fillStyle = '#d9c7a1'; bx.fillRect(0, 0, 1144, 1375);
+    drawRig(bx, parts, rigTransforms(window.BASEPOSE, { sway: 0 }), 0, 0, 1);
+    const A = ax.getImageData(0, 0, 1144, 1375), B = bx.getImageData(0, 0, 1144, 1375);
+    const O = ctx.createImageData(1144, 1375);
+    let bad = 0;
+    for (let i = 0; i < A.data.length; i += 4) {
+      const dd = Math.abs(A.data[i] - B.data[i]) + Math.abs(A.data[i + 1] - B.data[i + 1]) + Math.abs(A.data[i + 2] - B.data[i + 2]);
+      const g = (A.data[i] + A.data[i + 1] + A.data[i + 2]) / 3;
+      if (dd > 60) { O.data[i] = 255; O.data[i + 1] = 0; O.data[i + 2] = 0; bad++; }
+      else { O.data[i] = O.data[i + 1] = O.data[i + 2] = 150 + g * 0.4; }
+      O.data[i + 3] = 255;
+    }
+    ctx.putImageData(O, 0, 0);
+    return bad;
+  }
+  if (which === 'parts') {
+    canvas.width = 2400; canvas.height = 1500;
+    ctx.fillStyle = '#d9c7a1'; ctx.fillRect(0, 0, 2400, 1500);
+    const names = Object.keys(parts).filter(n => parts[n] instanceof HTMLCanvasElement), cols = 6, cw = 400, ch = 500, s = 0.33;
+    names.forEach((n, k) => {
+      const x = (k % cols) * cw, y = Math.floor(k / cols) * ch;
+      ctx.strokeStyle = '#999'; ctx.strokeRect(x, y, cw, ch);
+      ctx.drawImage(parts[n], x + 10, y + 20, 1144 * s, 1375 * s);
+      ctx.fillStyle = '#000'; ctx.font = '22px DejaVu Sans'; ctx.direction = 'ltr'; ctx.textAlign = 'left';
+      ctx.fillText(n, x + 8, y + 22);
+    });
+    return;
+  }
+  if (which === 'stills') {
+    // الصورة وحدها في وضعيات مفتاحية (من نفس الخط الزمني للفيديو)
+    const list = [['وقفة القتال', 4.8], ['ضربة سريعة', 5.662], ['ضربة قوية (رفع)', 6.607], ['ضربة قوية', 6.712],
+      ['طعنة', 7.762], ['لكمة', 8.812], ['ركلة أمامية', 9.862], ['ركلة عالية', 10.912]];
+    const cw = 420, ch = 440;
+    canvas.width = cw * 4; canvas.height = ch * 2;
+    list.forEach(([n, t], k) => {
+      const x = (k % 4) * cw, y = Math.floor(k / 4) * ch;
+      ctx.save(); ctx.beginPath(); ctx.rect(x, y, cw, ch); ctx.clip();
+      const g = ctx.createLinearGradient(0, y, 0, y + ch);
+      g.addColorStop(0, '#3a3128'); g.addColorStop(1, '#1d1813');
+      ctx.fillStyle = g; ctx.fillRect(x, y, cw, ch);
+      ctx.fillStyle = '#c9b48a'; ctx.fillRect(x, y + ch - 50, cw, 50);
+      drawImageRig(ctx, poseAt(t).p, x + 150, y + ch - 46, 0.27, t, poseAt(t - 0.1).p);
+      label(ctx, n, x + cw / 2, y + 40, 26);
+      ctx.restore();
+      ctx.strokeStyle = '#120f0c'; ctx.lineWidth = 4; ctx.strokeRect(x, y, cw, ch);
+    });
+    return;
+  }
+  if (which === 'poses') {
+    canvas.width = 2000; canvas.height = 1300;
+    ctx.fillStyle = '#d9c7a1'; ctx.fillRect(0, 0, 2000, 1300);
+    const list = [
+      ['walk 0', poseWalk(0, 1, false)], ['walk .1', poseWalk(0.098, 1, false)], ['walk .2', poseWalk(0.196, 1, false)],
+      ['walk .3', poseWalk(0.294, 1, false)], ['guard', poseIdle(0, true)],
+      ['quick .34', keyPose(ATK.quick, 0.34)], ['quick .44', keyPose(ATK.quick, 0.44)],
+      ['heavy .34', keyPose(ATK.heavy, 0.34)], ['heavy .44', keyPose(ATK.heavy, 0.44)],
+      ['thrust .44', keyPose(ATK.thrust, 0.44)], ['punch .44', keyPose(ATK.punch, 0.44)],
+      ['kick_front .34', keyPose(ATK.kick_front, 0.34)], ['kick_front .44', keyPose(ATK.kick_front, 0.44)],
+      ['kick_high .34', keyPose(ATK.kick_high, 0.34)], ['kick_high .44', keyPose(ATK.kick_high, 0.44)],
+      ['duck', keyPose(DODGE.duck, 0.32)], ['leap', keyPose(DODGE.leap, 0.38)], ['stagger', poseStagger(0.2, 1)]
+    ];
+    const cols = 6, cw = 333, ch = 433;
+    list.forEach(([n, p], k) => {
+      const x = (k % cols) * cw, y = Math.floor(k / cols) * ch;
+      ctx.strokeStyle = '#a89870'; ctx.strokeRect(x, y, cw, ch);
+      ctx.fillStyle = '#bba57a'; ctx.fillRect(x, y + 380, cw, 2);
+      drawImageRig(ctx, p, x + 190, y + 380, 0.21, 0);
+      drawGame(ctx, p, x + 60, y + 380, 7);
+      ctx.fillStyle = '#000'; ctx.font = '20px DejaVu Sans'; ctx.direction = 'ltr'; ctx.textAlign = 'left';
+      ctx.fillText(n, x + 8, y + 24);
+    });
+  }
+};
+
+// الصورة من src/char.png، وإن لم تكن موجودة تُختار من الجهاز (إلا في التصوير)
+const loadFrom = (src) => new Promise((ok, no) => { const im = new Image(); im.onload = () => ok(im); im.onerror = no; im.src = src; });
+async function loadImage() {
+  try { return await loadFrom('./src/char.png'); }
+  catch (e) {
+    if (CAPTURE) throw new Error('docs/rig-test/src/char.png غير موجودة');
+    const box = document.getElementById('pick');
+    box.style.display = 'flex';
+    const file = await new Promise(ok => box.querySelector('input').addEventListener('change', ev => ok(ev.target.files[0]), { once: true }));
+    box.style.display = 'none';
+    return loadFrom(URL.createObjectURL(file));
+  }
+}
+
+window.ready = (async () => {
+  img = await loadImage();
+  parts = buildParts(img);
+  window.BASEPOSE = BASE;
+  if (!CAPTURE) {
+    const start = performance.now();
+    const loop = (now) => { window.frame(((now - start) / 1000) % TOTAL); requestAnimationFrame(loop); };
+    requestAnimationFrame(loop);
+  }
+  return true;
+})();
+</script>
+</body>
+</html>
