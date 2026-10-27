@@ -8,6 +8,7 @@ import {
 } from './anim.js';
 import { BODIES, tipOf } from './bodies.js';
 import { ultGlow } from './unitsArt.js';
+import { spriteBody, drawSpriteBody } from './unitSprites.js';
 
 export const MOVE_AR = {
   quick: 'سريعة', heavy: 'قوية', thrust: 'طعنة', spin: 'دائرية',
@@ -105,7 +106,9 @@ export function twoHand(ud, p) {
 // drawOne في المرجع. ghosts: عدد أشباح أثر السلاح (0 في المستوى المبسّط).
 // shaded: النمط المظلَّل (المرحلة 9ج) يُشغَّل لعلامات القدمين والظل والجسد فقط، لا للآثار من حوله
 export function drawOne(ctx, unit, key, x, y, scale, color, time, walking, ghosts, alpha = 1, shaded = false) {
-  const ud = BODIES[key] || BODIES.crow_common;
+  // العصابات الكلاسيكية بصور شخصياتها المعتمدة (unitSprites.js) لوحدات المستوى الكامل وحدها (أقرب 60 في الشاشة):
+  // رسم أجزاء الصور أثقل من الخطوط على جهاز بلا تسريع رسومي، فيبقى عددها محدوداً، والباقي بالرسم القديم
+  const ud = (unit.lod === 'full' && spriteBody(key)) || BODIES[key] || BODIES.crow_common;
   const animT = time + (unit.id % 17) * 0.13;
   const dead = unit.state === 'dead';
   const sw = dead ? null : swingOf(unit, time, ud);
@@ -180,7 +183,7 @@ export function drawOne(ctx, unit, key, x, y, scale, color, time, walking, ghost
   }
 
   STYLE.on = shaded;
-  const J = drawBody(ctx, p, color, ud);
+  const J = ud.sprite ? drawSpriteBody(ctx, p, color, ud) : drawBody(ctx, p, color, ud);
   STYLE.on = false;
 
   // الشرر عند الارتطام
