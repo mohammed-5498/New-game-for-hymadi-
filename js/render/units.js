@@ -1,15 +1,23 @@
-// رسم الوحدات: يستعمل docs/units-art.js (منسوخ في unitsArt.js) مربوطاً بحالة الوحدة
-import { TILE_HALF_W, TILE_HALF_H, COMBAT, PERFORMANCE, UNIT_ART, ULT } from '../config.js';
-import { UI_LIGHT, mix } from './colors.js';
-import { drawUnit as drawUnitArt } from './unitsArt.js';
+// رسم الوحدات: نظام الوضعيات v2 (anim.js + bodies.js + combatArt.js) مربوطاً بحالة الوحدة
+import { TILE_HALF_W, TILE_HALF_H, COMBAT, COMBAT_REALISM, PERFORMANCE, UNIT_ART, ULT, nations } from '../config.js';
+import { UI_LIGHT } from './colors.js';
+import { drawOne, stateLabel, drawSpeedLines } from './combatArt.js';
+import { flameLayers } from './anim.js';
+import { shadedCount } from '../pacing.js';
+import { nationArtKey, shotLook } from './nationArt.js';
+import './nationsArab.js';                 // مظاهر الدفعة العربية تُسجَّل في سجل الأمم (القسم 3.10)
+import './nationsAsia.js';                 // والدفعة الآسيوية
+import './nationsEurope.js';               // والدفعة الأوروبية
+import './nationsAfrica.js';               // والدفعة الأفريقية
+import './nationsLatin.js';                // والدفعة اللاتينية
 
 // الأفراد العاديون بلا ضربة مميزة، فلا نجمة ولا شريط شحن لهم
 const hasUlt = (unit) => !!unit.stats.ult;
 const ultReady = (unit) => hasUlt(unit) && unit.ultCharge >= ULT.max;
 
-// مفاتيح الرسم (القسم 13): عصابة الوحدة + نوعها
+// مفاتيح الرسم (القسم 13): عصابة الوحدة + نوعها (وصور الشخصيات في المتجر)
 // common فرد عادي، ثم شخصيتان مميزتان، ثم البطل champion
-const ART_KEYS = {
+export const ART_KEYS = {
   crows:     { common: 'crow_common',   spear: 'crow_spear',     dual: 'crow_dual',        champion: 'crow_hero' },
   hammers:   { common: 'hammer_common', armored: 'hammer_shield', smasher: 'hammer_breaker', champion: 'hammer_hero' },
   vipers:    { common: 'viper_common',  sniper: 'viper_sniper',  firebomber: 'viper_firebomber', champion: 'viper_hero' },
@@ -19,17 +27,26 @@ const ART_KEYS = {
 };
 
 // مفتاح غير معروف (عصابة لا تملك هذه الشخصية) يرجع لرسم الفرد العادي بدل ألا يُرسم شيء
-const artKey = (unit) => {
-  const gang = ART_KEYS[unit.gang] || ART_KEYS.crows;
+// وحدة الأمة (القسم 3.10) بمظهر أمتها: الكامل للوحدة المظللة (المرحلة 9ج)، والمبسّط لغيرها
+const artKey = (unit, time, shaded) => {
   const kind = unit.champion ? 'champion' : (unit.hero || 'common');
+  const own = unit.nation ? nationArtKey(unit, kind, time, shaded) : null;
+  if (own) return own;
+  const gang = ART_KEYS[unit.gang] || ART_KEYS.crows;
   return gang[kind] || gang.common;
 };
 
 const artScale = (unit) => UNIT_ART.scale *
-  (unit.champion ? UNIT_ART.championScale : unit.hero ? UNIT_ART.heroScale : 1);
+  (unit.champion ? UNIT_ART.championScale : unit.hero ? UNIT_ART.heroScale : 1) *
+  (unit.traits ? unit.traits.size : 1) *     // تنويع حجم بسيط بين الأفراد (القسم 5.4)
+  (unit.artScale || 1);                      // قائد الشرطة في الصمود أكبر ×1.3
+
+// حجم رسم الوحدة نسبة إلى الفرد العادي (لصندوقها عند إخفائها خلف المباني)
+export const unitSizeFactor = (unit) => artScale(unit) / UNIT_ART.scale;
 
 // الشرطة تُرسم بلونها الثابت مهما كان اللاعب
-const artColor = (unit) => unit.gang === 'police' ? UNIT_ART.policeColor : unit.color;
+// (ووحدة التدخل في الصمود بلونها الأغمق الخاص)
+const artColor = (unit) => unit.artColor || (unit.gang === 'police' ? UNIT_ART.policeColor : unit.color);
 
 // موقع الوحدة في العالم مع تنعيم بين تحديثين (alpha من 0 إلى 1)
 export function unitWorldPos(unit, alpha) {
@@ -38,14 +55,8 @@ export function unitWorldPos(unit, alpha) {
   return { x: (i - j) * TILE_HALF_W, y: (i + j) * TILE_HALF_H };
 }
 
-// هل الوحدة في منتصف ضربة؟ (الرسم يقرأ زمن بدايتها من حالة الوحدة)
-function swingProgress(unit, time) {
-  if (unit.attackStart === null || !unit.attackRate) return -1;
-  const elapsed = time - unit.attackStart;
-  return elapsed >= 0 && elapsed < unit.attackRate ? elapsed : -1;
-}
-
-export function drawUnit(ctx, unit, alpha, zoom = 99, time = 0) {
+// shaded: النمط المظلَّل ومظهر الأمة الكامل (يختار renderer.js أقرب وحدات المستوى الكامل، المرحلة 9ج)
+export function drawUnit(ctx, unit, alpha, zoom = 99, time = 0, debug = false, crowded = false, shaded = false) {
   const { x, y } = unitWorldPos(unit, alpha);
   const dead = unit.state === 'dead';
 
@@ -58,8 +69,48 @@ export function drawUnit(ctx, unit, alpha, zoom = 99, time = 0) {
     return;
   }
 
-  drawUnitArt(ctx, artKey(unit), { x, y, ...artState(unit, time, dead) });
+  // نظام الوضعيات v2 لكل الوحدات (القسم 5.4.6). المستوى المبسّط بلا أثر السلاح وبلا شبحي التفادي
+  const key = artKey(unit, time, shaded), scale = artScale(unit), color = artColor(unit), walking = isWalking(unit);
+  const full = unit.lod === 'full';
+  // خطوط السرعة خلف المندفع والمقذوف والمتفادي (القسم 5.4.7)
+  if (!dead) {
+    const vi = unit.cState === 'dodge' ? unit.dvx : unit.vx, vj = unit.cState === 'dodge' ? unit.dvy : unit.vy;
+    const speed = Math.hypot(vi, vj);
+    if (speed > COMBAT_REALISM.speedLinesAbove && (full || COMBAT_REALISM.speedLinesSimple)) {
+      drawSpeedLines(ctx, x, y, (vi - vj) * TILE_HALF_W, (vi + vj) * TILE_HALF_H, speed, scale);
+    }
+  }
+  if (full && unit.cState === 'dodge') {
+    for (let g = 1; g <= 2; g++) {
+      const di = unit.dvx * 0.035 * g, dj = unit.dvy * 0.035 * g;
+      drawOne(ctx, unit, key, x - (di - dj) * TILE_HALF_W, y - (di + dj) * TILE_HALF_H,
+              scale, color, time, walking, 0, 0.18);
+    }
+  }
+  const ghosts = full ? (crowded ? COMBAT_REALISM.trailGhostsCrowded : COMBAT_REALISM.trailGhosts) : 0;
+  // صيحة الحارة والراية المغروسة (القسم 3.10): حلقة ذهبية تحت قدمي من يصمد بلا ترنّح ولا سقوط،
+  // والشرطي المرتشي (رشوة الشرطي) بحلقة خضراء ما دامت الهدنة
+  const ring = dead ? null : unit.steadyUntil > time ? nations.fx.steadyRing : unit.bribedUntil > time ? nations.fx.bribeRing : null;
+  if (ring) {
+    ctx.beginPath();
+    ctx.ellipse(x, y + 0.6, 6.2 * scale, 2.5 * scale, 0, 0, 6.2832);
+    ctx.strokeStyle = ring;
+    ctx.lineWidth = 0.9;
+    ctx.stroke();
+  }
+  drawOne(ctx, unit, key, x, y, scale, color, time, walking, ghosts, 1, shaded);
   if (dead) return;
+
+  // وضع التفاصيل (ثلاث لمسات على شريط المعلومات): اسم الحالة فوق الوحدة
+  if (debug) {
+    const label = stateLabel(unit, time);
+    if (label) {
+      ctx.font = '600 3px system-ui, sans-serif'; ctx.textAlign = 'center';
+      ctx.lineWidth = 0.9; ctx.strokeStyle = 'rgba(0,0,0,.7)'; ctx.fillStyle = '#fff';
+      const ly = y + UNIT_ART.healthBarY - 2.5 * (unit.champion ? 1.3 : 1);
+      ctx.strokeText(label, x, ly); ctx.fillText(label, x, ly);
+    }
+  }
 
   // شريط الدم للوحدة المتضررة أو المحددة، وللبطل دائماً (القسم 6.6)
   const bar = unit.hp < unit.maxHp || unit.selected || unit.champion;
@@ -71,39 +122,9 @@ export function drawUnit(ctx, unit, alpha, zoom = 99, time = 0) {
   if (ultReady(unit)) drawReadyStar(ctx, x, y, time);
 }
 
-// اختيار حالة الرسم وزمنها: الموت ثم الضربة ثم تلقي الضرر ثم الجري أو الوقوف
-function artState(unit, time, dead) {
-  const common = {
-    color: unit.hitFlash > 0 ? mix(artColor(unit), '#ffffff', 0.5) : artColor(unit),
-    dir: unit.facing || 1,
-    scale: artScale(unit),
-    rate: unit.attackRate || unit.stats.attackTime,
-    hurtDur: UNIT_ART.hurtSeconds,
-    deathDur: COMBAT.deathTime
-  };
-
-  // الموت: سقوط واختفاء خلال ثانية (الأنميشن نفسه يدير الدوران والشفافية)
-  if (dead) {
-    return { ...common, state: 'death', t: COMBAT.deathTime - unit.deathTimer };
-  }
-
-  // الضربة أولاً حتى تبقى لحظة الارتطام (47%) مطابقة للضرر الفعلي
-  const swing = swingProgress(unit, time);
-  if (swing >= 0) {
-    // الضربة المميزة: نفس الحركة مع وهج ذهبي ومؤثر خاص (القسم 6.7)
-    const ult = unit.ultStart !== null && time - unit.ultStart < unit.ultRate;
-    return { ...common, state: ult ? 'ult' : 'attack', t: swing };
-  }
-
-  if (unit.hurtTimer > 0) {
-    return { ...common, state: 'hurt', t: UNIT_ART.hurtSeconds - unit.hurtTimer };
-  }
-
-  const walking = unit.state === 'moving' || unit.state === 'attackMove' ||
-                  (unit.state === 'attacking' && unit.path.length > 0);
-  // إزاحة صغيرة لكل وحدة حتى لا تتنفس كل الوحدات معاً
-  return { ...common, state: walking ? 'walk' : 'idle', t: time + (unit.id % 17) * 0.13 };
-}
+const isWalking = (unit) =>
+  unit.state === 'moving' || unit.state === 'attackMove' ||
+  (unit.state === 'attacking' && unit.path.length > 0);
 
 function drawHealthBar(ctx, unit, x, y) {
   const w = unit.champion ? 8 : unit.hero ? 6.5 : 5, h = 1.1;
@@ -181,6 +202,32 @@ export function drawProjectile(ctx, shot, alpha) {
   const y = (i + j) * TILE_HALF_H - 6 - Math.sin(progress * Math.PI) * COMBAT.projectileArc;
   const color = PROJECTILE_COLORS[shot.kind] || PROJECTILE_COLORS.stone;
 
+  if (shot.kind === 'falcon') { drawFalcon(ctx, shot, x, (i + j) * TILE_HALF_H, progress, t); return; }
+  // سهام مطر السهام (القسم 3.10): قوس عالٍ تسقط منه على المساحة، والسهم باتجاه طيرانه
+  if (shot.area > 0) {
+    const arc = nations.fx.rainArc;
+    aimedArrow(ctx, shot, x, (i + j) * TILE_HALF_H - 6 - Math.sin(progress * Math.PI) * arc, progress, arc, color);
+    return;
+  }
+  const look = shotLook(shot);
+  // السهم المشتعل (رامي السهام المشتعلة): شكل فقط، وقواعده قواعد زجاجة رامي النار
+  if (look === 'firearrow') {
+    const head = aimedArrow(ctx, shot, x, y, progress, COMBAT.projectileArc, PROJECTILE_COLORS.arrow);
+    if (shadedCount()) { flameLayers(ctx, head.x, head.y + 0.8, 0.7); return; }    // لهب بطبقات (المرحلة 9ج) ما دام النمط مشغلاً
+    ctx.beginPath(); ctx.ellipse(head.x, head.y, 1.2, 1.5, 0, 0, 6.2832); ctx.fillStyle = '#f0902a'; ctx.fill();
+    ctx.beginPath(); ctx.ellipse(head.x, head.y - 0.4, 0.6, 0.9, 0, 0, 6.2832); ctx.fillStyle = '#ffd45a'; ctx.fill();
+    return;
+  }
+  // المشعل (رامي المشاعل): عصا تدور في الهواء وفي طرفها لهب، وقواعده أيضاً قواعد زجاجة رامي النار
+  if (look === 'torch') {
+    const a = progress * 9.4, cx = Math.cos(a) * 2, cy = Math.sin(a) * 1.2;
+    ctx.beginPath(); ctx.moveTo(x - cx, y - cy); ctx.lineTo(x + cx, y + cy);
+    ctx.strokeStyle = '#6a4a2a'; ctx.lineWidth = 1; ctx.stroke();
+    if (shadedCount()) { flameLayers(ctx, x + cx, y + cy + 0.4, 0.8); return; }
+    ctx.beginPath(); ctx.ellipse(x + cx, y + cy - 0.6, 1.5, 2, 0, 0, 6.2832); ctx.fillStyle = '#f0902a'; ctx.fill();
+    ctx.beginPath(); ctx.ellipse(x + cx, y + cy - 0.9, 0.8, 1.2, 0, 0, 6.2832); ctx.fillStyle = '#ffd45a'; ctx.fill();
+    return;
+  }
   if (shot.kind === 'arrow') {
     ctx.beginPath();
     ctx.moveTo(x - 2, y + 1);
@@ -199,6 +246,57 @@ export function drawProjectile(ctx, shot, alpha) {
   }
 }
 
+// سهم بطول 4 باتجاه طيرانه على الشاشة (مع ميل قوس الرمية arc)، ويعيد مكان رأسه
+const HEAD = { x: 0, y: 0 };
+function aimedArrow(ctx, shot, x, y, progress, arc, color) {
+  const dI = shot.x - shot.prevX, dJ = shot.y - shot.prevY, dp = (shot.t - shot.prevT) / shot.duration;
+  let vx = (dI - dJ) * TILE_HALF_W, vy = (dI + dJ) * TILE_HALF_H - arc * Math.PI * Math.cos(progress * Math.PI) * dp;
+  const n = Math.sqrt(vx * vx + vy * vy);
+  if (n > 1e-6) { vx = vx / n * 2; vy = vy / n * 2; } else { vx = 2; vy = -1; }
+  ctx.beginPath();
+  ctx.moveTo(x - vx, y - vy);
+  ctx.lineTo(x + vx, y + vy);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 0.9;
+  ctx.stroke();
+  HEAD.x = x + vx; HEAD.y = y + vy;
+  return HEAD;
+}
+
+// صقر الصقّار (القسم 3.10): يرتفع من ساعده ثم ينقضّ بجناحين مضمومين على صدر الهدف،
+// ويعود بقوس ألطف وجناحين يرفرفان. ظل صغير على الأرض تحته
+function drawFalcon(ctx, shot, x, ground, progress, t) {
+  const back = shot.back;
+  const h = back ? 8 + 6 * progress + Math.sin(progress * Math.PI) * 14
+                 : 14 - 6 * progress + Math.sin(Math.min(1, progress / 0.8) * Math.PI) * 18;
+  const y = ground - h;
+  const sx = shot.startX - shot.startY, cx = shot.x - shot.y;
+  const dir = cx >= sx ? 1 : -1;
+  const dive = !back && progress > 0.62;
+  // ارتفاع طرفي الجناحين فوق الجسد: يرفرفان بين المنتصف والأعلى، ومضمومان في الانقضاض
+  const flap = dive ? 0.45 : 1.2 + 1.5 * (0.5 + 0.5 * Math.sin(t * 30));
+
+  ctx.globalAlpha = 0.25;
+  ctx.beginPath(); ctx.ellipse(x, ground, 2.4, 1, 0, 0, 6.2832); ctx.fillStyle = '#000'; ctx.fill();
+  ctx.globalAlpha = 1;
+
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(dir * 1.5, 1.5);
+  if (dive) ctx.rotate(0.75);                          // الرأس للأسفل في الانقضاض
+  const tri = (a, b, c, col) => {
+    ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.lineTo(c[0], c[1]); ctx.closePath();
+    ctx.fillStyle = col; ctx.fill();
+  };
+  tri([-0.4, 0], [-1.4, -flap * 0.85], [1.2, -0.3], '#5a3e28');        // الجناح البعيد
+  tri([-2, -0.2], [-3.8, -0.9], [-3.6, 0.9], '#5a3e28');                // الذيل
+  ctx.beginPath(); ctx.ellipse(0, 0, 2.3, 1.1, 0, 0, 6.2832); ctx.fillStyle = '#7a5a3e'; ctx.fill();
+  ctx.beginPath(); ctx.arc(2.1, -0.5, 0.95, 0, 6.2832); ctx.fillStyle = '#5a3e28'; ctx.fill();
+  tri([2.8, -0.8], [3.8, -0.3], [2.8, -0.1], '#e0b24a');                // المنقار
+  tri([0.2, 0], [-0.9, -flap], [1.6, -0.2], '#8e6a4a');                // الجناح القريب
+  ctx.restore();
+}
+
 // هالة الزعيم: دائرة منقطة عند قدميه
 export function drawAura(ctx, unit, alpha) {
   const { x, y } = unitWorldPos(unit, alpha);
@@ -210,6 +308,35 @@ export function drawAura(ctx, unit, alpha) {
   ctx.setLineDash([4, 3]);
   ctx.stroke();
   ctx.setLineDash([]);
+}
+
+// الراية المغروسة (غرس الراية، القسم 3.10): دائرة متقطعة بلون صاحبها، وسارية عليها راية بخطوط لونه والذهبي
+// تتموج، وتخفت في آخر ثانية من عمرها
+export function drawZone(ctx, zone, time) {
+  const x = (zone.x - zone.y) * TILE_HALF_W, y = (zone.x + zone.y) * TILE_HALF_H;
+  const fade = Math.max(0, Math.min(1, zone.until - time));
+  ctx.globalAlpha = 0.85 * fade;
+  ctx.beginPath();
+  ctx.ellipse(x, y, zone.radius * TILE_HALF_W, zone.radius * TILE_HALF_H, 0, 0, 6.2832);
+  ctx.strokeStyle = zone.color;
+  ctx.lineWidth = 1.2;
+  ctx.setLineDash([5, 3]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.globalAlpha = fade;
+  ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y - 30);
+  ctx.strokeStyle = '#5a4632'; ctx.lineWidth = 1.2; ctx.stroke();
+  for (let pass = 0; pass < 2; pass++) {
+    ctx.beginPath();
+    for (let k = pass; k < 5; k += 2) {
+      const y0 = y - 29 + k * 2.4, wv = Math.sin(time * 4 + k * 0.9) * 0.9;
+      ctx.moveTo(x, y0); ctx.lineTo(x - 13, y0 + wv); ctx.lineTo(x - 13, y0 + 2.4 + wv); ctx.lineTo(x, y0 + 2.4); ctx.closePath();
+    }
+    ctx.fillStyle = pass ? '#d9a83a' : zone.color;
+    ctx.fill();
+  }
+  ctx.beginPath(); ctx.arc(x, y - 30, 1, 0, 6.2832); ctx.fillStyle = '#c9a04a'; ctx.fill();
+  ctx.globalAlpha = 1;
 }
 
 // نار الزجاجات على الأرض
@@ -226,13 +353,14 @@ export function drawFire(ctx, fire, time) {
   ctx.fill();
   ctx.globalAlpha = 1;
 
-  // ألسنة لهب ترتعش
+  // ألسنة لهب ترتعش (بالنمط المظلَّل ما دام مشغلاً: لهب بطبقات وجمرات بنفس الارتفاع، المرحلة 9ج)
   for (let k = 0; k < 5; k++) {
     const angle = k * 1.257 + fire.x;
     const flicker = 0.6 + 0.4 * Math.sin(time * 9 + k * 2.1);
     const fx = x + Math.cos(angle) * rx * 0.55;
     const fy = y + Math.sin(angle) * ry * 0.55;
     const h = (3 + k % 2 * 2) * flicker * fade;
+    if (shadedCount()) { flameLayers(ctx, fx, fy, (h + 3) / 4.4); continue; }
     ctx.beginPath();
     ctx.moveTo(fx - 1.6, fy);
     ctx.lineTo(fx, fy - h - 3);

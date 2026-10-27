@@ -1,9 +1,22 @@
-// البوتات: دفاع ثم توسع ثم هجوم، بثلاث درجات صعوبة، مع احترام التحالفات
-import { TICK_SEC, BOT, SNOWBALL, MAP_GEN } from '../config.js';
-import { commandMove } from '../game/units.js';
-import { isEnemy } from '../game/combat.js';
-import { ownedDistricts } from '../game/spawn.js';
+// البوتات (القسم 11): السهل أفراد بلا فرق (دفاع ثم توسع ثم هجوم)،
+// والمتوسط فما فوق بطبقتين: استراتيجية بالفرق (squads.js) وتكتيكية لكل اشتباك (tactics.js)
+import { TICK_SEC, BOT, SNOWBALL, MAP_GEN, gameModes as GM } from '../config.js';
+import { isFinalMinute, sideTotals, sideKey, hillOf } from '../game/modes.js';
+import { commandMove, commandAttackMove } from '../game/units.js';
+import { isEnemy, commandAttack, isEnemyId } from '../game/combat.js';
+import { ownedDistricts, championOf } from '../game/spawn.js';
 import { forEachNearby } from '../game/spatialHash.js';
+import { setTargetPicker } from '../game/combat.js';
+import { setUltGate } from '../game/ults.js';
+import { decideSquads, levelOf, squadOf } from './squads.js';
+import { pickTarget, ultAllowed, updateTactics } from './tactics.js';
+import { hypot } from '../game/hypot.js';
+import { empireEconomy } from './empireBot.js';
+import { isHospital, healPoint } from '../game/empire.js';
+
+// الطبقة التكتيكية تختار الأهداف وتمسك الضربات المميزة عبر بوابتين في كود القتال
+setTargetPicker(pickTarget);
+setUltGate(ultAllowed);
 
 export function initBots(state) {
   // نوزّع أوقات القرار حتى لا تفكر كل البوتات في نفس اللحظة
@@ -20,12 +33,34 @@ export function updateBots(state) {
     if (state.botTimers[player.id] > 0) continue;
     state.botTimers[player.id] = config.decisionInterval;
 
-    decide(state, player, config);
+    // طور الإمبراطورية: لا ظهور تلقائي، فالبوت يشتري جيشه ومبانيه بنقاطه أولاً
+    if (state.mode === 'empire') empireEconomy(state, player);
+    decide(state, player, modeConfig(state, config));
   }
+  updateTactics(state);      // كل 0.25 ث لكل فرقة مشتبكة فقط
+}
+
+// أولويات البوت حسب الطور (القسم 9.5): لا يبقى بسلوك السيطرة الكاملة في كل طور
+function modeConfig(state, config) {
+  if (state.mode === 'points') {
+    // توسع مبكر وقوي، ودفاع عن الأحياء أكثر من مهاجمة الخصوم
+    const P = GM.points;
+    return {
+      ...config,
+      expandGroup: Math.min(config.groupSize, P.botExpandGroup),
+      defenseFactor: config.defenseFactor * P.botDefenseBoost,
+      attackArmy: Math.ceil(config.attackArmy * P.botAttackArmyFactor)
+    };
+  }
+  if (state.mode === 'survival') {
+    // الحليف يسترجع أحياء الشرطة بسرعة بدل انتظار جيش كبير
+    return { ...config, attackArmy: Math.ceil(config.attackArmy * GM.survival.botAttackArmyFactor) };
+  }
+  return config;
 }
 
 const isAlive = (unit) => unit.state !== 'dead' && unit.hp > 0;
-const distanceTo = (unit, district) => Math.hypot(unit.x - district.capture.i, unit.y - district.capture.j);
+const distanceTo = (unit, district) => hypot(unit.x - district.capture.i, unit.y - district.capture.j);
 
 function decide(state, player, config) {
   const units = state.units.filter(u => u.playerId === player.id && isAlive(u));
@@ -38,13 +73,36 @@ function decide(state, player, config) {
     unit.botTask = null;                 // مهمة قديمة لم تعد صالحة
     if (unit.state !== 'attacking') free.push(unit);
   }
-  if (!free.length) return;
+  const owned = ownedDistricts(state, player.id);
+  if (!free.length) {
+    // لا وحدة حرة: الفرق القائمة تُتابع مع ذلك في كل قرار (انسحاب، هدف تالٍ بعد الاحتلال، نهاية الدفاع)،
+    // وإلا بقيت فرقة احتلت هدفها واقفة، وفرقة تخسر بلا انسحاب، حتى تظهر وحدة جديدة
+    if (levelOf(player).squads) decideSquads(state, player, config, [], units, owned, { strongestPlayer });
+    return;
+  }
 
   const pool = { units: free };
-  const owned = ownedDistricts(state, player.id);
+
+  // حماية الزعيم: الزعيم خلف الجيش، ومطاردة زعيم العدو المعزول أو الضعيف
+  if (state.mode === 'regicide') regicidePlan(state, player, config, pool, units);
 
   if (config.retreatWounded) retreatWounded(state, player, config, pool, owned);
+  // ملك الحي: التلة أولويتها القصوى، قبل الدفاع عن بقية الأحياء
+  if (state.mode === 'king') kingPlan(state, player, config, pool, units.length);
+
+  // المتوسط فما فوق: الفرق ونقطة التجمع (11.1) بعد أولويات الطور
+  if (levelOf(player).squads) {
+    if (state.mode === 'survival') helpAllies(state, player, config, pool);
+    if (isFinalMinute(state)) strikeLeader(state, player, config, pool);
+    decideSquads(state, player, config, pool.units, units, owned, { strongestPlayer });
+    return;
+  }
+
   defend(state, player, config, pool, owned);
+  // الصمود ضد الشرطة: نجدة أحياء الحلفاء (وأنت منهم) حين تهاجمها الموجة
+  if (state.mode === 'survival') helpAllies(state, player, config, pool);
+  // الوقت بالنقاط: في الدقيقة الأخيرة كل الباقين على أضعف حي للمتصدر
+  if (isFinalMinute(state)) strikeLeader(state, player, config, pool);
   expand(state, player, config, pool);
   attack(state, player, config, pool, units.length);
 }
@@ -53,6 +111,13 @@ function decide(state, player, config) {
 function taskStillValid(state, unit) {
   const task = unit.botTask;
   if (!task) return false;
+  // عضو في فرقة قائمة، أو منسحب يعيد التجمع (11.1)
+  if (task.type === 'squad') return !!squadOf(state, unit);
+  if (task.type === 'regroup') return state.time < task.until;
+  // مطاردة زعيم عدو: ما دام حياً
+  if (task.type === 'hunt') return state.mode === 'regicide' && isAlive(task.leader);
+  // موقع الزعيم خلف جيشه: يُراجع في كل قرار، ولا يُعاد الأمر إلا إذا تغيّر المكان
+  if (task.type === 'leader') return state.mode === 'regicide';
   const district = state.map.districts[task.districtId];
   if (!district) return false;
 
@@ -69,6 +134,13 @@ function taskStillValid(state, unit) {
   if (task.type === 'heal') {
     return unit.hp < unit.maxHp && district.owner === unit.playerId;
   }
+  // ملك الحي: من وصل التلة يبقى فيها يقاتل ويحميها، والحرس يبقى في حيه
+  if (task.type === 'hill') return state.mode === 'king';
+  if (task.type === 'guard') return district.owner === unit.playerId;
+  if (task.type === 'help') {
+    return district.owner !== null && district.owner !== unit.playerId &&
+           !isEnemy(state, unit, { playerId: district.owner }) && districtThreat(state, district, district.owner) > 0;
+  }
   return false;
 }
 
@@ -78,7 +150,7 @@ function districtThreat(state, district, playerId) {
   let count = 0;
   forEachNearby(state, district.capture.i, district.capture.j, radius, (unit) => {
     if (!isAlive(unit)) return;
-    if (!isEnemy(state, { playerId }, unit)) return;
+    if (!isEnemyId(state, playerId, unit.playerId)) return;
     if (distanceTo(unit, district) <= radius) count++;
   });
   return count;
@@ -104,19 +176,150 @@ function expand(state, player, config, pool) {
   if (!pool.units.length) return;
   const center = groupCenter(pool.units);
 
+  // مراكز الشرطة لا تُحتل في الصمود: لا فائدة من الوقوف فيها
+  const survival = state.mode === 'survival';
+  // السهل يتجنب مراكز الشرطة العاملة (11.3)، ولا تُحتل في الصمود
+  const avoidStations = survival || player.difficulty === 'easy';
   const targets = state.map.districts
-    .filter(d => d.capture && d.owner === null)
+    .filter(d => d.capture && d.owner === null && !(d.police && avoidStations && (survival || !d.policeDisabled)))
     .sort((a, b) => {
       const special = (b.special ? 1 : 0) - (a.special ? 1 : 0);
       if (special) return special;
-      return Math.hypot(a.capture.i - center.i, a.capture.j - center.j) -
-             Math.hypot(b.capture.i - center.i, b.capture.j - center.j);
+      return hypot(a.capture.i - center.i, a.capture.j - center.j) -
+             hypot(b.capture.i - center.i, b.capture.j - center.j);
     });
 
+  const size = config.expandGroup || config.groupSize;
   for (const district of targets) {
-    if (pool.units.length < config.groupSize) return;
-    const group = takeNearest(pool, district, config.groupSize, config, false);
+    if (pool.units.length < size) return;
+    const group = takeNearest(pool, district, size, config, false);
     if (group.length) sendGroup(state, group, district, config, 'expand');
+  }
+}
+
+// --- الصمود: أقرب مجموعة صغيرة إلى حي حليف تهاجمه الشرطة ---
+function helpAllies(state, player, config, pool) {
+  const threatened = state.map.districts
+    .filter(d => d.capture && d.owner !== null && d.owner !== player.id &&
+                 !state.players[d.owner].neutral && !isEnemyId(state, player.id, d.owner))
+    .map(d => ({ district: d, threat: districtThreat(state, d, d.owner) }))
+    .filter(entry => entry.threat > 0)
+    .sort((a, b) => b.threat - a.threat);
+
+  for (const { district } of threatened) {
+    if (pool.units.length < GM.survival.botHelpGroup) return;
+    const group = takeNearest(pool, district, GM.survival.botHelpGroup, config, false);
+    if (group.length) sendGroup(state, group, district, config, 'help');
+  }
+}
+
+// --- حماية الزعيم: الزعيم خلف جيشه نحو حيه، والصيد حين يظهر زعيم عدو ضعيف أو معزول ---
+function regicidePlan(state, player, config, pool, units) {
+  const R = GM.regicide;
+  const leader = units.find(u => u.champion);
+  if (leader) {
+    const at = pool.units.indexOf(leader);
+    if (at >= 0) pool.units.splice(at, 1);               // لا يُرسل مع أي مجموعة
+    if (leader.state !== 'attacking') guardLeader(state, player, leader, units, R);
+  }
+  huntLeaders(state, player, config, pool, units, R);
+}
+
+function guardLeader(state, player, leader, units, R) {
+  const home = state.map.districts[player.homeDistrictId];
+  const homeOwned = home && home.capture && home.owner === player.id;
+  const army = units.filter(u => u !== leader);
+  let ti, tj;
+  // جريح: يعود لحيه المنزلي ليتعالج
+  if (homeOwned && (leader.hp < leader.maxHp * 0.5 || !army.length)) {
+    ti = home.capture.i; tj = home.capture.j;
+  } else if (army.length) {
+    // خلف مركز الجيش بمسافة ثابتة في اتجاه الحي المنزلي
+    const c = groupCenter(army);
+    const back = homeOwned ? { i: home.capture.i, j: home.capture.j } : { i: leader.x, j: leader.y };
+    const dx = back.i - c.i, dy = back.j - c.j, len = hypot(dx, dy);
+    ti = len > 0.01 ? c.i + dx / len * Math.min(R.botGuardDistance, len) : c.i;
+    tj = len > 0.01 ? c.j + dy / len * Math.min(R.botGuardDistance, len) : c.j;
+  } else return;
+  // لا نعيد الأمر إلا إذا تغيّر المكان المطلوب فعلاً (لا ارتجاف في الحركة)
+  const last = leader.botTask && leader.botTask.point;
+  if (last && hypot(last.i - ti, last.j - tj) < 1.5) return;
+  leader.botTask = { type: 'leader', point: { i: ti, j: tj } };
+  commandMove(state, ti, tj, [leader], false);
+}
+
+function huntLeaders(state, player, config, pool, units, R) {
+  if (!pool.units.length || !units.length) return;
+  for (const other of state.players) {
+    if (other.neutral || other.fallen || other.id === player.id) continue;
+    if (!isEnemyId(state, player.id, other.id)) continue;
+    const target = championOf(state, other.id);
+    if (!target) continue;
+    // نراه؟ أي وحدة لنا قريبة منه
+    if (!units.some(u => hypot(u.x - target.x, u.y - target.y) <= R.botHuntRange)) continue;
+    let guards = 0;
+    forEachNearby(state, target.x, target.y, 3, (u) => {
+      if (u !== target && u.playerId === other.id && isAlive(u)) guards++;
+    });
+    const weak = target.hp < target.maxHp * R.botHuntHpRatio;
+    if (!weak && guards >= R.botHuntIsolation) continue;
+
+    const spot = { capture: { i: target.x, j: target.y } };
+    const group = takeNearest(pool, spot, Math.max(config.groupSize, 4), config, true);
+    if (!group.length) return;
+    for (const unit of group) unit.botTask = { type: 'hunt', leader: target };
+    commandAttack(state, group, target);
+  }
+}
+
+// --- ملك الحي: حرس صغير للحي المنزلي، وأغلب الباقين إلى التلة بهجوم متحرك ---
+function kingPlan(state, player, config, pool, armySize) {
+  const hill = hillOf(state);
+  if (!hill || !pool.units.length) return;
+  const K = GM.king;
+
+  // الحرس: الأقرب للحي المنزلي، قوة صغيرة لا تزيد على 20% من الجيش
+  const home = state.map.districts[player.homeDistrictId];
+  const wanted = Math.min(K.botHomeGuard, Math.floor(armySize * K.botHomeGuardShare));
+  const guarding = state.units.filter(u => u.playerId === player.id && u.state !== 'dead' && u.botTask && u.botTask.type === 'guard').length;
+  if (home && home.owner === player.id && guarding < wanted) {
+    const guards = takeNearest(pool, home, wanted - guarding, config, false);
+    for (const unit of guards) unit.botTask = { type: 'guard', districtId: home.id };
+    if (guards.length) commandMove(state, home.capture.i, home.capture.j, guards, false);
+  }
+
+  // التلة: نسبة كبيرة من المتاح، بهجوم متحرك حتى يقاتلوا من يعترضهم
+  const count = Math.ceil(pool.units.length * K.botHillShare);
+  const group = takeNearest(pool, hill, count, config, true);
+  if (!group.length) return;
+  for (const unit of group) unit.botTask = { type: 'hill', districtId: hill.id };
+  commandAttackMove(state, hill.capture.i, hill.capture.j, group, false);
+}
+
+// --- الدقيقة الأخيرة في الوقت بالنقاط: أضعف حي يملكه المتصدر (أقل مدافعين) ---
+function strikeLeader(state, player, config, pool) {
+  if (!pool.units.length) return;
+  const mySide = sideKey(player);
+  const leader = sideTotals(state)
+    .filter(s => s.alive && s.key !== mySide)
+    .sort((a, b) => b.points - a.points)[0];
+  if (!leader) return;
+  const ids = new Set(leader.players.map(p => p.id));
+
+  let best = null, fewest = Infinity;
+  for (const district of state.map.districts) {
+    if (!district.capture || !ids.has(district.owner)) continue;
+    let defenders = 0;
+    forEachNearby(state, district.capture.i, district.capture.j, MAP_GEN.captureRadius * 2, (unit) => {
+      if (ids.has(unit.playerId) && isAlive(unit)) defenders++;
+    });
+    if (defenders < fewest) { fewest = defenders; best = district; }
+  }
+  if (!best) return;
+  while (pool.units.length) {
+    const group = takeNearest(pool, best, config.groupSize, config, true);
+    if (!group.length) break;
+    sendGroup(state, group, best, config, 'attack');
   }
 }
 
@@ -137,8 +340,8 @@ function attack(state, player, config, pool, armySize) {
     }
     // وإلا: الأقرب، ومن يملك أحياء أقل (الأضعف) أولاً
     const weak = ownedCount(state, a.owner) - ownedCount(state, b.owner);
-    const distance = Math.hypot(a.capture.i - center.i, a.capture.j - center.j) -
-                     Math.hypot(b.capture.i - center.i, b.capture.j - center.j);
+    const distance = hypot(a.capture.i - center.i, a.capture.j - center.j) -
+                     hypot(b.capture.i - center.i, b.capture.j - center.j);
     return distance + weak * 3;
   });
 
@@ -157,14 +360,15 @@ function attack(state, player, config, pool, armySize) {
 
 // --- سحب المصابين إلى المستشفى (الصعب فقط) ---
 function retreatWounded(state, player, config, pool, owned) {
-  const hospital = owned.find(d => d.special === 'hospital');
+  const hospital = owned.find(isHospital);
   if (!hospital) return;
 
+  const at = healPoint(state.map, hospital);
   const wounded = pool.units.filter(u => u.hp < u.maxHp * config.retreatHpRatio);
   for (const unit of wounded) {
     pool.units.splice(pool.units.indexOf(unit), 1);
     unit.botTask = { type: 'heal', districtId: hospital.id };
-    commandMove(state, hospital.capture.i, hospital.capture.j, [unit]);
+    commandMove(state, at.i, at.j, [unit], false);   // أوامر البوت بلا حلقة
   }
 }
 
@@ -189,15 +393,15 @@ function sendGroup(state, group, district, config, taskType) {
   const front = config.rangedBehind ? group.filter(u => !u.stats.projectile) : group;
   const back = config.rangedBehind ? group.filter(u => u.stats.projectile) : [];
 
-  if (front.length) commandMove(state, district.capture.i, district.capture.j, front);
+  if (front.length) commandMove(state, district.capture.i, district.capture.j, front, false);
 
   if (back.length) {
     const center = groupCenter(back);
     const dx = center.i - district.capture.i, dy = center.j - district.capture.j;
-    const length = Math.hypot(dx, dy) || 1;
+    const length = hypot(dx, dy) || 1;
     const i = district.capture.i + (dx / length) * config.rangedOffset;
     const j = district.capture.j + (dy / length) * config.rangedOffset;
-    commandMove(state, i, j, back);
+    commandMove(state, i, j, back, false);
   }
 }
 
@@ -210,7 +414,7 @@ function groupCenter(units) {
 function enemyDistricts(state, player) {
   return state.map.districts.filter(d =>
     d.capture && d.owner !== null && d.owner !== player.id &&
-    isEnemy(state, { playerId: player.id }, { playerId: d.owner }));
+    isEnemyId(state, player.id, d.owner));
 }
 
 function ownedCount(state, playerId) {
@@ -224,7 +428,7 @@ export function strongestPlayer(state, player) {
 
   for (const other of state.players) {
     if (other.id === player.id) continue;
-    if (!isEnemy(state, { playerId: player.id }, { playerId: other.id })) continue;
+    if (!isEnemyId(state, player.id, other.id)) continue;
     if (ownedCount(state, other.id) / total >= SNOWBALL.districtShare) return other.id;
   }
   return null;

@@ -1,9 +1,10 @@
 // ظهور الأفراد عند ساحات أعلام الأحياء المملوكة
-import { TICK_SEC, SPAWN, GANGS, MAP_GEN, SPECIAL_BONUS } from '../config.js';
+import { TICK_SEC, SPAWN, GANGS, MAP_GEN, SPECIAL_BONUS, ai } from '../config.js';
 import { createUnit } from './units.js';
 import { findFreeTiles } from '../map/pathfinding.js';
-import { isEnemy } from './combat.js';
+import { isEnemy, isEnemyId } from './combat.js';
 import { soundAt } from '../audio/sound.js';
+import { hypot } from './hypot.js';
 
 export function initSpawnTimers(state) {
   state.spawnTimers = state.players.map(player => normalInterval(state, player));
@@ -22,6 +23,13 @@ export function ownsSpecial(state, playerId, type) {
 const clockFactor = (state, playerId) =>
   ownsSpecial(state, playerId, 'clock') ? SPECIAL_BONUS.clock.spawnMultiplier : 1;
 
+// البوت المجنون يظهر أسرع 25% (مزية إضافية معلنة، القسم 11.3)
+function botSpawnFactor(player) {
+  if (player.isHuman || player.neutral) return 1;
+  const lvl = ai.levels[player.difficulty];
+  return (lvl && lvl.spawnFactor) || 1;
+}
+
 // زمن ظهور الفرد العادي: max(4, 14 - (D-1)) ثانية، مضروباً بمعدل العصابة وبرج الساعة
 export function normalInterval(state, player) {
   const owned = ownedDistricts(state, player.id).length;
@@ -31,7 +39,7 @@ export function normalInterval(state, player) {
   );
   const gang = GANGS[player.gang];
   const multiplier = (gang && gang.unit.spawnMultiplier) || 1;   // العقارب × 0.8
-  return seconds * multiplier * clockFactor(state, player.id);
+  return seconds * multiplier * clockFactor(state, player.id) * botSpawnFactor(player);
 }
 
 // زمن ظهور الشخصية المميزة: max(30, 75 - (D-1)×3) ثانية
@@ -41,10 +49,12 @@ export function heroInterval(state, player) {
     SPAWN.heroMin,
     SPAWN.heroBase - Math.max(0, owned - 1) * SPAWN.heroPerDistrict
   );
-  return seconds * clockFactor(state, player.id);
+  return seconds * clockFactor(state, player.id) * botSpawnFactor(player);
 }
 
 export function updateSpawn(state) {
+  // طور الإمبراطورية: لا ظهور تلقائي ولا عودة للبطل، الجنود من القاعدة الرئيسية بالنقاط (empire.js)
+  if (state.mode === 'empire') return;
   for (const player of state.players) {
     if (player.neutral) continue;       // الشرطة لها إنتاجها الخاص (القسم 3.8)
     const districts = ownedDistricts(state, player.id);
@@ -95,8 +105,8 @@ function hasEnemyNearFlag(state, district, playerId) {
   const { i, j } = district.capture;
   for (const unit of state.units) {
     if (unit.state === 'dead') continue;
-    if (!isEnemy(state, { playerId }, unit)) continue;
-    if (Math.hypot(unit.x - i, unit.y - j) <= MAP_GEN.captureRadius) return true;
+    if (!isEnemyId(state, playerId, unit.playerId)) continue;
+    if (hypot(unit.x - i, unit.y - j) <= MAP_GEN.captureRadius) return true;
   }
   return false;
 }
@@ -136,6 +146,7 @@ export function spawnChampion(state, player, district) {
 // مات البطل: يعود بعد 60 ثانية، والمؤقت لا يجري إلا وصاحبه يملك 5 أحياء فأكثر
 function updateChampion(state, player, districts) {
   if (championOf(state, player.id)) { state.championTimers[player.id] = null; return; }
+  if (state.mode === 'regicide') return;      // حماية الزعيم: الزعيم لا يعود (القسم 9.5.3)
 
   // أول تحديث بعد موته: نبدأ المؤقت
   if (state.championTimers[player.id] === null) {

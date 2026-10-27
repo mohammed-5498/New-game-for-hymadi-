@@ -18,6 +18,149 @@ export const MAP_SIZES = {
   large:  { key: 'large',  name: 'كبيرة',  n: 42, maxPlayers: 8, specialDistricts: 4, policeStations: 4 }
 };
 
+// --- طوابع المدن (القسم 3.9): شكل فقط، لا تغيّر قواعد اللعب ---
+export const CITIES = {
+  // مدن الأمم (القسم 3.10) تُضاف بعد المدن العشر: شبام والدرعية والقاهرة القديمة (الدفعة العربية)،
+  // ثم كايفنغ وغيونغجو (الدفعة الآسيوية). إيدو هي المدينة اليابانية نفسها بمعلم جديد (المفتاح japan)،
+  // ثم باريس وبرمنغهام وروتنبورغ (الدفعة الأوروبية)، ثم غوندر وكانو ومروي (الدفعة الأفريقية)،
+  // ثم ريو ولا بوكا وتينوتشتيتلان (الدفعة اللاتينية؛ المكسيكية الاستعمارية mexico تبقى للعصابات الكلاسيكية)
+  order: ['yamamah', 'arab', 'japan', 'china', 'europe', 'norway', 'hk', 'jaipur', 'mexico', 'chicago',
+          'shibam', 'diriyah', 'cairo', 'kaifeng', 'gyeongju', 'paris', 'birmingham', 'rothenburg',
+          'gondar', 'kano', 'meroe', 'rio', 'laboca', 'tenoch'],
+  defaultCity: 'random',
+  // ماء على حافة الخريطة بهذا العرض من المربعات (لا يُمشى عليه): مضيق النرويجية المتجمد، وقناتا كايفنغ وبرمنغهام،
+  // ونيل مروي، وميناء لا بوكا، وبحيرة تينوتشتيتلان. huts: المباني المجاورة للماء أكواخ على أعمدة (النرويجية وحدها)
+  water: { norway: { small: 2, medium: 2, large: 3, huts: true },
+           kaifeng: { small: 2, medium: 2, large: 3 },
+           birmingham: { small: 2, medium: 2, large: 3 },
+           meroe: { small: 2, medium: 2, large: 3 },
+           laboca: { small: 2, medium: 2, large: 3 },
+           tenoch: { small: 2, medium: 2, large: 3 } },
+  rorbuChance: 0.55,            // نسبة المباني المجاورة للماء التي تصير أكواخاً على أعمدة
+  // أسماء قصيرة لأزرار قائمة الإعداد (الاسم الكامل تحت الصورة المصغرة)
+  short: { yamamah: 'اليمامة', arab: 'عربية', japan: 'إيدو', china: 'صينية', europe: 'أوروبية', norway: 'نرويجية',
+           hk: 'هونغ كونغ', jaipur: 'جايبور', mexico: 'مكسيكية', chicago: 'شيكاغو',
+           shibam: 'شبام', diriyah: 'الدرعية', cairo: 'القاهرة', kaifeng: 'كايفنغ', gyeongju: 'غيونغجو',
+           paris: 'باريس', birmingham: 'برمنغهام', rothenburg: 'روتنبورغ', gondar: 'غوندر', kano: 'كانو', meroe: 'مروي',
+           rio: 'ريو', laboca: 'لا بوكا', tenoch: 'تينوتشتيتلان' },
+  thumbCycleMs: 2000,           // "عشوائي": الصورة المصغرة تتبدل بين المدن
+  thumbZoom: 1.4,               // تقريب الصورة المصغرة (تُقص الأطراف)
+  thumbParticles: 0.4,          // صور لوحة الطقس: ندف الثلج وخطوط المطر بهذه النسبة من عددها في شاشة المباراة
+  cardZoom: 1.5,                // خانات لوحة المدن: وسط الصورة المصغرة مكبّراً بهذا القدر (المباني أوضح)
+  // هالة خفيفة خلف الجنود: فاتحة في المدينة الداكنة (هونغ كونغ)، وداكنة في الصحراء الفاتحة (اليمامة)
+  // حتى يبقى الجنود الصفر والبرتقاليون واضحين فوق الرمل والبيوت الفاتحة
+  unitHalo: { hk: { color: 'rgba(255,255,255,0.28)', rx: 5.5, ry: 9, lift: 8 },
+              yamamah: { color: 'rgba(58,38,16,0.2)', rx: 5.5, ry: 9, lift: 8 } },
+  // المدن المفتوحة (بطلب المستخدم): شوارع أعرض ومستقيمة بأرصفة وممرات مشاة، والمباني صفوف مرتبة
+  // بينها ممرات مرصوفة (أرض يمشي عليها الجنود، موصولة بالشارع من طرفيها)
+  // street: عرض الشارع بالمربعات، spacing: قيم المسافة بين بدايتي شارعين (5 و7 ← أحياء 3 و5 مربعات)
+  // lanes: 'rows' ممر بين كل صفين، 'center' ممر واحد في وسط الحي (أكثف)، 'lots' كل مبنى في قطعته
+  // scale: حجم رسم المبنى العادي (المباني الحاسمة بحجمها الكامل)، أقل من 1 تظهر الأرض بين المباني
+  // roadProp: false يخفي علامات الطابع على الشارع (خطوط شيكاغو تتقاطع مع خط منتصف الشارع العريض)
+  // roundabout: دوار في التقاطع الأقرب لمركز الخريطة، radius نصف قطر حلقته بالمربعات
+  // مدينة بسور (صحراء اليمامة): سور حجري بأقواس على الحافتين البعيدتين وبوابات حيث تخرج الشوارع،
+  // وسور منهار منخفض على الحافتين القريبتين (لا يحجب الجنود)، وأبراج على الزوايا وكل towerEvery مربعاً
+  // archChance: نسبة الشوارع الخارجة من الحافتين القريبتين التي يقوم فوقها قوس قديم
+  walls: { yamamah: { towerEvery: 6, archChance: 0.6 } },
+  // مدن محصورة في طور واحد (بطلب المستخدم): لا تظهر في اختيار المدينة ولا في "عشوائي" للأطوار الأخرى
+  modeOnly: { yamamah: 'empire' },
+  open: {
+    chicago: { street: 2, spacing: [5, 7], lanes: 'center', scale: 1, roadProp: false },
+    hk:      { street: 2, spacing: [5, 7], lanes: 'center', scale: 1, roundabout: { radius: 3 } },
+    europe:  { street: 2, spacing: [5, 6, 7], lanes: 'rows', scale: 0.86 },
+    // شبام (بطلب المستخدم): نفس توسعة شيكاغو وهونغ كونغ، وأشجار رصيفها نخيل صغير (openCity.js)
+    shibam:  { street: 2, spacing: [5, 7], lanes: 'center', scale: 1 },
+    // باريس وروتنبورغ (بطلب المستخدم): توسعة هونغ كونغ بدوارها، وكثافة أقل (ممر بين كل صفين ومبانٍ أصغر)،
+    // ودوار كل مدينة بطابعها: مسلة بين نافورتين في باريس، ونافورة السوق بتمثالها في روتنبورغ (openCity.js)
+    paris:      { street: 2, spacing: [5, 7], lanes: 'rows', scale: 0.86, roundabout: { radius: 3 } },
+    rothenburg: { street: 2, spacing: [5, 7], lanes: 'rows', scale: 0.86, roundabout: { radius: 3 } }
+  }
+};
+
+// مناطق قائمة الإعداد (بطلب المستخدم): المدن والأمم مرتبة حسب المنطقة، لكل منطقة تبويب وخانة خاصة
+// (js/ui/picker.js). cities: مدن أمم المنطقة أولاً ثم بقية المدن بطابعها، nations: أمم المنطقة.
+// المدينة أو الأمة التي لا تظهر في أي منطقة تُجمع في تبويب "أخرى" فلا تختفي من القائمة
+export const REGIONS = {
+  order: ['arabic', 'asian', 'european', 'african', 'american'],
+  arabic:   { name: 'العربية', cityTitle: 'المدن العربية', nationTitle: 'العصابات العربية',
+              cities: ['shibam', 'diriyah', 'cairo', 'yamamah', 'arab'], nations: ['yemen', 'saudi', 'egypt'] },
+  asian:    { name: 'الآسيوية', cityTitle: 'المدن الآسيوية', nationTitle: 'العصابات الآسيوية',
+              cities: ['kaifeng', 'japan', 'gyeongju', 'china', 'hk', 'jaipur'], nations: ['china', 'japan', 'korea'] },
+  european: { name: 'الأوروبية', cityTitle: 'المدن الأوروبية', nationTitle: 'العصابات الأوروبية',
+              cities: ['paris', 'birmingham', 'rothenburg', 'europe', 'norway'], nations: ['france', 'britain', 'germany'] },
+  african:  { name: 'الأفريقية', cityTitle: 'المدن الأفريقية', nationTitle: 'العصابات الأفريقية',
+              cities: ['gondar', 'kano', 'meroe'], nations: ['ethiopia', 'nigeria', 'sudan'] },
+  american: { name: 'الأمريكتان', cityTitle: 'مدن الأمريكتين', nationTitle: 'عصابات الأمريكتين',
+              cities: ['rio', 'laboca', 'tenoch', 'mexico', 'chicago'], nations: ['brazil', 'argentina', 'mexico'] },
+  classic:  { name: 'الكلاسيكية', nationTitle: 'العصابات الكلاسيكية' },   // تبويب العصابات الأربع في اختيار الأمة
+  other:    { name: 'أخرى', cityTitle: 'مدن أخرى', nationTitle: 'عصابات أخرى' }
+};
+
+// أنواع من pool المدن ليست مباني (أشجار وزينة): لا تُصبغ بلون المالك، كأشجار الطابع القديم
+// والسور وبواباته وأبراجه في صحراء اليمامة: ملك المدينة لا الحي
+export const CITY_UNTINTED = ['palm', 'cherry', 'lantern', 'willow', 'lanterns', 'pine', 'rack', 'banyan', 'neem', 'cactus', 'tree',
+  'ptree', 'rtree', 'lamp', 'acacia', 'baobab', 'dye', 'crane', 'chinampa', 'ahuejote',
+  'grove', 'well', 'cart', 'wallI', 'wallJ', 'gateI', 'gateJ', 'archI', 'archJ', 'wallTower', 'brokenI', 'brokenJ', 'brokenTower',
+  'monument'];   // معلم المنطقة وسط المدينة (generator.js: placeMonument): ملك المدينة لا الحي
+
+// تخزين الطبقة الثابتة (الأرض والمباني والزينة) في قطع مخفية: تُرسم مرة وتُعرض الظاهرة فقط
+export const CITY_CACHE = {
+  chunkWorld: 128,               // ضلع القطعة بوحدات العالم (المربع 36×18)
+  scales: [0.75, 1.1, 1.6, 2.4, 3.6, 5.4],   // دقات الرسم (بكسل لكل وحدة)؛ تُختار حسب التقريب
+  scaleSlack: 0.85,              // تُقبل دقة أقل من المطلوب بهذا القدر قبل الانتقال للأعلى
+  maxPixels: 20e6,               // أقصى مجموع بكسلات القطع المخزنة (≈ 80 ميغابايت)، والأقدم يُحذف
+  frameBudgetMs: 6,              // وقت رسم القطع في الإطار الواحد (على دفعات: لا قطعة كاملة في إطار واحد)
+  warmScale: 2.4,                // بداية المباراة: الظاهر يُرسم أولاً بهذه الدقة الأقل، ثم يُرفع تدريجياً
+  warmBudgetMs: 14,              // وقت تجهيز المدينة في كل إطار عند بداية المباراة (لا تتقدم المباراة حتى تكتمل)
+  warmMaxMs: 2500,               // أقصى انتظار لتجهيز المدينة قبل أن تبدأ المباراة على أي حال
+  prefetchRing: 1,               // حلقة قطع حول الشاشة تُرسم مسبقاً بالوقت الفائض
+  baseScale: 0.75,               // خريطة الأرض الكاملة منخفضة الدقة: بديل مؤقت حتى تُرسم القطعة
+  tintSteps: 3,                  // إعادة رسم القطعة أثناء انتقال لون المالك على 3 مراحل فقط
+  reach: { side: 40, up: 110, down: 22 },  // ما قد يرسمه المربع حول مركزه (المباني ترتفع للأعلى)
+  // الوحدة خلف مبنى أمامها تختفي خلفه: قصاصة المبنى من صورة المدينة تُلصق فوقها (occlusion.js)
+  occlusion: {
+    enabled: true,               // للقياس فقط: false يرسم الوحدات فوق كل شيء
+    side: 28, down: 14,          // أقصى ما يرسمه المبنى حول مركز مربعه يميناً ويساراً وتحته
+    alphaCut: 160,               // البكسل أعتم من هذا يُعد من المبنى عند قياس حدوده (من 255)
+    unitSide: 7.5, unitUp: 21, unitDown: 4,  // صندوق الفرد العادي حول قدميه (الجسم والسلاح وشريط الدم)، ويكبر مع حجم الوحدة
+    maxPixels: 8e6,              // أقصى مجموع بكسلات القصاصات المخزنة، والأقدم يُحذف
+    budgetMs: 2                  // وقت قياس المباني وصنع قصاصات جديدة في الإطار الواحد
+  }
+};
+
+// المباني الحاسمة بطراز كل مدينة: hq أعلى مبانيها للمقر، وbase مبناها العادي للشرطة والمستشفى والمخزن
+export const CITY_SPECIALS = {
+  yamamah: { hq: 'tower',   base: 'house' },
+  arab:    { hq: 'tall',    base: 'house' },
+  japan:   { hq: 'two',     base: 'house' },
+  china:   { hq: 'tower2',  base: 'hutong' },
+  europe:  { hq: 'row',     base: 'row' },
+  norway:  { hq: 'long',    base: 'wood' },
+  hk:      { hq: 'tower',   base: 'shop' },
+  jaipur:  { hq: 'haveli2', base: 'haveli' },
+  mexico:  { hq: 'balcony', base: 'adobe' },
+  chicago: { hq: 'brick',   base: 'warehouse' },
+  // مدن الأمم العربية: المقر أعلى مبانيها، والمباني الحاسمة على مبنى المدينة العادي
+  shibam:  { hq: 'tower',   base: 'towerLow' },
+  diriyah: { hq: 'najdiTall', base: 'najdi' },
+  cairo:   { hq: 'house',   base: 'wikala' },
+  // مدن الأمم الآسيوية (إيدو هي japan أعلاه)
+  kaifeng:  { hq: 'tea',      base: 'shop' },
+  gyeongju: { hq: 'hanokBig', base: 'hanok' },
+  // مدن الأمم الأوروبية
+  paris:      { hq: 'haus',    base: 'haus' },
+  birmingham: { hq: 'factory', base: 'terrace' },
+  rothenburg: { hq: 'row',     base: 'fach' },
+  // مدن الأمم الأفريقية
+  gondar: { hq: 'stone',     base: 'stone' },
+  kano:   { hq: 'hausaTall', base: 'hausa' },
+  meroe:  { hq: 'nubian',    base: 'nubian' },
+  // مدن الأمم اللاتينية
+  rio:    { hq: 'colonial', base: 'colonial' },
+  laboca: { hq: 'conv',     base: 'conv' },
+  tenoch: { hq: 'house',    base: 'house' }
+};
+
 // --- الكاميرا ---
 export const CAMERA = {
   minZoom: 0.8,
@@ -60,7 +203,7 @@ export const MAP_GEN = {
   // إصلاح الفراغات المعزولة (القسم 3.4.1)
   pocketRepairRounds: 3,      // أقصى عدد مرات لإعادة الـ flood fill والإصلاح
   pocketFillType: 'H',        // الفراغ الذي لا يمكن وصله يُردم بهذا المبنى
-  protectedBuildings: ['Q', 'S', 'G', 'C', 'O', 'N'],  // مبانٍ لا تُفتح لعمل ممر (مقر، مستشفى، مخزن، ساعة، نافورة، مركز شرطة)
+  protectedBuildings: ['Q', 'S', 'G', 'C', 'O', 'N', '~', 'Y'],  // لا تُفتح لعمل ممر (مقر، مستشفى، مخزن، ساعة، نافورة، مركز شرطة، ماء، جزيرة الدوار)
   devChecks: true             // وضع التطوير: يطبع تحذيراً إن بقي مربع معزول
 };
 
@@ -174,6 +317,176 @@ export const HEROES = {
   }
 };
 
+// --- القتال الواقعي (القسم 5.4) ---
+// منقولة كما هي من CR في docs/combat-reference.html.
+// المسافات هناك بالبكسل (مربع = 30 بكسل)، وهنا كلها بالمربعات مباشرة.
+export const COMBAT_REALISM = {
+  dodgeBase: 0.18,             // احتمال التفادي الأساسي
+  blockBase: 0.35,             // احتمال الصدّ (لأصحاب الدروع وحدهم)
+  projectileDodge: 0.5,        // المقذوف يُتفادى بنصف الاحتمال ولا يُصَدّ
+
+  stMax: 100,                  // التحمّل
+  stRegen: 20,                 // تجدد التحمّل في الثانية
+  dodgeCost: 35,
+  blockCost: 25,
+  dodgeCd: 1.2,                // تبريد التفادي
+
+  frontHalf: 60 * Math.PI / 180,    // أمام: ±60° (قوس 120°)
+  sideHalf: 120 * Math.PI / 180,    // جانب: حتى ±120°، وما بعدها خلف
+  angleMul: { front: 1, side: 0.5, back: 0 },      // فرصة التفادي حسب الزاوية
+  dmgMul:   { front: 1, side: 1.10, back: 1.25 },  // الضرر حسب الزاوية
+
+  dodgeDist: 0.8,              // مربعات تقطعها القفزة الجانبية
+  dodgeTime: 0.30,
+  blockTime: 0.30,
+  staggerBump: 0.30,           // ترنّح الحليف الذي اصطدمت به وحدة مرتدة
+  staggerBlocked: 0.25,        // ترنّح المهاجم بعد أن يُصَدّ
+  jitter: 0.15,                // عشوائية نقاط اختيار الحركة
+
+  // بذرة الشخصية: لكل وحدة قيمة ثابتة بين هذين الحدين
+  traits: {
+    aggr: [0.7, 1.3],          // الجرأة: تقصّر الفاصل بين الضربات وتحبّب الضربة القوية
+    dodgeSkill: [0.7, 1.3],    // مهارة التفادي والصدّ
+    react: [0.10, 0.35],       // زمن رد الفعل بالثواني
+    spd: [0.93, 1.07],         // تنويع سرعة المشي
+    size: [0.96, 1.04]         // تنويع الحجم في الرسم
+  },
+
+  // الحركات الأربع. أزمنتها نسبية لا مطلقة:
+  // زمن الحركة = زمن ضربة الوحدة (القسم 6) × مجموع أزمنة الحركة ÷ moveTimeBase.
+  // moveTimeBase = 0.8 مختار حتى يبقى الضرر في الثانية كما كان قبل هذه المرحلة،
+  // فأرقام القسم 6 لم تتغير: الضربة السريعة أسرع وأضعف، والقوية أبطأ وأقوى، ومحصلتهما واحدة.
+  moveTimeBase: 0.8,
+  moves: {
+    quick:  { wind: 0.18, strike: 0.08, hold: 0.05, rec: 0.25, dmg: 0.7, rangeAdd: 0,   arc: 100, sAmp: 0.85, lunge: 0.8 },
+    heavy:  { wind: 0.45, strike: 0.10, hold: 0.09, rec: 0.55, dmg: 1.6, rangeAdd: 0,   arc: 110, sAmp: 1.20, lunge: 1.25, stagger: 0.40, knock: 1.0, down: 0.3 },
+    thrust: { wind: 0.30, strike: 0.07, hold: 0.06, rec: 0.35, dmg: 1.0, rangeAdd: 0.6, arc: 50,  sAmp: 0.60, lunge: 1.6 },
+    spin:   { wind: 0.50, strike: 0.15, hold: 0.05, rec: 0.60, dmg: 0.8, rangeAdd: 0.2, arc: 360, sAmp: 1.10, lunge: 0.4 },
+    // اللكمات والركلات (القسم 5.4.7): unarmed = بلا سلاح. push يدفع الهدف ليصنع مسافة، down احتمال إسقاطه أرضاً
+    punch:      { wind: 0.12, strike: 0.06, hold: 0.04, rec: 0.20, dmg: 0.5, rangeAdd: -0.15, arc: 80, unarmed: true },
+    kick_front: { wind: 0.24, strike: 0.08, hold: 0.06, rec: 0.30, dmg: 0.9, rangeAdd: 0.3,   arc: 70, push: 1.1, unarmed: true },
+    kick_high:  { wind: 0.36, strike: 0.10, hold: 0.08, rec: 0.45, dmg: 1.3, rangeAdd: 0.2,   arc: 80, stagger: 0.35, knock: 0.9, down: 0.45, unarmed: true }
+  },
+  downTime: 1.1,               // السقوط على الأرض ثم النهوض بالركوع: لا يهاجم ولا يتفادى
+  comboChance: 0.55,           // بعد لكمة أو ركلة أمامية: يُتبعها بضربة سلاح فوراً
+  comboPause: 0.04,
+  primaryBonus: 1.0,           // مكافأة نقاط لحركة الوحدة الأساسية (طعنة حامل الرمح)
+  pauseMin: 0.10,              // الفاصل بعد التعافي، مقسوماً على الجرأة
+  pauseRandom: 0.25,
+  strikeMoment: 0.6,           // لحظة الضرر داخل زمن الضرب
+  reachBonus: 0.33,            // تسامح مدى عند لحظة الضربة (مربعات)
+  arcTolerance: 0.35,          // تسامح زاوية القوس (راديان)
+  aimTolerance: 0.6,           // لا تبدأ الضربة قبل أن يقترب وجهها من الهدف (راديان)
+  turnWhileAttacking: 2,       // أثناء الضربة يدور الجميع ببطء واحد: من يضرب لا يتابعك
+
+  friction: 8,                 // تباطؤ الارتداد في الثانية
+  bumpSpeed: 2.0,              // أقل سرعة ارتداد تصطدم بالحليف (مربع/ثانية)
+  bumpCd: 0.4,                 // تبريد الاصطدام للوحدة نفسها
+  corpseBumpCd: 0.2,
+  corpseKnockBig: 1.4,         // دفع الجثة بضربة قوية أو دائرية (مربعات)
+  corpseKnockSmall: 0.6,
+  maxRagdolls: 20,             // أقصى عدد جثث متدحرجة في وقت واحد
+
+  // ارتداد خفيف مرئي مع كل ضربة عادية: لا يقطع هجوم المصاب (القسم 5.4.4ب)
+  flinchTime: 0.2,
+  flinchKnock: 0.15,           // مربعات
+  duckChance: 0.55,            // التلويح والقوية: احتمال الانحناء بدل القفز
+  duckSpeed: 0.3,              // الانحناء يتحرك قليلاً فقط
+
+  // تصادم الأسلحة: متقابلان يضربان في نفس اللحظة تقريباً
+  clashChance: 0.6,
+  clashWindow: 0.08,           // ثانية
+  clashKnock: 0.45,            // مربعات
+  clashStagger: 0.2,
+
+  // الكلمات الطائرة فوق الأحداث
+  pops: {
+    seconds: 1.1,
+    max: 40,                   // أقصى عدد ظاهر معاً (الأقدم يُحذف)
+    colors: { dodge: '#b8f0a8', block: '#8fd0ff', back: '#ff8a7a', bump: '#ffd66e', clash: '#ffe08a', down: '#ffffff',
+              show: '#ffb3c2', bribe: '#9fe08a' }   // show: «استعراض!» (سمة اليابان)، bribe: «رُشي!» (القسم 3.10)
+  },
+  clashFxSeconds: 0.3,         // شرر التصادم
+  burstSeconds: 0.22,          // نجمة الانفجار عند الارتطام (القسم 5.4.7)
+  speedLinesAbove: 2.33,       // خطوط السرعة خلف كل وحدة أسرع من هذا (مربع/ث = 70 بكسل/ث في المرجع)
+  speedLinesSimple: true,      // خطوط السرعة في المستوى المبسّط أيضاً (أول ما يُلغى إن ثقل الأداء بعد أثر الأطراف)
+  pushFlinch: 1.4,             // الركلة الأمامية: ارتداد أطول من العادي
+
+  // الرسم (القسم 5.4.6)
+  // ساحة تجربة القتال (قائمة الإعداد): 7 غربان ضد 4 مطارق متقاربين
+  arena: {
+    crows: 7,
+    hammers: [null, 'armored', null, 'smasher'],   // فرد، مصفّح، فرد، محطِّم
+    gapTiles: 2.6,             // المسافة بين الصفين عند البداية
+    zoom: 3.8,
+    restartSeconds: 3.2        // بعد فناء أحد الطرفين تبدأ معركة جديدة
+  },
+
+  trailGhosts: 3,              // أشباح أثر السلاح في المستوى الكامل
+  trailGhostsCrowded: 1,       // وحين يزدحم المشهد (أكثر من 60 وحدة ظاهرة): قيس مع 300 وحدة فكانت 3 أثقل بـ 13%
+  combatPoseTiles: 2.6,        // داخل هذه المسافة من الهدف تقف الوحدة وقفة القتال
+
+  busyBonus: 1.33,             // تفضيل الهدف المشغول بغيرنا (مربعات) × ميل الالتفاف
+  crowdRadius: 1.6,            // نصف قطر عدّ الأعداء المحيطين (يحبّب الضربة الدائرية)
+  nightReact: 0.10,            // ليلاً تتأخر كل الوحدات في رد الفعل (القسم 7)
+
+  // مستويات التفصيل (القسم 5.4.5)
+  lod: {
+    fullUnits: 60,             // أقرب 60 وحدة داخل الشاشة: النظام كامل
+    crowdedAbove: 800,         // إذا تجاوزت وحدات المباراة الحية هذا العدد...
+    fullUnitsCrowded: 30,      // ...ينخفض حد المستوى الكامل إلى 30 (القسم 5.4.5)
+    refreshSeconds: 0.5,       // إعادة حساب المستوى
+    offScreenDamage: 0.85      // الضرر الإحصائي خارج الشاشة
+  }
+};
+
+// --- الدوران والالتفاف والحركات لكل وحدة (القسمان 5.4.4ب و5.4) ---
+// turn: سرعة الدوران راديان/ثانية — البطيء في الدوران يُلتف عليه.
+// flank: ميل الالتفاف من 0 إلى 1.
+// moves: الحركات التي تملكها. block: هل تصدّ بالدرع. primary: حركتها الأساسية.
+// الرماة يُعرفون من stats.projectile: حركاتهم هذه للقتال القريب وحده.
+export const COMBAT_STYLE = {
+  gangs: {
+    crows:     { turn: 8, flank: 0.85 },
+    hammers:   { turn: 4, flank: 0.25 },
+    vipers:    { turn: 6, flank: 0.50 },
+    scorpions: { turn: 5, flank: 0.40 },
+    police:    { turn: 4, flank: 0.20 }
+  },
+  units: {
+    // من يملك ماذا (القسم 5.4.7): الغربان كل الحركات بما فيها الركلة العالية، والأبطال كل الحركات،
+    // المطارق العاديون لكمة وركلة أمامية، المصفّح والمحطِّم ركلة أمامية فقط، الأفاعي والشرطة لكمة وركلة أمامية،
+    // العقارب لكمة وركلتان.
+    // الغربان: خفيفة سريعة الدوران، أكثر من يلتف
+    crow_common:    { moves: ['quick', 'heavy', 'thrust', 'punch', 'kick_front', 'kick_high'] },
+    crow_spear:     { moves: ['thrust', 'quick', 'heavy', 'punch', 'kick_front', 'kick_high'], primary: 'thrust' },
+    crow_dual:      { moves: ['quick', 'heavy', 'punch', 'kick_front', 'kick_high'] },
+    crow_champion:  { moves: ['quick', 'heavy', 'thrust', 'spin', 'punch', 'kick_front', 'kick_high'] },
+
+    // المطارق: ثقيلة بطيئة الدوران، والمصفّح والمحطِّم أبطأ (turn 3)
+    hammer_common:   { moves: ['quick', 'heavy', 'thrust', 'punch', 'kick_front'] },
+    hammer_armored:  { moves: ['quick', 'heavy', 'kick_front'], block: true, turn: 3, flank: 0 },
+    hammer_smasher:  { moves: ['quick', 'heavy', 'spin', 'kick_front'], turn: 3, flank: 0.1 },
+    hammer_champion: { moves: ['quick', 'heavy', 'thrust', 'spin', 'punch', 'kick_front', 'kick_high'], block: true },
+
+    // الأفاعي: رماة، وحركاتهم هذه للقتال القريب وحده
+    viper_common:     { moves: ['quick', 'heavy', 'punch', 'kick_front'] },
+    viper_sniper:     { moves: ['quick', 'thrust', 'punch', 'kick_front'] },
+    viper_firebomber: { moves: ['quick', 'punch', 'kick_front'] },
+    viper_champion:   { moves: ['quick', 'heavy', 'thrust', 'spin', 'punch', 'kick_front', 'kick_high'] },
+
+    // العقارب
+    scorpion_common:    { moves: ['quick', 'heavy', 'thrust', 'punch', 'kick_front', 'kick_high'] },
+    scorpion_boss:      { moves: ['quick', 'heavy', 'punch', 'kick_front', 'kick_high'] },
+    scorpion_medic:     { moves: ['quick', 'punch', 'kick_front', 'kick_high'] },
+    scorpion_champion:  { moves: ['quick', 'heavy', 'thrust', 'spin', 'punch', 'kick_front', 'kick_high'] },
+
+    // الشرطة: دروع تصدّ
+    police_common:  { moves: ['quick', 'heavy', 'punch', 'kick_front'], block: true },
+    police_captain: { moves: ['quick', 'heavy', 'thrust', 'punch', 'kick_front'], block: true }
+  }
+};
+
 // --- الضربات المميزة: قواعد الشحن (القسم 6.7) ---
 // الأفراد العاديون لا يملكون ضربة مميزة، فلا شريط شحن لهم
 export const ULT = {
@@ -232,6 +545,217 @@ export const CHAMPIONS = {
       ult: { kind: 'buff', needs: 'either', radius: 3.5, damageBonus: 0.50, duration: 5, heal: 60 }
     }
   }
+};
+
+// --- الأمم (القسم 3.10، docs/NATIONS.md) ---
+// الأمة = نمط قتالي (عصابة كلاسيكية بقواعدها في GANGS وHEROES وCHAMPIONS كما هي تماماً)
+// + سمة وطنية واحدة + مظهر واسم لكل وحدة + ضربة بطل خاصة + مدينة. والعصابات الأربع تبقى "كلاسيكية".
+// حقول الأمة:
+//   name اسم البلد، gangName اسم العصابة (يظهر في شريط القوة وشاشة النهاية)، style النمط (مفتاح في GANGS)،
+//   city مدينتها (مفتاح في CITIES، لخيار "مدينة المضيف")، secondary لونها الثانوي (في الإكسسوارات فقط)،
+//   names أسماء الوحدات بمفاتيح النمط: common، والشخصيتان المميزتان (مثل boss وmedic)، وchampion،
+//   trait السمة: name وdesc وmods (معدِّلات، كلها اختيارية):
+//     homeDamageTaken: نسبة تُطرح من الضرر الذي تتلقاه وحداتك داخل أحيائك
+//     homeDamage:      نسبة تُضاف إلى ضرر وحداتك داخل أحيائك
+//     vision:          مربعات تُضاف إلى مدى رصد كل وحداتك
+//     rangedRange:     مربعات تُضاف إلى مدى كل وحدة ترمي من بعيد
+//     adjacentCapture: نسبة تُضاف إلى سرعة الاستيلاء على حي مجاور لحي تملكه
+//     brothers:        {radius, perHero, max} كل شخصية مميزة حية تعطي الأفراد حولها نسبة ضرر (الصين)
+//     showoff:         {idle, bonus, pop} أول ضربة بعد مدة بلا هجوم أقوى (اليابان)
+//     weatherProof:    الرماة لا يتأثرون بالليل ولا بالمطر (كوريا)
+//     kicks:           {damage, prefer} الركلات أقوى وتُختار أكثر (فرنسا)
+//     commonArmor:     درع يُضاف إلى الأفراد العاديين (بريطانيا)
+//     heavyStagger:    نسبة تُضاف إلى زمن ترنّح الضربة القوية (بريطانيا)
+//     phalanx:         {count, radius, reduce} ضرر متلقى أقل في المجموعة الكبيرة (ألمانيا)
+//     outnumbered:     {radius, bonus} ضرر أكبر حين يفوقك الأعداء عدداً حولك (إثيوبيا)
+//     punches:         {damage, stagger, staggerTime} اللكمات أقوى وقد ترنّح (نيجيريا)
+//     armorAll:        درع يُضاف إلى كل الوحدات (نيجيريا)
+//     rangedDamage:    نسبة تُضاف إلى ضرر رمي الرماة (السودان)
+//     dodge:           نقاط تُضاف إلى فرصة التفادي الأساسية (البرازيل: 0.18 ← 0.26)
+//     capture:         نسبة تُضاف إلى سرعة الاستيلاء على أي حي (البرازيل)
+//     duel:            {radius, bonus, clash} ضرر أكبر حين لا عدو حولك غير خصم واحد، وتصادم أسلحة أكثر (الأرجنتين)
+//     slowShots:       {factor, duration} كل مقذوف يصيب يُبطئ المصاب (المكسيك)
+//   heroMods (اختياري): معدِّلات شخصية مميزة واحدة بمفتاحها، خارج السمة:
+//     slowHits:        {factor, duration} ضربتها القريبة تُبطئ المصاب (غاوتشو الأرجنتين)
+//   ult ضربة البطل الخاصة: تحل محل ضربة بطل النمط، وبقية أرقام البطل كما هي.
+//     ring (اختياري): لون حلقة تتسع حول مكان الضربة
+// "داخل أحيائك": منطقة الحي هي مربعاته ومعها الشوارع الأقرب إليه (game/nations.js).
+export const nations = {
+  order: ['yemen', 'saudi', 'egypt', 'china', 'japan', 'korea', 'france', 'britain', 'germany',
+          'ethiopia', 'nigeria', 'sudan', 'brazil', 'argentina', 'mexico'],   // الأمم المتاحة في قائمة الإعداد، دفعةً دفعة (القسم 5 من NATIONS.md)
+
+  // ===== الدفعة العربية (المرحلة 9أ) =====
+  yemen: {
+    name: 'اليمن', gangName: 'أبناء سبأ', style: 'scorpions', city: 'shibam', secondary: '#2f3f7a',   // نيلي
+    names: { common: 'مقاتل الجنبية', boss: 'شيخ الجنبية', medic: 'العطّار', champion: 'ملكة سبأ' },
+    trait: { name: 'أبراج الطين', desc: 'وحداتك داخل أحيائك تأخذ ضرراً أقل 15%', mods: { homeDamageTaken: 0.15 } },
+    // نداء القوافل: يظهر 3 أفراد فوراً حولها (ضمن الحد الأقصى للوحدات)، حين يكون عدو داخل radius
+    ult: { kind: 'caravan', needs: 'enemy', radius: 4, count: 3, spread: 2,
+           name: 'نداء القوافل', desc: 'يظهر 3 أفراد فوراً حولها' }
+  },
+  saudi: {
+    name: 'السعودية', gangName: 'حراس القوافل', style: 'vipers', city: 'diriyah', secondary: '#c0392b',   // أحمر الشماغ
+    names: { common: 'رامي المقلاع', sniper: 'القوّاس', firebomber: 'النفّاط', champion: 'الصقّار' },
+    trait: { name: 'عين الصقر', desc: 'مدى الرصد +2 مربع، والرماة +0.5 مربع مدى', mods: { vision: 2, rangedRange: 0.5 } },
+    // انقضاض الصقر: على أبعد عدو داخل range، ولا يُتفادى. زمن الطيران flightMin + flightPerTile × المسافة
+    // (حتى flightMax)، ويعود الصقر إلى ساعد الصقّار بنفس الزمن
+    ult: { kind: 'falcon', needs: 'enemy', range: 9, damage: 80, flightMin: 0.45, flightPerTile: 0.06, flightMax: 0.95,
+           name: 'انقضاض الصقر', desc: 'الصقر ينقضّ على أبعد عدو بضرر كبير' }
+  },
+  egypt: {
+    name: 'مصر', gangName: 'فتوات الحارة', style: 'hammers', city: 'cairo', secondary: '#e6d7bc',   // بيج الجلابية
+    names: { common: 'الفتوة', armored: 'حامل الدرع', smasher: 'صاحب النبّوت الكبير', champion: 'كبير الفتوات' },
+    trait: { name: 'رجالة الحارة', desc: '+20% ضرر داخل أحيائك، والاستيلاء على الحي المجاور لحيك أسرع 15%',
+             mods: { homeDamage: 0.20, adjacentCapture: 0.15 } },
+    // صيحة الحارة: كل حليف داخل radius (ومعه الكبير) يصمد duration ثانية بلا ترنّح ولا سقوط
+    ult: { kind: 'shout', needs: 'enemy', radius: 3.5, duration: 3,
+           name: 'صيحة الحارة', desc: 'كل فتوة حوله يصمد 3 ثوانٍ بلا ترنّح ولا سقوط' }
+  },
+
+  // ===== الدفعة الآسيوية (المرحلة 9ب) =====
+  china: {
+    name: 'الصين', gangName: 'إخوة الجبل', style: 'scorpions', city: 'kaifeng', secondary: '#3f8f6a',   // أخضر يشمي
+    names: { common: 'فتى الجبل', boss: 'شيخ العصا', medic: 'الطبيب الجوال', champion: 'زعيم ليانغشان' },
+    // الـ108: كل شخصية مميزة حية (لا البطل) تعطي الأفراد العاديين من لاعبها داخل radius نسبة perHero ضرراً، بحد أقصى max
+    trait: { name: 'الـ108', desc: 'كل شخصية مميزة حية تعطي الأفراد حولها +3% ضرر، بحد أقصى +15%',
+             mods: { brothers: { radius: 3, perHero: 0.03, max: 0.15 } } },
+    // راية الأخوة: تحفيز وعلاج معاً لكل حليف داخل radius (بأرقام ضربة بطل الحشد)، وحلقة بلون ring حوله
+    ult: { kind: 'buff', needs: 'either', radius: 3.5, damageBonus: 0.50, duration: 5, heal: 60, ring: '#7fd48a',
+           name: 'راية الأخوة', desc: 'علاج وزيادة ضرر لكل حليف في دائرة حوله' }
+  },
+  japan: {
+    name: 'اليابان', gangName: 'الكابوكيمونو', style: 'crows', city: 'japan', secondary: '#b8283a',   // قرمزي
+    names: { common: 'كابوكيمونو', spear: 'حامل الغليون', dual: 'مبارز السيفين', champion: 'زعيم الكابوكيمونو' },
+    // الاستعراض: أول ضربة بعد idle ثانية بلا هجوم تضرّ أكثر بنسبة bonus، وتظهر فوقها كلمة pop
+    trait: { name: 'الاستعراض', desc: 'أول ضربة بعد 3 ثوانٍ بلا هجوم تُحدث +40% ضرر',
+             mods: { showoff: { idle: 3, bonus: 0.40, pop: 'استعراض!' } } },
+    // رقصة الشارع: hits ضربة متتالية خلال duration ثانية، كل ضربة على كل عدو داخل radius (لفّة في كل ضربة)
+    ult: { kind: 'whirl', needs: 'enemy', radius: 2, hits: 4, damage: 8, duration: 1,
+           name: 'رقصة الشارع', desc: 'سلسلة ضربات سريعة على كل من حوله' }
+  },
+  korea: {
+    name: 'كوريا', gangName: 'الهوارانغ', style: 'vipers', city: 'gyeongju', secondary: '#e07a9a',   // وردي زهري
+    names: { common: 'فتى الهوارانغ', sniper: 'الرامي الدقيق', firebomber: 'رامي السهام المشتعلة', champion: 'قائد الهوارانغ' },
+    // weatherProof: الرماة لا يقصر رصدهم ليلاً ولا تخطئ رمياتهم في المطر
+    trait: { name: 'رماية الهوارانغ', desc: 'الرماة لا يتأثرون بالليل ولا بالمطر، و+0.5 مربع مدى',
+             mods: { rangedRange: 0.5, weatherProof: true } },
+    // مطر السهام: arrows سهماً على دائرة نصف قطرها area حول أكثف تجمع للأعداء داخل range،
+    // كل سهم يضر كل عدو داخل hitRadius من سقوطه (لا يُتفادى)، وتصل خلال flight + حتى spreadSeconds
+    ult: { kind: 'rain', needs: 'enemy', range: 7, arrows: 12, area: 1.6, damage: 12, hitRadius: 0.7,
+           flight: 0.55, spreadSeconds: 0.45, ring: '#e07a9a',
+           name: 'مطر السهام', desc: 'وابل من السهام على مساحة' }
+  },
+
+  // ===== الدفعة الأوروبية (المرحلة 9ب) =====
+  france: {
+    name: 'فرنسا', gangName: 'الأباتشي', style: 'crows', city: 'paris', secondary: '#c22f2f',   // أحمر المنديل
+    names: { common: 'أباتشي', spear: 'مقاتل العصا', dual: 'الراقص المقاتل', champion: 'ملك الأباتشي' },
+    // السافات: الركلتان (الأمامية والعالية) تضرّان أكثر بنسبة damage، وتزيد نقاط اختيارهما prefer (تُختاران أكثر)
+    trait: { name: 'السافات', desc: 'الركلات +25% ضرراً وتُختار أكثر', mods: { kicks: { damage: 0.25, prefer: 0.3 } } },
+    // رقصة الأباتشي: أقرب عدو داخل range يتلقى damage ويُقذف throw مربعاً ويسقط أرضاً
+    ult: { kind: 'throwdown', needs: 'enemy', range: 1.6, damage: 45, throw: 2.2,
+           name: 'رقصة الأباتشي', desc: 'يقذف خصمه ويسقطه أرضاً' }
+  },
+  britain: {
+    name: 'بريطانيا', gangName: 'فتيان سمول هيث', style: 'hammers', city: 'birmingham', secondary: '#3a3a3e',   // رمادي فحمي
+    names: { common: 'فتى سمول هيث', armored: 'حامل غطاء البرميل', smasher: 'صاحب القبضة', champion: 'زعيم الحي' },
+    // معاطف الصوف: الأفراد العاديون +commonArmor درع، وترنّح الضربة القوية لوحداتك أطول بنسبة heavyStagger
+    trait: { name: 'معاطف الصوف', desc: 'الأفراد العاديون +10% درع، والضربة القوية ترنّح أطول 25%',
+             mods: { commonArmor: 0.10, heavyStagger: 0.25 } },
+    // رشوة الشرطي (مبسّطة): الشرطة داخل radius منه لحظة الضربة لا تهاجم وحداتك ولا تهاجمها وحداتك duration ثانية
+    ult: { kind: 'bribe', needs: 'police', radius: 7, duration: 10,
+           name: 'رشوة الشرطي', desc: 'الشرطة القريبة تتجاهل وحداتك 10 ثوانٍ' }
+  },
+  germany: {
+    name: 'ألمانيا', gangName: 'اللاندسكنخت', style: 'hammers', city: 'rothenburg', secondary: '#d9a83a',   // أصفر ذهبي
+    names: { common: 'لاندسكنخت', armored: 'حامل الرمح الطويل', smasher: 'حامل السيف ذي اليدين', champion: 'حامل الراية' },
+    // الكتيبة: الوحدة التي حولها داخل radius (ومعها نفسها) count من وحدات لاعبها فأكثر تأخذ ضرراً أقل بنسبة reduce
+    trait: { name: 'الكتيبة', desc: 'وحداتك في مجموعة من 6 فأكثر تأخذ ضرراً أقل 12%',
+             mods: { phalanx: { count: 6, radius: 2.5, reduce: 0.12 } } },
+    // غرس الراية (مبسّطة): الراية تُغرس مكانه duration ثانية، وكل حليف داخل radius منها يصمد بلا ترنّح ولا سقوط ولا دفع
+    ult: { kind: 'banner', needs: 'enemy', radius: 3, duration: 8,
+           name: 'غرس الراية', desc: 'منطقة لا يتراجع منها أحد' }
+  },
+
+  // ===== الدفعة الأفريقية (المرحلة 9ب) =====
+  ethiopia: {
+    name: 'إثيوبيا', gangName: 'أبطال عدوة', style: 'scorpions', city: 'gondar', secondary: '#2e8b57',   // أخضر الحواف (مع الأصفر والأحمر)
+    names: { common: 'محارب عدوة', boss: 'قارع النقارة', medic: 'المعالج', champion: 'الراس' },
+    // روح عدوة: الوحدة التي حولها داخل radius أعداء أكثر من وحدات لاعبها وحلفائه (ومعها نفسها) تضرّ أكثر بنسبة bonus
+    trait: { name: 'روح عدوة', desc: 'حين يفوقك الأعداء عدداً حولك، ضررك +18%',
+             mods: { outnumbered: { radius: 3, bonus: 0.18 } } },
+    // هجوم عدوة: حين يكون عدو داخل range، كل حليف داخل radius منه أسرع بنسبة bonus مدة duration ثانية
+    ult: { kind: 'haste', needs: 'enemy', range: 6, radius: 4, bonus: 0.30, duration: 5, ring: '#e8c23a',
+           name: 'هجوم عدوة', desc: 'اندفاع جماعي بسرعة +30%' }
+  },
+  nigeria: {
+    name: 'نيجيريا', gangName: 'مقاتلو الدمبي', style: 'hammers', city: 'kano', secondary: '#24325e',   // نيلي كانو الداكن
+    names: { common: 'مقاتل الدمبي', armored: 'حارس السور', smasher: 'الملاكم الثقيل', champion: 'بطل الدمبي' },
+    // اليد الملفوفة: اللكمة تضرّ أكثر بنسبة damage، وترنّح المصاب staggerTime ثانية باحتمال stagger؛ ودرع كل الوحدات +armorAll
+    trait: { name: 'اليد الملفوفة', desc: 'اللكمات +35% ضرراً وفرصة ترنّح، والدرع +10%',
+             mods: { punches: { damage: 0.35, stagger: 0.3, staggerTime: 0.3 }, armorAll: 0.10 } },
+    // الضربة القاضية: لكمة على أقرب عدو داخل range بضرر damage تقذفه throw مربعاً وتسقطه أرضاً
+    ult: { kind: 'knockout', needs: 'enemy', range: 1.4, damage: 60, throw: 2.6,
+           name: 'الضربة القاضية', desc: 'لكمة تقذف وتُسقط' }
+  },
+  sudan: {
+    name: 'السودان', gangName: 'رماة النوبة', style: 'vipers', city: 'meroe', secondary: '#c98a3a',   // ذهبي مغرة
+    names: { common: 'فتى النوبة', sniper: 'الرامي الطويل', firebomber: 'رامي المشاعل', champion: 'الكنداكة' },
+    // أرض القوس: الرماة +rangedRange مربع مدى، وضرر رميهم +rangedDamage
+    trait: { name: 'أرض القوس', desc: 'الرماة +1 مربع مدى و+10% ضرر', mods: { rangedRange: 1, rangedDamage: 0.10 } },
+    // وابل الملكة: arrows سهماً لا تُتفادى، كل سهم على عدو مختلف حول الهدف إن وُجد، بضرر damage
+    ult: { kind: 'arrows', needs: 'enemy', range: 7.5, arrows: 6, damage: 22,
+           name: 'وابل الملكة', desc: 'ستة سهام دفعة واحدة على الأعداء' }
+  },
+
+  // ===== الدفعة اللاتينية (المرحلة 9ب) =====
+  brazil: {
+    name: 'البرازيل', gangName: 'المالتاس', style: 'crows', city: 'rio', secondary: '#f2efe6',   // أبيض الكابويرا
+    names: { common: 'كابويرا الشارع', spear: 'عازف البيريمباو', dual: 'الأكروبات', champion: 'المعلّم' },
+    // الجينغا: فرصة التفادي الأساسية +dodge، والركلات تُختار أكثر (prefer) بلا ضرر زائد، والاستيلاء أسرع بنسبة capture
+    trait: { name: 'الجينغا', desc: 'فرصة التفادي +8%، والركلات أكثر، والاستيلاء أسرع 10%',
+             mods: { dodge: 0.08, kicks: { damage: 0, prefer: 0.3 }, capture: 0.10 } },
+    // الروضة: hits ركلات خلال duration ثانية، كل ركلة على كل عدو داخل radius (كرقصة الشارع، بالركل)
+    ult: { kind: 'roda', needs: 'enemy', radius: 2, hits: 4, damage: 8, duration: 1.2,
+           name: 'الروضة', desc: 'دائرة يرقص فيها ويركل كل من فيها' }
+  },
+  argentina: {
+    name: 'الأرجنتين', gangName: 'الكومبادريتوس', style: 'crows', city: 'laboca', secondary: '#1e1e22',   // أسود التانغو
+    names: { common: 'كومبادريتو', spear: 'الغاوتشو بالبولياداس', dual: 'المبارز بالشال', champion: 'المالِفو' },
+    // مبارزة الفاكون: ضرر +bonus للوحدة التي لا عدو داخل radius حولها غير خصم واحد، واحتمال تصادم الأسلحة +clash
+    trait: { name: 'مبارزة الفاكون', desc: '+20% ضرر في المواجهة الفردية، وتصادم الأسلحة أكثر',
+             mods: { duel: { radius: 2.5, bonus: 0.20, clash: 0.25 } } },
+    // الغاوتشو بالبولياداس: ضربته القريبة تُبطئ المصاب بنسبة factor مدة duration ثانية
+    heroMods: { spear: { slowHits: { factor: 0.2, duration: 1.5 } } },
+    // تانغو الموت: يدور بأقرب عدو داخل range ثم يطرحه: ضرر damage ويقذفه throw مربعاً ويسقطه أرضاً
+    ult: { kind: 'tango', needs: 'enemy', range: 1.6, damage: 45, throw: 1.8,
+           name: 'تانغو الموت', desc: 'يدور بخصمه ثم يطرحه أرضاً' }
+  },
+  mexico: {
+    name: 'المكسيك', gangName: 'فرسان النسر والجاغوار', style: 'vipers', city: 'tenoch', secondary: '#2fa8a0',   // فيروزي
+    names: { common: 'محارب التشينامبا', sniper: 'فارس الجاغوار الرامي', firebomber: 'رامي الأتلاتل', champion: 'قائد النسور' },
+    // رمية الأتلاتل: كل مقذوف يصيب يُبطئ المصاب بنسبة factor مدة duration ثانية
+    trait: { name: 'رمية الأتلاتل', desc: 'المقذوفات تُبطئ الهدف 20% لثانية ونصف',
+             mods: { slowShots: { factor: 0.2, duration: 1.5 } } },
+    // صيحة النسر: كهجوم عدوة، حين يكون عدو داخل range كل حليف داخل radius أسرع بنسبة bonus مدة duration ثانية
+    ult: { kind: 'haste', needs: 'enemy', range: 7, radius: 5, bonus: 0.15, duration: 6, ring: '#2fa8a0',
+           name: 'صيحة النسر', desc: 'كل وحداته حوله +15% سرعة' }
+  },
+
+  // الأنماط القتالية الأربعة (أسماؤها في قائمة الإعداد)
+  styles: {
+    crows:     { name: 'الخاطف', desc: 'سرعة والتفاف واستيلاء سريع' },
+    hammers:   { name: 'الصامد', desc: 'دم ودرع وضربات ثقيلة' },
+    vipers:    { name: 'الرامي', desc: 'قتال من بعيد' },
+    scorpions: { name: 'الحشد',  desc: 'عدد وظهور أسرع وهالات ودعم' }
+  },
+  classicNote: 'كلاسيكية',       // السطر الصغير تحت العصابة الكلاسيكية في خانة اللاعب
+  // آثار ضربات الأبطال: مدة الحلقة المتسعة وغبار ظهور الأفراد، وحلقة الصامدين تحت أقدامهم
+  // rainArc: ارتفاع قوس سهام مطر السهام (بكسل) فتسقط من الأعلى، لا كالرمية العادية (COMBAT.projectileArc)
+  // bribeRing: حلقة تحت الشرطي المرتشي، bribeColor: حلقة الرشوة حول البطل
+  fx: { ringSeconds: 0.7, dustSeconds: 0.8, steadyRing: 'rgba(230,194,90,0.85)', rainArc: 30,
+        bribeRing: 'rgba(120,200,110,0.9)', bribeColor: '#e8c56a' },
+  noticeSeconds: 6               // إشعار سمة أمتك عند بداية المباراة
 };
 
 // --- مراكز الشرطة: طرف محايد معادٍ للجميع (القسم 3.8) ---
@@ -310,7 +834,8 @@ export const COMBAT = {
   maxArmor: 0.90,            // سقف الدرع بعد جمع المكافآت حتى لا تصير الوحدة حصينة
   hitFlashTime: 0.10,        // وميض أبيض خفيف على المُصاب عند كل ضربة تصيب
   deathTime: 1.0,            // زمن سقوط الوحدة الميتة واختفائها
-  hitMoment: 0.47            // لحظة الارتطام من زمن الضربة (تطابق أنميشن docs/units-art.js)
+  hitMoment: 0.47,           // لحظة الارتطام من زمن الضربة (تطابق أنميشن docs/units-art.js)
+  flankSteerTiles: 3         // داخل هذه المسافة تتقدم الوحدة مباشرة بلا A* (يلزم للالتفاف)
 };
 
 // --- الاستيلاء (تُستخدم في المرحلة 3) ---
@@ -321,9 +846,28 @@ export const CAPTURE = {
   groundTintAlpha: 0.30,      // نسبة صبغ أرض الحي بلون المالك
   roofTintAlpha: 0.45,        // الأسطح والأجزاء العلوية للمباني
   wallTintAlpha: 0.20,        // الجدران فقط، حتى تبقى قراءة المباني واضحة
+  // الخلط في فضاء OKLab (colors.js): الإضاءة تقترب من لون المالك بالنسب أعلاه، ودرجة اللون أسرع بهذا الضعف
+  // (أسطح 81% وجدران 36%): لون المالك نقي في كل المدن، لا زيتوني ولا باهت، وظلال المبنى كما هي
+  tintChroma: 1.8,
+  groundTintChroma: 1.0,      // الأرض أهدأ (درجة اللون بنسبة الخلط نفسها): لا تذوب فيها وحدات المالك بلونها نفسه
+  // حدّ الحي بلون مالكه: خط مرسوم على أطراف الحي المطلة على الشارع (داخلها بمقدار inset)،
+  // يُقرأ في كل مدينة مهما كانت ألوان مبانيها (الأحمر في جايبور وشيكاغو، والمدن الملونة)
+  border: { width: 1.5, inset: 1.3, alpha: 0.95, under: 'rgba(24,18,12,0.45)', underWidth: 2.6 },
   tintSeconds: 0.5,           // زمن الانتقال اللوني عند تغيّر المالك
   tintSteps: 10,              // درجات الانتقال (تقليل عدد الألوان المخلوطة)
-  noticeSeconds: 2.5          // مدة ظهور إشعار الاستيلاء
+  noticeSeconds: 2.5,         // مدة ظهور إشعار الاستيلاء
+  // علامة العلم (بطلب المستخدم): سهم ذهبي يلمع فوق كل علم استيلاء ودائرة ذهبية صغيرة حول قاعدته فيُرى العلم
+  // في كل مدينة. السهم فوق طبقة الليل والمباني (يلمع: pulse)، والدائرة مع العلم في الطبقة الثابتة وتضيء ليلاً (light).
+  // arrow: نصف عرض رأس السهم half (ولا يصغر على الشاشة عن
+  // minScreen ÷ التقريب)، ورأسه فوق الأرض بـ lift، ويتمايل bob بسرعة bobSpeed. ring: نصفا قطري الدائرة
+  // وعرضها. glow لون توهج السهم. pulseSpeed سرعة اللمعان، وpulseMin أخفت شدة له (0..1)
+  flagMark: { color: '#ffd34d', outline: 'rgba(70,45,8,0.85)', glow: '255,205,70',
+              // السهم بثلاث طبقات: توهج مكبَّر glowScale شفافيته glowAlpha × النبض، وحد داكن مكبَّر edgeScale، ثم الذهبي
+              arrow: { half: 3.6, minScreen: 6, lift: 31, bob: 1.4, bobSpeed: 2.6, glowScale: 1.6, glowAlpha: 0.55, edgeScale: 1.22 },
+              // الدائرة مرسومة مع العلم في الطبقة الثابتة: توهج عرضه glowWidth بشفافية glowAlpha، ثم خط ذهبي width
+              ring: { rx: 7, ry: 3.5, width: 1.3, glowWidth: 3.6, glowAlpha: 0.4 },
+              light: { r: 20, alpha: 0.45 },  // ضوء العلم ليلاً
+              pulseSpeed: 3.2, pulseMin: 0.35 }
 };
 
 // --- الظهور ---
@@ -390,7 +934,116 @@ export const BOT = {
   }
 };
 
-export const BOT_LEVELS = ['easy', 'medium', 'hard'];
+// المجنون (11.3): مثل الصعب وأسرع قراراً، ومعه مزايا إضافية غير عادلة
+BOT.insane = {
+  ...BOT.hard,
+  key: 'insane', name: 'مجنون',
+  decisionInterval: 0.5,
+  note: 'يحصل على مزايا إضافية'
+};
+
+export const BOT_LEVELS = ['easy', 'medium', 'hard', 'insane'];
+
+// --- ذكاء البوتات v2 (القسم 11) ---
+export const ai = {
+  // ما يملكه كل مستوى من الطبقتين (11.3). السهل يبقى بسلوكه القديم: أفراد بلا فرق.
+  levels: {
+    easy:   { squads: false },
+    // retreat: الانسحاب، twoFronts: الجبهتان، raids: الإغارة على أحياء العدو الخالية،
+    // protectRanged: حماية الرماة وتراجعهم، pullWounded: سحب المصابين (11.3: صعب فما فوق)
+    medium: { squads: true, minSquad: 6,  focus: true, flank: true, smartUlts: 'partial',
+              policeArmy: 8,
+              responseRadius: 0,      // المتوسط يرى خريطة القوى وحدها (5 مربعات)، لا من يلحق للنجدة
+              reinforce: false },   // ولا ينجد فرقه المشتبكة
+    // الصعب فما فوق: يدافع عن حيه حين يصل العدو قرب نقطة استيلائه (3 مربعات)، لا حين يقف عدو في حيه المجاور،
+    // وفرقة توسع صغيرة واحدة في وقت واحد (الباقون يتوسعون معاً) — بالقياس (5د-2)
+    hard:   { squads: true, minSquad: 8,  focus: true, flank: true, smartUlts: 'full',
+              retreat: true, twoFronts: true, raids: true, protectRanged: true, pullWounded: true,
+              policeEarly: true,
+              strictDefense: true, preferWeak: 3, threatRadius: 3, maxSmallSquads: 1 },
+    insane: { squads: true, minSquad: 10, focus: true, flank: true, smartUlts: 'full',
+              retreat: true, twoFronts: true, raids: true, protectRanged: true, pullWounded: true,
+              policeEarly: true,
+              strictDefense: true, preferWeak: 3, threatRadius: 3, maxSmallSquads: 1,
+              spawnFactor: 0.75,       // ظهور أسرع 25% (زمن الظهور × 0.75)
+              chargeFactor: 1.25 }     // شحن الضربات أسرع 25%
+  },
+
+  // الطبقة الاستراتيجية (11.1)
+  powerRadius: 5,             // نصف قطر خريطة القوى حول كل حي
+  unitValue: { unit: 1, hero: 3, champion: 5 },   // × نسبة الدم الحالية
+  attackRatio: 1.3,           // لا يُهاجَم حي إلا بقوة ≥ 1.3 × قوة المدافعين
+  retreatRatio: 0.6,          // تنسحب الفرقة إن نقصت قوتها عن 0.6 × قوة الأعداء حولها
+  defenseRatio: 1.2,          // الدفاع بلا إفراط: 1.2 × قوة المهاجم
+  threatRadius: 5,            // يُدافَع عن الحي إن كان عدو ضمن هذا البعد عن نقطة استيلائه (= خريطة القوى)
+  specialValue: 2,            // قيمة الحي المميز
+  stationValue: 1.5,          // قيمة مركز الشرطة (صعب فما فوق)
+  snowballValue: 3,           // أحياء صاحب 40% تتضاعف قيمتها (القسم 9)
+  enemyDistrictValue: 1.5,    // حي يملكه عدو أثمن من محايد: انتزاعه يقوّيك ويضعفه
+  preferWeak: 0,              // وزن تفضيل أضعف الخصوم (0 = بلا تفضيل؛ يُرفع للصعب في levels)
+  expandSize: 2,              // فرقة التوسع لحي محايد خالٍ (الهدف السهل)
+  dangerRadius: 8,            // الأعداء الجائلون قرب الهدف السهل: الفرقة تكبر حتى تفوقهم
+  responseRadius: 12,         // أعداء ضمن هذا البعد عن الهدف يلحقون للدفاع عنه: يُحسبون مدافعين
+  soloSafeRadius: 14,         // وحدة واحدة تكفي لحي خالٍ فقط إن لم يكن عدو ضمن هذا البعد
+  maxSmallSquads: 3,          // أقصى عدد لفرق التوسع والإغارة الصغيرة في وقت واحد
+  expandAwayWeight: 0.5,      // التوسع يفضّل الأحياء البعيدة عن العدو (نقاتل قرب أحيائنا)
+  reinforce: true,            // نجدة الفرق المشتبكة (يمكن تعطيلها لمستوى بعينه)
+  stage: false,               // الالتئام قبل الاقتحام: مطفأ (القياس: الاقتحام المباشر أقوى، 5د-2)
+  groupExpand: true,          // المتجمعون قبل اكتمال فرقة الهجوم يتوسعون معاً
+  reinforceRange: 14,         // الوحدات الحرة ضمن هذا البعد تنجد فرقة مشتبكة لا تتفوق
+  stageDistance: 5,           // فرقة الهجوم تلتئم أولاً عند نقطة قبل الهدف بهذا البعد
+  stageRadius: 3,
+  stageShare: 0.75,           // تقتحم حين يصل 75% منها
+  stageMaxSeconds: 12,        // أو بعد هذه المدة على أي حال
+  policeAvoidRadius: 9,       // قبل مهاجمة الشرطة: تجنّب الأحياء ضمن مدى مطاردتها حول مراكزها
+  rallyRadius: 4,             // من كان ضمن هذا البعد عن نقطة التجمع يُعد متجمعاً
+  rallySwitchGain: 3,         // لا تتغير نقطة التجمع إلا إن صارت الجديدة أقرب للجبهة بهذا القدر
+  twoFrontChance: 0.35,       // احتمال تقسيم الهجوم لجبهتين (صعب فما فوق)
+  twoFrontMinDistance: 10,    // الحيان المستهدفان متباعدان بهذا القدر على الأقل
+  raidAwayDistance: 12,       // جيش العدو الرئيسي بعيد عن أحيائه بهذا القدر: إغارة معاكسة
+  raidSize: 3,
+  raidMinSpeed: 2.3,          // الوحدات السريعة أولاً في الإغارة
+
+  // الطبقة التكتيكية (11.2): كل 0.25 ث لكل فرقة مشتبكة
+  tacticSeconds: 0.25,
+  maxAttackersPerTarget: 3,
+  priorityBonus: 3,           // الطبيب والقناص والبطل المصاب: كأنهم أقرب بهذا القدر
+  woundedHero: 0.5,           // "البطل المصاب": دمه تحت هذه النسبة
+  ehpScale: 60,               // كل 60 دم فعلي = مربع واحد إضافي في تفضيل الهدف
+  kiteDistance: 1.6,          // عدو أقرب من هذا للرامي: يتراجع خطوة
+  kiteStep: 1.5,
+  kiteCooldown: 1.5,
+  woundedRatio: 0.3,          // تحت 30% دم: تتراجع نحو الطبيب أو المستشفى
+  flankMinSpeed: 2.3,         // الوحدات السريعة تلتف
+  flankOffset: 2.5,
+  flankMinSquad: 6,           // الالتفاف في الفرق الكبيرة فقط (الصغيرة تتفكك)
+  heroBehind: 1.5,            // البطل يتقدم خلف مركز فرقته بهذا القدر (إلا ذو الدرع)
+  armoredHero: 0.45,          // درع بهذا القدر فأكثر: يتقدم في المقدمة
+  aoeMinEnemies: 3,           // الضربات الدائرية والأرضية والحريق
+  healMinWounded: 2,          // العلاج الجماعي
+  hardenMinAttackers: 2,      // التصلّب
+  ultHoldSeconds: 4,          // أقصى انتظار للحظة الأفضل، ثم تُطلق على أي حال
+  focusReach: 1,              // تركيز الضرب يختار من داخل مدى الضرب + هذا القدر
+
+  // أداة القياس (11.4): مباراة بوتات فقط بلا رسم
+  battle: {
+    speed: 8,                 // ×8 من سرعة اللعب العادية
+    maxMinutes: 40,           // حد أقصى لزمن المباراة؛ بعده يفوز صاحب الأحياء الأكثر
+    mapSize: 'medium',
+    matchOptions: [5, 10, 20, 40],
+    defaultMatches: 10,
+    // الصيغة القياسية: 4 لاعبين الكل ضد الكل (2 من كل مستوى) مثل المباراة العادية؛
+    // 1 ضد 1 تحسمه فوضى البداية، والفرق تزيل حسابات الكل ضد الكل
+    formats: {
+      ffa4:  { name: '4 لاعبين', perSide: 2, teams: false },
+      duel:  { name: '1 ضد 1',   perSide: 1, teams: false },
+      teams: { name: 'فريقان',   perSide: 2, teams: true }
+    },
+    defaultFormat: 'ffa4',
+    defaultMirror: true,      // نفس العصابة للجانبين: العصابات غير متكافئة بين البوتات
+    tapsToOpen: 3             // ثلاث لمسات على عنوان اللعبة تفتح الأداة
+  }
+};
 
 // منع الاكتساح: من يملك هذه النسبة من الأحياء يصير هدف كل البوتات غير المتحالفة معه
 export const SNOWBALL = { districtShare: 0.40 };
@@ -418,6 +1071,16 @@ export const POWER_PANEL = {
   maxHeightPct: 0.33             // لا تغطي أكثر من ثلث ارتفاع الشاشة
 };
 
+// --- مجموعات التحكم (القسم 4.4): تحفظ جنوداً برقم ثم تحددهم بلمسة ---
+// المدتان من INPUT نفسها: نفس إيماءات اللعبة في كل مكان
+export const controlGroups = {
+  count: 5,                       // عدد الأزرار المرقّمة
+  holdMs: INPUT.longPressMs,      // ضغطة مطوّلة = حفظ المحددين في الرقم
+  doubleTapMs: INPUT.doubleTapMs, // لمستان سريعتان = تحديد ونقل الكاميرا
+  cameraSeconds: 0.3,             // مدة انتقال الكاميرا الناعم إلى مركز المجموعة
+  emptyOpacity: 0.4               // وضوح الزر الفارغ
+};
+
 export const ALERTS = {
   maxArrows: 2,          // لا يظهر أكثر من سهمين في وقت واحد
   repeatSeconds: 5,      // لا يتكرر التنبيه لنفس المنطقة قبل هذه المدة
@@ -436,7 +1099,7 @@ export const AUDIO = {
   sfxVolume: 0.7,                 // القيم الافتراضية قبل أي اختيار
   musicVolume: 0.35,
   muted: false,
-  volumeSteps: [0, 0.25, 0.5, 0.75, 1],   // درجات مؤشري الصوت في القائمة
+  volumeStep: 0.05,               // خطوة مؤشري الصوت في شاشة الإعدادات (5%)
 
   screenMargin: 40,               // هامش حول الشاشة: ما خرج عنه لا يُسمع
   heavyDamage: 20,                // ضربة بهذا الضرر فأكثر تُسمع ضربة ثقيلة
@@ -446,7 +1109,23 @@ export const AUDIO = {
   musicInterval: 0.5,             // ثانية بين كل تحديث لحرارة الموسيقى
   captureTickSeconds: 1.0,        // نبضة الاستيلاء لحي اللاعب
   alertSeconds: 5.0,              // تنبيه "وحداتك تتعرض للهجوم" خارج الشاشة
-  whistleSeconds: 6.0             // صافرة الشرطة عند بدء مطاردتها
+  whistleSeconds: 6.0,            // صافرة الشرطة عند بدء مطاردتها
+
+  // يُفتح الصوت بأول تفاعل يسمح به المتصفح: بعضها لا يسمح في pointerdown ويسمح في touchend أو click
+  unlockEvents: ['pointerdown', 'touchend', 'click', 'keydown'],
+
+  // مزج مؤثرات القتال (المرحلة 5ب): المعركة الكبيرة تطلب مئات المؤثرات في الثانية (200 وحدة: ~560)،
+  // فتُجمع طلبات كل تحديث ويُسمع أهمها فقط: perSecond مؤثراً في الثانية بمخزون burst، وحتى maxPerTick
+  // في التحديث الواحد بلا تكرار نفس المؤثر فيه. الأعلى priority يُسمع أولاً، وjitter عشوائي بين
+  // المتساويين، وcenter مكافأة لما قرب وسط الشاشة. المعركة الصغيرة تُسمع كاملة تقريباً.
+  // minGap: أقل زمن بين مرتين لنفس المؤثر (أعلى من حد الملف 0.045): دويّ الضربة المميزة لا يتلاحق.
+  // ما ليس في priority (الظهور والعلاج والاستيلاء والصافرة واكتمال الشحن) يُسمع مباشرة بحد الملف وحده
+  mix: {
+    perSecond: 12, burst: 5, maxPerTick: 3, queueMax: 64, jitter: 0.6, center: 0.5,
+    priority: { death: 3, ult_cast: 2.8, hit_heavy: 2.5, fire: 2.2, hit_shield: 2, hit_melee: 1.8,
+                arrow: 1.4, stone: 1.4, swing: 1 },
+    minGap: { ult_cast: 0.6, death: 0.12 }
+  }
 };
 
 // --- الأداء ---
@@ -456,7 +1135,279 @@ export const PERFORMANCE = {
   maxLights: 140,         // أقصى عدد إضاءات تُرسم في الإطار الواحد ليلاً
   detailZoom: 1.4,        // أقل من هذا التقريب: نتجاوز التفاصيل الصغيرة (نوافذ...)
   unitDetailZoom: 1.2,    // أقل من هذا: الوحدة نقطة بسيطة (حجمها أقل من 3 بكسل أصلاً)
-  fpsTaps: 3              // لمسات شريط المعلومات لإظهار مؤشر الإطارات
+  // النمط المظلَّل (المرحلة 9ج، القسم 3.10، docs/nations/style-v5.js): وحدات المستوى الكامل بأطراف كبسولية
+  // ورأس متدرج وتدرج للأقمشة وظل ناعم ولهب بطبقات، ومظاهر الأمم فيه بكل تفاصيلها.
+  // المبسّط والإحصائي بالرسم القديم كما هو. false يطفئه كله (للمقارنة)
+  shadedStyle: true,
+  // عدد الوحدات المظللة (أقربها إلى وسط الشاشة من وحدات المستوى الكامل) يتكيف مع الجهاز، تطبيقاً آلياً لقاعدة
+  // "إن نزل الأداء خفّض عدد وحدات المستوى الكامل حتى يعود" (js/pacing.js). الهدف 60 إطاراً/ث بهامش: كل نافذة
+  // إيقاع (1.5 ث) فيها إطارات متأخرة أكثر من lateShare، أو إيقاع أبطأ من 60، أو عمل إطار (p75) أكثر من
+  // workShrink من زمنه، تضرب العدد في shrink؛ وكل نافذة بلا تأخر وعملها أقل من workGrow تزيده growStep حتى max،
+  // ولا يتجاوز بعد التأخر ما سبّبه مدة capMs. الرسم وحده يتأثر
+  shaded: {
+    max: 60,
+    min: 0,
+    start: 12,            // العدد أول مرة (يتعلم بعدها ويبقى بين المباريات)
+    growStep: 4,
+    shrink: 0.5,
+    lateShare: 0.05,
+    workGrow: 0.6,
+    workShrink: 0.75,
+    capMs: 20000
+  },
+  fpsTaps: 3,             // لمسات شريط المعلومات لإظهار مؤشر الإطارات
+  // إيقاع الإطارات (js/pacing.js): جهاز لا يلحق بكل إطارات الشاشة بانتظام يرسم كل إطار ثانٍ،
+  // فالإيقاع الثابت (30 على شاشة 60) أنعم من المتقلب، ثم يجرّب العودة للإيقاع الكامل
+  pacing: {
+    enabled: true,
+    lateExtra: 0.5,       // الإطار متأخر إن تجاوز موعده بأكثر من نصف إطار شاشة (فاته إطار كامل)
+    minLateMs: 20,        // ...وتجاوز هذا (التذبذب بين 8 و16 على شاشة 120 لا يُرى)
+    enterLate: 0.25,      // إن تأخر ربع الإطارات في النافذة: إيقاع أبطأ
+    windowMs: 1500,       // نافذة الحكم
+    holdMs: 8000,         // مدة البقاء على الإيقاع الأبطأ قبل تجربة الأسرع (تتضاعف عند الفشل)
+    maxHoldMs: 64000,
+    probeWorkShare: 0.7,  // لا تُجرَّب العودة للأسرع إلا إن كان عمل الإطار ≤ 70% من زمنه هناك
+    maxFrameMs: 34        // لا أبطأ من هذا: 30 إطاراً/ث على الأقل
+  }
+};
+
+// --- أطوار اللعب (القسم 9.5) ---
+export const gameModes = {
+  order: ['conquest', 'points', 'regicide', 'king', 'survival', 'empire'],
+  defaultMode: 'conquest',
+
+  // 9.5.1 الطور الأصلي: بلا تغيير
+  conquest: {
+    name: 'السيطرة الكاملة',
+    short: 'آخر من يبقى يفوز',   // سطر تحت اسم الطور في لوحة الأطوار
+    desc: 'آخر عصابة تبقى في المدينة تفوز.'
+  },
+
+  // 9.5.2 الوقت بالنقاط
+  points: {
+    name: 'الوقت بالنقاط',
+    short: 'الأعلى نقاطاً يفوز',
+    desc: 'كل حي تملكه يعطيك نقطة كل ثانية، والمميز نقطتين. الأعلى نقاطاً عند انتهاء الوقت يفوز.',
+    minutes: [5, 10, 15, 20],
+    defaultMinutes: 10,
+    pointPerDistrict: 1,        // نقطة في الثانية لكل حي
+    pointPerSpecial: 2,         // والحي المميز نقطتان
+    finalSeconds: 60,           // الدقيقة الأخيرة
+    finalMultiplier: 2,         // النقاط مضاعفة فيها
+    armyWeights: { unit: 1, hero: 3, champion: 5 },   // حسم التعادل: الأكبر جيشاً
+    // البوتات: توسع مبكر وقوي، ودفاع أكثر من الهجوم، وفي الدقيقة الأخيرة أضعف حي للمتصدر
+    botExpandGroup: 2,          // مجموعات توسع أصغر = أحياء أكثر في وقت واحد
+    botDefenseBoost: 1.5,       // مدافعون أكثر لكل مهاجم
+    botAttackArmyFactor: 1.6    // جيش أكبر قبل مهاجمة الخصوم
+  },
+
+  // 9.5.3 حماية الزعيم
+  regicide: {
+    name: 'حماية الزعيم',
+    short: 'احمِ زعيمك',
+    desc: 'بطلك هو زعيمك: إن مات خسرت فوراً. آخر من يبقى زعيمه حياً يفوز.',
+    hpBonus: 0.5,               // دم الزعيم +50%
+    homeHealPerSecond: 2,       // علاجه داخل حيه المنزلي
+    homeHealRadius: 4,          // "داخل الحي": مربعاته، أو شوارعه حتى هذا البعد عن علمه
+    fadeSeconds: 1,             // تلاشي وحدات من سقط زعيمه
+    hitAlertSeconds: 2.5,       // عمر السهم الأحمر حين يُضرب زعيمك
+    leaderArrowSize: 9,         // نصف قطر السهم الذهبي نحو زعماء الأعداء
+    // البوتات: الزعيم خلف الجيش، ومطاردة الزعيم المعادي المعزول أو الضعيف
+    botGuardDistance: 3,        // كم مربعاً يبقى الزعيم خلف مجموعته
+    botHuntHpRatio: 0.5,        // زعيم عدو دمه أقل من هذا = هدف
+    botHuntIsolation: 3,        // أو حوله أقل من هذا العدد من حراسه
+    botHuntRange: 14            // أبعد مسافة يطارد منها
+  },
+
+  // 9.5.4 ملك الحي
+  king: {
+    name: 'ملك الحي',
+    short: 'سيطر على التلة',
+    desc: 'سيطر على حي التلة في وسط المدينة. أول من يجمع الزمن المطلوب يفوز.',
+    holdMinutes: [2, 3, 5],
+    defaultHoldMinutes: 3,
+    hillMinTiles: 6,            // التلة: الأقرب للمركز من الأحياء بهذا الحجم فأكثر
+    warnSeconds: 20,            // تنبيه حين يقترب أحد من الفوز
+    botHillShare: 0.75,         // نسبة الجيش المرسلة للتلة
+    botHomeGuard: 2,            // قوة صغيرة تبقى للدفاع عن الحي المنزلي (بحد أقصى)
+    botHomeGuardShare: 0.2      // ولا تزيد على هذه النسبة من الجيش
+  },
+
+  // الإمبراطورية (بطلب المستخدم، طور تجريبي مستقل في صحراء اليمامة وحدها): أرقامه في EMPIRE
+  empire: {
+    name: 'الإمبراطورية',
+    short: 'نقاط ومبانٍ وترقيات',
+    desc: 'لا ظهور تلقائي: أحياؤك تجمع النقاط، وتصرفها على الجنود من القاعدة الرئيسية وعلى الترقيات والمباني. المس حيك مرتين لقائمته. آخر من يبقى يفوز.'
+  },
+
+  // 9.5.5 الصمود ضد الشرطة
+  survival: {
+    name: 'الصمود ضد الشرطة',
+    short: 'موجات الشرطة',
+    desc: 'أنت وحلفاؤك ضد موجات شرطة تزداد قوة كل 45 ثانية. اصمد أطول ما يمكن.',
+    allies: [0, 1, 2, 3],
+    defaultAllies: 0,
+    levels: ['easy', 'medium', 'hard', 'insane'],
+    defaultLevel: 'medium',
+    // الإيقاع (9.5.5 v2): 45 ث، ثم ينقص ثانيتين مع كل موجة حتى حد أدنى
+    waveSeconds: 45,
+    firstWaveSeconds: 45,
+    waveSpeedup: 2,
+    minWaveSeconds: { easy: 25, medium: 25, hard: 25, insane: 18 },
+    // الحجم والقوة ينموان أُسّياً: عدد الموجة n = base + per×n، والدم والضرر × growth^n
+    size: {
+      easy:   { base: 3, per: 2, growth: 1.05 },
+      medium: { base: 4, per: 3, growth: 1.08 },
+      hard:   { base: 5, per: 4, growth: 1.11 },
+      insane: { base: 6, per: 5, growth: 1.14 }
+    },
+    // التكوين والتكتيك حسب رقم الموجة، ولكل مرحلة اسم يُعلَن
+    // captainsPer: ضابط لكل هذا العدد (0 = بلا ضباط)، riotShare: نسبة وحدات التدخل،
+    // fronts: عدد الجبهات، weakest: إحدى الجبهات على أضعف حي، focusHeroes: الضرب على الأبطال أولاً
+    phases: [
+      { from: 1,  name: 'دورية',       captainsPer: 0, riotShare: 0,    fronts: 1 },
+      { from: 4,  name: 'تعزيزات',     captainsPer: 6, riotShare: 0,    fronts: 2 },
+      { from: 7,  name: 'قوات التدخل', captainsPer: 6, riotShare: 0.25, fronts: 3, weakest: true },
+      { from: 10, name: 'الطوارئ',     captainsPer: 5, riotShare: 0.5,  fronts: 3, weakest: true, focusHeroes: true }
+    ],
+    // وحدة التدخل: رسم الشرطي بلون أغمق، دم ×1.6، درع 35%، تصدّ دائماً من الأمام ما دام معها تحمّل
+    riot: { name: 'وحدة تدخل', color: '#1f2f46', hpFactor: 1.6, armor: 0.35 },
+    // كل موجة خامسة: قائد الشرطة (رسم الضابط ×1.3، دم ×5، هالة +30% ضرر، نداء يستدعي 4 شرطة)
+    boss: {
+      every: 5, name: 'قائد الشرطة', scale: 1.3, hpFactor: 5,
+      aura: { radius: 3, damageBonus: 0.30 },
+      summon: 4, summonRadius: 3
+    },
+    captainsBehind: 2,          // الضباط يتقدمون خلف الصفوف بهذا البعد (من الموجة 10)
+    // الشرطة تستولي على الأحياء في هذا الطور؛ قوة استيلاء كل شرطي حسب الصعوبة
+    // (مضبوطة بأداة القياس حتى يصل بوت صعب إلى: سهل 12-15، متوسط 8-10، صعب 6-8، مجنون 4-5)
+    capturePower: { easy: 0.25, medium: 0.25, hard: 0.25, insane: 1 },
+    edgeSearchTiles: 12,        // البحث عن شارع قرب حافة الخريطة لظهور الموجة
+    spawnSpread: 8,             // مربعات الظهور حول كل مصدر
+    retargetSeconds: 2,         // شرطة الموجة الواقفة تختار هدفاً جديداً كل هذه المدة
+    alarmSeconds: 5,            // العدّاد يحمرّ قبل الموجة بهذه المدة
+    noticeSeconds: 3,           // إشعار "الموجة N قادمة!"
+    botHelpGroup: 3,            // الحليف البوت يرسل هذا العدد لنجدة حي حليف مهدد
+    botAttackArmyFactor: 0.5,   // الحليف يسترجع أحياء الشرطة بجيش أصغر من المعتاد
+    recordKey: 'gangcity.survivalBest'   // أفضل نتيجة لكل صعوبة: gangcity.survivalBest.hard ...
+  }
+};
+
+// --- طور الإمبراطورية (بطلب المستخدم، تجريبي، في صحراء اليمامة وحدها) ---
+// لا ظهور تلقائي: الأحياء تجمع النقاط، وتُصرف على الجنود من القاعدة الرئيسية، وعلى ترقيات العصابة،
+// وعلى بناء الأحياء (قاعدة رئيسية أو برج رماية أو مستشفى). فئة المبنى لا تتغير بعد بنائه.
+// المباني صور اليمامة نفسها (js/render/yamamah.js) بلا صور جديدة، ولا يتغير شكل الجنود مع الترقيات
+export const EMPIRE = {
+  city: 'yamamah',
+  startPoints: 0,
+  income: { district: 0.5, hq: 2 },        // نقطة في الثانية: كل حي، والقاعدة الرئيسية (بدل الحي)
+  leaderKill: 50,                           // من يُسقط زعيم عصابة (بطلها) يأخذ هذه النقاط
+  hintSeconds: 7,                           // تلميح البداية: لمستان على حيك تفتحان قائمته
+  // الإنتاج من القاعدة الرئيسية: الكلفة بالنقاط، والزمن بالثواني قبل ترقية سرعة الإنتاج
+  units: {
+    order: ['common', 'strong', 'elite', 'leader'],
+    common: { cost: 10, seconds: 4 },       // الفرد العادي
+    strong: { cost: 25, seconds: 7 },       // الأقوى منه: الشخصية المميزة الأخرى
+    elite:  { cost: 50, seconds: 10 },      // النخبة: الشخصية المميزة الأقوى (elite)
+    leader: { cost: 100, seconds: 15 }      // الزعيم (البطل): واحد فقط لكل عصابة
+  },
+  // النخبة من الشخصيتين المميزتين لكل نمط قتالي (الأمم بأنماطها)، والأخرى هي "الأقوى"
+  elite: { crows: 'spear', hammers: 'smasher', vipers: 'sniper', scorpions: 'boss' },
+  queueMax: 5,                              // أقصى طلبات الإنتاج في القاعدة الواحدة
+  // ترقيات العصابة: ثلاثة مستويات، والكلفة لكل مستوى، والأثر لكل مستوى. الجنود الحاليون والجدد معاً،
+  // وتبقى للعصابة التي اشترتها مهما سقطت قواعدها (بقرار المستخدم)
+  upgrades: {
+    order: ['hp', 'damage', 'armor', 'speed'],
+    hp:         { name: 'الدم',         costs: [30, 50, 70], per: 0.10 },   // +10% دم لكل مستوى
+    damage:     { name: 'الضرر',        costs: [30, 50, 70], per: 0.10 },   // +10% ضرر
+    armor:      { name: 'الدفاع',       costs: [30, 50, 70], per: 0.05 },   // +5 نقاط درع (من 100) فوق درع الوحدة
+    speed:      { name: 'سرعة المشي',   costs: [30, 50, 70], per: 0.06 }    // +6% سرعة
+  },
+  buildings: {
+    order: ['tower', 'hospital', 'hq'],
+    // القاعدة الرئيسية: سرعة الإنتاج ملك القاعدة نفسها، فتبقى فيها وتنتقل لمن يحتلها (زمن الإنتاج × times)
+    hq:       { name: 'قاعدة رئيسية', cost: 100, desc: 'تنتج الجنود',
+                upgrades: { order: ['production'],
+                            production: { name: 'سرعة الإنتاج', costs: [20, 40, 50], times: [1, 0.8, 0.65, 0.5] } } },
+    // برج الرماية: يرمي سهماً على أقرب عدو في مداه كل attackTime ثانية (المربع من مركز البرج)
+    tower:    { name: 'برج رماية', cost: 40, desc: 'يرمي سهاماً على الأعداء', range: 6.5, damage: 14, attackTime: 1.5,
+                upgrades: { order: ['damage', 'rate'],
+                            damage: { name: 'الضرر', costs: [40, 70], per: 0.35 },        // +35% ضرر لكل مستوى
+                            rate:   { name: 'سرعة الضرب', costs: [40, 70], per: 0.2 } } }, // زمن الرمية −20%
+    // المستشفى: يعالج جنود صاحبه داخل radius مربعاً حوله، perSecond دم في الثانية لكل واحد
+    hospital: { name: 'مستشفى', cost: 50, desc: 'يعالج جنودك حوله', radius: 3.5, perSecond: 4,
+                upgrades: { order: ['radius', 'rate'],
+                            radius: { name: 'مدى العلاج', costs: [40, 70], per: 1 },      // +1 مربع
+                            rate:   { name: 'سرعة العلاج', costs: [40, 70], per: 0.5 } } } // +50% علاج
+  },
+  // صورة كل مبنى من صور اليمامة (أنواع yamamah.js): القاعدة صورة المقر نفسها (CITY_SPECIALS)، والمستشفى
+  // بيت المدينة بالصليب الأحمر كالمستشفى في الأطوار الأخرى (landmarks.js)
+  // hospitalRoof: من أعلى سطح المستشفى إلى وسطه (لوحة الصليب الحمراء)
+  art: { tower: 'watchtower', hospital: 'hall', hospitalRoof: 3 },
+  // شارة كل مبنى على سارية فوق سطحه (بطلب المستخدم): تاج للقاعدة، وقوس وسهم للبرج، وصليب للمستشفى،
+  // على قرص بحلقة بلون صاحبه. نصف القطر بوحدات العالم، ولا يصغر على الشاشة عن minScreen بكسل
+  badge: { radius: 6.5, minScreen: 11, pole: 5, disc: 'rgba(32,23,13,0.9)', neutral: '#9a9183' },
+  // هالة ذهبية حول كل قاعدة رئيسية (حول القلعة كلها): نصف القطر بالمربعات، ونبض بطيء
+  baseHalo: { radius: 2.15, width: 1.5, glow: 6, alpha: 0.8, glowAlpha: 0.3, pulse: 0.35, speed: 2.2 },
+  arrow: { flight: 0.45, top: 30 },         // سهم البرج: زمن الطيران، وارتفاع انطلاقه فوق قاعدة البرج
+  halo: { width: 5, alpha: 0.32 },          // هالة على حدود الحي المملوك (تحت الحد الملون)
+  // قائمة الحي (لمستان على حيك): تحديثها، ومكان الحي فوقها حين تغطيه (نسبة من ارتفاع ما فوقها)
+  // hqTapBox: لمس القاعدة يشمل قلعتها كلها (نصف العرض بأنصاف عرض المربع)
+  menu: { refreshMs: 250, revealAt: 0.55, hqTapBox: 2.2 },
+  // البوتات: كيف تصرف نقاطها (js/ai/empireBot.js). لا ظهور تلقائي في هذا الطور: بلا صرف لا جيش
+  bot: {
+    queue: 2,                               // تبقي هذا العدد من الطلبات في طابور كل قاعدة
+    // نسب الإنتاج بالدور: عادي، الأقوى، النخبة (السهل: عاديون فقط)
+    mix: { easy: [1, 0, 0], medium: [5, 2, 1], hard: [4, 2, 1], insane: [4, 2, 1] },
+    // حصة الترقيات والمباني مما يصرفه (السهل لا يرقّي ولا يبني)
+    techShare: { easy: 0, medium: 0.25, hard: 0.35, insane: 0.35 },
+    upgradeOrder: ['damage', 'hp', 'armor', 'speed'],   // الأقل مستوى أولاً، وبهذا الترتيب عند التساوي (وسرعة إنتاج القاعدة قبلها)
+    minArmy: 6,                             // جيش أصغر من هذا: الجنود قبل أي ترقية
+    leaderArmy: 5,                          // لا يعيد شراء الزعيم قبل أن يكون معه هذا العدد من الجنود
+    towerEvery: 4,                          // برج لكل 4 أحياء، على الحي الأقرب للأعداء
+    hospitalAt: 4,                          // مستشفى واحد حين يملك 4 أحياء، قرب قاعدته
+    hqAt: 8, maxHq: 2,                      // قاعدة رئيسية ثانية حين يملك 8 أحياء، في أبعد أحيائه عن الأعداء
+    buysPerDecision: 3                      // أقصى مشتريات في القرار الواحد
+  }
+};
+
+// --- القوائم (القسم 12.0) ---
+export const UI = {
+  fadeMs: 200,                   // مدة التلاشي بين الشاشات
+  statsKey: 'gangcity.stats',    // الإحصائيات الدائمة في localStorage
+  setupKey: 'gangcity.setup',    // آخر إعداد مباراة اختاره اللاعب
+
+  // حفظ المباراة الجارية للعودة إليها لاحقاً (خانة واحدة)
+  matchKey: 'gangcity.match',      // المباراة نفسها
+  matchInfoKey: 'gangcity.matchInfo', // ملخص صغير يقرؤه زر "متابعة المباراة" بلا فك المباراة كلها
+  matchVersion: 6,               // يُرفع عند تغيّر شكل حالة المباراة، فتُهمل الحفظات القديمة (3: الأمم، 4: الآسيوية، 5: الأوروبية، 6: الأفريقية)
+  matchDecimals: 5,              // دقة الأعداد العشرية في الحفظ (تصغّر حجمه)
+
+  // الخلفية الحية للقائمة الرئيسية: الخريطة نفسها وبضع وحدات تتجول
+  menuScene: {
+    mapSize: 'large',            // مدينة كبيرة: تتسع لانجراف الكاميرا بالطول والعرض
+    weathers: ['day', 'day', 'snow', 'rain'],   // بلا ليل: الطبقة الداكنة تكفي
+    zoom: 1.9,                   // أقل تقريب للكاميرا (يزيد على الشاشات الطويلة)
+    edgeMargin: 0.3,             // هامش يبقي الكاميرا داخل المدينة فلا تظهر حافتها
+    cameraSpeed: 9,              // أقصى سرعة لانجراف الكاميرا (بكسل عالم في الثانية)
+    walkers: 30,                 // عدد الوحدات المتجولة
+    walkArea: [0.55, 0.65],      // منطقة التجوال حول المركز (نسبة من نصف العرض، ونصف الارتفاع)
+    heroShare: 0.4,              // نسبة الشخصيات المميزة بينها
+    roamTiles: 7,                // أبعد مربع تمشي إليه الوحدة في الجولة الواحدة
+    restSeconds: [2, 7],         // وقفة الوحدة بين جولة وأخرى (من، إلى)
+    ownedShare: 0.5,             // نسبة الأحياء الملوّنة بألوان العصابات
+    fps: 30,                     // معدل رسم الخلفية: يوفّر البطارية في القوائم
+    maxDpr: 1.5                  // دقة الرسم: تحت طبقة داكنة لا تحتاج أكثر
+  }
+};
+
+// --- المتجر (بطلب المستخدم): الخرائط والعصابات (الأمم) تُشترى منه، والمظاهر لاحقاً ---
+// المجاني مع اللاعب: العصابات الكلاسيكية الأربع (GANG_IDS) وهذه الخرائط الأربع. الأسعار تُحدد لاحقاً،
+// وفي فترة الاختبار كل شيء متاح للعب بلا شراء (لا قفل في قائمة الإعداد)
+export const STORE = {
+  freeCities: ['arab', 'hk', 'europe', 'chicago'],   // العربية، هونغ كونغ، الأوروبية، شيكاغو
+  prices: { cities: {}, sides: {} },   // السعر بمفتاح المدينة أو الأمة: فارغ حتى تُحدد الأسعار
+  previewColor: 'blue'                 // لون الشخصيات في صور المتجر (من PLAYER_COLORS)
 };
 
 // --- إعدادات المباراة الافتراضية (تُستبدل باختيارات قائمة الإعداد) ---

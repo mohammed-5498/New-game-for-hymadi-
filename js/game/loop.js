@@ -10,8 +10,10 @@ import { updateSpawn } from './spawn.js';
 import { updatePolice } from './police.js';
 import { updateVictory } from './victory.js';
 import { updateBots } from '../ai/bot.js';
-import { updateMusicIntensity } from '../audio/sound.js';
+import { updateMusicIntensity, flushSounds } from '../audio/sound.js';
 import { updateAlerts } from './alerts.js';
+import { updateArena } from './arena.js';
+import { updateMode, updateFades } from './modes.js';
 
 export function updateMatch(state) {
   state.time += TICK_SEC;
@@ -22,15 +24,22 @@ export function updateMatch(state) {
   processPathQueue(state);  // حد أقصى 20 عملية A* في التحديث
   updateUnits(state);
   removeDeadUnits(state);
-  updateCapture(state);
-  updateDistrictTints(state);   // الانتقال اللوني لأرض الحي ومبانيه
-  updateSpawn(state);
-  updatePolice(state);      // إنتاج الشرطة واختفاؤها بعد الاستيلاء
-  updateBots(state);
-  updateVictory(state);
+  if (state.arena) {
+    updateArena(state);     // ساحة تجربة القتال: لا ظهور ولا بوتات ولا شرطة ولا فوز
+  } else {
+    updateCapture(state);
+    updateDistrictTints(state);   // الانتقال اللوني لأرض الحي ومبانيه
+    updateSpawn(state);
+    updatePolice(state);      // إنتاج الشرطة واختفاؤها بعد الاستيلاء
+    updateBots(state);
+    updateMode(state);        // عدّادات الطور ونقاطه وشروط فوزه (القسم 9.5)
+    updateFades(state);       // تلاشي وحدات من سقط زعيمه
+    updateVictory(state);
+  }
   updateNotice(state);
   updateAlerts(state);           // أسهم الحافة تختفي بانتهاء عمرها أو بدخولها الشاشة
   updateMusicIntensity(state);   // الطبول تشتد مع اشتباك وحدات اللاعب
+  flushSounds();                 // مؤثرات القتال: يُسمع أهم ما طُلب في هذا التحديث (المرحلة 5ب)
 
   if (state.moveMarker) {
     state.moveMarker.t += TICK_SEC;

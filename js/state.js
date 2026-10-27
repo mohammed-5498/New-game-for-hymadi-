@@ -1,5 +1,5 @@
 // حالة المباراة: اللاعبون، الوحدات، الخريطة، الكاميرا، التحديد
-import { CAMERA, PLAYER_COLORS, GANGS, UNITS, WEATHER } from './config.js';
+import { CAMERA, PLAYER_COLORS, UNITS, WEATHER, CITIES } from './config.js';
 import { createMap } from './map/generator.js';
 import { findFreeTiles } from './map/pathfinding.js';
 import { createUnit } from './game/units.js';
@@ -8,13 +8,17 @@ import { initSpawnTimers, spawnChampion } from './game/spawn.js';
 import { initBots } from './ai/bot.js';
 import { createPolicePlayer, initPolice } from './game/police.js';
 import { tileToWorld } from './map/coords.js';
+import { buildArena } from './game/arena.js';
+import { initMode, prepareModeUnits } from './game/modes.js';
+import { nationOf, sideName, buildTerritory, traitNotice } from './game/nations.js';
 
 export function createMatch(settings) {
   const players = settings.players.map((p, index) => ({
     id: index,
     name: p.name,
-    gang: p.gang,
-    gangName: GANGS[p.gang].name,
+    gang: p.gang,                      // النمط القتالي (القسم 3.10)
+    nation: nationOf(p.nation) ? p.nation : null,   // الأمة، أو null للعصابة الكلاسيكية
+    gangName: sideName(p.gang, p.nation),
     color: (PLAYER_COLORS.find(c => c.id === p.color) || PLAYER_COLORS[index]).hex,
     isHuman: !!p.isHuman,
     team: p.team || 0,
@@ -22,7 +26,11 @@ export function createMatch(settings) {
     homeDistrictId: -1
   }));
 
-  const map = createMap(settings.mapSize, players);
+  // طابع المدينة (القسم 3.9). طور الإمبراطورية في مدينته وحدها وبلا أحياء مميزة،
+  // والمدينة المحصورة فيه لا تُلعب في غيره (حفظ إعداد قديم اختارها مثلاً): تصير عشوائياً
+  const forced = Object.keys(CITIES.modeOnly).find(city => CITIES.modeOnly[city] === settings.mode);
+  const city = forced || (CITIES.modeOnly[settings.city] ? 'random' : settings.city);
+  const map = createMap(settings.mapSize, players, city, { specials: settings.mode !== 'empire' });
   if (!map) throw new Error('تعذر توليد خريطة صالحة');
 
   // الشرطة طرف محايد يُضاف بعد توزيع الأحياء المنزلية فلا يأخذ حياً ولا مقراً
@@ -54,7 +62,18 @@ export function createMatch(settings) {
     heroTurn: [],
     fires: [],                 // مناطق نار رامي النار
     time: 0,                   // زمن المباراة بالثواني
+    // القتال الواقعي (القسم 5.4)
+    combatSeed: (Math.random() * 4294967295) >>> 0,   // بذرة المباراة: معركتان لا تتشابهان
+    rollingCorpses: 0,         // عدد الجثث المتدحرجة الآن (سقفها في COMBAT_REALISM)
+    lodAt: 0,                  // موعد إعادة حساب مستويات التفصيل
+    combatEvents: { dodge: 0, block: 0, stagger: 0, bump: 0, roll: 0, back: 0, side: 0, hits: 0, clash: 0, down: 0, kick: 0, punch: 0, combo: 0 },
+    pops: [],                  // الكلمات الطائرة: تفادى! صدّ! من الخلف! اصطدام! تصادم!
+    clashes: [],               // شرر تصادم الأسلحة
+    fx: [],                    // نجوم الانفجار عند الارتطام
+    ultFx: [],                 // آثار ضربات أبطال الأمم: حلقات وغبار (القسم 3.10)
+    zones: [],                 // مناطق ضربات الأبطال القائمة مدة: الراية المغروسة (القسم 3.10)
     shakeAt: -99,              // زمن آخر ارتجاجة كاميرا (القسم 5.2)
+    cameraTween: null,         // انتقال الكاميرا الناعم إلى مجموعة تحكم (القسم 4.4)
     alerts: [],                // أسهم الحافة الظاهرة الآن (القسم 12.3)
     alertSeen: [],             // مناطق نُبّه عنها قريباً {kind, i, j, t}
     stats: {
@@ -64,13 +83,17 @@ export function createMatch(settings) {
     }
   };
 
+  initMode(state);               // الطور وخياراته (القسم 9.5)
   buildCaptureZones(state);
+  buildTerritory(map);           // مناطق الأحياء وتجاورها لسمات الأمم (القسم 3.10)
   snapDistrictTints(state);      // الأحياء المنزلية ملوّنة من البداية
   spawnStartingUnits(state);
+  prepareModeUnits(state);       // ما يخص الطور في الوحدات الأولى (دم الزعيم مثلاً)
   initSpawnTimers(state);
   initPolice(state);
   initBots(state);
   centerCameraOnHome(state);
+  state.notice = traitNotice(players[state.humanId]) || state.notice;   // سمة أمتك (القسم 3.10)
   return state;
 }
 
@@ -159,11 +182,25 @@ export function resetMatch(state, settings = state.settings) {
   state.humanId = fresh.humanId;
   state.moveMarker = null;
   state.selectionBox = null;
-  state.notice = null;
+  state.notice = fresh.notice;
   state.matchResult = null;
   state.time = 0;
+  state.combatSeed = fresh.combatSeed;      // بذرة جديدة: المباراة التالية تختلف
+  state.rollingCorpses = 0;
+  state.lodAt = 0;
+  state.combatEvents = fresh.combatEvents;
+  state.pops = [];
+  state.clashes = [];
+  state.fx = [];
+  state.ultFx = [];
+  state.zones = [];
   state.alerts = [];
   state.alertSeen = [];
   state.shakeAt = -99;
+  state.cameraTween = null;
+  state.arena = null;
+  state.mode = fresh.mode;
+  state.modeState = fresh.modeState;
   centerCameraOnHome(state);
+  if (settings.arena) buildArena(state);     // ساحة تجربة القتال
 }

@@ -1,13 +1,15 @@
 // اللمس والتحديد والأوامر (إصبع واحد، إصبعان، وعجلة الماوس)
-import { CAMERA, INPUT, ALERTS } from '../config.js';
+import { CAMERA, INPUT, ALERTS, TILE_HALF_W, TILE_HALF_H, EMPIRE } from '../config.js';
 import { screenToWorld, worldToTile, worldToScreen, tileToWorld } from '../map/coords.js';
 import { clampCamera } from '../render/renderer.js';
 import { commandMove, commandAttackMove } from '../game/units.js';
 import { commandAttack, isEnemy } from '../game/combat.js';
-import { selectedUnits, selectUnitsAround } from '../state.js';
+import { selectedUnits, selectUnitsAround, clearSelection } from '../state.js';
 import { sound } from '../audio/sound.js';
 import { setInputMode } from './hud.js';
 import { unitWorldPos } from '../render/units.js';
+import { badgeOf } from '../render/empireArt.js';
+import { openEmpireMenu, closeEmpireMenu, isEmpireMenuOpen } from './empireMenu.js';
 
 export function setupInput(canvas, state) {
   const pointers = new Map();
@@ -17,6 +19,8 @@ export function setupInput(canvas, state) {
   let lastUnitTap = null;  // آخر نقرة على جندي: للكشف عن النقرة المزدوجة
   let longPressTimer = null;   // مؤقت الضغطة المطوّلة (أمر الهجوم المتحرك)
   let longPressFired = false;  // نفّذنا الأمر فلا نكرره عند رفع الإصبع
+  // طور الإمبراطورية: لمستان سريعتان على مبنى تملكه (أو على حي لك بلا مبنى) تفتحان قائمته
+  let lastDistrictTap = null;  // { id, time }
 
   const pointFromEvent = (e) => {
     const rect = canvas.getBoundingClientRect();
@@ -25,6 +29,7 @@ export function setupInput(canvas, state) {
 
   function onDown(id, p) {
     pointers.set(id, p);
+    state.cameraTween = null;          // لمس الخريطة يوقف انتقال الكاميرا إلى مجموعة
     if (pointers.size === 1) {
       dragStart = { x: p.x, y: p.y, camX: state.camera.x, camY: state.camera.y };
       moved = false;
@@ -111,6 +116,19 @@ export function setupInput(canvas, state) {
       longPressTimer = null;
       if (moved || pointers.size !== 1) return;
 
+      // طور الإمبراطورية (بطلب المستخدم): ضغطة مطوّلة على مبناك أو أي حي لك تفتح قائمته، ولو كان معك جنود محددون
+      if (state.mode === 'empire') {
+        const target = ownBuildingAt(p.x, p.y) || ownAreaAt(p.x, p.y);
+        if (target) {
+          longPressFired = true;
+          lastDistrictTap = null;
+          clearSelection(state);
+          sound('ui_tap');
+          openEmpireMenu(state, target.id);
+          return;
+        }
+      }
+
       const group = selectedUnits(state);
       if (!group.length) return;
       if (findUnitAt(p.x, p.y)) return;          // الضغط على وحدة ليس أمر أرض
@@ -142,6 +160,26 @@ export function setupInput(canvas, state) {
 
     const group = selectedUnits(state);
     const hit = findUnitAt(sx, sy);
+
+    // طور الإمبراطورية: اللمسة الثانية السريعة على مبناك تفتح قائمته وتلغي تحديد الجنود (بقرار المستخدم)،
+    // واللمسة على الخريطة تغلق المفتوحة. وأوامر الحركة فورية كما في الأطوار الأخرى
+    if (state.mode === 'empire') {
+      const target = hit && hit.playerId === state.humanId ? null : menuDistrictAt(sx, sy);
+      const now = performance.now();
+      if (target && lastDistrictTap && lastDistrictTap.id === target.id && now - lastDistrictTap.time <= INPUT.doubleTapMs) {
+        lastDistrictTap = null;
+        lastUnitTap = null;
+        clearSelection(state);
+        sound('ui_tap');
+        openEmpireMenu(state, target.id);
+        return;
+      }
+      lastDistrictTap = target ? { id: target.id, time: now } : null;
+      if (isEmpireMenuOpen()) {
+        closeEmpireMenu(state);
+        return;                          // لمسة الإغلاق لا تصدر أمراً
+      }
+    }
 
     // نقرة ثانية قرب الجندي نفسه حتى لو لم تصبه بدقة: تحديد المجموعة
     const doubleTarget = lastUnitTap && isSecondTapOn(lastUnitTap.unit, sx, sy)
@@ -175,6 +213,38 @@ export function setupInput(canvas, state) {
     const world = screenToWorld(sx, sy, state.camera, state.view);
     const tile = worldToTile(world.x, world.y);
     if (commandMove(state, tile.i, tile.j, group)) sound('command');
+  }
+
+  // ما تفتح لمستاه قائمة (طور الإمبراطورية): مبنى تملكه، أو حي تملكه بلا مبنى. أرض حي فيه مبنى للحركة فقط
+  function menuDistrictAt(sx, sy) {
+    const building = ownBuildingAt(sx, sy);
+    if (building) return building;
+    const area = ownAreaAt(sx, sy);
+    return area && !area.building ? area : null;
+  }
+
+  // مبنى تملكه تحت الإصبع: صورته كلها مع شارتها فوقها (فهي أعلى من مربعها)، والقاعدة بقلعتها كلها
+  function ownBuildingAt(sx, sy) {
+    const z = state.camera.z;
+    for (const d of state.map.districts) {
+      if (d.owner !== state.humanId || !d.building || d.buildTile === undefined) continue;
+      const b = badgeOf(state, d), wide = d.building === 'hq' ? EMPIRE.menu.hqTapBox : 1;
+      const base = worldToScreen(b.x, b.y, state.camera, state.view);
+      const top = base.y - (b.y - b.cy + b.r) * z;
+      if (Math.abs(sx - base.x) <= TILE_HALF_W * wide * z && sy >= top && sy <= base.y + TILE_HALF_H * wide * z) return d;
+    }
+    return null;
+  }
+
+  // حي تملكه تحت الإصبع: مربعاته والشوارع الأقرب إليه (map.areaAt)
+  function ownAreaAt(sx, sy) {
+    const map = state.map;
+    const world = screenToWorld(sx, sy, state.camera, state.view);
+    const tile = worldToTile(world.x, world.y);
+    const i = Math.round(tile.i), j = Math.round(tile.j);
+    if (i < 0 || j < 0 || i >= map.n || j >= map.n || !map.areaAt) return null;
+    const d = map.districts[map.areaAt[j * map.n + i]];
+    return d && d.owner === state.humanId ? d : null;
   }
 
   // لمسة على سهم الحافة: تنقل الكاميرا إلى مكان الحدث ويختفي السهم

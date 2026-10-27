@@ -1,22 +1,11 @@
 // توليد الخريطة العشوائية: شوارع، أحياء، نقاط استيلاء، مباني
-import { MAP_SIZES, MAP_GEN, POLICE } from '../config.js';
+import { MAP_SIZES, MAP_GEN, POLICE, CITIES, CITY_UNTINTED } from '../config.js';
+import { THEMES as CITY_THEMES } from '../render/cityThemes.js';
 import { D4, D8 } from './pathfinding.js';
+import { hypot } from '../game/hypot.js';
 
 const rnd = () => Math.random();
 const ri = (n) => Math.floor(Math.random() * n);
-
-// أنواع المباني في كل طابع حي، مع أوزان الاحتمال (منقولة من prototype.html)
-// '.' أرض فارغة، H بيت، A عمارة، R أطلال، F مصنع، W مستودع، T شجرة،
-// M أكشاك سوق، X سيارة محطمة، K خزان ماء
-const THEMES = {
-  crows:     [['A', 40], ['H', 22], ['R', 14], ['T', 6],  ['.', 18]],
-  hammers:   [['F', 18], ['W', 32], ['K', 8],  ['R', 14], ['X', 8], ['.', 20]],
-  vipers:    [['T', 38], ['H', 28], ['R', 12], ['.', 22]],
-  scorpions: [['H', 50], ['M', 10], ['B', 10], ['R', 12], ['.', 18]],
-  neutral:   [['H', 30], ['A', 14], ['R', 20], ['W', 10], ['T', 10], ['X', 5], ['.', 11]],
-  special:   [['T', 30], ['H', 25], ['.', 45]],
-  police:    [['H', 26], ['W', 16], ['X', 10], ['R', 10], ['T', 8], ['.', 30]]
-};
 
 // المباني الخاصة بكل حي مميز
 const SPECIAL_BUILDINGS = {
@@ -43,78 +32,132 @@ function pickWeighted(table) {
 }
 
 // ينشئ خريطة صالحة، ويعيد المحاولة إذا فشل الشرط (شوارع متصلة، أحياء منزلية كافية)
-export function createMap(sizeKey, players) {
+// city: مفتاح طابع المدينة (القسم 3.9)، أو 'random'. المدينة شكل فقط: الشوارع والأحياء كما هي
+// "عشوائي" لا يختار مدينة محصورة في طور واحد (CITIES.modeOnly: اليمامة لطور الإمبراطورية)
+export const OPEN_CITIES = CITIES.order.filter(city => !CITIES.modeOnly[city]);
+
+export function resolveCity(city) {
+  return CITY_THEMES[city] ? city : OPEN_CITIES[ri(OPEN_CITIES.length)];
+}
+
+// options.specials: false بلا أحياء مميزة (طور الإمبراطورية: مبانيه تُبنى بالنقاط)
+export function createMap(sizeKey, players, city = 'random', options = {}) {
   const size = MAP_SIZES[sizeKey] || MAP_SIZES.medium;
+  const cityKey = resolveCity(city);
   for (let attempt = 0; attempt < MAP_GEN.maxTries; attempt++) {
-    const map = buildMap(size, players);
+    const map = buildMap(size, players, cityKey, options);
     if (map) return map;
   }
   return null;
 }
 
-function buildMap(size, players) {
+function buildMap(size, players, cityKey, options) {
   const map = createEmptyMap(size);
+  map.city = cityKey;
+  map.seed = ri(1e9);                // بذرة الرسم: نفس الخريطة تُرسم دائماً بنفس الشكل
+  // ماء على حافة الخريطة (النرويجية): خارج الشوارع والأحياء، فلا علم ولا مقر ولا تلة عليه
+  const water = (CITIES.water[cityKey] || {})[size.key] || 0;
+  map.land = map.n - water;          // أول عمود ماء (i >= land)
+  for (let j = 0; j < map.n; j++) for (let i = map.land; i < map.n; i++) map.type[map.idx(i, j)] = '~';
   carveStreets(map);
   if (!roadsConnected(map)) return null;          // شرط إلزامي: الشوارع كلها متصلة
 
   const districts = findDistricts(map);
   if (!assignHomeDistricts(map, districts, players)) return null;
-  assignSpecialDistricts(map, districts, size, players);
+  if (options.specials !== false) assignSpecialDistricts(map, districts, size, players);
   assignPoliceDistricts(map, districts, size);
   fillDistricts(map, districts);
   map.districts = districts;
+  const walls = CITIES.walls[cityKey];
+  if (walls) buildCityWalls(map, walls);
+  if (map.land < map.n && CITIES.water[cityKey].huts) placeRorbu(map);   // أكواخ الماء للنرويجية وحدها
   repairIsolatedPockets(map);     // القسم 3.4.1: لا يبقى فراغ محاصر بالمباني
   decorateRoads(map);
+  placeMonument(map);
   return map;
+}
+
+// معلم المنطقة المميز (بطلب المستخدم): يحل محل مبنى عادي قرب وسط المدينة، فلا يتغير ما يُمشى عليه
+// (كان مبنى ويبقى مبنى) ولا يُستهلك رقم عشوائي، فبقية الخريطة والمباراة كما هما. يُفضَّل الركن الأمامي
+// للحي (شارعان أمامه من الجهتين القريبتين من الشاشة) فلا يحجبه مبنى أمامه، ثم ما أمامه شارع من جهة،
+// ثم ما يلاصق شارعاً. المدن ذات الدوار (CITIES.open[city].roundabout) لا تحتاجه: الدوار معلمها
+function placeMonument(map) {
+  const city = CITY_THEMES[map.city], open = CITIES.open[map.city];
+  if (!city || typeof city.draw.monument !== 'function' || (open && open.roundabout)) return;
+  const n = map.n, ci = (map.land - 1) / 2, cj = (n - 1) / 2;
+  const road = (i, j) => map.inBounds(i, j) && map.road[map.idx(i, j)] === 1;
+  let best = -1, bestScore = Infinity;
+  for (let j = 0; j < n; j++) {
+    for (let i = 0; i < map.land; i++) {
+      const k = map.idx(i, j), kind = map.kind[k];
+      if (map.type[k] !== 'H' || !kind || CITY_UNTINTED.includes(kind)) continue;   // مبنى عادي لا شجرة ولا سور
+      const front = (road(i + 1, j) ? 1 : 0) + (road(i, j + 1) ? 1 : 0);
+      if (!front && !road(i - 1, j) && !road(i, j - 1)) continue;
+      const score = (2 - front) * 1e6 + (i - ci) * (i - ci) + (j - cj) * (j - cj);
+      if (score < bestScore) { bestScore = score; best = k; }
+    }
+  }
+  if (best >= 0) map.kind[best] = 'monument';
+}
+
+// دوال الخريطة: منفصلة عن بياناتها حتى تُعاد إليها بعد تحميل مباراة محفوظة
+const MAP_METHODS = {
+  idx(i, j) { return j * this.n + i; },
+  inBounds(i, j) { return i >= 0 && j >= 0 && i < this.n && j < this.n; },
+  // الوحدات تمشي على الشوارع والأرض الفارغة وساحات العلم فقط
+  isWalkable(i, j) {
+    if (!this.inBounds(i, j)) return false;
+    const k = this.idx(i, j);
+    return this.road[k] === 1 || this.type[k] === '.' || this.type[k] === 'P';
+  },
+  // مربع موصول بشبكة الشوارع: الظهور وأوامر الحركة لا تستهدف غيره
+  isConnected(i, j) {
+    if (!this.isWalkable(i, j)) return false;
+    return !this.connected || this.connected[this.idx(i, j)] === 1;
+  },
+  districtOf(i, j) {
+    if (!this.inBounds(i, j)) return null;
+    const d = this.districtAt[this.idx(i, j)];
+    return d < 0 ? null : this.districts[d];
+  }
+};
+
+export function attachMapMethods(map) {
+  return Object.assign(map, MAP_METHODS);
 }
 
 function createEmptyMap(size) {
   const n = size.n;
-  return {
+  return attachMapMethods({
     size,
     n,
     road: new Uint8Array(n * n),
     type: new Array(n * n).fill('.'),
     region: new Array(n * n).fill('neutral'),
+    kind: new Array(n * n).fill(null),   // نوع المبنى من pool المدينة ('house', 'ruin', 'palm'...)
     dash: new Uint8Array(n * n),      // خطوط منتصف الشارع
     decor: {},                        // زينة فوق الشوارع (برميل نار، عمود إنارة)
     districtAt: new Int32Array(n * n).fill(-1),
     districts: [],
-    connected: null,                  // يملؤه إصلاح الفراغات المعزولة (القسم 3.4.1)
-
-    idx(i, j) { return j * this.n + i; },
-    inBounds(i, j) { return i >= 0 && j >= 0 && i < this.n && j < this.n; },
-    // الوحدات تمشي على الشوارع والأرض الفارغة وساحات العلم فقط
-    isWalkable(i, j) {
-      if (!this.inBounds(i, j)) return false;
-      const k = this.idx(i, j);
-      return this.road[k] === 1 || this.type[k] === '.' || this.type[k] === 'P';
-    },
-    // مربع موصول بشبكة الشوارع: الظهور وأوامر الحركة لا تستهدف غيره
-    isConnected(i, j) {
-      if (!this.isWalkable(i, j)) return false;
-      return !this.connected || this.connected[this.idx(i, j)] === 1;
-    },
-    districtOf(i, j) {
-      if (!this.inBounds(i, j)) return null;
-      const d = this.districtAt[this.idx(i, j)];
-      return d < 0 ? null : this.districts[d];
-    }
-  };
+    connected: null                   // يملؤه إصلاح الفراغات المعزولة (القسم 3.4.1)
+  });
 }
 
 // --- 1) الشوارع ---
 function carveStreets(map) {
-  const n = map.n;
+  const n = map.n, land = map.land;
+  // المدن المفتوحة (CITIES.open): شوارع أعرض ومستقيمة بلا انحراف ولا أزقة، فالأحياء مستطيلات مرتبة
+  const open = CITIES.open[map.city];
+  if (open) { carveWideStreets(map, open); return; }
   const spacing = () => MAP_GEN.streetSpacingMin + ri(MAP_GEN.streetSpacingMax - MAP_GEN.streetSpacingMin + 1);
-  const lines = () => {
+  const lines = (limit) => {
     const arr = [];
     let p = 1 + ri(2);
-    while (p < n - 1) { arr.push(p); p += spacing(); }
+    while (p < limit - 1) { arr.push(p); p += spacing(); }
     return arr;
   };
 
-  const cols = lines(), rows = lines();
+  const cols = lines(land), rows = lines(n);
   const near = (arr, v) => arr.some(a => Math.abs(a - v) <= 1);
 
   // شوارع طولية مع انحراف بسيط بعيداً عن التقاطعات
@@ -123,7 +166,7 @@ function carveStreets(map) {
     for (let j = 0; j < n; j++) {
       if (!near(rows, j) && rnd() < MAP_GEN.bendChance) {
         map.road[map.idx(cc, j)] = 1;
-        cc = Math.max(1, Math.min(n - 2, cc + (rnd() < 0.5 ? -1 : 1)));
+        cc = Math.max(1, Math.min(land - 2, cc + (rnd() < 0.5 ? -1 : 1)));
       }
       map.road[map.idx(cc, j)] = 1;
     }
@@ -131,7 +174,7 @@ function carveStreets(map) {
   // شوارع عرضية
   for (const r of rows) {
     let rr = r;
-    for (let i = 0; i < n; i++) {
+    for (let i = 0; i < land; i++) {
       if (!near(cols, i) && rnd() < MAP_GEN.bendChance) {
         map.road[map.idx(i, rr)] = 1;
         rr = Math.max(1, Math.min(n - 2, rr + (rnd() < 0.5 ? -1 : 1)));
@@ -148,7 +191,39 @@ function carveStreets(map) {
     const d = D4[ri(4)];
     for (let s = 1; s <= MAP_GEN.alleyLength; s++) {
       const a = i + d[0] * s, b = j + d[1] * s;
-      if (map.inBounds(a, b)) map.road[map.idx(a, b)] = 1;
+      if (map.inBounds(a, b) && a < land) map.road[map.idx(a, b)] = 1;
+    }
+  }
+}
+
+// شبكة شوارع مستقيمة بعرض open.street، والمسافة بين بدايتي شارعين إحدى قيم open.spacing
+function carveWideStreets(map, open) {
+  const n = map.n, land = map.land, w = open.street;
+  const lines = (limit) => {
+    const arr = [];
+    let p = 1 + ri(2);
+    while (p + w <= limit - 1) { arr.push(p); p += open.spacing[ri(open.spacing.length)]; }
+    return arr;
+  };
+  const cols = lines(land), rows = lines(n);
+  for (const c of cols) for (let j = 0; j < n; j++) for (let d = 0; d < w; d++) map.road[map.idx(c + d, j)] = 1;
+  for (const r of rows) for (let i = 0; i < land; i++) for (let d = 0; d < w; d++) map.road[map.idx(i, r + d)] = 1;
+  if (open.roundabout && cols.length && rows.length) carveRoundabout(map, cols, rows, w, open.roundabout.radius);
+}
+
+// دوار في التقاطع الأقرب لمركز الخريطة: جزيرة في وسط التقاطع ('Y': لا يُمشى عليها ولا تُفتح)
+// وحولها حلقة شارع حتى نصف القطر radius، تأخذ زوايا الأحياء الأربعة المجاورة
+function carveRoundabout(map, cols, rows, w, radius) {
+  const mid = (map.n - 1) / 2, half = (w - 1) / 2;
+  const nearest = (arr) => arr.reduce((a, b) => Math.abs(b + half - mid) < Math.abs(a + half - mid) ? b : a);
+  const c = nearest(cols), r = nearest(rows), ci = c + half, cj = r + half;
+  const reach = Math.ceil(radius);
+  for (let j = Math.floor(cj - reach); j <= Math.ceil(cj + reach); j++) {
+    for (let i = Math.floor(ci - reach); i <= Math.ceil(ci + reach); i++) {
+      if (!map.inBounds(i, j)) continue;
+      const di = i - ci, dj = j - cj, k = map.idx(i, j);
+      if (Math.abs(di) < w / 2 && Math.abs(dj) < w / 2) { map.road[k] = 0; map.type[k] = 'Y'; }
+      else if (di * di + dj * dj <= radius * radius) map.road[k] = 1;
     }
   }
 }
@@ -189,7 +264,7 @@ function findDistricts(map) {
   for (let j = 0; j < n; j++) {
     for (let i = 0; i < n; i++) {
       const k = map.idx(i, j);
-      if (map.road[k] || map.districtAt[k] >= 0) continue;
+      if (map.road[k] || map.districtAt[k] >= 0 || map.type[k] === '~' || map.type[k] === 'Y') continue;
 
       const district = {
         id: districts.length,
@@ -219,7 +294,7 @@ function findDistricts(map) {
           const x = a + dx, y = b + dy;
           if (!map.inBounds(x, y)) continue;
           const nk = map.idx(x, y);
-          if (map.road[nk] || map.districtAt[nk] >= 0) continue;
+          if (map.road[nk] || map.districtAt[nk] >= 0 || map.type[nk] === '~' || map.type[nk] === 'Y') continue;
           map.districtAt[nk] = district.id;
           stack.push([x, y]);
         }
@@ -255,7 +330,7 @@ function assignHomeDistricts(map, districts, players) {
     let best = null, bestDist = Infinity;
     for (const d of big) {
       if (d.isHome) continue;
-      const dist = Math.hypot(d.cx - px, d.cy - py);
+      const dist = hypot(d.cx - px, d.cy - py);
       if (dist < bestDist) { bestDist = dist; best = d; }
     }
     if (!best) return false;
@@ -277,7 +352,7 @@ function assignSpecialDistricts(map, districts, size) {
   const limit = n * MAP_GEN.specialCenterRadiusPct;
 
   const candidates = districts
-    .filter(d => !d.isHome && d.capturable && Math.hypot(d.cx - center, d.cy - center) < limit)
+    .filter(d => !d.isHome && d.capturable && hypot(d.cx - center, d.cy - center) < limit)
     .sort(() => rnd() - 0.5);
 
   const types = ['hospital', 'armory', 'clock'].sort(() => rnd() - 0.5);
@@ -295,7 +370,7 @@ function assignSpecialDistricts(map, districts, size) {
 function assignPoliceDistricts(map, districts, size) {
   const homes = districts.filter(d => d.isHome);
   const farFromHomes = (d) => homes.every(h =>
-    Math.hypot(d.cx - h.cx, d.cy - h.cy) >= POLICE.minHomeDistance);
+    hypot(d.cx - h.cx, d.cy - h.cy) >= POLICE.minHomeDistance);
 
   const candidates = districts.filter(d =>
     !d.isHome && !d.special && d.capturable && farFromHomes(d));
@@ -309,7 +384,7 @@ function assignPoliceDistricts(map, districts, size) {
     let best = null, bestDist = -1;
     for (const d of candidates) {
       if (chosen.includes(d)) continue;
-      const nearest = Math.min(...chosen.map(c => Math.hypot(d.cx - c.cx, d.cy - c.cy)));
+      const nearest = Math.min(...chosen.map(c => hypot(d.cx - c.cx, d.cy - c.cy)));
       if (nearest > bestDist) { bestDist = nearest; best = d; }
     }
     if (!best) break;
@@ -323,20 +398,60 @@ function assignPoliceDistricts(map, districts, size) {
 }
 
 // --- 5) ملء الأحياء بالمباني ونقاط الاستيلاء ---
-function fillDistricts(map, districts) {
-  for (const district of districts) {
-    const theme = THEMES[district.region] || THEMES.neutral;
+// نوع المربع من pool المدينة: '.' أرض فارغة يُمشى عليها، 'ruin' أطلال، والباقي مبانٍ وأشجار لا يُمشى عليها
+function placeKind(map, k, kind) {
+  map.kind[k] = kind === '.' ? null : kind;
+  map.type[k] = kind === '.' ? '.' : kind === 'ruin' ? 'R' : 'H';
+}
 
+// المدن المفتوحة: ممرات أرض مرصوفة بين صفوف المباني داخل الحي (المستطيل بين الشوارع)، موصولة بالشارع
+// من طرفيها. الصفوف موازية لضلع الحي الأطول، والممر بينها:
+// 'rows': كل مربع بعده عن أقرب طرف للحي فردي (الحي 3 ← صفان وممر، 4 ← صفان وممران، 5 ← ثلاثة صفوف)
+// 'center': ممر واحد في وسط الحي (3 ← صفان، 5 ← صفان مزدوجان): أكثف
+// 'lots': ممرات في الاتجاهين (كل مبنى في قطعته)
+// يعيد اتجاه الممر للمربع ('lane_i' يمتد على i، 'lane_j' على j) أو null للمبنى
+function laneMask(district, lanes) {
+  let i0 = Infinity, i1 = -1, j0 = Infinity, j1 = -1;
+  for (const [i, j] of district.tiles) {
+    if (i < i0) i0 = i; if (i > i1) i1 = i;
+    if (j < j0) j0 = j; if (j > j1) j1 = j;
+  }
+  const lane = (v, a, b) => {
+    const u = v - a, w = b - a + 1;
+    if (lanes !== 'center') return Math.min(u, b - v) % 2 === 1;
+    return w % 2 ? w >= 3 && u === (w - 1) / 2 : w >= 4 && (u === w / 2 - 1 || u === w / 2);
+  };
+  if (lanes === 'lots') return (i, j) => lane(j, j0, j1) ? 'lane_i' : lane(i, i0, i1) ? 'lane_j' : null;
+  return i1 - i0 >= j1 - j0 ? (i, j) => lane(j, j0, j1) ? 'lane_i' : null
+                            : (i, j) => lane(i, i0, i1) ? 'lane_j' : null;
+}
+
+function fillDistricts(map, districts) {
+  const city = CITY_THEMES[map.city];
+  const open = CITIES.open[map.city];
+  for (const district of districts) {
+    const lane = open && open.lanes && district.capturable ? laneMask(district, open.lanes) : null;
+    // أنماط الأحياء (صحراء اليمامة): الحي كله من نمط واحد (نجدي، قصور، واحة) فيبدو متجانساً
+    const pool = city.styles && district.capturable ? pickWeighted(city.styles.map(style => [style, style.weight])).pool : city.pool;
     for (const [i, j] of district.tiles) {
       const k = map.idx(i, j);
       map.region[k] = district.region;
-      map.type[k] = pickWeighted(theme);
+      const kind = pickWeighted(pool);
+      const path = lane && lane(i, j);
+      placeKind(map, k, path ? '.' : kind);
+      if (path) map.kind[k] = path;            // أرض فارغة تُرسم ممراً مرصوفاً باتجاهه
     }
 
     // حي صغير: ليس قابلاً للاستيلاء، أشجار أو أرض فارغة فقط
+    // (الأوروبية تعرّف شجرتها دالة رسم لا اسم نوع: نوعها 'tree'، وإلا رُسمت بيتاً)
     if (!district.capturable) {
+      if (city.smallPool) {                    // بساتين وآبار (صحراء اليمامة)
+        for (const [i, j] of district.tiles) placeKind(map, map.idx(i, j), pickWeighted(city.smallPool));
+        continue;
+      }
+      const tree = typeof city.draw.tree === 'function' ? 'tree' : city.draw.tree;
       for (const [i, j] of district.tiles) {
-        map.type[map.idx(i, j)] = rnd() < 0.5 ? 'T' : '.';
+        placeKind(map, map.idx(i, j), rnd() < 0.5 ? tree : '.');
       }
       continue;
     }
@@ -347,7 +462,7 @@ function fillDistricts(map, districts) {
       const touchesRoad = D4.some(([dx, dy]) =>
         map.inBounds(i + dx, j + dy) && map.road[map.idx(i + dx, j + dy)]);
       if (!touchesRoad) continue;
-      const dist = Math.hypot(i - district.cx, j - district.cy);
+      const dist = hypot(i - district.cx, j - district.cy);
       if (dist < bestDist) { bestDist = dist; point = [i, j]; }
     }
     if (!point) { district.capturable = false; continue; }
@@ -359,8 +474,8 @@ function fillDistricts(map, districts) {
     const inner = district.tiles
       .filter(([i, j]) => !(i === point[0] && j === point[1]))
       .sort((a, b) =>
-        Math.hypot(a[0] - district.cx, a[1] - district.cy) -
-        Math.hypot(b[0] - district.cx, b[1] - district.cy));
+        hypot(a[0] - district.cx, a[1] - district.cy) -
+        hypot(b[0] - district.cx, b[1] - district.cy));
 
     if (district.isHome && inner[0]) {
       map.type[map.idx(inner[0][0], inner[0][1])] = 'Q';   // مبنى المقر
@@ -375,19 +490,92 @@ function fillDistricts(map, districts) {
   }
 }
 
+// صحراء اليمامة: السور على مربعات حافة الخريطة (مبانٍ لا يُمشى عليها، وقبل إصلاح الفراغات فيُفتح منه ما يلزم)
+// - الحافتان البعيدتان (i = 0 وj = 0): أقواس السور، وبرج كل towerEvery مربعاً، والأطلال فيه ثغرات منهارة،
+//   وبوابة فوق كل شارع يخرج من الحافة (الشارع يبقى شارعاً: نوع البوابة على مربعه ويُمشى تحتها)
+// - الحافتان القريبتان: سور منهار منخفض لا يحجب الجنود خلفه، والشوارع تخرج منه بلا بوابة
+// - الزوايا أبراج (القريبة منهارة). ساحة العلم والمباني الحاسمة والشوارع على الحافة لا تُمس
+function buildCityWalls(map, cfg) {
+  const n = map.n, last = n - 1;
+  const road = (i, j) => map.inBounds(i, j) && map.road[map.idx(i, j)] === 1;
+  for (let j = 0; j < n; j++) {
+    for (let i = 0; i < n; i++) {
+      if (i !== 0 && j !== 0 && i !== last && j !== last) continue;
+      const k = map.idx(i, j);
+      const corner = (i === 0 || i === last) && (j === 0 || j === last);
+      if (map.road[k]) {
+        if (corner) continue;
+        if (i === 0 && road(1, j) && !road(0, j - 1) && !road(0, j + 1)) map.kind[k] = 'gateJ';
+        else if (j === 0 && road(i, 1) && !road(i - 1, 0) && !road(i + 1, 0)) map.kind[k] = 'gateI';
+        // الحافتان القريبتان: قوس قديم قائم فوق بعض الشوارع الخارجة، والباقي ثغرة
+        else if (rnd() < cfg.archChance) {
+          if (i === last && road(i - 1, j) && !road(i, j - 1) && !road(i, j + 1)) map.kind[k] = 'archJ';
+          else if (j === last && road(i, j - 1) && !road(i - 1, j) && !road(i + 1, j)) map.kind[k] = 'archI';
+        }
+        continue;
+      }
+      const type = map.type[k];
+      if (type !== 'H' && type !== '.' && type !== 'R') continue;
+      let kind;
+      if (corner) kind = i === last && j === last ? 'brokenTower' : 'wallTower';
+      else if (i === 0 || j === 0) {
+        const along = i === 0 ? j : i;
+        if (along % cfg.towerEvery === 0) kind = 'wallTower';
+        else if (type === 'R') kind = i === 0 ? 'brokenJ' : 'brokenI';
+        else kind = i === 0 ? 'wallJ' : 'wallI';
+      } else kind = i === last ? 'brokenJ' : 'brokenI';
+      map.type[k] = 'H';
+      map.kind[k] = kind;
+    }
+  }
+}
+
+// النرويجية: المباني المجاورة للماء أكواخ على أعمدة (rorbu)، كما في hook المرجع
+function placeRorbu(map) {
+  const i = map.land - 1;
+  for (let j = 0; j < map.n; j++) {
+    const k = map.idx(i, j);
+    if (map.type[k] === 'H' && rnd() < CITIES.rorbuChance) map.kind[k] = 'rorbu';
+  }
+}
+
+// علامات الشارع العريض (حارتان)، ترسمها chunkCache.js:
+// 3: خط المنتصف بين j و j+1 (شارع على i)، 4: بين i و i+1 (شارع على j)، ولا خط في التقاطعات
+// 5: حلقة الدوار (بلا علامات ولا حطام)، 6 و7: ممر مشاة عند مدخل التقاطع (شارع على i / على j)
+function wideDash(map, i, j) {
+  const r = (a, b) => map.inBounds(a, b) && map.road[map.idx(a, b)] === 1;
+  for (let b = j - 2; b <= j + 2; b++) for (let a = i - 2; a <= i + 2; a++) {
+    if (map.inBounds(a, b) && map.type[map.idx(a, b)] === 'Y') return 5;
+  }
+  const roads = (a, b) => r(a - 1, b) + r(a + 1, b) + r(a, b - 1) + r(a, b + 1);
+  const cross = (a, b) => r(a, b) && roads(a, b) === 4;      // مربع تقاطع: شارع من الجهات الأربع
+  if (roads(i, j) === 3) {
+    if (r(i - 1, j) && r(i + 1, j) && (cross(i - 1, j) || cross(i + 1, j))) return 6;
+    if (r(i, j - 1) && r(i, j + 1) && (cross(i, j - 1) || cross(i, j + 1))) return 7;
+  }
+  if (r(i, j + 1) && !r(i, j - 1) && !r(i, j + 2) && r(i - 1, j) && r(i + 1, j)) return 3;
+  if (r(i + 1, j) && !r(i - 1, j) && !r(i + 2, j) && r(i, j - 1) && r(i, j + 1)) return 4;
+  return 0;
+}
+
 // --- 6) خطوط منتصف الشوارع وزينتها ---
 function decorateRoads(map) {
   const n = map.n;
+  const open = CITIES.open[map.city];
+  const wide = open && open.street === 2;
   for (let j = 0; j < n; j++) {
     for (let i = 0; i < n; i++) {
       const k = map.idx(i, j);
       if (!map.road[k]) continue;
 
-      const horizontal = (map.inBounds(i - 1, j) && map.road[map.idx(i - 1, j)]) ||
-                         (map.inBounds(i + 1, j) && map.road[map.idx(i + 1, j)]);
-      const vertical   = (map.inBounds(i, j - 1) && map.road[map.idx(i, j - 1)]) ||
-                         (map.inBounds(i, j + 1) && map.road[map.idx(i, j + 1)]);
-      map.dash[k] = horizontal && !vertical ? 1 : vertical && !horizontal ? 2 : 0;
+      if (wide) map.dash[k] = wideDash(map, i, j);
+      else {
+        const horizontal = (map.inBounds(i - 1, j) && map.road[map.idx(i - 1, j)]) ||
+                           (map.inBounds(i + 1, j) && map.road[map.idx(i + 1, j)]);
+        const vertical   = (map.inBounds(i, j - 1) && map.road[map.idx(i, j - 1)]) ||
+                           (map.inBounds(i, j + 1) && map.road[map.idx(i, j + 1)]);
+        map.dash[k] = horizontal && !vertical ? 1 : vertical && !horizontal ? 2 : 0;
+      }
 
       const q = rnd();
       if (q < 0.015) map.decor[k] = 'B';              // برميل نار

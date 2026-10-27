@@ -3,35 +3,43 @@ import { UNIT_BASE, GANGS, HEROES, CHAMPIONS, POLICE, UNITS, TICK_SEC, PERFORMAN
 import { findPath, findFreeTiles, nearestWalkable, buildFlowField, flowStep } from '../map/pathfinding.js';
 import { clearCombatOrders } from './combat.js';
 import { moveSpeed } from './weather.js';
+import { initRealism, faceAngleTo } from './realism.js';
+import { hypot } from './hypot.js';
+import { nationStats, nationUnitName } from './nations.js';
 
 // إحصائيات الوحدة: الأساس + ميزة العصابة، أو الأساس + قيم الشخصية المميزة أو البطل
 // والشرطة المحايدة لها جدولها الخاص (القسم 3.8)
-export function unitStats(gangId, heroId, champion = false) {
+// nationId: أمة اللاعب (القسم 3.10): نمطها هو العصابة gangId بقواعدها، ثم سمتها وضربة بطلها
+export function unitStats(gangId, heroId, champion = false, nationId = null) {
   if (gangId === 'police') return { ...UNIT_BASE, ...POLICE[heroId === 'captain' ? 'captain' : 'common'] };
-  if (champion) return { ...UNIT_BASE, ...CHAMPIONS[gangId].stats };
-  if (heroId) return { ...UNIT_BASE, ...HEROES[heroId].stats };
+  if (champion) return nationStats({ ...UNIT_BASE, ...CHAMPIONS[gangId].stats }, nationId, true);
+  if (heroId) return nationStats({ ...UNIT_BASE, ...HEROES[heroId].stats }, nationId, false, heroId);
   const gang = GANGS[gangId];
-  return { ...UNIT_BASE, ...(gang && gang.unit ? gang.unit : {}) };
+  return nationStats({ ...UNIT_BASE, ...(gang && gang.unit ? gang.unit : {}) }, nationId, false);
 }
 
-// اسم الوحدة كما يظهر للاعب
-function unitName(gangId, heroId, champion) {
+// اسم الوحدة كما يظهر للاعب (وحدات الأمة بأسماء أمتها)
+function unitName(gangId, heroId, champion, nationId) {
   if (gangId === 'police') return POLICE[heroId === 'captain' ? 'captain' : 'common'].name;
+  const own = nationUnitName(nationId, heroId, champion);
+  if (own) return own;
   if (champion) return CHAMPIONS[gangId].name;
   return heroId ? HEROES[heroId].name : 'فرد';
 }
 
 // champion: بطل العصابة (القسم 6.6). رسمه جاهز، وقواعد ظهوره في المرحلة 4
 export function createUnit(state, player, i, j, heroId = null, champion = false) {
-  const stats = unitStats(player.gang, heroId, champion);
-  return {
+  const nation = player.nation || null;
+  const stats = unitStats(player.gang, heroId, champion, nation);
+  const unit = {
     id: state.nextUnitId++,
     playerId: player.id,
-    gang: player.gang,
+    gang: player.gang,                 // النمط القتالي: كل القواعد منه
+    nation,                            // الأمة (القسم 3.10): الاسم والمظهر والسمة، وnull للكلاسيكية
     color: player.color,
     hero: champion ? null : heroId,    // null للفرد العادي
     champion,                          // بطل اللاعب الوحيد
-    name: unitName(player.gang, heroId, champion),
+    name: unitName(player.gang, heroId, champion, nation),
     x: i, y: j,           // الموقع الحالي بالمربعات
     prevX: i, prevY: j,   // الموقع في التحديث السابق (لتنعيم الرسم)
     stats,
@@ -81,6 +89,15 @@ export function createUnit(state, player, i, j, heroId = null, champion = false)
     buffAttackSpeed: 0,
     slowUntil: 0,           // إبطاء من الضربة الأرضية
     slowFactor: 0,
+    steadyUntil: 0,         // صيحة الحارة (القسم 3.10): لا ترنّح ولا سقوط حتى هذا الزمن
+    awayUntil: 0,           // صقر الصقّار غائب عن ساعده في انقضاضه حتى هذا الزمن (الرسم فقط)
+    lastSwingAt: -99,       // زمن آخر ضربة بدأتها الوحدة (الاستعراض: سمة اليابان)
+    brothers: 0,            // عدد الشخصيات المميزة حول الفرد في هذا التحديث (الـ108: سمة الصين)
+    holdUntil: 0,           // داخل راية مغروسة: لا يُدفع حتى هذا الزمن (غرس الراية، ألمانيا)
+    bribedUntil: 0,         // شرطي مرتشٍ: لا يهاجم وحدات اللاعب bribedBy ولا تهاجمه حتى هذا الزمن (بريطانيا)
+    bribedBy: -1,
+    hasteUntil: 0,          // اندفاع: سرعة أكبر بنسبة hasteFactor حتى هذا الزمن (هجوم عدوة)
+    hasteFactor: 0,
 
     // الشرطة المحايدة (القسم 3.8)
     stationId: -1,          // رقم حي المركز الذي تتبعه
@@ -88,18 +105,63 @@ export function createUnit(state, player, i, j, heroId = null, champion = false)
     vanishAt: -1,           // بعد الاستيلاء على مركزها تختفي عند هذا الزمن
 
     armorBonus: 0,          // درع إضافي من مكافأة مراكز الشرطة المملوكة
+    takenMul: 1,            // مضاعف الضرر المتلقى من سمة الأمة (داخل أحيائك)، 1 لغيرها
 
     // المكافآت المحسوبة كل تحديث (الهالات، مخزن السلاح)
     damageMultiplier: 1,
     aura: false,            // هل هو داخل هالة
     auraBonus: 0,           // أقوى مكافأة ضرر من الهالات المحيطة
-    auraHeal: 0             // علاج هالة بطل العقارب
+    auraHeal: 0,            // علاج هالة بطل العقارب
+
+    // حقول تُملأ لاحقاً، موجودة من البداية بقيمة "لا شيء" حتى يبقى لكل الوحدات نفس الشكل
+    // (المحرك يبطئ كل وصول لخصائص الكائنات إن اختلفت أشكالها)
+    hardened: false,        // تصلّب (realism.js)
+    botTask: null,          // مهمة البوت (ai/bot.js)
+    gatherRally: null,      // نقطة تجمع الفرقة (ai/squads.js)
+    kiteAt: -99,            // آخر ابتعاد للرامي (ai/tactics.js)
+    ultHeldSince: -1,       // بداية تأجيل الضربة المميزة (ai/tactics.js)
+    lastHitBy: -1,          // آخر لاعب ضربه (حماية الزعيم)
+    fadeAt: -1,             // زمن التلاشي بعد سقوط الزعيم
+    wave: 0,                // رقم موجة الصمود (وحدات الشرطة فيه)
+    waveFactor: 0,
+    riot: false,
+    boss: false,
+    alwaysBlock: false,
+    focusHeroes: false,
+    artColor: null,
+    artScale: null,
+    healingTarget: null     // آخر من عالجه الطبيب
   };
+
+  // القتال الواقعي (القسم 5.4): بذرة الشخصية وأسلوب القتال والحالات الجديدة
+  initRealism(state, unit);
+  if (!shapeWarm) warmShape(unit);
+  return unit;
+}
+
+// حقول تبدأ null وتحمل أرقاماً لاحقاً
+const NULL_NUMBERS = new Set(['attackStart', 'ultStart', 'gatherRally', 'artScale']);
+let shapeWarm = false;
+
+// (المرحلة 8) أول وحدة في الجلسة فقط: كل حقل يأخذ مرة واحدة أعم نوع سيحمله ثم يعود لقيمته فوراً.
+// المحرك يعيد ترتيب شكل الكائن كلما تلقى حقلٌ نوعاً جديداً لأول مرة (عدد بفاصلة، رقم بدل null...)
+// ويرمي الكود المحسّن لكل الوحدات أثناء اللعب؛ هكذا يحدث ذلك مرة واحدة هنا قبل أن يبدأ اللعب.
+// القيم لا تتغير أبداً: نفس القيمة الأصلية تُعاد.
+function warmShape(unit) {
+  shapeWarm = true;
+  for (const key of Object.keys(unit)) {
+    const v = unit[key];
+    if (typeof v === 'number') { unit[key] = 0.5; unit[key] = v; }
+    else if (v === null) { unit[key] = NULL_NUMBERS.has(key) ? 0.5 : {}; unit[key] = null; }
+    else if (typeof v === 'boolean') { unit[key] = !v; unit[key] = v; }
+    else if (typeof v === 'string') { unit[key] = v + '_'; unit[key] = v; }
+  }
 }
 
 // أمر حركة لمجموعة الوحدات المحددة
 // المجموعات الكبيرة تستخدم حقل تدفق واحد، والصغيرة A* عبر طابور محدود
-export function commandMove(state, targetI, targetJ, units) {
+// showMarker: حلقة مكان الأمر للاعب وحده؛ أوامر البوتات والخلفية الحية بلا حلقة
+export function commandMove(state, targetI, targetJ, units, showMarker = true) {
   const map = state.map;
   const group = units.filter(u => u.state !== 'dead');
   if (!group.length) return 0;
@@ -109,7 +171,7 @@ export function commandMove(state, targetI, targetJ, units) {
   const start = nearestWalkable(map, clampedI, clampedJ);
   if (!start) return 0;
 
-  state.moveMarker = { i: clampedI, j: clampedJ, t: 0 };
+  if (showMarker) state.moveMarker = { i: clampedI, j: clampedJ, t: 0 };
 
   // مجموعة كبيرة: حقل تدفق واحد من الهدف بدل A* لكل وحدة
   if (group.length > PERFORMANCE.flowFieldMinGroup) {
@@ -129,7 +191,7 @@ export function commandMove(state, targetI, targetJ, units) {
 
   // الأقرب للهدف يأخذ المربعات الأقرب
   const sorted = [...group].sort((a, b) =>
-    Math.hypot(a.x - start[0], a.y - start[1]) - Math.hypot(b.x - start[0], b.y - start[1]));
+    hypot(a.x - start[0], a.y - start[1]) - hypot(b.x - start[0], b.y - start[1]));
 
   let spotIndex = 0, ordered = 0;
   for (const unit of sorted) {
@@ -155,9 +217,9 @@ function beginOrder(unit) {
 
 // أمر الهجوم المتحرك: تتقدم المجموعة نحو المكان، وتتوقف لقتال من يعترضها
 // ثم تواصل تقدمها (عكس أمر الحركة العادي الذي يتجاهل الأعداء)
-export function commandAttackMove(state, targetI, targetJ, units) {
+export function commandAttackMove(state, targetI, targetJ, units, showMarker = true) {
   const map = state.map;
-  const ordered = commandMove(state, targetI, targetJ, units);
+  const ordered = commandMove(state, targetI, targetJ, units, false);
   if (!ordered) return 0;
 
   const clampedI = Math.max(0, Math.min(map.n - 1, Math.round(targetI)));
@@ -170,7 +232,7 @@ export function commandAttackMove(state, targetI, targetJ, units) {
     unit.attackMove = { i: destination[0], j: destination[1] };
     if (unit.state === 'moving') unit.state = 'attackMove';
   }
-  state.moveMarker = { i: clampedI, j: clampedJ, t: 0, attack: true };   // حلقة حمراء
+  if (showMarker) state.moveMarker = { i: clampedI, j: clampedJ, t: 0, attack: true };   // حلقة حمراء
   return ordered;
 }
 
@@ -208,6 +270,7 @@ export function updateUnits(state) {
     unit.prevX = unit.x;
     unit.prevY = unit.y;
     if (unit.state === 'dead') continue;
+    if (unit.cState) continue;          // تفادٍ أو صدّ أو ترنّح: لا حركة على المسار
     moveAlongPath(state, unit);
   }
   applySeparation(state);
@@ -235,7 +298,7 @@ function moveAlongPath(state, unit) {
 
   // قد تقطع الوحدة أكثر من نقطة مسار في التحديث الواحد إذا كانت سريعة
   while (remaining > 0 && unit.path.length) {
-    const [tx, ty] = unit.path[0];
+    const point = unit.path[0], tx = point[0], ty = point[1];
     const dx = tx - unit.x, dy = ty - unit.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
 
@@ -249,6 +312,7 @@ function moveAlongPath(state, unit) {
       remaining = 0;
     }
     faceTowards(unit, tx, ty);
+    if (unit.state !== 'attacking') faceAngleTo(unit, tx, ty);   // تمشي فتنظر حيث تمشي
   }
 
   // الوحدة المهاجمة تبقى في حالتها؛ وأمر الحركة ينتهي بالانتظار
@@ -267,36 +331,70 @@ export function faceTowards(unit, targetI, targetJ) {
   if (Math.abs(screenDx) > 0.01) unit.facing = screenDx >= 0 ? 1 : -1;
 }
 
-// قوة تباعد خفيفة حتى لا تتداخل الوحدات، بشرط ألا تدفع أي وحدة داخل مبنى
-function applySeparation(state) {
-  const map = state.map;
-  const radius = UNITS.separationRadius;
-  const push = UNITS.separationStrength * TICK_SEC;
+// اتجاه الرسم مشتق من وجه الوحدة في العالم (القتال الواقعي يدوّر الوجه لا الاتجاه)
+export function facingFromAngle(unit) {
+  const screenDx = Math.cos(unit.faceAngle) - Math.sin(unit.faceAngle);
+  if (Math.abs(screenDx) > 0.01) unit.facing = screenDx >= 0 ? 1 : -1;
+}
 
-  // شبكة بسيطة بخلايا بحجم مسافة التباعد لتقليل المقارنات
-  const cells = new Map();
-  const cellKey = (x, y) => Math.floor(x / radius) + ',' + Math.floor(y / radius);
-  for (const unit of state.units) {
-    if (unit.state === 'dead') continue;
-    const key = cellKey(unit.x, unit.y);
-    if (!cells.has(key)) cells.set(key, []);
-    cells.get(key).push(unit);
+// قوة تباعد خفيفة حتى لا تتداخل الوحدات، بشرط ألا تدفع أي وحدة داخل مبنى
+// الشبكة بخلايا بحجم مسافة التباعد في مصفوفات أرقام تُعاد كل تحديث (بلا نصوص ولا كائنات جديدة)،
+// وكل خلية تحفظ وحداتها بترتيب state.units نفسه: نفس المقارنات بنفس الترتيب، فالنتيجة مطابقة تماماً
+const sepGrid = { cx: new Int32Array(0), cy: new Int32Array(0), count: new Int32Array(0), start: new Int32Array(0), list: new Int32Array(0) };
+
+function applySeparation(state) {
+  const map = state.map, units = state.units, total = units.length;
+  const radius = UNITS.separationRadius;
+  const radiusSq = radius * radius;
+  const push = UNITS.separationStrength * TICK_SEC;
+  const g = sepGrid;
+  if (g.cx.length < total) {
+    const size = Math.max(64, total * 2);
+    g.cx = new Int32Array(size); g.cy = new Int32Array(size); g.list = new Int32Array(size);
   }
 
-  for (const unit of state.units) {
+  // خلية كل وحدة حية، وحدود الشبكة
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (let k = 0; k < total; k++) {
+    const unit = units[k];
+    if (unit.state === 'dead') continue;
+    const x = Math.floor(unit.x / radius), y = Math.floor(unit.y / radius);
+    g.cx[k] = x; g.cy[k] = y;
+    if (x < minX) minX = x; if (x > maxX) maxX = x;
+    if (y < minY) minY = y; if (y > maxY) maxY = y;
+  }
+  if (minX === Infinity) return;
+  // هامش خلية من كل جانب: الجيران عند الحافة خلايا فارغة لا خارج المصفوفة
+  const w = maxX - minX + 3, h = maxY - minY + 3, cells = w * h;
+  if (g.count.length < cells) { g.count = new Int32Array(cells * 2); g.start = new Int32Array(cells * 2); }
+  const count = g.count, start = g.start, list = g.list;
+  count.fill(0, 0, cells);
+  const cellIndex = (x, y) => (x - minX + 1) + (y - minY + 1) * w;
+  for (let k = 0; k < total; k++) if (units[k].state !== 'dead') count[cellIndex(g.cx[k], g.cy[k])]++;
+  let sum = 0;
+  for (let c = 0; c < cells; c++) { start[c] = sum; sum += count[c]; count[c] = 0; }
+  for (let k = 0; k < total; k++) {
+    if (units[k].state === 'dead') continue;
+    const c = cellIndex(g.cx[k], g.cy[k]);
+    list[start[c] + count[c]++] = k;
+  }
+
+  for (let k = 0; k < total; k++) {
+    const unit = units[k];
     if (unit.state === 'dead') continue;
     let ox = 0, oy = 0;
-    const cx = Math.floor(unit.x / radius), cy = Math.floor(unit.y / radius);
+    const cx = g.cx[k], cy = g.cy[k];
 
     for (let a = -1; a <= 1; a++) {
       for (let b = -1; b <= 1; b++) {
-        const group = cells.get((cx + a) + ',' + (cy + b));
-        if (!group) continue;
-        for (const other of group) {
+        const c = cellIndex(cx + a, cy + b);
+        const end = start[c] + count[c];
+        for (let q = start[c]; q < end; q++) {
+          const other = units[list[q]];
           if (other === unit) continue;
           const dx = unit.x - other.x, dy = unit.y - other.y;
           const distSq = dx * dx + dy * dy;
-          if (distSq >= radius * radius) continue;
+          if (distSq >= radiusSq) continue;
           const dist = Math.sqrt(distSq);
           if (dist < 0.0001) {   // متطابقتان تماماً: دفعة عشوائية صغيرة
             ox += (Math.random() - 0.5) * push;
