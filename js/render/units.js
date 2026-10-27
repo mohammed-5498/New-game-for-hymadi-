@@ -5,6 +5,7 @@ import { drawOne, stateLabel, drawSpeedLines } from './combatArt.js';
 import { flameLayers } from './anim.js';
 import { shadedCount } from '../pacing.js';
 import { nationArtKey, shotLook } from './nationArt.js';
+import { spriteShotLook } from './unitSprites.js';
 import './nationsArab.js';                 // مظاهر الدفعة العربية تُسجَّل في سجل الأمم (القسم 3.10)
 import './nationsAsia.js';                 // والدفعة الآسيوية
 import './nationsEurope.js';               // والدفعة الأوروبية
@@ -209,7 +210,7 @@ export function drawProjectile(ctx, shot, alpha) {
     aimedArrow(ctx, shot, x, (i + j) * TILE_HALF_H - 6 - Math.sin(progress * Math.PI) * arc, progress, arc, color);
     return;
   }
-  const look = shotLook(shot);
+  const look = spriteShotLook(shot) || shotLook(shot);
   // السهم المشتعل (رامي السهام المشتعلة): شكل فقط، وقواعده قواعد زجاجة رامي النار
   if (look === 'firearrow') {
     const head = aimedArrow(ctx, shot, x, y, progress, COMBAT.projectileArc, PROJECTILE_COLORS.arrow);

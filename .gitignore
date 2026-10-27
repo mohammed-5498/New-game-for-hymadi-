@@ -2,3 +2,7 @@
 # Capacitor
 www/
 node_modules/
+
+# صور الشخصيات الأصلية تبقى خارج المستودع بطلب المستخدم؛ الأجزاء المقطّعة منها في assets/units
+docs/characters/
+__pycache__/
