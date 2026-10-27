@@ -6,7 +6,7 @@ import { poseIdle, drawBody, STYLE, softShadow } from '../render/anim.js';
 import { twoHand } from '../render/combatArt.js';
 import { ART_KEYS } from '../render/units.js';          // ومعه تسجيل مظاهر الأمم
 import { NATION_ART } from '../render/nationArt.js';
-import { spriteBody, drawSpriteBody } from '../render/unitSprites.js';
+import { spriteBody, drawSpriteBody, whenSpriteReady } from '../render/unitSprites.js';
 
 // مساحة الشخصية بوحدات الجسد (مقيسة لكل الشخصيات): من قمة غطاء الرأس إلى حلقة الأرض تحت القدمين،
 // وعرض خانتها في صف الشخصيات (السلاح والحلقة قد يتجاوزانها قليلاً)
@@ -47,8 +47,10 @@ export function drawCharacters(canvas, side, kinds, color, glow = null) {
   const s = Math.min(h / ((FIT.top + FIT.bottom) * big), w / span);
   let x = (w + span * s) / 2;
   const y = h - FIT.bottom * big * s;
+  let pending = null;
   kinds.forEach((kind, k) => {
-    const key = bodyKey(side, kind), ud = spriteBody(key) || BODIES[key];   // العصابات الكلاسيكية بصورها
+    const key = bodyKey(side, kind), sp = spriteBody(key), ud = sp || BODIES[key];   // الشخصيات بصورها
+    if (!sp) pending = key;
     const sc = s * kindScale(kind), slot = FIT.slot * kindScale(kind) * s;
     ctx.save();
     ctx.translate(x - slot / 2, y);
@@ -61,4 +63,6 @@ export function drawCharacters(canvas, side, kinds, color, glow = null) {
     ctx.restore();
     x -= slot;
   });
+  // صور الأمة لم تُحمَّل بعد (تُحمَّل عند أول حاجة): تُعاد الرسمة بها حين تكتمل
+  if (pending) whenSpriteReady(pending, () => drawCharacters(canvas, side, kinds, color, glow));
 }

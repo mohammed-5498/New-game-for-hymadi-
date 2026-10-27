@@ -1,23 +1,30 @@
-// صور الشخصيات المعتمدة للعصابات الكلاسيكية الأربع (القسم 13.1): كل صورة مقطّعة بالأداة
-// scripts/slice_units.py إلى جذع ورأس وعضد وساعد وفخذ وساق بقدم وسلاح، بأطوال هيكل drawBody نفسه.
-// drawSpriteBody تحسب المفاصل كما يحسبها drawBody حرفياً ثم ترسم الأجزاء عليها بدل الخطوط، وتعيد J نفسها،
-// فكل الوضعيات والآثار (الشرر، الأثر، الوميض، التفادي، السقوط) تعمل كما هي.
-// الجسد يأخذ لون اللاعب: تُصبغ بكسلات لون العصابة مرة واحدة لكل (عصابة، لون).
-// الأمم والشرطة بلا صور هنا، فتبقى مرسومة بالكود.
+// صور الشخصيات المعتمدة (القسم 13.1): العصابات الكلاسيكية الأربع والأمم الـ15 والشرطة. كل صورة مقطّعة بالأداة
+// scripts/slice_units.py إلى جذع ورأس وعضد وساعد وفخذ وساق بقدم و"إزار" (ما تحت الحوض: ثوب أو معطف) وسلاح،
+// بأطوال هيكل drawBody نفسه. drawSpriteBody تحسب المفاصل كما يحسبها drawBody حرفياً ثم ترسم الأجزاء عليها
+// بدل الخطوط، وتعيد J نفسها، فكل الوضعيات والآثار (الشرر، الأثر، الوميض، التفادي، السقوط) تعمل كما هي.
+// الجسد يأخذ لون اللاعب: تُصبغ بكسلات لون العصابة (أو لون جسد الأمة) مرة واحدة لكل (أطلس، لون).
 import { SPRITES } from './unitSpritesData.js';
 import { BODIES } from './bodies.js';
 import { rot, add, ik2, wdir, limb, flame } from './anim.js';
 
 const UPP = SPRITES.upp;           // وحدة رسم لكل بكسل من الأطلس
-const loaded = {};                 // العصابة ← صورة أطلسها بعد اكتمال التحميل
-const painted = new Map();         // 'عصابة|لون' ← أطلس مصبوغ بلون اللاعب
+const loaded = {};                 // الأطلس ← صورته بعد اكتمال التحميل
+const waiting = {};                // الأطلس ← دوال تنتظر تحميله (صور المتجر)
+const painted = new Map();         // 'أطلس|لون' ← أطلس مصبوغ بلون اللاعب
 
-// التحميل يبدأ فوراً؛ وحتى يكتمل تُرسم الوحدات بالكود
-for (const [gang, g] of Object.entries(SPRITES.gangs)) {
+function load(gang) {
+  if (waiting[gang]) return;
+  waiting[gang] = [];
   const img = new Image();
-  img.onload = () => { loaded[gang] = img; };
-  img.src = g.src;
+  img.onload = () => {
+    loaded[gang] = img;
+    for (const fn of waiting[gang]) fn();
+    waiting[gang].length = 0;
+  };
+  img.src = SPRITES.gangs[gang].src;
 }
+// الكلاسيكية والشرطة في كل مباراة فتُحمَّل فوراً، والأمم عند أول حاجة إليها؛ وحتى يكتمل التحميل تُرسم بالكود
+for (const gang of ['crows', 'hammers', 'vipers', 'scorpions', 'police']) load(gang);
 
 // --- الصبغ بلون اللاعب: نغيّر درجة اللون ونحفظ نسبة التشبع والإضاءة إلى لون العصابة الأصلي ---
 function hexHsv(hex) {
@@ -63,10 +70,15 @@ function paint(gang, color) {
   return out;
 }
 
+// المباراة فيها حتى 8 لاعبين (أمة ولون لكل منهم) والشرطة، والمتجر يرسم الأمم كلها: يبقى آخر 16 أطلساً مصبوغاً
+const PAINTED_MAX = 16;
 function sheet(gang, color) {
   const id = gang + '|' + color;
   let S = painted.get(id);
-  if (!S) painted.set(id, S = paint(gang, color));
+  if (!S) {
+    if (painted.size >= PAINTED_MAX) painted.delete(painted.keys().next().value);
+    painted.set(id, S = paint(gang, color));
+  }
   return S;
 }
 
@@ -81,11 +93,12 @@ function part(c, S, p, x, y, ang, k = 1) {
 }
 const angleOf = (a, b) => Math.atan2(b[1] - a[1], b[0] - a[0]);
 
-// رجل: فخذ وساق بقدم بزوايا leg في anim.js وأطوالها
+// رجل: فخذ وساق بقدم بزوايا leg في anim.js وأطوالها. تعيد نقاط الورك والركبة والقدم (J.legB وJ.legF)
 function legPart(c, S, th, sn, hx, hy, t, fl) {
   const kx = hx + Math.sin(t) * 5.8, ky = hy + Math.cos(t) * 5.8;
   part(c, S, th, hx, hy, Math.atan2(ky - hy, kx - hx));
   part(c, S, sn, kx, ky, Math.atan2(Math.cos(t - fl), Math.sin(t - fl)));
+  return { h: [hx, hy], k: [kx, ky], f: [kx + Math.sin(t - fl) * 6, ky + Math.cos(t - fl) * 6] };
 }
 
 // ذراع: عضد من الكتف إلى المرفق وساعد إلى اليد (نتيجة ik2)
@@ -94,10 +107,32 @@ function armPart(c, S, ua, la, s, k) {
   part(c, S, la, k.j[0], k.j[1], angleOf(k.j, k.e));
 }
 
+// نقطة على الساق: 0 الورك، 0.5 الركبة، 1 القدم (legPt في nationArt.js)
+function legPt(L, t) {
+  const A = t <= 0.5 ? L.h : L.k, B = t <= 0.5 ? L.k : L.f, u = t <= 0.5 ? t / 0.5 : (t - 0.5) / 0.5;
+  return [A[0] + (B[0] - A[0]) * u, A[1] + (B[1] - A[1]) * u];
+}
+
+// الإزار (ما تحت الحوض: ثوب، معطف، تنورة، حزام) معلّق من الحوض: أفقه مع ميل الحوض، ونزوله نحو منتصف
+// الساقين عند طول حاشيته s[8] فيتمايل معهما (كالثوب في nationArt.js)، بحدود حتى لا يتشوه عند الركلة والسقوط
+function skirtPart(c, S, s, J) {
+  const L = s[8], B = legPt(J.legB, Math.min(1, L / 11.8)), F = legPt(J.legF, Math.min(1, L / 11.8));
+  const ca = Math.cos(J.pl), sa = Math.sin(J.pl);
+  const dx = (B[0] + F[0]) / 2 - J.hip[0], dy = (B[1] + F[1]) / 2 - J.hip[1];
+  const d = Math.hypot(dx, dy) || 1, m = Math.min(1.1, Math.max(0.75, d / L));
+  // ميل النزول عن عمود الحوض محدود بـ 0.9
+  const tilt = Math.max(-0.9, Math.min(0.9, Math.atan2(dx * ca + dy * sa, dy * ca - dx * sa)));
+  const yx = (-sa * Math.cos(tilt) + ca * Math.sin(tilt)) * m, yy = (ca * Math.cos(tilt) + sa * Math.sin(tilt)) * m;
+  c.save();
+  c.transform(ca * UPP, sa * UPP, yx * UPP, yy * UPP, J.hip[0], J.hip[1]);
+  c.drawImage(S, s[0], s[1], s[2], s[3], -s[4], -s[5], s[2], s[3]);
+  c.restore();
+}
+
 // القوس: المقبض في اليد الأمامية ويتحدب للأمام، والوتر يُشد إلى اليد الخلفية (مثل bow في bodies.js)
-function bowArt(arrows, fire) {
+function bowArt(arrows, fire, name = 'bow') {
   return (c, S, P, J, p) => {
-    const w = P.bow, aim = p.pull === undefined ? p.wa * 0.4 : p.wa, pull = p.pull || 0;
+    const w = P[name], aim = p.pull === undefined ? p.wa * 0.4 : p.wa, pull = p.pull || 0;
     const d = wdir(aim), u = [d[1], -d[0]], h = J.handF, k = UPP * w[7];
     part(c, S, w, h[0], h[1], aim + w[6], w[7]);
     if (pull <= 0.05) return;
@@ -118,10 +153,12 @@ function bowArt(arrows, fire) {
 
 // سلاح في اليد الأمامية على زاوية الوضعية
 const inHand = (name) => (c, S, P, J, p) => part(c, S, P[name], J.handF[0], J.handF[1], p.wa, P[name][7]);
+// سلاح ثانٍ في اليد الخلفية (زاوية bodies.js)
+const inBack = (name) => (c, S, P, J) => part(c, S, P[name], J.handB[0], J.handB[1], angleOf(J.Sb, J.handB) - 0.9, P[name][7]);
 // درع مستدير عند يد ما مائل مع الجذع (مكان الدرع في bodies.js)
 const shieldAt = (c, S, w, x, y, J) => part(c, S, w, x, y, w[6] + J.a2 * 0.6, w[7]);
 
-// لكل وحدة: ما في يدها الأمامية (held)، وما خلف الجذع (back)، وما أمامه (front)
+// لكل وحدة كلاسيكية: ما في يدها الأمامية (held)، وما خلف الجذع (back)، وما أمامه (front)
 const ART = {
   crow_common:   { held: inHand('dagger') },
   crow_spear:    { held: inHand('spear') },
@@ -165,25 +202,95 @@ const ART = {
   }
 };
 
-// وصف الرسم لكل وحدة: وصف bodies.js (الحلقات والظل والسلاح ذو اليدين) مع الصور وأطوال أسلحتها.
-// sx وsy متساويان: نسب الصورة نفسها بلا مط
+// --- الأمم والشرطة: طريقة حمل كل قطعة من بيانات الأداة (uses)، فلا جدول يدوي لكل وحدة ---
+// قطعة قائمة بلا دوران (قِدر، مشعل، فانوس معلّق، صقر) مقبضها عند النقطة (x, y)
+const still = (c, S, w, x, y) => part(c, S, w, x, y, w[6], w[7]);
+const USES = {
+  hand: (n) => ({ held: inHand(n) }),
+  pair: (n) => ({ back: inBack(n) }),
+  shield: (n) => ({ front: (c, S, P, J) => shieldAt(c, S, P[n], J.handF[0] + 1.2, J.handF[1], J) }),
+  side: (n) => ({                             // درع الشرطة على اليد الخلفية: خلفه، وأمامه عند الصدّ
+    back(c, S, P, J, p) { if (!p.blocking) shieldAt(c, S, P[n], J.handB[0] + 0.8, J.handB[1] - 3.5, J); },
+    front(c, S, P, J, p) { if (p.blocking) shieldAt(c, S, P[n], J.handB[0] + 0.8, J.handB[1] - 3.5, J); }
+  }),
+  hang: (n) => ({ held: (c, S, P, J) => still(c, S, P[n], J.handF[0], J.handF[1]) }),
+  upright: (n) => ({ held: (c, S, P, J) => still(c, S, P[n], J.handF[0], J.handF[1] - 0.3) }),
+  // على القبضة: أعلاها (المفاصل) باتجاه الساعد
+  fist: (n) => ({ front: (c, S, P, J) => part(c, S, P[n], J.handF[0], J.handF[1], angleOf(J.elbowF, J.handF), P[n][7]) }),
+  falcon: (n) => ({ front: (c, S, P, J) => still(c, S, P[n], J.handF[0], J.handF[1]) }),
+  back: (n) => ({                             // جعبة على الظهر (مكان جعبة viper_hero)
+    back(c, S, P, J, p) {
+      const q1 = add(J.chest, rot(-1.8, 0.6, J.a2)), q2 = add(J.mid, rot(-3.4, 1.2, p.pl));
+      part(c, S, P[n], (q1[0] + q2[0]) / 2, (q1[1] + q2[1]) / 2, angleOf(q2, q1), P[n][7]);
+    }
+  }),
+  belt: (n) => ({ mid: (c, S, P, J) => { const b = add(J.hip, rot(2.2, -0.6, J.pl)); still(c, S, P[n], b[0], b[1]); } })
+};
+
+function nationArt(key, P, A, away) {
+  const hooks = { held: [], back: [], front: [], mid: [] };
+  for (const [n, use] of Object.entries(A.uses)) {
+    if (away && use === 'falcon') continue;   // الصقر في انقضاضه (unit.awayUntil)
+    if (use === 'bow') { hooks.held.push(bowArt(A.arrows || 1, A.fire, n)); continue; }
+    for (const [hook, fn] of Object.entries(USES[use](n))) hooks[hook].push(fn);
+    if (use === 'hand' && A.pair) hooks.back.push(inBack(n));
+  }
+  if (key === 'saudi_champion') {             // الصقّار: القوس في يده أثناء الرمي فقط (قوس القوّاس من الأطلس نفسه)
+    const bow = bowArt(3, false), Q = { bow: SPRITES.gangs.saudi.units.saudi_sniper.bow };
+    hooks.held.push((c, S, P2, J, p) => { if (p.pull !== undefined) bow(c, S, Q, J, p); });
+  }
+  const all = (list) => list.length ? (c, S, P2, J, p) => { for (const fn of list) fn(c, S, P2, J, p); } : null;
+  return { held: all(hooks.held) || (() => {}), back: all(hooks.back), front: all(hooks.front), mid: all(hooks.mid),
+           twoH: !!A.twoH };
+}
+
+// الأطلس ← مفاتيح وحداته؛ ووصف الرسم لكل مفتاح يُبنى عند أول طلب (مظاهر الأمم تُسجَّل في BODIES بعد هذا الملف)
+const ATLAS_OF = {};
+for (const [gang, g] of Object.entries(SPRITES.gangs)) for (const key of Object.keys(g.units)) ATLAS_OF[key] = gang;
 const DESC = {};
-for (const [gang, g] of Object.entries(SPRITES.gangs)) {
-  for (const [key, P] of Object.entries(g.units)) {
+
+// وصف الرسم: وصف bodies.js (الحلقات والظل والهالة) مع الصور وأطوال أسلحتها. sx وsy متساويان: نسب الصورة بلا مط.
+// للأمم: المفتاح بلاحقته _lite (المستوى المبسّط بالكود) أو _away (الصقر غائب) يرسم الصورة نفسها
+function describe(key) {
+  const away = /_away(_lite)?$/.test(key), base = key.replace(/_lite$/, '').replace(/_away$/, '');
+  const gang = ATLAS_OF[base];
+  if (!gang) return (DESC[key] = null);
+  if (!BODIES[key]) return null;
+  const P = SPRITES.gangs[gang].units[base], A = P._;
+  if (!A) {                                    // العصابات الكلاسيكية: جدول ART
     const art = ART[key], w = Object.values(P).find(v => v.length > 7 && v[8] > 0);
     const size = key === 'hammer_hero' ? 1.1 : 1;           // بطل المطارق أضخم الجميع (القسم 6.6)
-    DESC[key] = Object.assign({}, BODIES[key], {
+    return (DESC[key] = Object.assign({}, BODIES[key], {
       sx: size, sy: size, gang, P, art, sprite: true,
       tipLen: w ? w[8] : BODIES[key].tipLen, butt: w && w[9] > 0 ? w[9] : BODIES[key].butt,
       twoH: art.twoH || BODIES[key].twoH, shoots: art.shoots
-    });
+    }));
   }
+  const art = nationArt(base, P, A, away), body = BODIES[key];
+  const hand = Object.keys(A.uses).find(n => A.uses[n] === 'hand'), w = hand && P[hand];
+  // الحجم كأكبر بُعدي مظهر الكود (الأبطال أطول قليلاً)
+  const size = Math.max(body.sx || 1, body.sy || 1);
+  return (DESC[key] = Object.assign({}, body, {
+    sx: size, sy: size, gang, P, art, sprite: true,
+    tipLen: w ? w[8] : body.tipLen, butt: w && w[9] > 0 ? w[9] : body.butt, twoH: art.twoH
+  }));
 }
 
-// وصف الوحدة بالصور إن كانت لها صور وتم تحميلها، وإلا null فتُرسم بالكود
+// وصف الوحدة بالصور إن كانت لها صور وتم تحميلها، وإلا null فتُرسم بالكود (ويبدأ تحميل أطلس الأمة)
 export function spriteBody(key) {
-  const d = DESC[key];
-  return d && loaded[d.gang] ? d : null;
+  const d = key in DESC ? DESC[key] : describe(key);
+  if (!d) return null;
+  if (loaded[d.gang]) return d;
+  load(d.gang);
+  return null;
+}
+
+// يستدعي fn مرة واحدة حين يكتمل تحميل صور هذه الوحدة (إن لم تكن جاهزة): لإعادة رسم صورة ثابتة في المتجر
+export function whenSpriteReady(key, fn) {
+  const d = key in DESC ? DESC[key] : describe(key);
+  if (!d || loaded[d.gang]) return;
+  load(d.gang);
+  waiting[d.gang].push(fn);
 }
 
 // رامي النار الكلاسيكي بصورته (قوس) يطلق سهماً مشتعلاً بدل الزجاجة: الشكل فقط، والقواعد كما هي
@@ -192,7 +299,7 @@ export function spriteShotLook(shot) {
   return a && !a.nation && a.hero === 'firebomber' && spriteBody('viper_firebomber') ? 'firearrow' : null;
 }
 
-// مثل drawBody في anim.js: نفس المفاصل ونفس J، والأجزاء من الصور. الساقان قبل الجذع لأن المئزر يغطي أعلاهما
+// مثل drawBody في anim.js: نفس المفاصل ونفس J، والأجزاء من الصور. الساقان قبل الجذع لأن الإزار والثوب يغطيان أعلاهما
 export function drawSpriteBody(c, p, col, ud) {
   const S = sheet(ud.gang, col), P = ud.P, A = ud.art;
   const hp = [p.px, p.py];
@@ -201,13 +308,15 @@ export function drawSpriteBody(c, p, col, ud) {
   const Sb = add(C, rot(-0.9, 0.7, a2)), Sf = add(C, rot(0.9, 0.5, a2));
   const J = { hip: hp, mid: M, chest: C, neck: N, head: H, ha, Sf, Sb, a2, pl: p.pl, legB: null, legF: null };
 
-  legPart(c, S, P.thD, P.snD, p.px - 1.2, p.py, p.tb, p.kb);
-  legPart(c, S, P.th, P.sn, p.px + 1.2, p.py, p.tf, p.kf);
+  J.legB = legPart(c, S, P.thD, P.snD, p.px - 1.2, p.py, p.tb, p.kb);
+  J.legF = legPart(c, S, P.th, P.sn, p.px + 1.2, p.py, p.tf, p.kf);
   const b = ik2(Sb, p.bh, 3.7, 3.7, true);
   J.handB = b.e;
   armPart(c, S, P.uaD, P.laD, Sb, b);
   if (A.back) A.back(c, S, P, J, p);
+  if (P.skirt) skirtPart(c, S, P.skirt, J);
   part(c, S, P.torso, hp[0], hp[1], angleOf(hp, C));
+  if (A.mid) A.mid(c, S, P, J, p);
   part(c, S, P.head, H[0], H[1], ha + P.head[6]);
   const f = ik2(Sf, p.fh, 3.7, 3.7, true);
   J.handF = f.e;

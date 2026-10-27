@@ -106,8 +106,8 @@ export function twoHand(ud, p) {
 // drawOne في المرجع. ghosts: عدد أشباح أثر السلاح (0 في المستوى المبسّط).
 // shaded: النمط المظلَّل (المرحلة 9ج) يُشغَّل لعلامات القدمين والظل والجسد فقط، لا للآثار من حوله
 export function drawOne(ctx, unit, key, x, y, scale, color, time, walking, ghosts, alpha = 1, shaded = false) {
-  // العصابات الكلاسيكية بصور شخصياتها المعتمدة (unitSprites.js) لوحدات المستوى الكامل وحدها (أقرب 60 في الشاشة):
-  // رسم أجزاء الصور أثقل من الخطوط على جهاز بلا تسريع رسومي، فيبقى عددها محدوداً، والباقي بالرسم القديم
+  // الشخصيات بصورها المعتمدة (unitSprites.js: الكلاسيكية والأمم والشرطة) لوحدات المستوى الكامل وحدها (أقرب 60 في
+  // الشاشة): رسم أجزاء الصور أثقل من الخطوط على جهاز بلا تسريع رسومي، فيبقى عددها محدوداً، والباقي بالرسم القديم
   const ud = (unit.lod === 'full' && spriteBody(key)) || BODIES[key] || BODIES.crow_common;
   const animT = time + (unit.id % 17) * 0.13;
   const dead = unit.state === 'dead';
