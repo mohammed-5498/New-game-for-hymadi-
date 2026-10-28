@@ -1,5 +1,5 @@
 // رسم الوحدات: نظام الوضعيات v2 (anim.js + bodies.js + combatArt.js) مربوطاً بحالة الوحدة
-import { TILE_HALF_W, TILE_HALF_H, COMBAT, COMBAT_REALISM, PERFORMANCE, UNIT_ART, ULT, nations } from '../config.js';
+import { TILE_HALF_W, TILE_HALF_H, TICK_SEC, COMBAT, COMBAT_REALISM, PERFORMANCE, UNIT_ART, ULT, nations } from '../config.js';
 import { UI_LIGHT } from './colors.js';
 import { drawOne, stateLabel, drawSpeedLines } from './combatArt.js';
 import { flameLayers } from './anim.js';
@@ -73,6 +73,8 @@ export function drawUnit(ctx, unit, alpha, zoom = 99, time = 0, debug = false, c
   // نظام الوضعيات v2 لكل الوحدات (القسم 5.4.6). المستوى المبسّط بلا أثر السلاح وبلا شبحي التفادي
   const key = artKey(unit, time, shaded), scale = artScale(unit), color = artColor(unit), walking = isWalking(unit);
   const full = unit.lod === 'full';
+  // ما مضى من التحديث الجاري: الوضعيات تتحرك بسلاسة إطار الشاشة لا بخطوات التحديث (القسم 5.4.8)
+  const sub = alpha * TICK_SEC;
   // خطوط السرعة خلف المندفع والمقذوف والمتفادي (القسم 5.4.7)
   if (!dead) {
     const vi = unit.cState === 'dodge' ? unit.dvx : unit.vx, vj = unit.cState === 'dodge' ? unit.dvy : unit.vy;
@@ -85,7 +87,7 @@ export function drawUnit(ctx, unit, alpha, zoom = 99, time = 0, debug = false, c
     for (let g = 1; g <= 2; g++) {
       const di = unit.dvx * 0.035 * g, dj = unit.dvy * 0.035 * g;
       drawOne(ctx, unit, key, x - (di - dj) * TILE_HALF_W, y - (di + dj) * TILE_HALF_H,
-              scale, color, time, walking, 0, 0.18);
+              scale, color, time, walking, 0, 0.18, false, sub);
     }
   }
   const ghosts = full ? (crowded ? COMBAT_REALISM.trailGhostsCrowded : COMBAT_REALISM.trailGhosts) : 0;
@@ -99,7 +101,7 @@ export function drawUnit(ctx, unit, alpha, zoom = 99, time = 0, debug = false, c
     ctx.lineWidth = 0.9;
     ctx.stroke();
   }
-  drawOne(ctx, unit, key, x, y, scale, color, time, walking, ghosts, 1, shaded);
+  drawOne(ctx, unit, key, x, y, scale, color, time, walking, ghosts, 1, shaded, sub);
   if (dead) return;
 
   // وضع التفاصيل (ثلاث لمسات على شريط المعلومات): اسم الحالة فوق الوحدة

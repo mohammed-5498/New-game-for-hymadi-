@@ -3,7 +3,7 @@
 // الالتفاف، والاصطدام بالحلفاء. كل الأرقام في COMBAT_REALISM و COMBAT_STYLE.
 //
 // المرجع يعمل بالبكسل وبخطوة زمنية حرة؛ هنا كل المسافات بالمربعات والخطوة ثابتة (TICK_SEC).
-import { TICK_SEC, COMBAT_REALISM as CR, COMBAT_STYLE, nations } from '../config.js';
+import { TICK_SEC, COMBAT_REALISM as CR, COMBAT_STYLE, FIGHT, nations } from '../config.js';
 import { forEachNearby } from './spatialHash.js';
 import { onScreen } from './alerts.js';
 import { hypot } from './hypot.js';
@@ -84,6 +84,19 @@ export function initRealism(state, unit) {
   unit.rolling = false;        // جثة متدحرجة
   unit.lod = 'full';
   unit.lodAt = 0;
+
+  // أنميشن القتال حسب السلاح (القسم 5.4.8): يكتبها القتال ويقرؤها الرسم وحده، فلا تغيّر اللعب
+  unit.cNode = null;           // عقدة الحركة الجارية أو الأخيرة في شجرة التتابع (L1, H1, D...)
+  unit.chainAt = -1e9;         // متى انتهت الحركة الأخيرة (نافذة التتابع)
+  unit.approachAt = -1e9;      // آخر تقدّم نحو الهدف، وبداية هذا التقدّم (ضربة الاندفاع)
+  unit.approachSince = -1e9;
+  unit.landAt = -1e9;          // متى أصابت ضربتها الأخيرة (التجمّد عند الارتطام)، ومتى عُرفت نتيجتها أصابت أم لا
+  unit.hitDoneAt = -1e9;
+  unit.hitAt = -1e9;           // متى أُصيبت آخر مرة، وتجمّدها، وأسلوب الضارب وعقدته (رد فعلها)
+  unit.hitStop = 0;
+  unit.hitStyle = '';
+  unit.hitNode = '';
+  unit.deathFront = false;     // ماتت بضربة من الخلف: تسقط على وجهها
 }
 
 // --- أزمنة الحركة ---
@@ -145,6 +158,42 @@ export function chooseMove(unit, target, dist, nearCount, range) {
   return best;
 }
 
+// --- أنميشن القتال حسب السلاح (القسم 5.4.8) ---
+// أسلوب الشخصية من سلاحها، وعقدة الحركة المختارة في شجرة تتابع أسلوبها. للرسم وحده: لا يقرؤها اللعب
+export function fightStyle(unit) {
+  const table = FIGHT.weapons[unit.nation] || FIGHT.weapons[unit.gang] || FIGHT.weapons.crows;
+  return table[unit.champion ? 'champion' : (unit.hero || 'common')] || 'blade';
+}
+export const fightBig = (unit) => !unit.champion && !!FIGHT.big[unit.hero];
+// القائد (البطل): سلسلة أسلوبه ورابعة بعدها L4
+const LEADER_CHAIN = {};
+for (const [name, style] of Object.entries(FIGHT.styles)) LEADER_CHAIN[name] = style.chain.concat('L4');
+
+export function fightNode(state, unit, key, target) {
+  const name = fightStyle(unit), style = FIGHT.styles[name];
+  const special = FIGHT.special.find(k => unit.style.moves.includes(k));
+  if (unit.champion && target && target.hp <= target.maxHp * FIGHT.finisherHp && (key === 'heavy' || key === special)) return 'F';
+  if (style.dash.includes(key) && state.time - unit.approachAt <= FIGHT.dashWindow &&
+      unit.approachAt - unit.approachSince >= FIGHT.dashMin) return 'D';
+  if (key === 'heavy') return 'H1';
+  if (key === special) return 'S1';
+  if (style.light.includes(key)) {
+    const chain = unit.champion ? LEADER_CHAIN[name] : style.chain;
+    if (state.time - unit.chainAt > FIGHT.window) return chain[0];
+    if (unit.cNode === 'P') return chain[1];                       // اللكمة تفتح السلسلة
+    return chain[(chain.indexOf(unit.cNode) + 1) % chain.length];   // غير موجودة (-1) ← الأولى
+  }
+  return key === 'punch' ? 'P' : key === 'kick_front' ? 'KF' : key === 'kick_high' ? 'KH' : key === 'spin' ? 'S1' : 'D';
+}
+
+// التجمّد عند الارتطام بالثواني لضربة هذه العقدة (يقرؤه رسم الضارب والمُصاب)
+const NODE_GROUP = { L1: 'light', L2: 'light', L3: 'light', L4: 'light', D: 'dash', P: 'punch', KF: 'kick_front',
+                     KH: 'kick_high', H1: 'heavy', S1: 'special', F: 'finisher' };
+export function hitstopOf(style, node, big) {
+  const s = (FIGHT.hitstop[style] || FIGHT.hitstop.blade) * (FIGHT.hitstopMul[NODE_GROUP[node]] || 1) * (big ? FIGHT.hitstopBig : 1);
+  return Math.min(FIGHT.hitstopMax, s);
+}
+
 // --- الرؤية المعلّقة ---
 // عندما يبدأ المهاجم استعداده يسجّل عند الهدف رؤية تنفَّذ بعد زمن رد فعله.
 // ليلاً يتأخر رد الفعل لأن الوحدة ترى الضربة متأخرة (القسم 7).
@@ -185,12 +234,13 @@ function beginBlock(state, unit) {
   addPop(state, unit, 'صدّ!', 'block');
 }
 
-// يُلغي ضربة في منتصفها (التفادي في أول نصف الاستعداد يلغي الضربة)
+// يُلغي ضربة في منتصفها (التفادي في أول نصف الاستعداد يلغي الضربة)، وتبدأ سلسلة التتابع من أولها
 function cancelSwing(unit) {
   unit.cMove = null;
   unit.cPhases = null;
   unit.pendingHit = null;
   unit.attackStart = null;
+  unit.chainAt = -1e9;
 }
 
 // الوحدة رأت الاستعداد: هل تتفادى أو تصدّ؟
@@ -472,7 +522,7 @@ export function updatePops(state) {
   }
   if (state.fx.length) {
     for (const fx of state.fx) fx.t += TICK_SEC;
-    state.fx = state.fx.filter(fx => fx.t < CR.burstSeconds);
+    state.fx = state.fx.filter(fx => fx.t < (fx.life || CR.burstSeconds));
   }
   if (state.clashes.length) {
     for (const fx of state.clashes) fx.t += TICK_SEC;
@@ -531,8 +581,14 @@ export function knockDown(state, unit, fromX, fromY, tiles) {
 // --- نجمة انفجار في نقطة الارتطام: ثلثا المسافة نحو المصاب، وارتفاعها حسب الحركة ---
 const FX_HEIGHT = { kick_high: 22, kick_front: 12 };
 const FX_BIG = { heavy: true, kick_high: true, spin: true, kick_front: true };
-export function addBurst(state, attacker, target, move) {
+// style وnode وbigA: أسلوب الضارب وعقدته وهل هو العضو الضخم، فيُرسم أثر الارتطام بلغة سلاحه (القسم 5.4.8)،
+// وdx وdy اتجاه الضربة (لخط سرعة الطعنة وقوس الجرح)
+// echo: إصابة ثانية فما بعد من نفس الضربة الدائرية (أثرها نجمة صغيرة بلا حلقة اهتزاز ثانية)
+export function addBurst(state, attacker, target, move, echo = false) {
   if (attacker.lod === 'stat' && target.lod === 'stat') return;
+  const dx = target.x - attacker.x, dy = target.y - attacker.y, d = Math.sqrt(dx * dx + dy * dy) || 1;
   state.fx.push({ x: (target.x * 2 + attacker.x) / 3, y: (target.y * 2 + attacker.y) / 3, t: 0,
-                  big: !!FX_BIG[move], h: FX_HEIGHT[move] || 16 });
+                  big: !!FX_BIG[move], h: FX_HEIGHT[move] || 16,
+                  style: fightStyle(attacker), node: attacker.cNode || '', bigA: fightBig(attacker), life: FIGHT.quake.seconds,
+                  dx: dx / d, dy: dy / d, echo });
 }

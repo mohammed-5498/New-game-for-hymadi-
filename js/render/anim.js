@@ -98,7 +98,8 @@ function ik2(o,t,L1,L2,flip){let dx=t[0]-o[0],dy=t[1]-o[1],d=Math.hypot(dx,dy)||
 
 /* ---------- الوضعيات ----------
    px,py الحوض | pl ميل أسفل العمود | cb انحناء أعلى العمود | ht ميل الرأس | hdx,hdy إزاحة الرأس
-   fh,bh اليد الأمامية والخلفية | wa زاوية السلاح (0 للأمام، سالب للأعلى) | tf,kf / tb,kb فخذ وركبة الساق الأمامية/الخلفية */
+   fh,bh اليد الأمامية والخلفية | wa زاوية السلاح (0 للأمام، سالب للأعلى) | tf,kf / tb,kb فخذ وركبة الساق الأمامية/الخلفية
+   (إضافة اللعبة، القسم 5.4.8) tw دوران الجذع اختيارياً: موجب يقدّم الكتف الخلفي ويُرجع الأمامي (0 = الرسم القديم حرفياً) */
 const BASE={px:0,py:-11,pl:0.05,cb:0,ht:0,hdx:0,hdy:0,fh:[3.5,-6.5],bh:[-2.5,-6.5],wa:0.9,tf:0.13,kf:0.16,tb:-0.13,kb:0.16,air:0};
 const GUARD={px:0,py:-9.8,pl:0.18,cb:0.1,ht:0.08,fh:[4.6,-15],bh:[3,-13.4],wa:-1.35,tf:0.58,kf:0.75,tb:-0.72,kb:0.48};
 function P(o){return Object.assign({},BASE,GUARD,o);}
@@ -212,7 +213,7 @@ function drawBody(c,p,col,o){
   const W=o.lw||2,dc=dk(col,0.32),hp=[p.px,p.py],pts=!!(o.robe||o.over||o.legs);
   const M=add(hp,rot(0,-4.6,p.pl)),a2=p.pl+p.cb,C=add(M,rot(0,-4.6,a2)),N=add(C,rot(0,-1.3,a2));
   const ha=a2+p.ht,H=add(add(N,rot(0,-3.1,ha)),[p.hdx,p.hdy]);
-  const Sb=add(C,rot(-0.9,0.7,a2)),Sf=add(C,rot(0.9,0.5,a2));
+  const tw=p.tw||0,Sb=add(C,rot(-0.9+1.5*tw,0.7,a2)),Sf=add(C,rot(0.9-0.9*tw,0.5,a2));   // tw: دوران الجذع (القسم 5.4.8)
   const J={hip:hp,mid:M,chest:C,neck:N,head:H,ha,Sf,Sb,a2,pl:p.pl,legB:null,legF:null};
   J.legB=leg(c,p.px-1.2,p.py,p.tb,p.kb,W,dc,pts&&LEG_B,o.legFrom);
   o.backWeapon&&o.backWeapon(c,J,p,col);
@@ -250,7 +251,7 @@ function drawBodyStyled(c,p,col,o){
   const W=(o.lw||2)*STYLE.thick,dc=dk(col,0.32),hp=[p.px,p.py];
   const M=add(hp,rot(0,-4.6,p.pl)),a2=p.pl+p.cb,C=add(M,rot(0,-4.6,a2)),N=add(C,rot(0,-1.3,a2));
   const ha=a2+p.ht,H=add(add(N,rot(0,-3.1,ha)),[p.hdx,p.hdy]);
-  const Sb=add(C,rot(-0.9,0.7,a2)),Sf=add(C,rot(0.9,0.5,a2));
+  const tw=p.tw||0,Sb=add(C,rot(-0.9+1.5*tw,0.7,a2)),Sf=add(C,rot(0.9-0.9*tw,0.5,a2));   // tw: دوران الجذع (القسم 5.4.8)
   const J={hip:hp,mid:M,chest:C,neck:N,head:H,ha,Sf,Sb,a2,pl:p.pl,legB:null,legF:null};
   J.legB=legStyled(c,p.px-1.2,p.py,p.tb,p.kb,W,dc,LEG_B,false);
   o.backWeapon&&o.backWeapon(c,J,p,col);

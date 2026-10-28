@@ -1,12 +1,13 @@
 // الكاميرا وترتيب الرسم الكامل لإطار واحد
-import { TILE_HALF_W, TILE_HALF_H, TICK_SEC, CAMERA, CAPTURE, PERFORMANCE, ALERTS, COMBAT_REALISM, UNIT_ART, CITIES, CITY_CACHE, gameModes as GM, nations } from '../config.js';
+import { TILE_HALF_W, TILE_HALF_H, TICK_SEC, CAMERA, CAPTURE, PERFORMANCE, ALERTS, COMBAT_REALISM, UNIT_ART, CITIES, CITY_CACHE, FIGHT, gameModes as GM, nations } from '../config.js';
 import { enemyLeaders } from '../game/modes.js';
 import { onScreen } from '../game/alerts.js';
 import { BACKGROUND, UI_LIGHT } from './colors.js';
 import { drawUnit, drawSelectionRing, drawProjectile, drawAura, drawFire, drawZone, unitWorldPos, unitSizeFactor } from './units.js';
 import { drawOverlay, drawLights, drawParticles } from './weather.js';
 import { worldToTile } from '../map/coords.js';
-import { drawClash, drawBurst } from './combatArt.js';
+import { drawClash, drawImpact } from './combatArt.js';
+import { impactKind } from './fightAnim.js';
 import { getPref } from '../prefs.js';
 import { drawCityLayer, cityStatics } from './chunkCache.js';
 import { drawPoliceLamp } from './landmarks.js';
@@ -112,7 +113,7 @@ export function render(ctx, state, alpha, cityBudgetMs = CITY_CACHE.frameBudgetM
   drawEmpireMarks(ctx, state, visible, state.empireOpen);   // شريط الإنتاج ودائرة مدى المبنى المفتوح
   drawHillCrown(ctx, state, visible);
   drawGroupTags(ctx, state, alpha, visible);
-  drawCombatFx(ctx, state, visible);
+  drawCombatFx(ctx, state, visible, alpha);
 
   // جزيئات الطقس ومربع التحديد وأسهم التنبيه في إحداثيات الشاشة
   ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
@@ -123,13 +124,13 @@ export function render(ctx, state, alpha, cityBudgetMs = CITY_CACHE.frameBudgetM
 
 // --- شرر تصادم الأسلحة والكلمات الطائرة (القسم 5.4.4ب) ---
 // فوق طبقة الليل حتى تُقرأ، وبحجم ثابت على الشاشة مهما كان التقريب
-function drawCombatFx(ctx, state, visible) {
+function drawCombatFx(ctx, state, visible, alpha) {
   if (state.camera.z < PERFORMANCE.unitDetailZoom) return;
-  // نجوم الانفجار عند الارتطام
-  const sc = UNIT_ART.scale * 1.15;
+  // أثر الارتطام بلغة سلاح الضارب (نجمة، ومضة قوس، خط سرعة، غبار وحلقة اهتزاز)، القسم 5.4.8
+  const sc = UNIT_ART.scale * 1.15, sub = alpha * TICK_SEC;
   for (const fx of state.fx) {
-    const x = (fx.x - fx.y) * TILE_HALF_W, y = (fx.x + fx.y) * TILE_HALF_H - fx.h * sc;
-    if (visible(x, y)) drawBurst(ctx, x, y, fx.t / COMBAT_REALISM.burstSeconds, fx.big, sc);
+    const x = (fx.x - fx.y) * TILE_HALF_W, y = (fx.x + fx.y) * TILE_HALF_H;
+    if (visible(x, y - fx.h * sc)) drawImpact(ctx, fx, x, y, sc, fx.t + sub);
   }
   for (const fx of state.clashes) {
     const x = (fx.x - fx.y) * TILE_HALF_W, y = (fx.x + fx.y) * TILE_HALF_H - 14;
@@ -366,6 +367,10 @@ function drawUnitsLayer(ctx, state, alpha, visible) {
   entries.sort((a, b) => a.key - b.key);
   pickShaded(entries, state.camera);
   const halo = CITIES.unitHalo[state.map.city];
+  // اهتزاز الأرض حول ارتطام المطرقة والعضو الضخم (القسم 5.4.8): الوحدات القريبة ترتجف، لا الكاميرا
+  QUAKES.length = 0;
+  for (const fx of state.fx) if (fx.t < FIGHT.quake.seconds && impactKind(fx) === 'quake') QUAKES.push(fx);
+  const now = state.time + alpha * TICK_SEC;
   drawUnitsOccluded(ctx, state, entries, (c, e) => {
     const unit = e.unit;
     if (halo && unit.state !== 'dead') {
@@ -375,8 +380,23 @@ function drawUnitsLayer(ctx, state, alpha, visible) {
       c.fillStyle = halo.color;
       c.fill();
     }
+    const q = QUAKES.length ? quakeShake(unit, now) : 0;
+    if (q) c.translate(q, 0);
     drawUnit(c, unit, alpha, state.camera.z, state.time, state.debugView, state.lodCrowded, e.shaded);
+    if (q) c.translate(-q, 0);
   });
+}
+
+// إزاحة الوحدة الأفقية من اهتزاز الأرض: أقوى قرب الارتطام وفي أوله
+const QUAKES = [];
+function quakeShake(unit, now) {
+  const { tiles, seconds, pixels } = FIGHT.quake;
+  let k = 0;
+  for (const fx of QUAKES) {
+    const dx = unit.x - fx.x, dy = unit.y - fx.y, d = Math.sqrt(dx * dx + dy * dy);
+    if (d < tiles) k = Math.max(k, (1 - fx.t / seconds) * (1 - d / tiles));
+  }
+  return k ? Math.sin(now * 90 + unit.id) * pixels * k : 0;
 }
 
 // النمط المظلَّل ومظاهر الأمم الكاملة (المرحلة 9ج) لأقرب وحدات المستوى الكامل إلى وسط الشاشة، بعدد يتكيف مع

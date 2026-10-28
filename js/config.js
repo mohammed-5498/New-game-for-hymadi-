@@ -487,6 +487,68 @@ export const COMBAT_STYLE = {
   }
 };
 
+// --- أنميشن القتال حسب السلاح (القسم 5.4.8): رسم فقط، اللعب كما هو ---
+// كل شخصية لها أسلوب حسب سلاحها، والحركة التي يختارها القتال (quick, heavy...) تُرسم كعقدة من شجرة تتابع
+// أسلوبها: L1 → L2 → L3 للخفيفة، H1 للقوية، S1 للخاصة، D للاندفاع، F لإنهاء القائد، P لكمة، KF وKH ركلتان.
+// لا يغيّر شيء هنا أزمنة الحركات ولا ضررها ولا اختيارها: كل الأرقام هنا للرسم.
+export const FIGHT = {
+  // الأسلوب لكل شخصية: الأمة أو العصابة ← النوع ← الأسلوب (knife سكين، blade سيف أو عصا بيد واحدة،
+  // spear رمح أو عصا طويلة، hammer مطرقة أو هراوة ثقيلة، fists قبضات، shield درع، ranged سلاح الرامي باليد)
+  weapons: {
+    crows:     { common: 'knife', spear: 'spear', dual: 'knife', champion: 'spear' },
+    hammers:   { common: 'hammer', armored: 'shield', smasher: 'hammer', champion: 'hammer' },
+    vipers:    { common: 'knife', sniper: 'ranged', firebomber: 'ranged', champion: 'ranged' },
+    scorpions: { common: 'blade', boss: 'blade', medic: 'fists', champion: 'spear' },
+    police:    { common: 'blade', captain: 'blade' },
+    yemen:     { common: 'knife', boss: 'knife', medic: 'fists', champion: 'blade' },
+    saudi:     { common: 'ranged', sniper: 'ranged', firebomber: 'ranged', champion: 'ranged' },
+    egypt:     { common: 'hammer', armored: 'shield', smasher: 'hammer', champion: 'blade' },
+    china:     { common: 'blade', boss: 'hammer', medic: 'blade', champion: 'spear' },
+    japan:     { common: 'blade', spear: 'spear', dual: 'blade', champion: 'blade' },
+    korea:     { common: 'blade', sniper: 'ranged', firebomber: 'ranged', champion: 'ranged' },
+    france:    { common: 'knife', spear: 'spear', dual: 'knife', champion: 'blade' },
+    britain:   { common: 'hammer', armored: 'shield', smasher: 'fists', champion: 'blade' },
+    germany:   { common: 'knife', armored: 'spear', smasher: 'blade', champion: 'spear' },
+    ethiopia:  { common: 'blade', boss: 'blade', medic: 'fists', champion: 'spear' },
+    nigeria:   { common: 'fists', armored: 'shield', smasher: 'fists', champion: 'fists' },
+    sudan:     { common: 'fists', sniper: 'ranged', firebomber: 'ranged', champion: 'ranged' },
+    brazil:    { common: 'blade', spear: 'spear', dual: 'fists', champion: 'spear' },
+    argentina: { common: 'knife', spear: 'blade', dual: 'knife', champion: 'knife' },
+    mexico:    { common: 'blade', sniper: 'ranged', firebomber: 'ranged', champion: 'ranged' }
+  },
+  big: { smasher: true, armored: true },   // العضو الضخم: أبطأ شكلاً وأثقل ارتطاماً، والقائد هو البطل (champion)
+
+  // شجرة التتابع: الخفيفة التالية داخل النافذة تتقدم في سلسلة أسلوبها ثم تعود لأولها، وبعد الاندفاع D
+  // أو اللكمة P أو القوية أو الخاصة تبدأ من L1 (اللكمة تفتح السلسلة فيليها L2). القوية H1 والخاصة S1 من أي عقدة.
+  // light: الحركات التي تُعدّ خفيفة في هذا الأسلوب، dash: ما يصير اندفاعاً حين تصل الوحدة راكضة.
+  // والقائد يزيد على سلسلة أسلوبه رابعة L4 (لفّة بركلة)
+  // (الطعنة thrust خفيفة في كل الأساليب: هي أكثر ما يختاره القتال على مسافة الاشتباك المعتادة)
+  styles: {
+    knife:  { chain: ['L1', 'L2', 'L3'], light: ['quick', 'thrust'],          dash: ['quick', 'thrust'] },
+    blade:  { chain: ['L1', 'L2', 'L3'], light: ['quick', 'thrust'],          dash: ['quick', 'thrust'] },
+    spear:  { chain: ['L1', 'L2', 'L3'], light: ['quick', 'thrust'],          dash: ['quick', 'thrust'] },
+    hammer: { chain: ['L1', 'L2', 'L3'], light: ['quick', 'thrust'],          dash: ['quick', 'thrust'] },
+    fists:  { chain: ['L1', 'L2', 'L3'], light: ['punch', 'quick', 'thrust'], dash: ['quick', 'thrust', 'punch'] },
+    shield: { chain: ['L1', 'L2', 'L3'], light: ['quick', 'thrust'],          dash: ['quick', 'thrust'] },
+    ranged: { chain: ['L1', 'L2', 'L3'], light: ['quick', 'thrust'],          dash: ['quick', 'thrust'] }
+  },
+  special: ['spin', 'kick_high', 'kick_front'],   // الخاصة S1: أول ما تملكه الوحدة من هذه
+  window: 0.7,          // نافذة التتابع: ثوانٍ بعد نهاية الحركة تكمل فيها التالية السلسلة
+  dashWindow: 0.3,      // تقدّمت نحو هدفها خلال هذا قبل الضربة...
+  dashMin: 0.25,        // ...وكان تقدّمها أطول من هذا: الضربة اندفاع D
+  finisherHp: 0.25,     // القائد: ضربته القوية أو الخاصة والهدف تحت 25% من دمه = ضربة الإنهاء F
+
+  // التجمّد عند الارتطام (Hitstop): يتجمّد الضارب في وضعية الارتطام ويرتجف المُصاب، ثم يكمل الضارب أسرع قليلاً
+  // فينتهي في وقته تماماً. بالثواني للضربة الخفيفة، مضروباً في نوع الحركة، وأطول للعضو الضخم
+  hitstop: { knife: 0.03, blade: 0.045, spear: 0.055, hammer: 0.085, fists: 0.065, shield: 0.06, ranged: 0.04 },
+  hitstopMul: { light: 1, dash: 1.15, punch: 0.9, kick_front: 1.2, kick_high: 1.4, heavy: 1.7, special: 1.5, finisher: 2.3 },
+  hitstopBig: 1.35,
+  hitstopMax: 0.2,
+  quake: { tiles: 1.8, seconds: 0.32, pixels: 1.1 },   // اهتزاز الأرض حول ارتطام المطرقة والعضو الضخم (لا الكاميرا)
+  // مزج الوضعيات عند تبدّل الحالة، فلا قفزة إلى الوقفة: بداية ضربة، العودة للوقفة أو المشي بعدها، رد الفعل
+  blend: { swing: 0.06, rest: 0.2, react: 0.06, walk: 0.14 }
+};
+
 // --- الضربات المميزة: قواعد الشحن (القسم 6.7) ---
 // الأفراد العاديون لا يملكون ضربة مميزة، فلا شريط شحن لهم
 export const ULT = {

@@ -305,7 +305,7 @@ export function drawSpriteBody(c, p, col, ud) {
   const hp = [p.px, p.py];
   const M = add(hp, rot(0, -4.6, p.pl)), a2 = p.pl + p.cb, C = add(M, rot(0, -4.6, a2)), N = add(C, rot(0, -1.3, a2));
   const ha = a2 + p.ht, H = add(add(N, rot(0, -3.1, ha)), [p.hdx, p.hdy]);
-  const Sb = add(C, rot(-0.9, 0.7, a2)), Sf = add(C, rot(0.9, 0.5, a2));
+  const tw = p.tw || 0, Sb = add(C, rot(-0.9 + 1.5 * tw, 0.7, a2)), Sf = add(C, rot(0.9 - 0.9 * tw, 0.5, a2));   // tw: دوران الجذع
   const J = { hip: hp, mid: M, chest: C, neck: N, head: H, ha, Sf, Sb, a2, pl: p.pl, legB: null, legF: null };
 
   J.legB = legPart(c, S, P.thD, P.snD, p.px - 1.2, p.py, p.tb, p.kb);

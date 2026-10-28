@@ -6,7 +6,7 @@ import {
   updateRealism, updateBumps, updateLod, registerSight, chooseMove, moveTiming,
   zoneOf, zoneDamage, knockback, stagger, blockedBy, corpseKnock, turnToward,
   approachPoint, busyBonus, crowdCount, attackPause, statDamageFactor, wrapAngle, releaseRagdoll,
-  addPop, updatePops, flinch, tryClash, knockDown, addBurst
+  addPop, updatePops, flinch, tryClash, knockDown, addBurst, fightNode, fightStyle, fightBig, hitstopOf
 } from './realism.js';
 import { createFire } from './abilities.js';
 import { chargeOverTime, chargeOnHit, chargeOnDamageTaken, tryCastUlt, resolveUlt, updateFlurry } from './ults.js';
@@ -102,6 +102,7 @@ export function updateCombat(state) {
         const finished = unit.cMove;
         unit.cMove = null;
         unit.cPhases = null;
+        unit.chainAt = state.time;          // نافذة التتابع تبدأ من هنا (رسم فقط، القسم 5.4.8)
         // التتابع (القسم 5.4.7): بعد لكمة أو ركلة أمامية، غالباً يُتبعها بضربة سلاح فوراً
         if (CR.moves[finished].unarmed && finished !== 'kick_high' && unit.rng() < CR.comboChance) {
           unit.combo = true;
@@ -159,6 +160,7 @@ export function updateCombat(state) {
 function resolveHit(state, unit) {
   const hit = unit.pendingHit;
   unit.pendingHit = null;
+  unit.hitDoneAt = state.time;          // متى عُرفت نتيجة الضربة (رسم فقط: يكمل الضارب حركته بعدها، القسم 5.4.8)
   if (!isAlive(unit)) return;
 
   if (hit.ranged) { if (isAlive(hit.target)) spawnVolley(state, unit, hit.target, hit.damage); return; }
@@ -200,6 +202,7 @@ function resolveMove(state, unit, hit) {
 
   let landed = false;
   for (const target of targets) {
+    const echo = landed;                                       // الإصابة الثانية فما بعد من نفس الضربة الدائرية
     if (target.cState === 'dodge') continue;                 // تفادى: الضربة في الهواء
     const zone = zoneOf(target, unit.x, unit.y);
 
@@ -215,8 +218,14 @@ function resolveMove(state, unit, hit) {
     if (zone === 'back') { state.combatEvents.back++; addPop(state, target, 'من الخلف!', 'back'); }
     else if (zone === 'side') state.combatEvents.side++;
     if (m.unarmed) state.combatEvents[hit.move === 'punch' ? 'punch' : 'kick']++;
-    addBurst(state, unit, target, hit.move);
+    addBurst(state, unit, target, hit.move, echo);
     state.combatEvents.hits++;
+    // التجمّد عند الارتطام ورد الفعل حسب سلاح الضارب (رسم فقط، القسم 5.4.8)
+    unit.landAt = state.time;
+    target.hitAt = state.time;
+    target.hitStyle = fightStyle(unit);
+    target.hitNode = unit.cNode || '';
+    target.hitStop = hitstopOf(target.hitStyle, target.hitNode, fightBig(unit));
 
     // الضربة المساحية للمحطِّم تبقى كما هي (القسم 6) على ضربات السلاح المفردة؛ الدائرية واللكمة والركلة لا
     const died = (hit.move === 'spin' || m.unarmed)
@@ -416,6 +425,10 @@ function fightTarget(state, unit, budget) {
     return;
   }
 
+  // تتقدم نحو هدفها: يقرؤه الرسم وحده (ضربة الاندفاع D، القسم 5.4.8)
+  if (state.time - unit.approachAt > TICK_SEC * 1.5) unit.approachSince = state.time;
+  unit.approachAt = state.time;
+
   // خارج المدى: تتقدم نحو نقطة الالتفاف لا نحو مركز الهدف (القسم 5.4.4ب)
   const goal = ranged ? target : approachPoint(unit, target, range);
   if (!ranged && closeSteer(state, unit, goal, dist)) return;
@@ -522,6 +535,7 @@ function meleeSwing(state, unit, target, dist, range, damage, attackTime, aimOff
   unit.cMove = key;
   unit.cMoveT = 0;
   unit.cPhases = phases;
+  unit.cNode = fightNode(state, unit, key, target);   // شكل الحركة في شجرة تتابع أسلوبها (رسم فقط)
   // لا فاصل الآن: يُضبط عند اكتمال الحركة، فمن تفادى وألغى ضربته لا يُعاقَب بزمنها كاملاً
   unit.attackCooldown = 0;
   unit.attackStart = state.time;
@@ -630,6 +644,8 @@ export function applyDamage(state, attacker, target, amount) {
     target.pendingUlt = null;
     target.flurry = null;
     target.deathTimer = COMBAT.deathTime;
+    // من الخلف تسقط على وجهها، وإلا على ظهرها (رسم فقط؛ نار الأرض ليست وحدة)
+    target.deathFront = !!attacker.stats && zoneOf(target, attacker.x, attacker.y) === 'back';
     target.path = [];
     target.target = null;
     target.selected = false;
