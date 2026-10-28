@@ -15,6 +15,7 @@ import { forEachNearby } from './spatialHash.js';
 import { findFreeTiles } from '../map/pathfinding.js';
 import { soundAt } from '../audio/sound.js';
 import { hypot } from './hypot.js';
+import { random } from './random.js';   // عشوائية المنطق: مشتركة بين الأجهزة في اللعب المحلي
 
 const isAlive = (unit) => unit && unit.state !== 'dead' && unit.hp > 0;
 
@@ -153,7 +154,7 @@ function produce(state, player, district, kind) {
   }
   const spots = findFreeTiles(state.map, district.capture.i, district.capture.j, SPAWN.spotSearchTiles);
   if (!spots.length) return false;
-  const [i, j] = spots[Math.floor(Math.random() * spots.length)];
+  const [i, j] = spots[Math.floor(random() * spots.length)];
   const unit = createUnit(state, player, i, j, heroFor(player, kind));
   state.units.push(unit);
   applyUpgrades(state, unit);

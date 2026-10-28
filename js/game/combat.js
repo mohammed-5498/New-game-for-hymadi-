@@ -14,6 +14,7 @@ import { visionRange, rangedShotHits, moveSpeed } from './weather.js';
 import { forEachNearby } from './spatialHash.js';
 import { soundAt, soundAlert } from '../audio/sound.js';
 import { raiseAlert } from './alerts.js';
+import { random } from './random.js';   // عشوائية المنطق: مشتركة بين الأجهزة في اللعب المحلي
 
 // اختيار الهدف للبوتات (القسم 11.2): يُسجَّل من ai/bot.js، ولا يغيّر قواعد القتال
 // يُستدعى فقط حين تحتاج الوحدة هدفاً جديداً، ويعيد undefined ليبقى الاختيار العادي
@@ -669,8 +670,8 @@ export function spawnProjectile(state, unit, target, damage, offset = 0, fire = 
 
   // في المطر تخطئ بعض الرميات فتسقط قرب الهدف بلا ضرر
   const hits = rangedShotHits(state, unit);
-  const angle = Math.random() * 6.2832;
-  const spread = COMBAT.missSpread * (0.6 + Math.random() * 0.4);
+  const angle = random() * 6.2832;
+  const spread = COMBAT.missSpread * (0.6 + random() * 0.4);
 
   soundAt(state, unit.stats.projectile === 'stone' ? 'stone' : 'arrow', unit.x, unit.y);
 
@@ -711,12 +712,12 @@ export function spawnFalcon(state, unit, target, damage, duration) {
 export function spawnRain(state, unit, cx, cy, ult, damage) {
   soundAt(state, 'arrow', unit.x, unit.y);
   for (let k = 0; k < ult.arrows; k++) {
-    const angle = Math.random() * 6.2832, r = Math.sqrt(Math.random()) * ult.area;
+    const angle = random() * 6.2832, r = Math.sqrt(random()) * ult.area;
     state.projectiles.push({
       kind: 'arrow', attacker: unit, target: null, damage, dodgeable: false, fire: null, hits: false,
       missX: cx + Math.cos(angle) * r, missY: cy + Math.sin(angle) * r,
       startX: unit.x, startY: unit.y, x: unit.x, y: unit.y, prevX: unit.x, prevY: unit.y,
-      t: 0, prevT: 0, duration: ult.flight + Math.random() * ult.spreadSeconds,
+      t: 0, prevT: 0, duration: ult.flight + random() * ult.spreadSeconds,
       returns: false, back: false, area: ult.hitRadius
     });
   }

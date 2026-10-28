@@ -11,7 +11,7 @@ import { restoreRng } from './game/realism.js';
 import { districtsOwnedBy } from './state.js';
 
 // حقول لا تُحفظ: تخص الشاشة الحالية، أو تُبنى من جديد في كل تحديث
-const SKIP_STATE_KEYS = new Set(['view', 'inputMode', 'debugView', 'selectionBox', 'running', 'paused', 'unitHash', 'cameraTween', 'hudAvoid', 'empireOpen']);
+const SKIP_STATE_KEYS = new Set(['view', 'inputMode', 'debugView', 'selectionBox', 'running', 'paused', 'unitHash', 'cameraTween', 'hudAvoid', 'empireOpen', 'lanRole']);
 
 const TYPED = {
   Uint8Array, Int8Array, Uint8ClampedArray, Uint16Array, Int16Array,
@@ -21,9 +21,9 @@ const TYPED = {
 // دوال لا تُحفظ، وتُعاد بعد التحميل
 const MAP_METHOD_KEYS = new Set(['idx', 'inBounds', 'isWalkable', 'isConnected', 'districtOf']);
 
-// تُحفظ المباراة الجارية فقط: لا المنتهية، ولا ساحة التجربة
+// تُحفظ المباراة الجارية فقط: لا المنتهية، ولا ساحة التجربة، ولا مباراة اللعب المحلي (لا تُتابع بلا أصحابها)
 export const canSaveMatch = (state) =>
-  !!state.running && !state.matchResult && !(state.settings && state.settings.arena) && state.humanId >= 0;
+  !!state.running && !state.matchResult && !(state.settings && (state.settings.arena || state.settings.lan)) && state.humanId >= 0;
 
 // --- كائنات config.js: المسار بدل النسخة ---
 let configPaths = null;
@@ -220,6 +220,25 @@ export function clearSavedMatch() {
     localStorage.removeItem(UI.matchKey);
     localStorage.removeItem(UI.matchInfoKey);
   } catch { /* تخزين معطّل */ }
+}
+
+// --- اللعب المحلي (القسم 16): نفس الترميز ينقل المباراة كلها بين الأجهزة (بدايتها، وإعادة المزامنة) ---
+// المضيف يفك نصه هو أيضاً (unpackMatch) فتبدأ كل الأجهزة من نفس الحالة حرفياً، بأعدادها المقرّبة ومولّداتها
+export function packMatch(state) {
+  return JSON.stringify({ v: UI.matchVersion, ...encode(state) });
+}
+
+// keep: مفاتيح تخص هذا الجهاز تبقى كما هي (الكاميرا، رقم لاعبه...). يرمي خطأ إن كان النص تالفاً
+export function unpackMatch(state, text, keep = []) {
+  const data = JSON.parse(text);
+  if (!data || data.v !== UI.matchVersion) throw new Error('نسخة مباراة مختلفة');
+  const { root, withFunctions } = decode(data);
+  for (const [obj, fns] of withFunctions) restoreFunctions(root, obj, fns);
+  if (!root.map || !Array.isArray(root.units) || !root.players) throw new Error('مباراة ناقصة');
+  const kept = { view: state.view, inputMode: state.inputMode, debugView: state.debugView };
+  for (const key of keep) kept[key] = state[key];
+  for (const key of Object.keys(state)) delete state[key];
+  Object.assign(state, root, kept, { selectionBox: null, cameraTween: null });
 }
 
 // يحمّل المباراة المحفوظة داخل نفس كائن الحالة (اللمس والواجهة يحتفظون بمرجعه)

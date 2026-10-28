@@ -10,6 +10,7 @@ import { setInputMode } from './hud.js';
 import { unitWorldPos } from '../render/units.js';
 import { badgeOf } from '../render/empireArt.js';
 import { openEmpireMenu, closeEmpireMenu, isEmpireMenuOpen } from './empireMenu.js';
+import { lanCommand } from '../net/session.js';
 
 export function setupInput(canvas, state) {
   const pointers = new Map();
@@ -135,8 +136,24 @@ export function setupInput(canvas, state) {
 
       const world = screenToWorld(p.x, p.y, state.camera, state.view);
       const tile = worldToTile(world.x, world.y);
-      if (commandAttackMove(state, tile.i, tile.j, group)) { longPressFired = true; sound('command'); }
+      if (order('amove', group, tile)) { longPressFired = true; sound('command'); }
     }, INPUT.longPressMs);
+  }
+
+  // أوامر الحركة والهجوم. في اللعب المحلي (القسم 16) تُرسل أمراً ينفذه كل جهاز في نفس التحديث،
+  // وحلقة مكان الأمر تظهر هنا فوراً
+  function order(kind, group, tile, target) {
+    if (!state.lanRole) {
+      if (kind === 'attack') { commandAttack(state, group, target); return true; }
+      return kind === 'move' ? commandMove(state, tile.i, tile.j, group) : commandAttackMove(state, tile.i, tile.j, group);
+    }
+    const u = group.map(unit => unit.id);
+    if (kind === 'attack') { lanCommand({ k: 'attack', u, t: target.id }); return true; }
+    const n = state.map.n;
+    const i = Math.max(0, Math.min(n - 1, Math.round(tile.i))), j = Math.max(0, Math.min(n - 1, Math.round(tile.j)));
+    lanCommand({ k: kind, u, i, j });
+    state.moveMarker = { i, j, t: 0, attack: kind === 'amove' };
+    return true;
   }
 
   function cancelLongPress() {
@@ -205,14 +222,14 @@ export function setupInput(canvas, state) {
     if (!group.length) return;
 
     if (hit && isEnemy(state, group[0], hit)) {
-      commandAttack(state, group, hit);
+      order('attack', group, null, hit);
       sound('command');
       return;
     }
 
     const world = screenToWorld(sx, sy, state.camera, state.view);
     const tile = worldToTile(world.x, world.y);
-    if (commandMove(state, tile.i, tile.j, group)) sound('command');
+    if (order('move', group, tile)) sound('command');
   }
 
   // ما تفتح لمستاه قائمة (طور الإمبراطورية): مبنى تملكه، أو حي تملكه بلا مبنى. أرض حي فيه مبنى للحركة فقط

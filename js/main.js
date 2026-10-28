@@ -14,9 +14,11 @@ import {
 import { setupPower, updatePower } from './ui/power.js';
 import { setupGroups, updateGroups, hudRects } from './ui/groups.js';
 import {
-  setupMenus, showScreen, currentScreen,
+  setupMenus, showScreen, currentScreen, isLanSetup,
   openExitDialog, closeExitDialog, isExitDialogOpen
 } from './ui/menus.js';
+import { setupLanScreen, lanBack } from './ui/lanScreen.js';
+import { lanActive, lanFrame, startLanHost } from './net/session.js';
 import { setupMenuScene, menuSceneFrame } from './ui/menuScene.js';
 import { isPickerOpen, closePicker } from './ui/picker.js';
 import { setupEmpireMenu, updateEmpireMenu, isEmpireMenuOpen, closeEmpireMenu } from './ui/empireMenu.js';
@@ -49,6 +51,15 @@ setupMenus({
     state.running = true;
     showScreen('game');
   },
+  // اللعب المحلي (القسم 16): المضيف يبدأ، فتُرسل المباراة لكل صديق ويدخلها الجميع معاً
+  // (لا تمس المباراة المحفوظة: المحلية لا تُحفظ)
+  startLan(settings, peerOfPlayer) {
+    resetMatch(state, settings);
+    startLanHost(state, peerOfPlayer);
+    state.running = true;
+    showScreen('game');
+  },
+  leaveLanSetup: lanBack,
   // "متابعة المباراة": تعود من حيث توقفت (false إن كان الحفظ تالفاً)
   continueMatch() {
     if (!loadMatch(state)) return false;
@@ -66,6 +77,8 @@ setupMenus({
     resetParticles(state.weather, state.view);
   }
 });
+
+setupLanScreen(state);
 
 showScreen('main');
 
@@ -90,6 +103,8 @@ onBackButton(() => {
     return;
   }
 
+  // اللعب المحلي: شاشته وقائمة إعداد المضيف ترجعان خطوة (وتوقفان الاستضافة أو الانضمام)
+  if (currentScreen() === 'lan' || (currentScreen() === 'setup' && isLanSetup())) { lanBack(); return; }
   if (currentScreen() !== 'main') { showScreen('main'); return; }   // الإعداد والإعدادات والإحصائيات
   openExitDialog();                                     // القائمة الرئيسية
 });
@@ -154,17 +169,23 @@ function loop(now) {
     return;
   }
 
-  accumulator += frameMs;
-  let steps = 0;
-  while (accumulator >= TICK_MS && steps < 5) {   // حد أقصى للتحديثات المتراكمة
-    update();
-    accumulator -= TICK_MS;
-    steps++;
+  let alpha;
+  if (lanActive()) {
+    alpha = lanFrame(state, frameMs, now);       // اللعب المحلي: التحديثات حسب أدوار المضيف (القسم 16)
+  } else {
+    accumulator += frameMs;
+    let steps = 0;
+    while (accumulator >= TICK_MS && steps < 5) {   // حد أقصى للتحديثات المتراكمة
+      update();
+      accumulator -= TICK_MS;
+      steps++;
+    }
+    if (accumulator > TICK_MS * 5) accumulator = 0;
+    alpha = accumulator / TICK_MS;
   }
-  if (accumulator > TICK_MS * 5) accumulator = 0;
 
   updateParticles(state.weather, state.view, frameMs / 1000);
-  render(ctx, state, accumulator / TICK_MS);
+  render(ctx, state, alpha);
   updateHud(state);
   updatePower(state);          // شريط القوة يتحدث كل ثانية لا كل إطار
   updateGroups(state, frameMs); // أعداد المجموعات وانتقال الكاميرا إليها

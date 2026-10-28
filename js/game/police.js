@@ -4,6 +4,7 @@ import { TICK_SEC, POLICE, UNIT_ART } from '../config.js';
 import { createUnit } from './units.js';
 import { findFreeTiles } from '../map/pathfinding.js';
 import { COMBAT } from '../config.js';
+import { random } from './random.js';   // عشوائية المنطق: مشتركة بين الأجهزة في اللعب المحلي
 
 const isAlive = (unit) => unit.state !== 'dead' && unit.hp > 0;
 
@@ -88,7 +89,7 @@ function disableStation(state, station) {
   station.policeDisabled = true;
   for (const unit of state.units) {
     if (unit.stationId !== station.id || !isAlive(unit)) continue;
-    unit.vanishAt = state.time + Math.random() * POLICE.vanishSeconds;
+    unit.vanishAt = state.time + random() * POLICE.vanishSeconds;
   }
 }
 
@@ -98,7 +99,7 @@ function spawnPolice(state, station, captain) {
   const spots = findFreeTiles(state.map, station.capture.i, station.capture.j, 6);
   if (!spots.length) return false;
 
-  const [i, j] = spots[Math.floor(Math.random() * spots.length)];
+  const [i, j] = spots[Math.floor(random() * spots.length)];
   const unit = createUnit(state, player, i, j, captain ? 'captain' : null);
   unit.stationId = station.id;
   // لا تبتعد عن مركزها أكثر من 6 مربعات مهما طاردت

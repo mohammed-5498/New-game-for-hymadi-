@@ -343,6 +343,9 @@ button.wide.ghost { background: transparent; color: var(--text-dim); }
   .main-menu { max-width: 780px; flex-direction: row; align-items: center; gap: 28px; }
   .brand, .main-buttons { flex: 1 1 0; min-width: 0; }
   .title { font-size: clamp(30px, 5.6vw, 50px); }
+  /* الأزرار في عمودين: السبعة كلها (مع متابعة المباراة وخروج) ظاهرة بلا تمرير */
+  .main-buttons { display: grid; grid-template-columns: 1fr 1fr; }
+  #btnContinue, #mainNotice { grid-column: 1 / -1; }
 }
 /* شاشة قصيرة جداً: الأزرار الستة (مع متابعة المباراة وخروج) بلا تمرير */
 @media (orientation: landscape) and (max-height: 400px) {
@@ -1079,3 +1082,65 @@ input[type=range].muted { opacity: .4; }
 .em-queue { display: flex; align-items: center; gap: 6px; margin: 5px 2px 0; font-size: 11px; color: var(--text-dim); white-space: nowrap; }
 .em-bar { flex: 1 1 auto; min-width: 40px; height: 5px; border-radius: 3px; background: rgba(243, 236, 224, .12); overflow: hidden; }
 .em-bar i { display: block; height: 100%; width: 0; background: var(--gold); }
+
+/* --- اللعب المحلي (القسم 16): شاشة الاستضافة والانضمام وغرفة الانتظار --- */
+.menu.lan { max-width: 460px; text-align: right; }
+.menu.lan .label { margin-top: 10px; }
+.text-input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 52px;
+  padding: 0 14px;
+  background: #2a221c;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  font: inherit;
+  font-size: 18px;
+  -webkit-user-select: text;
+  user-select: text;
+}
+.text-input:focus { outline: none; border-color: var(--gold); }
+.lan-list { display: flex; flex-direction: column; gap: 6px; }
+.lan-list button.wide { margin: 0; }
+.lan-list button.wide small { font-weight: 400; }
+.lan-ip-row { display: flex; gap: 6px; }
+.lan-ip-row .text-input { flex: 1 1 auto; text-align: left; }
+.lan-ip-row .opt { flex: 0 0 96px; }
+.lan-player {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 4px 10px;
+  background: var(--btn);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-size: 15px;
+}
+.lan-player.me { border-color: var(--gold); }
+.lan-player .dot { flex: 0 0 auto; width: 16px; height: 16px; border-radius: 50%; border: 2px solid rgba(243, 236, 224, .35); }
+.lan-player small { margin-inline-start: auto; color: var(--text-dim); }
+#lanLobby .pick-btn { margin-top: 10px; }
+.lan-status { text-align: center; margin: 10px 0 0; }
+.lan-status.error { color: var(--danger); }
+/* قائمة إعداد المضيف: اسم المباراة وعنوانه، وخانات الأصدقاء بلون ذهبي */
+.lan-info { text-align: center; margin: -6px 0 8px; color: var(--gold); }
+.slot.net .cell.type { color: var(--gold); font-weight: 700; }
+/* أثناء المباراة: "بانتظار المضيف…" أو "أوقف المضيف المباراة" */
+#lanBanner {
+  position: absolute;
+  top: 38%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(27, 22, 18, .9);
+  border: 1px solid var(--gold);
+  color: var(--gold);
+  border-radius: 12px;
+  padding: 10px 18px;
+  font-size: 17px;
+  font-weight: 700;
+  white-space: nowrap;
+  pointer-events: none;
+}

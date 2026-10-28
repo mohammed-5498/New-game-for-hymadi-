@@ -12,6 +12,7 @@ import { setSummonHook } from './ults.js';
 import { sound } from '../audio/sound.js';
 import { hypot } from './hypot.js';
 import { initEmpire, updateEmpire, incomeOf } from './empire.js';
+import { random } from './random.js';   // عشوائية المنطق: مشتركة بين الأجهزة في اللعب المحلي
 
 export const modeOf = (state) => (state.mode && GM[state.mode]) ? state.mode : 'conquest';
 
@@ -296,7 +297,7 @@ function fallLeader(state, player) {
 
   for (const unit of state.units) {
     if (unit.playerId !== player.id || unit.state === 'dead') continue;
-    unit.fadeAt = state.time + Math.random() * R.fadeSeconds;
+    unit.fadeAt = state.time + random() * R.fadeSeconds;
   }
   for (const district of state.map.districts) {
     if (district.owner !== player.id) continue;
@@ -496,7 +497,7 @@ function waveSources(state, fronts) {
     if (spot) all.push({ i: spot[0], j: spot[1] });
   }
   if (!all.length) return [];
-  const chosen = [all[Math.floor(Math.random() * all.length)]];
+  const chosen = [all[Math.floor(random() * all.length)]];
   while (chosen.length < fronts && chosen.length < all.length) {
     let best = null, bestD = -1;
     for (const c of all) {

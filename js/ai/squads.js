@@ -10,6 +10,7 @@ import { commandMove, commandAttackMove } from '../game/units.js';
 import { isEnemy, isEnemyId } from '../game/combat.js';
 import { forEachNearby, hashCells, cellBox } from '../game/spatialHash.js';
 import { hypot } from '../game/hypot.js';
+import { random } from '../game/random.js';   // عشوائية المنطق: مشتركة بين الأجهزة في اللعب المحلي
 
 const isAlive = (unit) => unit.state !== 'dead' && unit.hp > 0;
 const dist = (a, b) => hypot(a.i - b.i, a.j - b.j);
@@ -280,7 +281,7 @@ export function decideSquads(state, player, config, pool, units, owned, helpers)
   if (!chosen) return;
 
   // جبهتان (صعب فما فوق): حيان متباعدان في وقت واحد إن كانت القوة تكفي الاثنين
-  if (lvl.twoFronts && Math.random() < ai.twoFrontChance) {
+  if (lvl.twoFronts && random() < ai.twoFrontChance) {
     const second = fits.find(t => t !== chosen &&
       dist(t.district.capture, chosen.district.capture) >= ai.twoFrontMinDistance &&
       power >= ai.attackRatio * (t.enemy + chosen.enemy));
@@ -604,7 +605,7 @@ function orderSquad(state, units, district, lvl, defended) {
 
   if (main.length) commandAttackMove(state, t.i, t.j, main, false);
   if (flank.length) {
-    const side = Math.random() < 0.5 ? 1 : -1;
+    const side = random() < 0.5 ? 1 : -1;
     const fi = t.i - uy * side * ai.flankOffset + ux;
     const fj = t.j + ux * side * ai.flankOffset + uy;
     commandAttackMove(state, fi, fj, flank, false);

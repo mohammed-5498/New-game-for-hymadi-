@@ -13,6 +13,7 @@ import { pickTarget, ultAllowed, updateTactics } from './tactics.js';
 import { hypot } from '../game/hypot.js';
 import { empireEconomy } from './empireBot.js';
 import { isHospital, healPoint } from '../game/empire.js';
+import { random } from '../game/random.js';   // عشوائية المنطق: مشتركة بين الأجهزة في اللعب المحلي
 
 // الطبقة التكتيكية تختار الأهداف وتمسك الضربات المميزة عبر بوابتين في كود القتال
 setTargetPicker(pickTarget);
@@ -21,7 +22,7 @@ setUltGate(ultAllowed);
 export function initBots(state) {
   // نوزّع أوقات القرار حتى لا تفكر كل البوتات في نفس اللحظة
   state.botTimers = state.players.map(p =>
-    p.isHuman || p.neutral ? 0 : Math.random() * BOT[p.difficulty || 'medium'].decisionInterval);
+    p.isHuman || p.neutral ? 0 : random() * BOT[p.difficulty || 'medium'].decisionInterval);
 }
 
 export function updateBots(state) {

@@ -6,6 +6,7 @@ import { moveSpeed } from './weather.js';
 import { initRealism, faceAngleTo } from './realism.js';
 import { hypot } from './hypot.js';
 import { nationStats, nationUnitName } from './nations.js';
+import { random } from './random.js';   // عشوائية المنطق: مشتركة بين الأجهزة في اللعب المحلي
 
 // إحصائيات الوحدة: الأساس + ميزة العصابة، أو الأساس + قيم الشخصية المميزة أو البطل
 // والشرطة المحايدة لها جدولها الخاص (القسم 3.8)
@@ -397,8 +398,8 @@ function applySeparation(state) {
           if (distSq >= radiusSq) continue;
           const dist = Math.sqrt(distSq);
           if (dist < 0.0001) {   // متطابقتان تماماً: دفعة عشوائية صغيرة
-            ox += (Math.random() - 0.5) * push;
-            oy += (Math.random() - 0.5) * push;
+            ox += (random() - 0.5) * push;
+            oy += (random() - 0.5) * push;
             continue;
           }
           const force = ((radius - dist) / radius) * push;

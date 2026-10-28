@@ -16,6 +16,7 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
+        registerPlugin(LanPlugin.class);   // اللعب المحلي (القسم 16): قبل إنشاء الجسر
         super.onCreate(savedInstanceState);
         hideSystemBars();
     }

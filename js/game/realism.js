@@ -469,6 +469,9 @@ function bumpFrom(state, unit, isEnemyFn) {
 export function updateLod(state) {
   if (state.time < state.lodAt) return;
   state.lodAt = state.time + CR.lod.refreshSeconds;
+  // اللعب المحلي (القسم 16): المستوى يغيّر القتال نفسه، فيُحسب من كاميرات كل اللاعبين (تصل كأوامر مشتركة)
+  // لا من كاميرا هذا الجهاز، فتتطابق المباراة على كل الأجهزة
+  if (state.netCams) { lodFromCams(state, state.netCams); return; }
 
   const cx = state.camera.x, cy = state.camera.y;
   const visible = [];
@@ -490,6 +493,33 @@ export function updateLod(state) {
   }
   visible.sort((a, b) => a.d - b.d);
   for (let k = 0; k < fullUnits; k++) visible[k].unit.lod = 'full';
+}
+
+// مستويات التفصيل من عدة كاميرات: الظاهر في أي شاشة مبسّط، وأقرب fullUnits لوسط كل شاشة كامل، والباقي إحصائي.
+// cam: {x, y, z, w, h} مركز الكاميرا في العالم وتقريبها ومقاس شاشتها
+function lodFromCams(state, cams) {
+  let alive = 0;
+  for (const unit of state.units) {
+    if (unit.state !== 'dead') alive++;
+    unit.lod = 'stat';
+  }
+  const fullUnits = alive > CR.lod.crowdedAbove ? CR.lod.fullUnitsCrowded : CR.lod.fullUnits;
+  let crowded = false;
+  for (const cam of cams) {
+    if (!cam) continue;
+    const visible = [];
+    for (const unit of state.units) {
+      const wx = (unit.x - unit.y) * 18, wy = (unit.x + unit.y) * 9;
+      const sx = (wx - cam.x) * cam.z + cam.w / 2, sy = (wy - cam.y) * cam.z + cam.h / 2;
+      if (sx < -40 || sx > cam.w + 40 || sy < -40 || sy > cam.h + 40) continue;
+      if (unit.lod === 'stat') unit.lod = 'simple';
+      const dx = wx - cam.x, dy = wy - cam.y;
+      visible.push({ unit, d: dx * dx + dy * dy });
+    }
+    if (visible.length > fullUnits) { crowded = true; visible.sort((a, b) => a.d - b.d); }
+    for (let k = 0, n = Math.min(fullUnits, visible.length); k < n; k++) visible[k].unit.lod = 'full';
+  }
+  state.lodCrowded = crowded;
 }
 
 // الضرر الإحصائي خارج الشاشة أقل قليلاً (القسم 5.4.5)

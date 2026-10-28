@@ -5,6 +5,7 @@ import { findFreeTiles } from '../map/pathfinding.js';
 import { isEnemy, isEnemyId } from './combat.js';
 import { soundAt } from '../audio/sound.js';
 import { hypot } from './hypot.js';
+import { random } from './random.js';   // عشوائية المنطق: مشتركة بين الأجهزة في اللعب المحلي
 
 export function initSpawnTimers(state) {
   state.spawnTimers = state.players.map(player => normalInterval(state, player));
@@ -89,14 +90,14 @@ function spawnUnit(state, player, districts, heroId) {
   // تفضيل الأحياء التي ليس فيها أعداء
   const safe = districts.filter(d => !hasEnemyNearFlag(state, d, player.id));
   const pool = safe.length ? safe : districts;
-  const district = pool[Math.floor(Math.random() * pool.length)];
+  const district = pool[Math.floor(random() * pool.length)];
 
   // findFreeTiles لا يعيد إلا مربعات موصولة بشبكة الشوارع (القسم 3.4.1)،
   // فلا تظهر وحدة داخل فراغ محاصر بالمباني
   const spots = findFreeTiles(state.map, district.capture.i, district.capture.j, SPAWN.spotSearchTiles);
   if (!spots.length) return;
 
-  const [i, j] = spots[Math.floor(Math.random() * spots.length)];
+  const [i, j] = spots[Math.floor(random() * spots.length)];
   state.units.push(createUnit(state, player, i, j, heroId));
   soundAt(state, 'spawn', i, j);
 }
@@ -136,7 +137,7 @@ export function spawnChampion(state, player, district) {
   const spots = findFreeTiles(state.map, district.capture.i, district.capture.j, SPAWN.spotSearchTiles);
   if (!spots.length) return null;
 
-  const [i, j] = spots[Math.floor(Math.random() * spots.length)];
+  const [i, j] = spots[Math.floor(random() * spots.length)];
   const champion = createUnit(state, player, i, j, null, true);
   state.units.push(champion);
   soundAt(state, 'spawn', i, j);
@@ -164,6 +165,6 @@ function updateChampion(state, player, districts) {
   // يظهر في ساحة علم حي مملوك، مع تفضيل الأحياء التي ليس فيها أعداء
   const safe = districts.filter(d => !hasEnemyNearFlag(state, d, player.id));
   const pool = safe.length ? safe : districts;
-  const district = pool[Math.floor(Math.random() * pool.length)];
+  const district = pool[Math.floor(random() * pool.length)];
   if (spawnChampion(state, player, district)) state.championTimers[player.id] = null;
 }

@@ -1,6 +1,7 @@
 // تأثير الطقس على اللعب: الرصد ليلاً، السرعة في الثلج، ودقة الرمي في المطر
 import { WEATHER } from '../config.js';
 import { empireSpeedMul } from './empire.js';
+import { random } from './random.js';   // عشوائية المنطق: مشتركة بين الأجهزة في اللعب المحلي
 
 // مدى رصد الوحدة بعد تأثير الطقس (ليلاً × 0.75)
 // رماة الهوارانغ (سمة كوريا، القسم 3.10) لا يتأثرون بالليل
@@ -24,5 +25,5 @@ export function moveSpeed(state, unit) {
 export function rangedShotHits(state, unit) {
   if (unit && unit.stats.weatherProof) return true;
   const chance = WEATHER[state.weather].rangedHitChance;
-  return chance >= 1 || Math.random() < chance;
+  return chance >= 1 || random() < chance;
 }

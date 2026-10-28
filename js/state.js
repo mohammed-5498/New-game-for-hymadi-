@@ -201,6 +201,10 @@ export function resetMatch(state, settings = state.settings) {
   state.arena = null;
   state.mode = fresh.mode;
   state.modeState = fresh.modeState;
+  // اللعب المحلي (القسم 16): مباراة بعد مباراة شبكية لا ترث كاميرات اللاعبين (مستويات التفصيل منها) ولا عدّادها
+  state.netCams = null;
+  state.netTick = 0;
+  state.lanOut = false;
   centerCameraOnHome(state);
   if (settings.arena) buildArena(state);     // ساحة تجربة القتال
 }
