@@ -24,13 +24,14 @@ function nativeTransport() {
   const call = (method, opts = {}) => cap.nativePromise('LanNet', method, opts);
   if (!nativeBound) {
     nativeBound = true;
-    cap.addListener('LanNet', 'peer', (e) => handlers && handlers.peer(e.id, e.address));
+    // e فارغ إن ردّ الجسر بخطأ بدل حدث
+    cap.addListener('LanNet', 'peer', (e) => e && handlers && handlers.peer(e.id, e.address));
     cap.addListener('LanNet', 'message', (e) => {
-      const msg = parse(e.data);
+      const msg = e && parse(e.data);
       if (msg && handlers) handlers.message(e.id, msg);
     });
-    cap.addListener('LanNet', 'closed', (e) => handlers && handlers.closed(e.id));
-    cap.addListener('LanNet', 'found', (e) => handlers && handlers.found(e));
+    cap.addListener('LanNet', 'closed', (e) => e && handlers && handlers.closed(e.id));
+    cap.addListener('LanNet', 'found', (e) => e && handlers && handlers.found(e));
   }
   return {
     host: (name) => call('host', { port: NET.port, beaconPort: NET.beaconPort, beaconMs: NET.beaconSeconds * 1000,

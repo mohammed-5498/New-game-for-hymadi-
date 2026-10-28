@@ -10,6 +10,7 @@ import {
   showScreen, showMainNotice, openLanSetup, closeLanSetup, isLanSetup, syncLanSlots, lanHasSeat, pickSide, sideLabel
 } from './menus.js';
 import { leaveToMain, backToLobby } from './hud.js';
+import { closePicker } from './picker.js';
 
 const el = (id) => document.getElementById(id);
 
@@ -42,14 +43,16 @@ export function setupLanScreen(state) {
     lobbyChanged: () => { if (isLanSetup()) syncLanSlots(); else if (view === 'lobby') render(); },
     foundChanged: (error) => { if (error) status(error, true); if (view === 'search') renderFound(); },
     canSeat: lanHasSeat,
-    // المضيف بدأ المباراة: المنضم يدخلها مباشرة
+    // المضيف بدأ المباراة: المنضم يدخلها مباشرة (ولو كانت لوحة الأمم مفتوحة عنده)
     enterGame: () => {
+      closePicker();
       state.running = true;
       showScreen('game');
       startMusic();
     },
     // انقطع المنضم عن المضيف (أو أغلق المضيف الجلسة)
     leftSession: (reason, inGame) => {
+      closePicker();
       view = 'start';
       if (inGame) {
         leaveToMain(state);
