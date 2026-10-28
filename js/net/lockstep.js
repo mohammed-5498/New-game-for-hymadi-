@@ -9,15 +9,17 @@ import { updateMatch } from '../game/loop.js';
 import { seedFrom, unseed } from '../game/random.js';
 import { commandMove, commandAttackMove } from '../game/units.js';
 import { commandAttack, isEnemy } from '../game/combat.js';
+import { empireCommand } from '../game/empire.js';
 import { packMatch, unpackMatch } from '../matchSave.js';
 import { tileToWorld } from '../map/coords.js';
 
 export const ALL = -1;
 
 // ما يخص هذا الجهاز ويبقى كما هو عند استلام المباراة كلها
-const LOCAL_KEYS = ['camera', 'humanId', 'lanRole', 'running', 'paused', 'lanOut', 'moveMarker', 'notice', 'alerts', 'alertSeen', 'hudAvoid'];
+const LOCAL_KEYS = ['camera', 'humanId', 'lanRole', 'running', 'paused', 'lanOut', 'moveMarker', 'notice', 'alerts', 'alertSeen', 'hudAvoid',
+                    'empireOpen', 'empireHinted'];
 
-// بصمة المباراة: ما يغيّر اللعب فقط (المواقع والدم والحالات والأحياء والبذرة)، لا ما يخص الشاشة
+// بصمة المباراة: ما يغيّر اللعب فقط (المواقع والدم والحالات والأحياء والبذرة ونقاط الأطوار)، لا ما يخص الشاشة
 export function hashState(state) {
   let h = 2166136261 >>> 0;
   const mix = (v) => { h = Math.imul(h ^ (v | 0), 16777619) >>> 0; };
@@ -26,6 +28,9 @@ export function hashState(state) {
     mix(u.id); mix(u.x * 1000); mix(u.y * 1000); mix(u.hp * 100); mix(u.state.length); mix(u.playerId);
   }
   for (const d of state.map.districts) { mix(d.owner === null ? -1 : d.owner); mix(d.progress * 100); }
+  // ما يحسم الأطوار: نقاط الإمبراطورية، ونقاط طور الوقت، وزمن السيطرة على التلة
+  const ms = state.modeState || {};
+  for (const list of [ms.points, ms.scores, ms.held]) if (Array.isArray(list)) for (const v of list) mix(v * 100);
   return h;
 }
 
@@ -70,6 +75,10 @@ function applyCommand(state, c) {
     return;
   }
   if (!player.isHuman) return;              // لاعب صار بوتاً: أوامره القديمة لا تُنفذ
+  if (c.k === 'emp') {                      // طور الإمبراطورية: إنتاج وترقيات ومبانٍ من قائمة الحي
+    if (state.mode === 'empire') empireCommand(state, c.p, c.a, Math.round(+c.d), c.x);
+    return;
+  }
   const units = unitsOf(state, c.p, c.u);
   if (!units.length) return;
   const i = Math.round(+c.i), j = Math.round(+c.j);

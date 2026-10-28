@@ -6,12 +6,10 @@
 // أو بزر الرجوع في أندرويد، ووحدها إن سقط الحي أو انتهت المباراة.
 import { EMPIRE as E, TILE_HALF_W, TILE_HALF_H } from '../config.js';
 import {
-  canQueue, queueUnit, heroFor, productionTime,
-  nextUpgrade, canUpgrade, buyUpgrade,
-  canBuild, buildDistrict,
-  nextBuildingUpgrade, canUpgradeBuilding, upgradeBuilding,
-  towerStats, hospitalStats, incomeOf, tileOf
+  canQueue, heroFor, productionTime, nextUpgrade, canUpgrade, canBuild, nextBuildingUpgrade, canUpgradeBuilding,
+  empireCommand, towerStats, hospitalStats, incomeOf, tileOf
 } from '../game/empire.js';
+import { lanCommand } from '../net/session.js';
 import { worldToScreen } from '../map/coords.js';
 import { drawCharacters } from './charThumb.js';
 import { unitName } from './storeScreen.js';
@@ -60,7 +58,7 @@ export function updateEmpireMenu(state, now) {
 // شخصية كل درجة إنتاج في رسم الشخصيات وأسمائها: العادي، والمميزتان، والبطل
 const artOf = (player, kind) => kind === 'common' ? 'common' : kind === 'leader' ? 'champion' : heroFor(player, kind);
 
-// --- الخانات: كل خانة { name, cost(), check(), act(), level(), max, art, desc } ---
+// --- الخانات: كل خانة { name, cost(), check(), cmd, level(), max, art, desc }، وcmd أمرها { a, d, x } (empireCommand) ---
 function sectionsFor(state, district) {
   const pid = state.humanId, player = state.players[pid];
   const side = player.nation || player.gang;
@@ -74,14 +72,14 @@ function sectionsFor(state, district) {
         name: unitName(side, art(kind)), art: art(kind), side, color: player.color,
         cost: () => E.units[kind].cost,
         check: () => canQueue(state, pid, district, kind),
-        act: () => queueUnit(state, pid, district.id, kind)
+        cmd: { a: 'queue', d: district.id, x: kind }
       })), ...buildingSlots(state, pid, district)] },
       { title: 'ترقيات العصابة', note: 'لكل جنودك', slots: E.upgrades.order.map(key => ({
         name: E.upgrades[key].name, max: E.upgrades[key].costs.length,
         level: () => levels[key],
         cost: () => (nextUpgrade(state, pid, key) || {}).cost,
         check: () => canUpgrade(state, pid, key),
-        act: () => buyUpgrade(state, pid, key)
+        cmd: { a: 'upgrade', d: district.id, x: key }
       })) }
     ];
   }
@@ -92,7 +90,7 @@ function sectionsFor(state, district) {
       desc: type === 'hq' ? E.buildings.hq.desc + '، +' + E.income.hq + '/ث' : E.buildings[type].desc,
       cost: () => E.buildings[type].cost,
       check: () => canBuild(state, pid, district, type),
-      act: () => buildDistrict(state, pid, district.id, type)
+      cmd: { a: 'build', d: district.id, x: type }
     })) }];
   }
 
@@ -107,7 +105,7 @@ function buildingSlots(state, pid, district) {
     level: () => (district.blv && district.blv[key]) || 0,
     cost: () => (nextBuildingUpgrade(district, key) || {}).cost,
     check: () => canUpgradeBuilding(state, pid, district, key),
-    act: () => upgradeBuilding(state, pid, district.id, key)
+    cmd: { a: 'improve', d: district.id, x: key }
   }));
 }
 
@@ -174,8 +172,16 @@ function build(state, district) {
   for (const [canvas, slot] of arts) drawCharacters(canvas, slot.side, [slot.art], slot.color);   // بعد وضعها: بمقاسها
 }
 
+// اللعب المحلي (القسم 16): الخانة المتاحة تُرسل أمرها فينفذه كل جهاز في نفس التحديث (بعد لحظة)
 function press(state, entry) {
-  const result = entry.slot.act();
+  const { cmd } = entry.slot;
+  let result;
+  if (state.lanRole) {
+    result = entry.slot.check();
+    if (result.ok) lanCommand({ k: 'emp', ...cmd });
+  } else {
+    result = empireCommand(state, state.humanId, cmd.a, cmd.d, cmd.x);
+  }
   if (result.ok) {
     sound('select');
     refresh(state);

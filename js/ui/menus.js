@@ -25,11 +25,12 @@ const el = (id) => document.getElementById(id);
 const MAP_SIZE_KEYS = ['small', 'medium', 'large'];
 const MAX_UNIT_CHOICES = [30, 50, 100, 150, 200, 250];
 const WEATHER_CHOICES = [...WEATHER_KEYS, 'random'];
-// خيار المدينة: مدن الأطوار العادية، ثم "مدينة المضيف" (مدينة أمة اللاعب الأول، القسم 3.10)، ثم عشوائي.
-// مدينة طور واحد (CITIES.modeOnly، اليمامة للإمبراطورية) لا تُختار: طورها يفرضها
-const CITY_CHOICES = [...OPEN_CITIES, 'host', 'random'];
-// المدينة التي يفرضها الطور المختار، أو null
-const forcedCity = () => Object.keys(CITIES.modeOnly).find(city => CITIES.modeOnly[city] === setup.mode) || null;
+// خيار المدينة: المدن، ثم "مدينة المضيف" (مدينة أمة اللاعب الأول، القسم 3.10)، ثم عشوائي.
+// مدينة طور واحد (CITIES.modeOnly، اليمامة للإمبراطورية) لا تظهر لغيره من الأطوار
+const CITY_CHOICES = [...CITIES.order, 'host', 'random'];
+const cityAllowed = (city, mode) => !CITIES.modeOnly[city] || CITIES.modeOnly[city] === mode;
+// مدن لوحة المدن للطور المختار: كلها لطور له مدينة خاصة (الإمبراطورية)، وبلا مدن الأطوار الأخرى لغيره
+const cityGroups = () => Object.values(CITIES.modeOnly).includes(setup.mode) ? CITY_GROUPS : PLAY_CITY_GROUPS;
 const TEAM_CHOICES = [0, 1, 2, 3, 4];
 const SLOT_TYPES = { human: 'أنت', bot: 'بوت', closed: 'مغلقة' };
 const MAX_SLOTS = 8;
@@ -152,28 +153,22 @@ export function showScreen(name) {
 // الصورة المصغرة للمدينة المختارة (حية: في "عشوائي" تتبدل المدن ما دامت القائمة ظاهرة)
 // "مدينة المضيف": مدينة أمة اللاعب الأول، أو عشوائي إن كان عصابة كلاسيكية أو عشوائياً
 function showCity() {
-  const city = forcedCity() || (setup.city === 'host' ? hostCity(setup.slots[0].side) : setup.city);
+  const city = setup.city === 'host' ? hostCity(setup.slots[0].side) : setup.city;
   updateCityThumb(el('cityThumb'), el('cityName'), city, () => screen === 'setup' && !isPickerOpen());
 }
 
 // لوحة المدن: تبويب لكل منطقة، وفي كل خانة صورة صغيرة لمدينتها، وبجانب الخانة صورة المختارة الحية،
 // وفي الأسفل عشوائي ومدينة المضيف
 function openCityPicker() {
-  if (forcedCity()) {                  // الطور يفرض مدينته: الزر مقفل، ويومض سببه
-    const note = el('cityName');
-    note.classList.remove('flash');
-    void note.offsetWidth;
-    note.classList.add('flash');
-    return;
-  }
+  const groups = cityGroups();
   openPicker({
     title: 'اختر المدينة',
-    groups: PLAY_CITY_GROUPS,
+    groups,
     art: drawCardThumb,
     extras: [{ value: 'random', text: 'عشوائي' }, { value: 'host', text: 'مدينة المضيف' }],
     current: () => setup.city,
     pick: (city) => { setup.city = city; refresh(); },
-    tabFor: (choice) => PLAY_CITY_GROUPS.indexOf(regionOf(PLAY_CITY_GROUPS, choice === 'host' ? hostCity(setup.slots[0].side) : choice)),
+    tabFor: (choice) => groups.indexOf(regionOf(groups, choice === 'host' ? hostCity(setup.slots[0].side) : choice)),
     aside: (node, choice) => {
       if (node.dataset.kind !== 'city') {
         node.dataset.kind = 'city';
@@ -294,7 +289,11 @@ function openModePicker() {
     icon: drawModeIcon,
     columns: 3,
     current: () => setup.mode,
-    pick: (mode) => { setup.mode = mode; refresh(); },
+    pick: (mode) => {
+      setup.mode = mode;
+      if (!cityAllowed(setup.city, mode)) { setup.city = 'random'; showCity(); }   // اليمامة للإمبراطورية وحدها
+      refresh();
+    },
     more: modeOptions,
     aside: (node, mode) => infoAside(node, drawModeIcon, mode, GM[mode].name, [GM[mode].desc]),
     close: showCity
@@ -370,7 +369,7 @@ function weatherShort(key) {
 
 // مدينة صور الطقس: المختارة، أو الظاهرة الآن في صورة "عشوائي"
 function previewCity() {
-  const city = forcedCity() || (setup.city === 'host' ? hostCity(setup.slots[0].side) : setup.city);
+  const city = setup.city === 'host' ? hostCity(setup.slots[0].side) : setup.city;
   if (CITIES.order.includes(city)) return city;
   return CITIES.order.includes(shownCity()) ? shownCity() : CITIES.order[0];
 }
@@ -537,14 +536,15 @@ function loadSetup() {
   try { saved = JSON.parse(localStorage.getItem(UI.setupKey) || 'null'); } catch { return; }
   if (!saved || typeof saved !== 'object') return;
 
-  // نقبل القيم الصالحة فقط، فلا تكسر بيانات قديمة أو تالفة القائمة
-  if (GM.order.includes(saved.mode)) setup.mode = saved.mode;
+  // نقبل القيم الصالحة فقط، فلا تكسر بيانات قديمة أو تالفة القائمة. والطور من إعداد بنسخته الحالية فقط:
+  // ما حُفظ قبل أن تصير الإمبراطورية الطور الأساسي يبدأ بها (UI.setupVersion)
+  if (GM.order.includes(saved.mode) && saved.v === UI.setupVersion) setup.mode = saved.mode;
   if (GM.points.minutes.includes(saved.pointsMinutes)) setup.pointsMinutes = saved.pointsMinutes;
   if (GM.king.holdMinutes.includes(saved.kingMinutes)) setup.kingMinutes = saved.kingMinutes;
   if (GM.survival.allies.includes(saved.allies)) setup.allies = saved.allies;
   if (GM.survival.levels.includes(saved.survivalLevel)) setup.survivalLevel = saved.survivalLevel;
   if (MAP_SIZES[saved.mapSize]) setup.mapSize = saved.mapSize;
-  if (CITY_CHOICES.includes(saved.city)) setup.city = saved.city;
+  if (CITY_CHOICES.includes(saved.city) && cityAllowed(saved.city, setup.mode)) setup.city = saved.city;
   if (MAX_UNIT_CHOICES.includes(saved.maxUnits)) setup.maxUnits = saved.maxUnits;
   if (WEATHER_CHOICES.includes(saved.weather)) setup.weather = saved.weather;
   if (!Array.isArray(saved.slots)) return;
@@ -562,7 +562,7 @@ function loadSetup() {
 }
 
 function saveSetup() {
-  try { localStorage.setItem(UI.setupKey, JSON.stringify(setup)); } catch { /* لا تخزين: يبقى للجلسة */ }
+  try { localStorage.setItem(UI.setupKey, JSON.stringify({ ...setup, v: UI.setupVersion })); } catch { /* لا تخزين: يبقى للجلسة */ }
 }
 
 // --- صفوف الخيارات (شاشة معركة البوتات) ---
@@ -706,12 +706,9 @@ function refresh() {
   el('modeChoice').textContent = GM[setup.mode].name;
   el('modeNote').textContent = modeNote();
   // زر المدينة: الخيار ومنطقته (الاسم الكامل تحته من الصورة المصغرة)
-  const forced = forcedCity();
-  const cityGroup = regionOf(CITY_GROUPS, forced || setup.city);
-  el('cityChoice').textContent = forced ? CITIES.short[forced] + ' • خريطة الطور'
-    : setup.city === 'random' ? 'عشوائي' : setup.city === 'host' ? 'مدينة المضيف'
+  const cityGroup = regionOf(CITY_GROUPS, setup.city);
+  el('cityChoice').textContent = setup.city === 'random' ? 'عشوائي' : setup.city === 'host' ? 'مدينة المضيف'
     : CITIES.short[setup.city] + (cityGroup ? ' • ' + cityGroup.name : '');
-  el('btnCity').classList.toggle('locked', !!forced);
   const size = MAP_SIZES[setup.mapSize];
   el('sizeChoice').textContent = size.name;
   el('sizeNote').textContent = 'حتى ' + playersText(size.maxPlayers);
@@ -872,7 +869,7 @@ export function buildMatchSettings() {
     },
     mapSize: setup.mapSize,
     // مدينة المضيف: مدينة أمة اللاعب الأول بعد حسم العشوائي، أو عشوائي للعصابة الكلاسيكية
-    city: forcedCity() || (setup.city === 'host' ? hostCity(players[0].nation) : setup.city),
+    city: setup.city === 'host' ? hostCity(players[0].nation) : setup.city,
     maxUnits: setup.maxUnits,
     weather: setup.weather === 'random'
       ? WEATHER_KEYS[Math.floor(Math.random() * WEATHER_KEYS.length)]
@@ -927,7 +924,7 @@ export const lanHasSeat = () => setup.slots.some((s, k) => k > 0 && s.type !== '
 // وصف الغرفة الذي يراه المنضمون في غرفة الانتظار
 function lobbyView() {
   return {
-    mode: setup.mode, city: forcedCity() || setup.city, mapSize: setup.mapSize,
+    mode: setup.mode, city: setup.city, mapSize: setup.mapSize,
     weather: setup.weather, maxUnits: setup.maxUnits,
     players: setup.slots.filter(s => s.type !== 'closed').map((s, k) => ({
       kind: k === 0 ? 'host' : s.type, name: k === 0 ? lan.name : s.type === 'net' ? s.name : 'بوت ' + BOT[s.difficulty].name,

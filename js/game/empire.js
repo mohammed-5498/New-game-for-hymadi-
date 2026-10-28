@@ -1,4 +1,4 @@
-// طور الإمبراطورية (بطلب المستخدم، طور تجريبي مستقل في صحراء اليمامة وحدها):
+// طور الإمبراطورية (بطلب المستخدم): الطور الأساسي للعبة، في كل المدن:
 // - النقاط: كل حي مملوك 0.5 في الثانية، والقاعدة الرئيسية 2 بدل ذلك، ومن يُسقط زعيم عصابة يأخذ 50
 // - الجنود من القاعدة الرئيسية بالنقاط وبطابور (لا ظهور تلقائي)، والزعيم (البطل) واحد فقط لكل عصابة
 // - ترقيات العصابة بثلاثة مستويات: الدم والضرر والدفاع وسرعة المشي (تبقى للعصابة مهما سقطت قواعدها)
@@ -27,8 +27,10 @@ const FIXED_KINDS = ['wallI', 'wallJ', 'gateI', 'gateJ', 'archI', 'archJ', 'wall
                      'fortI', 'fortJ', 'fortTower'];
 
 // القلعة (بطلب المستخدم): برج القاعدة في وسطها، وما حوله من مباني الحي نفسه سور على الجوانب وأبراج على
-// الزوايا (صور اليمامة، yamamah.js). على مربعات المباني وحدها: لا يتغير ما يُمشى عليه، والساحة والشوارع مداخلها
+// الزوايا (صور اليمامة، yamamah.js). على مربعات المباني وحدها: لا يتغير ما يُمشى عليه، والساحة والشوارع مداخلها.
+// في المدن التي لها صور قلعة فقط (EMPIRE.art[city].fort)، وفي غيرها القاعدة مبنى مقر المدينة بهالته
 function fortify(map, district) {
+  if (!(E.art[map.city] && E.art[map.city].fort)) return;
   const at = tileOf(map, district.buildTile);
   for (let dj = -1; dj <= 1; dj++) {
     for (let di = -1; di <= 1; di++) {
@@ -67,9 +69,10 @@ export function initEmpire(state, modeState) {
 // --- كل تحديث ---
 export function updateEmpire(state) {
   const ms = state.modeState;
-  // تلميح مرة واحدة في البداية (بعد إشعار سمة الأمة إن وُجد): كيف تُفتح قائمة الحي
-  if (!ms.hinted && !state.notice) {
-    ms.hinted = true;
+  // تلميح مرة واحدة في البداية (بعد إشعار سمة الأمة إن وُجد): كيف تُفتح قائمة الحي.
+  // يخص هذا الجهاز كالإشعار نفسه (اللعب المحلي: لا يدخل حالة المباراة المشتركة)
+  if (!state.empireHinted && !state.notice) {
+    state.empireHinted = true;
     state.notice = { text: 'المس مبنى قاعدتك مرتين بسرعة لقائمته، وأي حي لك بلا مبنى لتبني فيه', mine: true, t: E.hintSeconds, keep: true };
   }
   collectIncome(state, ms);
@@ -384,6 +387,19 @@ export function upgradeBuilding(state, playerId, districtId, key) {
   state.modeState.points[playerId] -= next.cost;
   district.blv = { ...district.blv, [key]: next.level };
   return OK;
+}
+
+// أمر واحد باسمه (القائمة، واللعب المحلي حيث يصل من جهاز آخر فتُفحص قيمه قبل تنفيذه):
+// a: queue (x نوع الجندي) | upgrade (x ترقية العصابة) | build (x نوع المبنى) | improve (x ترقية المبنى)، d رقم الحي
+export function empireCommand(state, playerId, a, d, x) {
+  const district = state.map.districts[d];
+  if (a === 'queue' && E.units.order.includes(x)) return queueUnit(state, playerId, d, x);
+  if (a === 'upgrade' && E.upgrades.order.includes(x)) return buyUpgrade(state, playerId, x);
+  if (a === 'build' && E.buildings.order.includes(x)) return buildDistrict(state, playerId, d, x);
+  if (a === 'improve' && district && district.building && E.buildings[district.building].upgrades.order.includes(x)) {
+    return upgradeBuilding(state, playerId, d, x);
+  }
+  return fail('');
 }
 
 // --- للواجهة: دخل اللاعب في الثانية الآن ---

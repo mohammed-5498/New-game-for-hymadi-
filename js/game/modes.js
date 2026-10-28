@@ -23,7 +23,8 @@ const gangPlayers = (state) => state.players.filter(p => !p.neutral);
 
 // --- البداية ---
 export function initMode(state) {
-  state.mode = GM[state.settings.mode] ? state.settings.mode : GM.defaultMode;
+  // بلا طور مذكور (الساحة وخلفية القوائم وأدوات القياس): السيطرة الكاملة، لا الطور المختار في قائمة الإعداد
+  state.mode = GM[state.settings.mode] ? state.settings.mode : 'conquest';
   const options = state.settings.modeOptions || {};
   const modeState = {};
 

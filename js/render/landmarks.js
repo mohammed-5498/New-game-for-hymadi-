@@ -6,15 +6,23 @@
 // - برج الساعة والتلة: معلم المدينة (landmark) + ساعة، أو تاج ذهبي فوق علم التلة
 // العلامات لا تُصبغ بلون المالك حتى تبقى واضحة دائماً.
 import { CITY_SPECIALS, CAPTURE, EMPIRE } from '../config.js';
-import { THEMES, getCtx, setThemeContext, setTone, getTone, getToneInfo, poly, circ, ln, box, el } from './cityThemes.js';
+import { THEMES, getCtx, setThemeContext, setTone, getTone, getToneInfo, poly, circ, ln, box, el, empireTower } from './cityThemes.js';
 
 const cityOf = (map) => THEMES[map.city] || THEMES.arab;
 const specialsOf = (map) => CITY_SPECIALS[map.city] || CITY_SPECIALS.arab;
 
-// نوع صورة مبنى طور الإمبراطورية بحرفه (Q قاعدة، T برج، M مستشفى): لقياس ارتفاعه خارج هذا الملف
+// مباني طور الإمبراطورية بطراز كل مدينة (EMPIRE.art): القاعدة مبنى مقرها، والبرج برج رماية مرسوم بألوانها،
+// والمستشفى مبناها الأساسي بالصليب. والمدينة التي لها صور مبانيها (اليمامة) ترسمها بها
+const TOWER = 'empireTower';
+const empireArtOf = (map) => EMPIRE.art[map.city] || null;
+const hospitalRoof = (map) => (empireArtOf(map) || {}).hospitalRoof || 0;
+
+// نوع مبنى طور الإمبراطورية بحرفه (Q قاعدة، T برج، M مستشفى): لرسمه، ولقياس ارتفاعه خارج هذا الملف
 export function empireKind(map, type) {
-  const S = specialsOf(map);
-  return type === 'T' ? EMPIRE.art.tower : type === 'Q' ? S.hq : EMPIRE.art.hospital;
+  const S = specialsOf(map), A = empireArtOf(map);
+  if (type === 'Q') return S.hq;
+  if (type === 'T') return A ? A.tower : TOWER;
+  return A ? A.hospital : S.base;
 }
 
 // --- ارتفاع سطح المبنى الحقيقي: يُقاس مرة واحدة لكل مربع برسمه في لوحة صغيرة مخفية ---
@@ -54,7 +62,7 @@ export function roofTop(map, kind, i, j) {
 
 function drawKind(map, kind, x, y, i, j) {
   const T = cityOf(map);
-  const fn = T.draw[kind];
+  const fn = kind === TOWER ? empireTower : T.draw[kind];
   if (typeof fn === 'function') fn(x, y, i, j, T);
 }
 
@@ -76,8 +84,8 @@ export function drawLandmark(map, type, x, y, i, j, ownerColor, flagColor, light
   const T = cityOf(map);
 
   if (type === 'Q' || type === 'T') {
-    // برج الرماية: مبنى المدينة المختار له (EMPIRE.art) وعلم مالكه فوقه كالقاعدة الرئيسية
-    const kind = type === 'T' ? EMPIRE.art.tower : S.hq;
+    // برج الرماية بطراز المدينة (empireKind) وعلم مالكه فوقه كالقاعدة الرئيسية
+    const kind = type === 'T' ? empireKind(map, 'T') : S.hq;
     drawKind(map, kind, x, y, i, j);
     const top = y - roofTop(map, kind, i, j);
     if (!badges) {
@@ -108,10 +116,11 @@ export function drawLandmark(map, type, x, y, i, j, ownerColor, flagColor, light
   }
 
   if (type === 'S' || type === 'M') {
-    // مستشفى طور الإمبراطورية: قاعة اليمامة بسقفها المقوّس (EMPIRE.art)، واللوحة في وسط السطح لا عند حافته الخلفية
-    const kind = type === 'M' ? EMPIRE.art.hospital : S.base;
+    // مستشفى طور الإمبراطورية بطراز المدينة (empireKind): في اليمامة قاعتها بسقفها المقوّس،
+    // واللوحة في وسط السطح لا عند حافته الخلفية (hospitalRoof)
+    const kind = type === 'M' ? empireKind(map, 'M') : S.base;
     drawKind(map, kind, x, y, i, j);
-    const top = y - roofTop(map, kind, i, j) + (type === 'M' ? EMPIRE.art.hospitalRoof : 0);
+    const top = y - roofTop(map, kind, i, j) + (type === 'M' ? hospitalRoof(map) : 0);
     plain(() => {
       // صليب أحمر على لوحة بيضاء فوق السطح، كبير يُرى من بعيد
       poly([[x - 8, top - 2], [x, top - 6], [x + 8, top - 2], [x, top + 2]], '#f4f1ea');

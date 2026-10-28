@@ -1,13 +1,14 @@
 // فحص اللعب المحلي (القسم 16): مضيف ومنضم في عملية واحدة بشبكة وهمية بتأخير عشوائي، وأوامر عشوائية من الطرفين.
 // يقارن بصمة المباراة عند الجهازين في نفس التحديث: يجب أن تتطابق دائماً. ثم يُفسد المنضم عمداً في منتصف المدة،
 // فيجب أن يكتشف المضيف الاختلاف ويعيد المزامنة وتتطابق البصمتان بعدها.
-//   node scripts/lan-sync-test.mjs [ثوانٍ] [conquest|points|king|regicide] [small|medium|large]
+//   node scripts/lan-sync-test.mjs [ثوانٍ] [empire|conquest|points|king|regicide] [small|medium|large]
 // شغّله بعد أي تعديل في المحاكاة: Math.random أو شيء يخص جهازاً واحداً داخل التحديث يكسر التطابق
 import { createMatch } from '../js/state.js';
 import * as LS from '../js/net/lockstep.js';
 import { packMatch, unpackMatch } from '../js/matchSave.js';
+import { EMPIRE } from '../js/config.js';
 
-const seconds = +(process.argv[2] || 60), mode = process.argv[3] || 'conquest', mapSize = process.argv[4] || 'small';
+const seconds = +(process.argv[2] || 60), mode = process.argv[3] || 'empire', mapSize = process.argv[4] || 'small';
 let seed = 12345;
 const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
 Math.random = rnd;          // الخريطة والبذرة عند المضيف قابلة للتكرار (والمحاكاة نفسها لا تستعمله)
@@ -41,7 +42,21 @@ let resyncs = 0;
 const H = LS.createLockstep('host', (to, msg) => sendLater(toClient, msg), 0);
 const C = LS.createLockstep('client', (to, msg) => sendLater(toHost, msg), 1, { onResync: () => resyncs++ });
 
+const pick = (list) => list[Math.floor(rnd() * list.length)];
+
+// طور الإمبراطورية: إنتاج في قاعدة، أو ترقية، أو بناء في حي، أو ترقية مبنى (وما لا تكفيه النقاط يُرفض عند الجميع)
+function empireCommand(state, L) {
+  const own = state.map.districts.filter(d => d.owner === L.slot && d.capture);
+  const r = rnd();
+  const d = r < 0.4 ? pick(own.filter(x => x.building === 'hq')) : r < 0.7 ? pick(own.filter(x => !x.building)) : pick(own.filter(x => x.building));
+  if (r < 0.4 && d) LS.localCommand(L, { k: 'emp', a: 'queue', d: d.id, x: pick(EMPIRE.units.order) });
+  else if (r < 0.55) LS.localCommand(L, { k: 'emp', a: 'upgrade', d: 0, x: pick(EMPIRE.upgrades.order) });
+  else if (r < 0.7 && d) LS.localCommand(L, { k: 'emp', a: 'build', d: d.id, x: pick(EMPIRE.buildings.order) });
+  else if (d) LS.localCommand(L, { k: 'emp', a: 'improve', d: d.id, x: pick(EMPIRE.buildings[d.building].upgrades.order) });
+}
+
 function randomCommand(state, L) {
+  if (state.mode === 'empire' && rnd() < 0.5) { empireCommand(state, L); return; }
   const mine = state.units.filter(u => u.playerId === L.slot && u.state !== 'dead');
   if (!mine.length) return;
   const u = mine.filter(() => rnd() < 0.5).map(x => x.id);
@@ -86,6 +101,8 @@ while (now < end && !(host.matchResult && client.matchResult)) {
 }
 
 const ok = tally.before[0] > 0 && tally.before[1] === 0 && resyncs >= 1 && tally.after[0] > 0 && tally.after[1] === 0;
+const empire = host.modeState.points ? { city: host.map.city, points: host.modeState.points.map(Math.floor),
+  buildings: host.map.districts.filter(d => d.building).length } : undefined;
 console.log(JSON.stringify({ mode, mapSize, seconds: Math.round(now / 1000), ticks: [host.netTick, client.netTick],
-  before: tally.before, resyncs, afterResync: tally.after, ok }));
+  before: tally.before, resyncs, afterResync: tally.after, empire, ok }));
 process.exit(ok ? 0 : 1);

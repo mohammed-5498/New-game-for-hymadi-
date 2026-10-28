@@ -152,7 +152,7 @@ const MODE_ICONS = {
   },
   // الإمبراطورية: القاعدة الرئيسية وبرج الرماية بصورتيهما في اليمامة، وقطعة نقاط ذهبية
   empire(ctx) {
-    building(ctx, EMPIRE.art.tower, 84, 66, 50);
+    building(ctx, EMPIRE.art.yamamah.tower, 84, 66, 50);
     building(ctx, 'tower_a', 50, 70, 76);
     circle(ctx, 92, 62, 11);
     fill(ctx, GOLD);

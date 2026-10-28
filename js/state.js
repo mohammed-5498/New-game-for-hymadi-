@@ -26,10 +26,11 @@ export function createMatch(settings) {
     homeDistrictId: -1
   }));
 
-  // طابع المدينة (القسم 3.9). طور الإمبراطورية في مدينته وحدها وبلا أحياء مميزة،
-  // والمدينة المحصورة فيه لا تُلعب في غيره (حفظ إعداد قديم اختارها مثلاً): تصير عشوائياً
-  const forced = Object.keys(CITIES.modeOnly).find(city => CITIES.modeOnly[city] === settings.mode);
-  const city = forced || (CITIES.modeOnly[settings.city] ? 'random' : settings.city);
+  // طابع المدينة (القسم 3.9). مدينة طور واحد (اليمامة للإمبراطورية) لا تُلعب في غيره: تصير عشوائياً.
+  // والإمبراطورية (الطور الأساسي) في كل المدن وبلا أحياء مميزة، و"عشوائي" فيها يشمل مدينتها
+  const only = CITIES.modeOnly[settings.city];
+  let city = only && only !== settings.mode ? 'random' : settings.city;
+  if (settings.mode === 'empire' && !CITIES.order.includes(city)) city = CITIES.order[Math.floor(Math.random() * CITIES.order.length)];
   const map = createMap(settings.mapSize, players, city, { specials: settings.mode !== 'empire' });
   if (!map) throw new Error('تعذر توليد خريطة صالحة');
 

@@ -7,6 +7,7 @@ import { createTransport } from './transport.js';
 import { createLockstep, localCommand, receive, stepFrame, sendCamera, playerLeft, prepareLanMatch, ALL } from './lockstep.js';
 import { packMatch, unpackMatch } from '../matchSave.js';
 import { centerCameraOnHome } from '../state.js';
+import { traitNotice } from '../game/nations.js';
 
 const S = {
   role: null,          // 'host' | 'client' | null
@@ -246,6 +247,7 @@ function clientStart(msg) {
   state.humanId = msg.you;
   state.lanRole = 'client';
   state.paused = false;
+  state.notice = traitNotice(state.players[msg.you]) || null;   // سمة أمته هو، لا إشعار المضيف
   centerCameraOnHome(state);
   S.L = createLockstep('client', (to, m) => S.transport.send(0, m), msg.you, { onResync: () => hook('resynced') });
   S.hostPaused = false;

@@ -399,11 +399,6 @@ button.wide.ghost { background: transparent; color: var(--text-dim); }
 .pick-text b { font-size: 18px; color: var(--gold); }
 .pick-text .hint { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pick-arrow { flex: 0 0 auto; font-size: 18px; color: var(--text-dim); }
-/* زر المدينة في طور يفرض مدينته (الإمبراطورية): بلا سهم، ولمسه يومض اسم المدينة */
-.pick-btn.locked .pick-arrow { visibility: hidden; }
-.pick-btn.locked .pick-text b { color: var(--text); }
-#cityName.flash { animation: city-flash .6s ease-out; }
-@keyframes city-flash { 0%, 50% { color: var(--gold); } }
 
 .pick-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-bottom: 12px; }
 .pick-tile {
