@@ -1435,14 +1435,17 @@ export const EMPIRE = {
 // botValue: قيمة حي الميزة عند البوتات (الحي العادي 1، والحي المميز القديم ai.specialValue)
 export const CITY_FEATURES = {
   cities: { diriyah: 'storm', shibam: 'villages', cairo: 'pyramid',
-            japan: 'dojo', gyeongju: 'bandits', kano: 'bandits', kaifeng: 'clinic', gondar: 'fortress', meroe: 'khartoum' },
+            japan: 'dojo', gyeongju: 'bandits', kano: 'bandits', kaifeng: 'clinic', gondar: 'fortress', meroe: 'khartoum',
+            paris: 'coups', rothenburg: 'policeHQ', birmingham: 'clock', tenoch: 'cartel', rio: 'statue', laboca: 'mercs' },
   ground: ['#c9a24e', 0.24],
   // المبنى المميز (بطلب المستخدم: مساحة خاصة به، وحجم أكبر وفخامة وهالة): كتلة 2×2 وسط حيه لا يُمشى عليها،
   // وبقية الحي ساحة مرصوفة حوله يُمشى عليها. حيه blockTiles مربعاً فأكثر (generator.js)
   blockTiles: 9,
-  botValue: { pyramid: 3, village: 2, dojo: 2.5, clinic: 2, fortress: 2.5, khartoum: 3 },
+  botValue: { pyramid: 3, village: 2, dojo: 2.5, clinic: 2, fortress: 2.5, khartoum: 3,
+              policeHQ: 3, clock: 3, complex: 2.5, cartel: 1.6, statue: 3, mercs: 2 },
   names: { pyramid: 'الهرم', village: 'القرية', dojo: 'دوجو الساموراي', clinic: 'دار العلاج', fortress: 'الحصن',
-           khartoum: 'برج الخرطوم' },
+           khartoum: 'برج الخرطوم', policeHQ: 'مركز الشرطة الرئيسي', clock: 'برج الساعة', complex: 'المجمع السكني',
+           statue: 'تمثال ريو', mercs: 'بيت المرتزقة' },
   hintSeconds: 6,                     // إشعار ميزة المدينة في بداية المباراة (بعد تلميح قائمة الحي)
   // سطر ميزة المدينة في معاينة المدينة (قائمة الإعداد والمتجر) وإشعار البداية
   desc: { storm: 'العاصفة الرملية: كل 3 دقائق لنصف دقيقة، مدى الرماة أقل والضربات تخطئ',
@@ -1452,13 +1455,20 @@ export const CITY_FEATURES = {
           bandits: 'قطاع الطرق: عصابة تظهر في الوسط كل دقيقتين، أكبر وأقوى في كل مرة، وتستولي على الأحياء',
           clinic: 'دار العلاج: تعالج جنود مالكها حولها، ويجنّد فيها أطباء',
           fortress: 'الحصن: حراس أقوياء وسهام، ومن يحتله يجنّد فيه أبطال عدوة',
-          khartoum: 'برج الخرطوم: برج رماية بعيد المدى بضعف الضرر، واحتلاله أطول بكثير' },
+          khartoum: 'برج الخرطوم: برج رماية بعيد المدى بضعف الضرر، واحتلاله أطول بكثير',
+          coups: 'الانقلابات: كل دقيقتين تتمرد أحياء من العصابات الكبيرة وتستولي على ما حولها',
+          policeHQ: 'مركز الشرطة الرئيسي: من يحتله تصير الشرطة صديقة له، وتنضم إليه شرطة كل مركز يحتله',
+          clock: 'برج الساعة: مالكه دخله +30% وإنتاجه أسرع 40%، واحتلاله أطول',
+          cartel: 'المجمع السكني: عصابة محايدة تحرس أربعة أحياء، وكل حي تنتزعه منها يرخّص جنودك 5%',
+          statue: 'تمثال ريو: جنود مالكه حوله أسرع ضرباً 20% وأقوى 15%، واحتلاله أطول',
+          mercs: 'بيوت المرتزقة: يستأجر مالكها مرتزقاً خفيفاً رخيصاً أو ثقيلاً غالياً' },
   // الهالة حول كل مبنى مميز وحول القرية التي ينتظر أهلها (رسم فقط): نصف القطر بالمربعات من وسط الكتلة، ونبض بطيء،
   // ونجوم صغيرة تدور عليها. colors: لون هالة كل ميزة
   halo: { radius: 1.95, width: 1.6, glow: 8, alpha: 0.85, glowAlpha: 0.3, pulse: 0.3, speed: 1.8,
           sparkles: 4, sparkleSpeed: 0.45, sparkleR: 1.6, light: 46 },
   colors: { pyramid: '255,206,84', village: '120,140,225', dojo: '232,70,86', clinic: '96,220,150', fortress: '150,214,96',
-            khartoum: '255,150,60' },
+            khartoum: '255,150,60', policeHQ: '95,160,240', clock: '240,205,120', complex: '47,190,175', statue: '140,230,120',
+            mercs: '235,95,110' },
   // العاصفة الرملية (الدرعية): أولها عند first ثانية ثم كل every ثانية، لمدة duration، وتنبيه قبلها بـ warn ثانية.
   // أثناءها: مدى الرماة والأبراج × rangeMul، والضربة القريبة والسهم وسهم البرج يخطئ باحتمال miss
   // ("أخطأ!" pop)، والنار وضربات الأبطال أضعف بنفس النسبة
@@ -1499,13 +1509,42 @@ export const CITY_FEATURES = {
   // برج الخرطوم (مروي): برج رماية واحد قرب الوسط، يرمي لمالكه: المدى range، والضرر ضرر برج الاقتصاد × damageMul،
   // وزمن الرمية زمنه ÷ rateMul. واحتلاله أبطأ: سرعة الاستيلاء على حيه × captureMul
   khartoum: { range: 9, damageMul: 2, rateMul: 1.5, captureMul: 0.3, top: 84 },
+  // الانقلابات (باريس): أولها عند first ثم كل every. كل عصابة تملك at[k] حياً فأكثر يتمرد منها k + 1 حياً (ليس قاعدة
+  // ولا مركز شرطة ولا التلة، وما بلا مبنى أولاً)، ويظهر في كل حي متمرد perDistrict متمردين بشكل أفراد nation بلون color،
+  // دمهم وضررهم × (1 + grow × (n − 1)) في الانقلاب n. يستولون على الأحياء المجاورة داخل range مربعاً من حيهم،
+  // ويقررون كل think ثانية. لا انقلابات في الصمود
+  coups: { first: 120, every: 120, at: [6, 9, 12], perDistrict: 3, grow: 0.1, range: 8, think: 2,
+           name: 'المتمردون', color: '#4a1c22', nation: 'france' },
+  // مركز الشرطة الرئيسي (روتنبورغ): مركز شرطة كبير قرب الوسط بجانب المراكز العادية، شرطته بشكل أفراد nation
+  // (والضابط بشكل captainLook)، ودمها وضررها × boost. من يحتله: الشرطة كلها صديقة له، وتنضم إليه شرطته
+  // وشرطة كل مركز يحتله بعده (police.js)
+  policeHQ: { nation: 'germany', captainLook: 'armored', boost: 1.15, top: 76 },
+  // برج الساعة (برمنغهام): قرب الوسط. مالكه: دخله × incomeMul، وزمن إنتاج جنوده ÷ productionMul، واحتلاله أبطأ (captureMul)
+  clock: { incomeMul: 1.3, productionMul: 1.4, captureMul: 0.5, top: 96 },
+  // المجمع السكني (تينوتشتيتلان): في الوسط، ومعه أحياء جيرانه الأقرب (neighbors) لعصابة محايدة بشكل nation وبلون color
+  // من البداية. تنتج total فرداً مميزاً فقط طوال المباراة (start في البداية ثم واحد كل every ثانية ما دام المجمع لها)،
+  // بالتناوب بين heroes، لا يبتعدون عن المجمع أكثر من leash مربعاً، ويستردون ما يُنتزع من أحيائهم (كل think ثانية).
+  // وكل حي من الأربعة يملكه لاعب: جنوده أرخص بنسبة discount
+  cartel: { neighbors: 3, total: 10, start: 4, every: 20, leash: 9, think: 2, discount: 0.05, heroes: ['sniper', 'firebomber'],
+            name: 'عصابة المجمع', color: '#1f5f5a', nation: 'mexico' },
+  complex: { top: 52 },                     // مبنى المجمع: ارتفاع قمته للشارة
+  // تمثال ريو (ريو): على صخرة قرب الوسط. جنود مالكه داخل radius مربعاً منه: سرعة الضرب + attackSpeed والضرر + damage،
+  // واحتلاله أبطأ (captureMul)
+  statue: { radius: 7, attackSpeed: 0.2, damage: 0.15, captureMul: 0.5, top: 70 },
+  // بيوت المرتزقة (لا بوكا): عددها لكل حجم خريطة، موزعة بعيدة عن الأحياء المنزلية. يستأجر مالكها فيها recruits
+  mercs: { count: { small: 1, medium: 2, large: 3 }, minHomeDistance: 5, top: 46, recruits: ['blade', 'gaucho'] },
   // التجنيد في المباني المميزة (من قائمتها، بطابور كالقاعدة): الكلفة والزمن، وشكل الوحدة (أمة nation وشخصيتها hero،
   // وnull للفرد العادي) وما يُضاف إلى إحصائياتها stats، واسمها name (وإلا اسمها في أمتها)
   recruits: {
     doctor:  { name: 'طبيب', cost: 30, seconds: 6, nation: 'china', hero: null,
                stats: { damage: 4, heal: { radius: 3, perSecond: 10 } } },
     drummer: { cost: 45, seconds: 9, nation: 'ethiopia', hero: 'boss' },
-    healer:  { cost: 35, seconds: 8, nation: 'ethiopia', hero: 'medic' }
+    healer:  { cost: 35, seconds: 8, nation: 'ethiopia', hero: 'medic' },
+    // مرتزقة لا بوكا: خفيف يضرب بسرعة ورخيص، وثقيل قوي وغالٍ جداً
+    blade:   { name: 'مرتزق خفيف', cost: 15, seconds: 4, nation: 'argentina', hero: 'dual',
+               stats: { hp: 90, damage: 7, attackTime: 0.55, speed: 2.7 } },
+    gaucho:  { name: 'مرتزق ثقيل', cost: 140, seconds: 14, nation: 'argentina', hero: 'spear',
+               stats: { hp: 520, armor: 0.35, damage: 30, attackTime: 1.3, speed: 2.0 } }
   }
 };
 

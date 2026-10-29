@@ -61,6 +61,7 @@ export function updateCapture(state) {
     if (!districtIds) continue;
 
     for (const id of districtIds) {
+      if (owner.ownOnly && !map.districts[id].feature) continue;
       if (!zones.has(id)) zones.set(id, new Map());
       const sides = zones.get(id);
       const side = sideKey(state, unit.playerId);

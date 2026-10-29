@@ -5,6 +5,7 @@ import { createUnit } from './units.js';
 import { findFreeTiles } from '../map/pathfinding.js';
 import { COMBAT } from '../config.js';
 import { random } from './random.js';   // عشوائية المنطق: مشتركة بين الأجهزة في اللعب المحلي
+import { dressMainPolice, joinPolice } from './features.js';
 
 const isAlive = (unit) => unit.state !== 'dead' && unit.hp > 0;
 
@@ -47,6 +48,16 @@ export function updatePolice(state) {
   const player = policePlayer(state);
   if (!player || state.mode === 'survival') return;
 
+  // مركز الشرطة الرئيسي (روتنبورغ، القسم 3.11): الشرطة صديقة لمن يملكه (isEnemyId في combat.js)
+  const main = state.map.districts.find(d => d.policeMain);
+  const friend = main && main.owner !== null && !state.players[main.owner].neutral ? main.owner : -1;
+  if (player.friendOf !== friend) {
+    player.friendOf = friend;
+    if (friend >= 0 && friend === state.humanId) {
+      state.notice = { text: 'استوليت على مركز الشرطة الرئيسي: الشرطة صديقة لك، وتنضم إليك شرطة كل مركز تحتله', mine: true, t: 5 };
+    }
+  }
+
   for (const station of policeStations(state)) {
     // أول استيلاء يوقف الإنتاج نهائياً، ولا يعود المركز ينتج أبداً
     if (station.owner !== null && !station.policeDisabled) disableStation(state, station);
@@ -85,12 +96,18 @@ export function updatePolice(state) {
   }
 }
 
+// والمركز الذي يحتله صاحب المركز الرئيسي (القسم 3.11): شرطته تنضم إليه بدل أن تختفي
 function disableStation(state, station) {
   station.policeDisabled = true;
+  const police = policePlayer(state);
+  const owner = police && station.owner === police.friendOf ? state.players[station.owner] : null;
+  let joined = 0;
   for (const unit of state.units) {
     if (unit.stationId !== station.id || !isAlive(unit)) continue;
-    unit.vanishAt = state.time + random() * POLICE.vanishSeconds;
+    if (owner) { joinPolice(state, unit, owner); joined++; }
+    else unit.vanishAt = state.time + random() * POLICE.vanishSeconds;
   }
+  if (joined && owner.id === state.humanId) state.notice = { text: 'انضم إليك ' + joined + ' من الشرطة', mine: true, t: 3 };
 }
 
 function spawnPolice(state, station, captain) {
@@ -101,6 +118,7 @@ function spawnPolice(state, station, captain) {
 
   const [i, j] = spots[Math.floor(random() * spots.length)];
   const unit = createUnit(state, player, i, j, captain ? 'captain' : null);
+  if (station.policeMain) dressMainPolice(unit, captain);     // شرطة المركز الرئيسي بشكل ألمانيا (القسم 3.11)
   unit.stationId = station.id;
   // لا تبتعد عن مركزها أكثر من 6 مربعات مهما طاردت
   unit.homePost = { x: station.capture.i, y: station.capture.j };

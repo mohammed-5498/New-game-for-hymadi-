@@ -16,7 +16,7 @@ import { findFreeTiles } from '../map/pathfinding.js';
 import { soundAt } from '../audio/sound.js';
 import { hypot } from './hypot.js';
 import { random } from './random.js';   // عشوائية المنطق: مشتركة بين الأجهزة في اللعب المحلي
-import { featureIncome, stormRangeMul, stormMiss, recruitsAt, spawnRecruit } from './features.js';
+import { featureIncome, stormRangeMul, stormMiss, recruitsAt, spawnRecruit, featureCostMul, featureIncomeMul, featureProductionMul } from './features.js';
 
 const isAlive = (unit) => unit && unit.state !== 'dead' && unit.hp > 0;
 
@@ -84,12 +84,12 @@ export function updateEmpire(state) {
   updateHospitals(state);
 }
 
-// ms.incomeMul: مضاعف الدخل من الطور (الدقيقة الأخيرة في الوقت بالنقاط، والصمود)، والبوت المجنون أكثر (مزيته)
+// ms.incomeMul: مضاعف الدخل من الطور (الدقيقة الأخيرة في الوقت بالنقاط، والصمود)، والبوت المجنون أكثر (مزيته)، ومالك برج الساعة (القسم 3.11)
 function collectIncome(state, ms) {
   const mul = (ms.incomeMul || 1) * TICK_SEC;
   for (const d of state.map.districts) {
     if (d.owner === null || !d.capture || state.players[d.owner].neutral) continue;
-    const gain = districtIncome(d) * mul * botIncome(state.players[d.owner]);
+    const gain = districtIncome(d) * mul * botIncome(state.players[d.owner]) * featureIncomeMul(state, d.owner);
     ms.points[d.owner] += gain;
     ms.earned[d.owner] += gain;
   }
@@ -125,15 +125,17 @@ function botIncome(player) {
   return (lvl && lvl.incomeFactor) || 1;
 }
 
-// سرعة الإنتاج ترقية القاعدة نفسها (district.blv.production)
+// سرعة الإنتاج ترقية القاعدة نفسها (district.blv.production)، ومالك برج الساعة أسرع (القسم 3.11)
 export function productionTime(state, district, kind) {
   const level = (district.blv && district.blv.production) || 0;
   const owner = state.players[district.owner];
-  return unitCost(kind).seconds * E.buildings.hq.upgrades.production.times[level] * (owner ? botFactor(owner) : 1);
+  return unitCost(kind).seconds * E.buildings.hq.upgrades.production.times[level] * (owner ? botFactor(owner) * featureProductionMul(state, owner.id) : 1);
 }
 
 // كلفة الطلب وزمنه: جنود القاعدة، أو المجنَّدون في المباني المميزة (CITY_FEATURES.recruits، القسم 3.11)
 const unitCost = (kind) => E.units[kind] || CITY_FEATURES.recruits[kind];
+// سعره لهذا اللاعب: أحياء عصابة المجمع التي يملكها تخفضه (تينوتشتيتلان)
+export const unitPrice = (state, playerId, kind) => Math.round(unitCost(kind).cost * featureCostMul(state, playerId));
 
 // هل يُنتج هذا الطلب في هذا الحي؟ جنود القاعدة في القاعدة الرئيسية، والمجنَّدون في مبناهم المميز
 const producesAt = (district, kind) => E.units[kind] ? district.building === 'hq' : (recruitsAt(district) || []).includes(kind);
@@ -298,7 +300,7 @@ export function canQueue(state, playerId, district, kind) {
   const queue = state.modeState.queues[district.id] || [];
   if (kind === 'leader' && leaderTaken(state, playerId)) return fail('لعصابتك زعيم');
   if (queue.length >= E.queueMax) return fail('الطابور ممتلئ');
-  if (pointsOf(state, playerId) < unitCost(kind).cost) return fail('النقاط لا تكفي');
+  if (pointsOf(state, playerId) < unitPrice(state, playerId, kind)) return fail('النقاط لا تكفي');
   return OK;
 }
 
@@ -307,7 +309,7 @@ export function queueUnit(state, playerId, districtId, kind) {
   const check = canQueue(state, playerId, district, kind);
   if (!check.ok) return check;
   const queues = state.modeState.queues;
-  state.modeState.points[playerId] -= unitCost(kind).cost;
+  state.modeState.points[playerId] -= unitPrice(state, playerId, kind);
   if (!queues[districtId]) queues[districtId] = [];
   queues[districtId].push({ kind, t: 0, payer: playerId });
   return OK;
@@ -431,7 +433,7 @@ export function incomeOf(state, playerId) {
     if (d.owner !== playerId || !d.capture) continue;
     total += districtIncome(d);
   }
-  return total * (state.modeState.incomeMul || 1);
+  return total * (state.modeState.incomeMul || 1) * featureIncomeMul(state, playerId);
 }
 
 export { towerStats, hospitalStats };

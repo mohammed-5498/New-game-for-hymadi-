@@ -9,7 +9,7 @@ import { tintAmount } from '../game/capture.js';
 import { beginCity, groundColor, drawRoadSurface, drawTileStatic, debrisLight, specialType, cityOf, cityReady } from './cityRender.js';
 import { isLane, drawLanePaving, roundaboutAnchor, drawRoundaboutRing, laneLight, roundaboutLights } from './openCity.js';
 import { lampSpot } from './landmarks.js';
-import { drawFeaturePaving, featureLight } from './featureArt.js';
+import { drawFeaturePaving, featureLight, featureLamp } from './featureArt.js';
 
 const PAD = 1;   // كل قطعة تتجاوز حدودها بوحدة: لا خطوط شعرية بين القطع
 
@@ -84,7 +84,14 @@ function collectStatics(state) {
     const special = specialType(state, k);
     if (special === 'N') cache.lamps.push(lampSpot(map, i, j, x, y));
     else if (special === 'P') cache.lights.push({ x, y: y - 4, r: 18, c: '255,235,190', a: 0.25 });
-    else if (special === 'F') { const d = map.districtOf(i, j); if (d && d.feature) cache.lights.push(featureLight(map, d, x, y)); }
+    else if (special === 'F') {
+      const d = map.districtOf(i, j);
+      if (d && d.feature) {
+        cache.lights.push(featureLight(map, d, x, y));
+        const lamp = featureLamp(d, x, y);
+        if (lamp) cache.lamps.push(lamp);
+      }
+    }
     else if (!special && debrisLight(map, i, j)) cache.lights.push({ x, y: y - 7, r: 34, c: '255,150,60', a: 0.65 });
     else if (!special && isLane(map, k)) { const l = laneLight(map, i, j, x, y); if (l) cache.lights.push(l); }
     else if (map.type[k] === 'Y' && roundaboutAnchor(map, i, j)) cache.lights.push(...roundaboutLights(x, y, map.city));

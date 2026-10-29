@@ -401,14 +401,17 @@ function assignPoliceDistricts(map, districts, size) {
 // المبنى المميز (بطلب المستخدم: مساحة خاصة به وحجم أكبر): كتلة 2×2 وسط حيه، مرسومة كلها من مربعها الأمامي (F)
 // والثلاثة الباقية f بلا رسم (لا يُمشى عليها)، وبقية الحي ساحة مرصوفة حوله يُمشى عليها (fplaza) إلا ساحة العلم.
 // center: الأقرب لوسط المدينة (بلا رقم عشوائي)، spread: موزعة بعيدة عن الأحياء المنزلية (الأولى عشوائية ثم الأبعد)
-const FEATURE_BUILDINGS = { pyramid: 'center', khartoum: 'center', dojo: 'center', clinic: 'spread', fortress: 'spread' };
+const FEATURE_BUILDINGS = { pyramid: 'center', khartoum: 'center', dojo: 'center', clinic: 'spread', fortress: 'spread',
+                            policeHQ: 'center', clock: 'center', complex: 'center', statue: 'center', mercs: 'spread' };
 const DISTRICT_FEATURE = { pyramid: 'pyramid', villages: 'village', dojo: 'dojo', clinic: 'clinic', fortress: 'fortress',
-                           khartoum: 'khartoum' };
+                           khartoum: 'khartoum', policeHQ: 'policeHQ', clock: 'clock', cartel: 'complex', statue: 'statue',
+                           mercs: 'mercs' };
+const FEATURE_CONFIG = { village: 'villages', complex: 'cartel' };   // قسم الأرقام في CITY_FEATURES إن اختلف اسمه
 
 function assignFeatures(map, districts, size) {
   const feature = DISTRICT_FEATURE[CITY_FEATURES.cities[map.city]];
   if (!feature) return;
-  const cfg = CITY_FEATURES[feature === 'village' ? 'villages' : feature];
+  const cfg = CITY_FEATURES[FEATURE_CONFIG[feature] || feature];
   const homes = districts.filter(d => d.isHome);
   const far = (d) => !cfg.minHomeDistance || homes.every(h => hypot(d.cx - h.cx, d.cy - h.cy) >= cfg.minHomeDistance);
   const building = FEATURE_BUILDINGS[feature];
@@ -421,6 +424,7 @@ function assignFeatures(map, districts, size) {
     const ci = (map.land - 1) / 2, cj = (map.n - 1) / 2;
     const order = candidates.slice().sort((a, b) => hypot(a.cx - ci, a.cy - cj) - hypot(b.cx - ci, b.cy - cj));
     for (const d of order.slice(0, count)) markFeature(d, feature);
+    if (feature === 'complex' && order[0]) markCartel(districts, order[0], cfg.neighbors);
     return;
   }
   // موزعة: بعد الأولى نختار في كل مرة الأبعد عن المختارة (كمراكز الشرطة)
@@ -441,6 +445,15 @@ function assignFeatures(map, districts, size) {
 function markFeature(district, feature) {
   district.feature = feature;
   district.region = 'feature';    // أرض تميل للذهبي قبل الاستيلاء عليه (cityRender.js)
+  // مركز الشرطة الرئيسي (روتنبورغ) مركز شرطة كغيره (police.js) ومبنى مميز معاً
+  if (feature === 'policeHQ') { district.police = true; district.policeMain = true; }
+}
+
+// المجمع السكني (تينوتشتيتلان): أقرب count أحياء إليه أحياء العصابة معه
+function markCartel(districts, complex, count) {
+  const near = districts.filter(d => d !== complex && d.capturable && !d.isHome && !d.police && !d.special && !d.feature)
+    .sort((a, b) => hypot(a.cx - complex.cx, a.cy - complex.cy) - hypot(b.cx - complex.cx, b.cy - complex.cy));
+  for (const d of near.slice(0, count)) markFeature(d, 'cartel');
 }
 
 // هل في الحي كتلة 2×2 من مربعاته؟
@@ -560,10 +573,10 @@ function fillDistricts(map, districts) {
 
     if (district.isHome && inner[0]) {
       map.type[map.idx(inner[0][0], inner[0][1])] = 'Q';   // مبنى المقر
-    } else if (district.police && inner[0]) {
-      map.type[map.idx(inner[0][0], inner[0][1])] = 'N';   // مركز الشرطة
     } else if (FEATURE_BUILDINGS[district.feature]) {
       placeFeatureBuilding(map, district, point, inner);   // مبنى ميزة المدينة وساحته (القسم 3.11)
+    } else if (district.police && inner[0]) {
+      map.type[map.idx(inner[0][0], inner[0][1])] = 'N';   // مركز الشرطة
     } else if (district.special) {
       SPECIAL_BUILDINGS[district.special].forEach((letter, index) => {
         const tile = inner[index];

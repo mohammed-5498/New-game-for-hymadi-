@@ -30,7 +30,8 @@ export const ART_KEYS = {
 // مفتاح غير معروف (عصابة لا تملك هذه الشخصية) يرجع لرسم الفرد العادي بدل ألا يُرسم شيء
 // وحدة الأمة (القسم 3.10) بمظهر أمتها: الكامل للوحدة المظللة (المرحلة 9ج)، والمبسّط لغيرها
 const artKey = (unit, time, shaded) => {
-  const kind = unit.champion ? 'champion' : (unit.hero || 'common');
+  // lookKind: شكل بدل شخصيتها (ضابط مركز الشرطة الرئيسي بشكل حامل الرمح الألماني، القسم 3.11)
+  const kind = unit.champion ? 'champion' : (unit.lookKind || unit.hero || 'common');
   const own = unit.nation ? nationArtKey(unit, kind, time, shaded) : null;
   if (own) return own;
   const gang = ART_KEYS[unit.gang] || ART_KEYS.crows;

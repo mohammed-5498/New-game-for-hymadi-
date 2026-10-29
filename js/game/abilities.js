@@ -8,7 +8,8 @@ import { forEachNearby } from './spatialHash.js';
 import { soundAt } from '../audio/sound.js';
 import { homeMods, inOwnArea, brotherMods, phalanxMods, outnumberedMods, duelMods } from './nations.js';
 import { empireDamageBonus, empireArmorBonus } from './empire.js';
-import { pyramidZones, pyramidTaken, stormDamageMul, featureDamageBonus } from './features.js';
+import { pyramidZones, pyramidTaken, stormDamageMul, featureDamageBonus, statueZones, inZone } from './features.js';
+import { CITY_FEATURES } from '../config.js';
 
 const isAlive = (unit) => unit.state !== 'dead' && unit.hp > 0;
 const allied = (state, a, b) => a.playerId === b.playerId || !isEnemy(state, a, b);
@@ -37,8 +38,9 @@ function applyDamageBonuses(state) {
   const phalanx = state.players.map(phalanxMods);
   const outnumbered = state.players.map(outnumberedMods);
   const duel = state.players.map(duelMods);
-  // الهرم (القسم 3.11): جنود مالكه حوله يتلقون ضرراً أقل (null بلا هرم مملوك)
+  // الهرم (القسم 3.11): جنود مالكه حوله يتلقون ضرراً أقل، وتمثال ريو: أقوى وأسرع ضرباً (null بلا مبنى مملوك)
   const pyramids = pyramidZones(state);
+  const statues = statueZones(state);
 
   // نبدأ من الصفر (المضاعف النهائي يُحسب في الحلقة الأخيرة بنفس ترتيب الجمع)
   // كتابة العدد العشري في خاصية الوحدة تحجز ذاكرة: لا نكتب إلا ما تغيّر فعلاً
@@ -99,6 +101,12 @@ function applyDamageBonuses(state) {
     if (ph && inGroup(state, unit, ph)) taken = 1 - ph.reduce;
     if (pyramids) taken *= pyramidTaken(pyramids, unit);
     if (unit.takenMul !== taken) unit.takenMul = taken;
+    let speed = 0;
+    if (statues && inZone(statues, unit)) {
+      multiplier += CITY_FEATURES.statue.damage;
+      speed = CITY_FEATURES.statue.attackSpeed;
+    }
+    if (unit.auraSpeed !== speed) unit.auraSpeed = speed;
     if (unit.damageMultiplier !== multiplier) unit.damageMultiplier = multiplier;
   }
 }

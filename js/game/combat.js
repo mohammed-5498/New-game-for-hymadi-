@@ -44,6 +44,8 @@ export function isEnemyId(state, a, b) {
   if (a === b) return false;
   const pa = state.players[a], pb = state.players[b];
   if (pa.passive || pb.passive) return false;
+  // الشرطة صديقة لصاحب مركزها الرئيسي (روتنبورغ، القسم 3.11)
+  if (pa.friendOf === b || pb.friendOf === a) return false;
   const teamA = pa.team;
   const teamB = pb.team;
   if (teamA && teamB && teamA === teamB) return false;
@@ -395,7 +397,7 @@ function fightTarget(state, unit, budget) {
   // حد المطاردة (لا ينطبق على أمر الهجوم من اللاعب)
   // الشرطة تقيسه من مركزها: لا تبتعد عنه أكثر من 6 مربعات (القسم 3.8)
   if (unit.homePost) {
-    if (distance(unit, unit.homePost) > POLICE.chaseTiles) { returnToOrigin(state, unit); return; }
+    if (distance(unit, unit.homePost) > (unit.leash || POLICE.chaseTiles)) { returnToOrigin(state, unit); return; }
   } else if (!unit.commandedTarget) {
     const visionLimit = visionRange(state, unit) * COMBAT.chaseVisionFactor;
     const fromOrigin = distance(unit, unit.chaseOrigin);
@@ -426,6 +428,7 @@ function fightTarget(state, unit, budget) {
       if (unit.buffUntil > state.time && unit.buffAttackSpeed) {
         attackTime /= 1 + unit.buffAttackSpeed;
       }
+      if (unit.auraSpeed) attackTime /= 1 + unit.auraSpeed;      // هالة تمثال ريو (القسم 3.11)
 
       // الرمي البعيد يبقى ضربة واحدة كما هي؛ والقتال القريب يستعمل الحركات الأربع
       if (ranged) rangedSwing(state, unit, target, damage, attackTime);

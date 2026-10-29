@@ -9,6 +9,12 @@
 // - دار العلاج (كايفنغ): علاج قوي حولها، وتجنيد طبيب
 // - الحصن (غوندر): حراس محايدون وسهام، وتجنيد أبطال عدوة
 // - برج الخرطوم (مروي): برج رماية أقوى، واحتلاله أبطأ
+// - الانقلابات (باريس): أحياء من العصابات الكبيرة تتمرد كل دقيقتين، ومتمردون يستولون على ما حولها (captures)
+// - مركز الشرطة الرئيسي (روتنبورغ): من يحتله تصير الشرطة صديقة له وتنضم إليه (police.js)
+// - برج الساعة (برمنغهام): دخل وإنتاج أسرع لمالكه، واحتلاله أبطأ
+// - المجمع السكني (تينوتشتيتلان): عصابة محايدة تحرس أحياءها الأربعة وتستردها، وكل حي منها يرخّص جنود مالكه
+// - تمثال ريو (ريو): جنود مالكه حوله أسرع ضرباً وأقوى، واحتلاله أبطأ
+// - بيوت المرتزقة (لا بوكا): استئجار مرتزقين
 // الحي يحمل ميزته (district.feature، من مولّد الخريطة)، والمباراة ميزة مدينتها (state.feature).
 // الأرقام كلها في CITY_FEATURES داخل config.js
 import { TICK_SEC, CITY_FEATURES as F, EMPIRE as E, COMBAT, SPAWN, nations } from '../config.js';
@@ -29,10 +35,11 @@ const cityNation = (city) => nations.order.find(id => nations[id].city === city)
 export const cityFeature = (city) => F.cities[city] || null;
 
 // --- الطرف المحايد الذي تحتاجه الميزة (يُضاف بعد الشرطة)، وnull لغيرها ---
-// villages: أهل القرى المسالمون، dojo: الساموراي، fortress: حراس الحصن، bandits: قطاع الطرق بشكل أمة المدينة
+// villages: أهل القرى المسالمون، dojo: الساموراي، fortress: حراس الحصن، bandits: قطاع الطرق بشكل أمة المدينة،
+// coups: المتمردون، cartel: عصابة المجمع
+const RAIDERS = ['bandits', 'coups', 'cartel'];      // أطراف تستولي على الأحياء
 export function createFeaturePlayer(players, feature, city) {
-  const cfg = feature === 'villages' ? F.villages : feature === 'dojo' ? F.dojo : feature === 'fortress' ? F.fortress
-            : feature === 'bandits' ? F.bandits : null;
+  const cfg = ['villages', 'dojo', 'fortress', 'bandits', 'coups', 'cartel'].includes(feature) ? F[feature] : null;
   if (!cfg) return null;
   const nation = feature === 'bandits' ? cityNation(city) : cfg.nation;
   if (!nation || !nations[nation]) return null;
@@ -46,7 +53,8 @@ export function createFeaturePlayer(players, feature, city) {
     isHuman: false,
     neutral: true,                     // خارج حساب الفوز والخسارة والبوتات كالشرطة
     passive: feature === 'villages',   // لا يهاجم ولا يُهاجَم ولا يُحسب جانباً في الاستيلاء (combat.js وcapture.js)
-    captures: feature === 'bandits',   // يستولي على الأحياء (capture.js)
+    captures: RAIDERS.includes(feature),   // يستولي على الأحياء (capture.js)
+    ownOnly: feature === 'cartel',     // عصابة المجمع تحرس أحياءها الأربعة فقط: لا تستولي على غيرها
     feature,
     team: 0,
     difficulty: 'medium',
@@ -78,6 +86,7 @@ function boost(unit, extra, mul = 1) {
 // --- البداية ---
 export function initFeatures(state) {
   if (state.feature === 'villages') initVillages(state);
+  if (state.feature === 'cartel') initCartel(state);
   for (const d of state.map.districts) {
     if (!d.capture || d.featureTile === undefined) continue;
     d.cool = 0;
@@ -106,6 +115,8 @@ export function updateFeatures(state) {
     case 'khartoum': updateKhartoum(state); break;
     case 'clinic': updateClinics(state); break;
     case 'bandits': updateBandits(state); break;
+    case 'coups': updateCoups(state); break;
+    case 'cartel': updateCartel(state); break;
   }
 }
 
@@ -148,17 +159,18 @@ const clock = (seconds) => {
   return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
 };
 
-// سطر شريط الطور: العاصفة الجارية أو القادمة حين تقترب، وموجة قطاع الطرق القادمة (null بعيداً عنهما)
+// سطر شريط الطور: العاصفة الجارية أو القادمة حين تقترب، وموجة قطاع الطرق أو الانقلاب القادم (null بعيداً عنها)
 export function featureBar(state) {
   if (state.feature === 'storm') {
     const now = stormAt(state.time);
     if (now.on) return { text: 'عاصفة رملية ' + clock(now.left), alarm: true };
     return now.left <= F.storm.duration ? { text: 'عاصفة بعد ' + clock(now.left), alarm: now.left <= F.storm.warn } : null;
   }
-  if (state.feature === 'bandits' && state.mode !== 'survival') {
-    const B = F.bandits;
+  if ((state.feature === 'bandits' || state.feature === 'coups') && state.mode !== 'survival') {
+    const B = F[state.feature];
     const left = state.time < B.first ? B.first - state.time : B.every - ((state.time - B.first) % B.every);
-    return left <= 30 ? { text: 'قطاع الطرق بعد ' + clock(left), alarm: left <= 10 } : null;
+    const name = state.feature === 'bandits' ? 'قطاع الطرق' : 'انقلاب';
+    return left <= 30 ? { text: name + ' بعد ' + clock(left), alarm: left <= 10 } : null;
   }
   return null;
 }
@@ -420,32 +432,215 @@ function spawnBandits(state, wave) {
   }
 }
 
-// وجهة من لا يقاتل منهم: الحي الأقرب الذي ليس لهم (المجاور لأحيائهم أولاً)، حتى cap حياً،
-// ثم حراسة أحيائهم (الذي يُنتزع منهم أولاً). لا قواعد اللاعبين ولا مراكز الشرطة، ولا التلة في ملك الحي
 function thinkBandits(state) {
   const player = featurePlayer(state);
   if (!player) return;
   const free = state.units.filter(u => u.playerId === player.id && isAlive(u) && u.state === 'idle');
+  const cap = F.bandits.cap[state.settings.mapSize] || F.bandits.cap.medium;
+  raid(state, player, free, cap, null);
+}
+
+// وجهة من لا يقاتل من طرف يستولي (قطاع الطرق والمتمردون): الحي الأقرب الذي ليس لهم (المجاور لأحيائهم أولاً)،
+// حتى cap حياً، ثم حراسة أحيائهم (الذي يُنتزع منهم أولاً). لا قواعد اللاعبين ولا مراكز الشرطة، ولا التلة في ملك الحي.
+// near: { i, j, r } حدود ما يقصدونه (المتمردون حول حيهم الأول)، أو null
+function raid(state, player, free, cap, near) {
   if (!free.length) return;
-  const map = state.map, B = F.bandits;
-  const cap = B.cap[state.settings.mapSize] || B.cap.medium;
+  const map = state.map;
   const held = map.districts.filter(d => d.owner === player.id && d.capture);
   const cx = free.reduce((s, u) => s + u.x, 0) / free.length, cy = free.reduce((s, u) => s + u.y, 0) / free.length;
+  const inside = (d) => !near || hypot(d.capture.i - near.i, d.capture.j - near.j) <= near.r;
   let target = null;
   if (held.length < cap) {
-    const near = new Set();
-    for (const d of held) for (const id of d.adj || []) near.add(id);
+    const next = new Set();
+    for (const d of held) for (const id of d.adj || []) next.add(id);
     let bestScore = Infinity;
     for (const d of map.districts) {
-      if (!d.capture || d.owner === player.id || d.police || d.building === 'hq' || d.hill) continue;
-      const score = hypot(d.capture.i - cx, d.capture.j - cy) - (near.has(d.id) ? 6 : 0);
+      if (!d.capture || d.owner === player.id || d.police || d.building === 'hq' || d.hill || !inside(d)) continue;
+      const score = hypot(d.capture.i - cx, d.capture.j - cy) - (next.has(d.id) ? 6 : 0);
       if (score < bestScore) { bestScore = score; target = d; }
     }
-  } else {
-    target = held.find(d => d.progress < 100) ||
-             held.reduce((a, b) => hypot(a.capture.i - cx, a.capture.j - cy) <= hypot(b.capture.i - cx, b.capture.j - cy) ? a : b);
+  }
+  if (!target) {
+    const mine = held.filter(inside);
+    target = mine.find(d => d.progress < 100) ||
+             mine.reduce((a, b) => !a || hypot(b.capture.i - cx, b.capture.j - cy) < hypot(a.capture.i - cx, a.capture.j - cy) ? b : a, null);
   }
   if (!target) return;
   const go = free.filter(u => hypot(u.x - target.capture.i, u.y - target.capture.j) > 2.5);
   if (go.length) commandAttackMove(state, target.capture.i, target.capture.j, go, false);
+}
+
+// ================= الانقلابات (باريس) =================
+// الانقلاب n عند first + (n − 1) × every: من كل عصابة تملك at[k] حياً فأكثر يتمرد k + 1 حياً، ثم المتمردون كل think ثانية
+function updateCoups(state) {
+  if (state.mode === 'survival') return;
+  const C = F.coups, tick = tickOf(state), first = ticks(C.first), every = ticks(C.every);
+  if (tick >= first && (tick - first) % every === 0) coup(state, (tick - first) / every + 1);
+  if (tick % ticks(C.think) === 0) thinkRebels(state);
+}
+
+function coup(state, wave) {
+  const C = F.coups, rebels = featurePlayer(state), map = state.map;
+  if (!rebels) return;
+  const mul = 1 + C.grow * (wave - 1);
+  let mine = 0, total = 0;
+  for (const player of state.players) {
+    if (player.neutral) continue;
+    const owned = map.districts.filter(d => d.owner === player.id && d.capture);
+    const count = C.at.filter(n => owned.length >= n).length;
+    if (!count) continue;
+    // ما بلا مبنى أولاً، وبترتيب عشوائي مشترك بين الأجهزة
+    const candidates = owned.filter(d => d.building !== 'hq' && !d.police && !d.hill)
+      .map(d => ({ d, r: (d.building ? 1 : 0) + random() }))
+      .sort((a, b) => a.r - b.r)
+      .slice(0, count);
+    for (const { d } of candidates) {
+      d.owner = rebels.id;
+      d.progress = 100;
+      d.progressOwner = rebels.id;
+      for (const [i, j] of findFreeTiles(map, d.capture.i, d.capture.j, C.perDistrict)) {
+        const unit = createUnit(state, rebels, i, j);
+        boost(unit, null, mul);
+        unit.raidFrom = d.id;
+        state.units.push(unit);
+      }
+      total++;
+      if (player.id === state.humanId) mine++;
+    }
+  }
+  if (!total) return;
+  state.notice = mine
+    ? { text: 'انقلاب! تمرد ' + (mine > 1 ? mine + ' من أحيائك' : 'حي من أحيائك'), mine: true, t: 4 }
+    : { text: 'انقلاب في المدينة: تمردت ' + total + (total > 1 ? ' أحياء' : ' حي'), mine: false, t: 4 };
+  sound('alert');
+}
+
+// كل جماعة متمردة (من حي واحد) تستولي على ما حول حيها داخل range مربعاً
+function thinkRebels(state) {
+  const rebels = featurePlayer(state);
+  if (!rebels) return;
+  const groups = new Map();
+  for (const unit of state.units) {
+    if (unit.playerId !== rebels.id || !isAlive(unit) || unit.state !== 'idle') continue;
+    if (!groups.has(unit.raidFrom)) groups.set(unit.raidFrom, []);
+    groups.get(unit.raidFrom).push(unit);
+  }
+  for (const [from, free] of groups) {
+    const origin = state.map.districts[from];
+    if (!origin || !origin.capture) continue;
+    raid(state, rebels, free, Infinity, { i: origin.capture.i, j: origin.capture.j, r: F.coups.range });
+  }
+}
+
+// ================= المجمع السكني (تينوتشتيتلان) =================
+// أحياء العصابة الأربعة لها من البداية، وأفرادها المميزون حول المجمع
+const cartelDistricts = (state) => state.map.districts.filter(d => d.feature === 'complex' || d.feature === 'cartel');
+
+function initCartel(state) {
+  const player = featurePlayer(state), complex = state.map.districts.find(d => d.feature === 'complex');
+  if (!player || !complex || !complex.capture || complex.featureTile === undefined) return;
+  for (const d of cartelDistricts(state)) {
+    if (!d.capture) continue;
+    d.owner = player.id;
+    d.progress = 100;
+    d.progressOwner = player.id;
+    d.tintColor = player.color;
+    d.tintMix = 1;
+  }
+  complex.produced = 0;
+  complex.nextAt = F.cartel.every;
+  for (let k = 0; k < F.cartel.start; k++) spawnCartel(state, complex);
+}
+
+function spawnCartel(state, complex) {
+  const C = F.cartel;
+  if (complex.produced >= C.total) return;
+  const hero = C.heroes[complex.produced % C.heroes.length];
+  if (spawnGuard(state, complex, { hero, stats: null })) {
+    const unit = state.units[state.units.length - 1];
+    unit.leash = C.leash;
+    complex.produced++;
+  }
+}
+
+// إنتاج حتى total ما دام المجمع لها، ثم استرداد أحيائها: من لا يقاتل يقصد أقرب حي انتُزع منها
+function updateCartel(state) {
+  const C = F.cartel, player = featurePlayer(state), complex = state.map.districts.find(d => d.feature === 'complex');
+  if (!player || !complex || !complex.capture || complex.featureTile === undefined) return;
+  if (complex.owner === player.id && complex.produced < C.total && state.time >= complex.nextAt) {
+    spawnCartel(state, complex);
+    complex.nextAt = state.time + C.every;
+  }
+  if (tickOf(state) % ticks(C.think)) return;
+  const lost = cartelDistricts(state).filter(d => d.capture && d.owner !== player.id);
+  const free = state.units.filter(u => u.playerId === player.id && isAlive(u) && u.state === 'idle');
+  if (!lost.length || !free.length) return;
+  const cx = free.reduce((s, u) => s + u.x, 0) / free.length, cy = free.reduce((s, u) => s + u.y, 0) / free.length;
+  const target = lost.reduce((a, b) => hypot(b.capture.i - cx, b.capture.j - cy) < hypot(a.capture.i - cx, a.capture.j - cy) ? b : a);
+  const go = free.filter(u => hypot(u.x - target.capture.i, u.y - target.capture.j) > 1.5);
+  if (go.length) commandAttackMove(state, target.capture.i, target.capture.j, go, false);
+}
+
+// كلفة جنود اللاعب: أرخص بنسبة discount لكل حي من أحياء العصابة يملكه (1 لغيره)
+export function featureCostMul(state, playerId) {
+  if (state.feature !== 'cartel') return 1;
+  let n = 0;
+  for (const d of state.map.districts) if ((d.feature === 'complex' || d.feature === 'cartel') && d.owner === playerId) n++;
+  return 1 - F.cartel.discount * n;
+}
+
+// ================= برج الساعة (برمنغهام) =================
+const clockOwner = (state) => {
+  if (state.feature !== 'clock') return -1;
+  const d = state.map.districts.find(x => x.feature === 'clock');
+  return d && d.owner !== null && !state.players[d.owner].neutral ? d.owner : -1;
+};
+
+// مضاعف دخل اللاعب (مالك برج الساعة أكثر)، و1 لغيره
+export const featureIncomeMul = (state, playerId) => clockOwner(state) === playerId ? F.clock.incomeMul : 1;
+// مضاعف زمن إنتاج جنود اللاعب (مالك برج الساعة أسرع)، و1 لغيره
+export const featureProductionMul = (state, playerId) => clockOwner(state) === playerId ? 1 / F.clock.productionMul : 1;
+
+// ================= تمثال ريو (ريو) =================
+// التماثيل المملوكة الآن: { owner, x, y, r2 } لضرر جنود مالكها وسرعة ضربهم حولها (abilities.js)، وnull بلا تمثال مملوك
+export function statueZones(state) {
+  if (state.feature !== 'statue') return null;
+  let zones = null;
+  for (const d of state.map.districts) {
+    if (d.feature !== 'statue' || d.owner === null || d.featureTile === undefined || state.players[d.owner].neutral) continue;
+    const at = featureCenter(state.map, d);
+    (zones || (zones = [])).push({ owner: d.owner, x: at.i, y: at.j, r2: F.statue.radius * F.statue.radius });
+  }
+  return zones;
+}
+
+export function inZone(zones, unit) {
+  for (const z of zones) {
+    if (z.owner !== unit.playerId) continue;
+    const dx = unit.x - z.x, dy = unit.y - z.y;
+    if (dx * dx + dy * dy <= z.r2) return true;
+  }
+  return false;
+}
+
+// ================= مركز الشرطة الرئيسي (روتنبورغ) =================
+// شرطة المركز الرئيسي بشكل أفراد ألمانيا (والضابط بشكل captainLook)، وأقوى قليلاً (police.js)
+export function dressMainPolice(unit, captain) {
+  const P = F.policeHQ;
+  unit.nation = P.nation;
+  unit.lookKind = captain ? P.captainLook : null;
+  boost(unit, null, P.boost);
+}
+
+// شرطي ينضم إلى صاحب المركز الرئيسي: جندي من جنوده بلونه، بلا مركز ولا حد مطاردة، ويستولي كالفرد العادي
+export function joinPolice(state, unit, owner) {
+  unit.playerId = owner.id;
+  unit.color = owner.color;
+  unit.artColor = owner.color;
+  unit.stationId = -1;
+  unit.homePost = null;
+  unit.vanishAt = -1;
+  unit.target = null;
+  unit.stats = { ...unit.stats, capturePower: 1 };
+  applyUpgrades(state, unit);
 }

@@ -1,9 +1,9 @@
 // البوتات في طور الإمبراطورية: تصرف نقاطها على الجنود والزعيم والترقيات والمباني (الأرقام في EMPIRE.bot).
 // لا ظهور تلقائي في هذا الطور فبلا هذا لا جيش للبوت. القتال والتوسع كما في الأطوار الأخرى (bot.js).
 // في كل قرار: "الشراء التالي" واحد، ويُدّخر له إن لم تكفِ النقاط (فلا تأكل الأفراد الرخيصة كل شيء)
-import { EMPIRE as E, CITY_FEATURES } from '../config.js';
+import { EMPIRE as E } from '../config.js';
 import {
-  canQueue, queueUnit, nextUpgrade, buyUpgrade, buildDistrict,
+  canQueue, queueUnit, unitPrice, nextUpgrade, buyUpgrade, buildDistrict,
   nextBuildingUpgrade, upgradeBuilding, buildSpot
 } from '../game/empire.js';
 import { isEnemyId } from '../game/combat.js';
@@ -67,7 +67,7 @@ function pickNext(state, player, memo) {
   if (roomy && army >= B.leaderArmy) {
     const check = canQueue(state, pid, hq, 'leader');
     if (check.ok || check.reason === 'النقاط لا تكفي') {
-      return { cost: E.units.leader.cost, buy: () => queueUnit(state, pid, hq.id, 'leader') };
+      return { cost: unitPrice(state, pid, 'leader'), buy: () => queueUnit(state, pid, hq.id, 'leader') };
     }
   }
 
@@ -79,7 +79,7 @@ function pickNext(state, player, memo) {
 
   // الجنود: بالدور حسب النسب، ما لم يحن دور الترقيات والمباني
   const kind = sequence(level)[memo.turn % sequence(level).length];
-  const unit = roomy ? { cost: E.units[kind].cost, turn: true, buy: () => queueUnit(state, pid, hq.id, kind) } : null;
+  const unit = roomy ? { cost: unitPrice(state, pid, kind), turn: true, buy: () => queueUnit(state, pid, hq.id, kind) } : null;
   const share = B.techShare[level] || 0;
   if (!share || (unit && army < B.minArmy)) return unit;
   const techTurn = memo.tech < share * (memo.units + memo.tech + 1);
@@ -140,10 +140,10 @@ function pickRecruit(state, pid, owned, army) {
     const have = (kind) => state.units.filter(u => u.playerId === pid && u.recruitKind === kind && u.state !== 'dead').length +
       Object.values(queues).reduce((n, q) => n + q.filter(item => item.payer === pid && item.kind === kind).length, 0);
     const kind = kinds.reduce((a, b) => (have(b) < have(a) ? b : a));
-    if (have(kind) * B.recruitEvery >= army) continue;
+    if (kinds.reduce((n, k) => n + have(k), 0) * B.recruitEvery >= army) continue;
     const check = canQueue(state, pid, d, kind);
     if (check.ok || check.reason === 'النقاط لا تكفي') {
-      return { cost: CITY_FEATURES.recruits[kind].cost, buy: () => queueUnit(state, pid, d.id, kind) };
+      return { cost: unitPrice(state, pid, kind), buy: () => queueUnit(state, pid, d.id, kind) };
     }
   }
   return null;

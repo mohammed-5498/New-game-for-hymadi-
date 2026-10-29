@@ -6,11 +6,11 @@
 // أو بزر الرجوع في أندرويد، ووحدها إن سقط الحي أو انتهت المباراة.
 import { EMPIRE as E, TILE_HALF_W, TILE_HALF_H, CITY_FEATURES as F } from '../config.js';
 import {
-  canQueue, heroFor, productionTime, nextUpgrade, canUpgrade, canBuild, nextBuildingUpgrade, canUpgradeBuilding,
+  canQueue, unitPrice, heroFor, productionTime, nextUpgrade, canUpgrade, canBuild, nextBuildingUpgrade, canUpgradeBuilding,
   empireCommand, towerStats, hospitalStats, incomeOf, tileOf
 } from '../game/empire.js';
 import { lanCommand } from '../net/session.js';
-import { recruitsAt, featureTowerStats } from '../game/features.js';
+import { recruitsAt, featureTowerStats, featureCostMul } from '../game/features.js';
 import { worldToScreen } from '../map/coords.js';
 import { drawCharacters } from './charThumb.js';
 import { unitName } from './storeScreen.js';
@@ -74,7 +74,7 @@ function sectionsFor(state, district) {
         const R = F.recruits[kind], art = R.hero || 'common';
         return {
           name: R.name || unitName(R.nation, art), art, side: R.nation, color: player.color,
-          cost: () => R.cost,
+          cost: () => unitPrice(state, pid, kind),
           check: () => canQueue(state, pid, district, kind),
           cmd: { a: 'queue', d: district.id, x: kind }
         };
@@ -89,7 +89,7 @@ function sectionsFor(state, district) {
       // الجنود، وبعدهم سرعة إنتاج هذه القاعدة (ترقيتها هي: تبقى فيها لمن يحتلها)
       { title: 'الإنتاج', queue: true, slots: [...E.units.order.map(kind => ({
         name: unitName(side, art(kind)), art: art(kind), side, color: player.color,
-        cost: () => E.units[kind].cost,
+        cost: () => unitPrice(state, pid, kind),
         check: () => canQueue(state, pid, district, kind),
         cmd: { a: 'queue', d: district.id, x: kind }
       })), ...buildingSlots(state, pid, district)] },
@@ -131,7 +131,7 @@ function buildingSlots(state, pid, district) {
 const TITLES = { hq: E.buildings.hq.name, tower: E.buildings.tower.name, hospital: E.buildings.hospital.name };
 
 // سطر قدرة البرج أو المستشفى الآن (بعد ترقياته)، أو ما يعطيه مبنى ميزة المدينة
-function statsLine(district) {
+function statsLine(state, district) {
   const fmt = (v) => String(Math.round(v * 10) / 10);
   const pct = (v) => Math.round(v * 100) + '%';
   if (district.feature === 'pyramid') {
@@ -140,6 +140,19 @@ function statsLine(district) {
   }
   if (district.feature === 'dojo') return 'كل جنودك +' + pct(F.dojo.damageBonus) + ' ضرر ما دمت تملكه';
   if (district.feature === 'clinic') return 'يعالج ' + F.clinic.perSecond + ' دم/ث لكل جندي • المدى ' + F.clinic.radius + ' مربع';
+  if (district.feature === 'policeHQ') return 'الشرطة صديقة لك ما دمت تملكه • شرطة كل مركز تحتله تنضم إليك';
+  if (district.feature === 'clock') {
+    return '+' + pct(F.clock.incomeMul - 1) + ' نقاط و+' + pct(F.clock.productionMul - 1) + ' سرعة إنتاج الجنود • احتلاله أبطأ';
+  }
+  if (district.feature === 'complex') {
+    return 'كل حي من أحياء المجمع تملكه يخفض سعر جنودك ' + pct(F.cartel.discount) +
+           ' • خصمك الآن ' + pct(1 - featureCostMul(state, state.humanId));
+  }
+  if (district.feature === 'statue') {
+    const S = F.statue;
+    return 'جنودك داخل ' + S.radius + ' مربعات منه: +' + pct(S.damage) + ' ضرر و+' + pct(S.attackSpeed) + ' سرعة ضرب • احتلاله أبطأ';
+  }
+  if (district.feature === 'mercs') return 'مرتزقة بالنقاط: الخفيف سريع ورخيص، والثقيل قوي وغالٍ';
   if (district.feature === 'fortress' || district.feature === 'khartoum') {
     const s = featureTowerStats(district);
     return 'سهم بضرر ' + Math.round(s.damage) + ' كل ' + fmt(s.attackTime) + ' ث • المدى ' + fmt(s.range) + ' مربع' +
@@ -245,7 +258,7 @@ function refresh(state) {
     if (entry.pips) [...entry.pips.children].forEach((pip, k) => pip.classList.toggle('on', k < level));
   }
 
-  if (open.stats) open.stats.textContent = statsLine(district);
+  if (open.stats) open.stats.textContent = statsLine(state, district);
   if (open.queue) {
     const queue = ms.queues[district.id] || [];
     const item = queue[0];
