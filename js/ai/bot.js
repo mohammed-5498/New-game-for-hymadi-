@@ -35,7 +35,7 @@ export function updateBots(state) {
     state.botTimers[player.id] = config.decisionInterval;
 
     // طور الإمبراطورية: لا ظهور تلقائي، فالبوت يشتري جيشه ومبانيه بنقاطه أولاً
-    if (state.mode === 'empire') empireEconomy(state, player);
+    if (state.economy) empireEconomy(state, player);
     decide(state, player, modeConfig(state, config));
   }
   updateTactics(state);      // كل 0.25 ث لكل فرقة مشتبكة فقط

@@ -178,7 +178,7 @@ export function drawTileStatic(state, i, j, x, y, lights, lamps) {
   const ownerColor = district && district.owner !== null ? state.players[district.owner].color : null;
   const flagColor = (PALETTES[map.region[k]] || PALETTES.neutral).flag;
   useTone(state, district, true);
-  const lamp = drawLandmark(map, special, x, y, i, j, ownerColor, flagColor, lights, state.mode === 'empire');
+  const lamp = drawLandmark(map, special, x, y, i, j, ownerColor, flagColor, lights, !!state.economy);
   if (lamp && lamps) lamps.push(lamp);
 }
 

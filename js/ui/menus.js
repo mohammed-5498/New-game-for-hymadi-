@@ -3,7 +3,6 @@ import {
   MAP_SIZES, PLAYER_COLORS, GANGS, GANG_IDS, BOT, BOT_LEVELS, COMBAT_REALISM,
   WEATHER, WEATHER_KEYS, UNITS, MATCH_DEFAULTS, AUDIO, UI, CITIES, NET, gameModes as GM, nations as NATIONS
 } from '../config.js';
-import { OPEN_CITIES } from '../map/generator.js';
 import { SIDE_CHOICES, resolveSide, nationOf } from '../game/nations.js';
 import { sound, audioSettings, setAudioSettings, startMusic } from '../audio/sound.js';
 import { isNativeApp, exitApp } from '../platform.js';
@@ -15,7 +14,7 @@ import { showMenuScene, hideMenuScene } from './menuScene.js';
 import { setupBattleScreen } from './battleScreen.js';
 import { updateCityThumb, drawCardThumb, shownCity, stopCard } from './cityThumb.js';
 import { setupPicker, openPicker, isPickerOpen, refreshPicker } from './picker.js';
-import { CITY_GROUPS, PLAY_CITY_GROUPS, SIDE_GROUPS, regionOf } from './regions.js';
+import { CITY_GROUPS, SIDE_GROUPS, regionOf } from './regions.js';
 import { drawModeIcon, drawSizeIcon, drawUnitsIcon, drawWeatherIcon } from './icons.js';
 import { showStore } from './storeScreen.js';
 import { lan, lanPeers, broadcastLobby } from '../net/session.js';
@@ -25,12 +24,8 @@ const el = (id) => document.getElementById(id);
 const MAP_SIZE_KEYS = ['small', 'medium', 'large'];
 const MAX_UNIT_CHOICES = [30, 50, 100, 150, 200, 250];
 const WEATHER_CHOICES = [...WEATHER_KEYS, 'random'];
-// خيار المدينة: المدن، ثم "مدينة المضيف" (مدينة أمة اللاعب الأول، القسم 3.10)، ثم عشوائي.
-// مدينة طور واحد (CITIES.modeOnly، اليمامة للإمبراطورية) لا تظهر لغيره من الأطوار
+// خيار المدينة: المدن، ثم "مدينة المضيف" (مدينة أمة اللاعب الأول، القسم 3.10)، ثم عشوائي
 const CITY_CHOICES = [...CITIES.order, 'host', 'random'];
-const cityAllowed = (city, mode) => !CITIES.modeOnly[city] || CITIES.modeOnly[city] === mode;
-// مدن لوحة المدن للطور المختار: كلها لطور له مدينة خاصة (الإمبراطورية)، وبلا مدن الأطوار الأخرى لغيره
-const cityGroups = () => Object.values(CITIES.modeOnly).includes(setup.mode) ? CITY_GROUPS : PLAY_CITY_GROUPS;
 const TEAM_CHOICES = [0, 1, 2, 3, 4];
 const SLOT_TYPES = { human: 'أنت', bot: 'بوت', closed: 'مغلقة' };
 const MAX_SLOTS = 8;
@@ -160,7 +155,7 @@ function showCity() {
 // لوحة المدن: تبويب لكل منطقة، وفي كل خانة صورة صغيرة لمدينتها، وبجانب الخانة صورة المختارة الحية،
 // وفي الأسفل عشوائي ومدينة المضيف
 function openCityPicker() {
-  const groups = cityGroups();
+  const groups = CITY_GROUPS;
   openPicker({
     title: 'اختر المدينة',
     groups,
@@ -207,7 +202,7 @@ export function pickSide(title, current, pick, close) {
 
 function hostCity(side) {
   const nation = nationOf(side);
-  return nation && OPEN_CITIES.includes(nation.city) ? nation.city : 'random';
+  return nation && CITIES.order.includes(nation.city) ? nation.city : 'random';
 }
 
 // --- لوحات خيارات المباراة (بطلب المستخدم): بنفس لوحة المدن، خانة واحدة بعناصر بأيقوناتها أو صورها،
@@ -289,11 +284,7 @@ function openModePicker() {
     icon: drawModeIcon,
     columns: 3,
     current: () => setup.mode,
-    pick: (mode) => {
-      setup.mode = mode;
-      if (!cityAllowed(setup.city, mode)) { setup.city = 'random'; showCity(); }   // اليمامة للإمبراطورية وحدها
-      refresh();
-    },
+    pick: (mode) => { setup.mode = mode; refresh(); },
     more: modeOptions,
     aside: (node, mode) => infoAside(node, drawModeIcon, mode, GM[mode].name, [GM[mode].desc]),
     close: showCity
@@ -536,15 +527,14 @@ function loadSetup() {
   try { saved = JSON.parse(localStorage.getItem(UI.setupKey) || 'null'); } catch { return; }
   if (!saved || typeof saved !== 'object') return;
 
-  // نقبل القيم الصالحة فقط، فلا تكسر بيانات قديمة أو تالفة القائمة. والطور من إعداد بنسخته الحالية فقط:
-  // ما حُفظ قبل أن تصير الإمبراطورية الطور الأساسي يبدأ بها (UI.setupVersion)
-  if (GM.order.includes(saved.mode) && saved.v === UI.setupVersion) setup.mode = saved.mode;
+  // نقبل القيم الصالحة فقط، فلا تكسر بيانات قديمة أو تالفة القائمة
+  if (GM.order.includes(saved.mode)) setup.mode = saved.mode;
   if (GM.points.minutes.includes(saved.pointsMinutes)) setup.pointsMinutes = saved.pointsMinutes;
   if (GM.king.holdMinutes.includes(saved.kingMinutes)) setup.kingMinutes = saved.kingMinutes;
   if (GM.survival.allies.includes(saved.allies)) setup.allies = saved.allies;
   if (GM.survival.levels.includes(saved.survivalLevel)) setup.survivalLevel = saved.survivalLevel;
   if (MAP_SIZES[saved.mapSize]) setup.mapSize = saved.mapSize;
-  if (CITY_CHOICES.includes(saved.city) && cityAllowed(saved.city, setup.mode)) setup.city = saved.city;
+  if (CITY_CHOICES.includes(saved.city)) setup.city = saved.city;
   if (MAX_UNIT_CHOICES.includes(saved.maxUnits)) setup.maxUnits = saved.maxUnits;
   if (WEATHER_CHOICES.includes(saved.weather)) setup.weather = saved.weather;
   if (!Array.isArray(saved.slots)) return;
@@ -562,7 +552,7 @@ function loadSetup() {
 }
 
 function saveSetup() {
-  try { localStorage.setItem(UI.setupKey, JSON.stringify({ ...setup, v: UI.setupVersion })); } catch { /* لا تخزين: يبقى للجلسة */ }
+  try { localStorage.setItem(UI.setupKey, JSON.stringify(setup)); } catch { /* لا تخزين: يبقى للجلسة */ }
 }
 
 // --- صفوف الخيارات (شاشة معركة البوتات) ---
@@ -889,26 +879,33 @@ export function openLanSetup() {
   showScreen('setup');
 }
 
-// خروج المضيف من قائمة الإعداد: خانات الأصدقاء تُغلق
+// خانة صديق غادر تعود كما كانت قبله (بوت أو مغلقة)
+function freeNetSlot(slot) {
+  slot.type = slot.was || 'closed';
+  slot.peer = null;
+}
+
+// خروج المضيف من قائمة الإعداد: خانات الأصدقاء تعود كما كانت
 export function closeLanSetup() {
   lanSetup = false;
-  for (const slot of setup.slots) if (slot.type === 'net') { slot.type = 'closed'; slot.peer = null; }
+  for (const slot of setup.slots) if (slot.type === 'net') freeNetSlot(slot);
   refresh();
 }
 
-// المنضمون ← الخانات: الجديد يأخذ أول خانة بوت ثم أول مغلقة، ومن غادر تُغلق خانته، والأمة اختيار صاحبها
+// المنضمون ← الخانات: الجديد يأخذ أول خانة بوت ثم أول مغلقة، ومن غادر تعود خانته، والأمة اختيار صاحبها
 export function syncLanSlots() {
   if (!lanSetup) return;
   const peers = lanPeers();
   const ids = new Set(peers.map(p => p.id));
   for (const slot of setup.slots) {
-    if (slot.type === 'net' && !ids.has(slot.peer)) { slot.type = 'closed'; slot.peer = null; }
+    if (slot.type === 'net' && !ids.has(slot.peer)) freeNetSlot(slot);
   }
   for (const peer of peers) {
     let slot = setup.slots.find(s => s.type === 'net' && s.peer === peer.id);
     if (!slot) {
       slot = setup.slots.find((s, k) => k > 0 && s.type === 'bot') || setup.slots.find((s, k) => k > 0 && s.type === 'closed');
       if (!slot) continue;
+      slot.was = slot.type;
       slot.type = 'net';
       slot.peer = peer.id;
     }

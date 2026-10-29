@@ -15,7 +15,7 @@ export function moveSpeed(state, unit) {
   // traits.spd: تنويع بسيط بين الأفراد (القسم 5.4) فلا تسير الصفوف كآلة واحدة
   let speed = unit.stats.speed * WEATHER[state.weather].speedMul * (unit.traits ? unit.traits.spd : 1);
   if (unit.hasteUntil > state.time) speed *= 1 + unit.hasteFactor;    // اندفاع ضربة بطل (القسم 3.10)
-  if (state.mode === 'empire') speed *= empireSpeedMul(state, unit.playerId);   // ترقية سرعة المشي
+  if (state.economy) speed *= empireSpeedMul(state, unit.playerId);   // ترقية سرعة المشي
   if (unit.slowUntil > state.time) return speed * (1 - unit.slowFactor);
   return speed;
 }

@@ -1,7 +1,6 @@
 // أيقونات خيارات قائمة الإعداد (بطلب المستخدم): طور اللعب، حجم الخريطة، الحد الأقصى للوحدات، الطقس.
 // تُرسم بالكود على لوحة بمقاسها الظاهر (بلا صور) بألوان الواجهة، في مساحة 120×80 وسط اللوحة.
-import { PLAYER_COLORS, MAP_SIZES, EMPIRE } from '../config.js';
-import { getSprite } from '../render/sprites.js';
+import { PLAYER_COLORS, MAP_SIZES } from '../config.js';
 
 const GOLD = '#e0b04a', TEXT = '#f3ece0', DIM = '#c4b49c';
 const W = 120, H = 80;
@@ -56,14 +55,6 @@ function crown(ctx, x, y, w, h) {
   ctx.lineTo(x + w / 2, y - h);
   ctx.lineTo(x + w / 2, y);
   ctx.closePath();
-}
-
-// صورة مبنى من صور صحراء اليمامة (صور المستخدم) قائمة على الأرض عند (x, ground) بارتفاع height
-function building(ctx, name, x, ground, height) {
-  const sprite = getSprite('yamamah', name);
-  if (!sprite || !sprite.img) return;              // لم تُحمَّل بعد: تُرسم في التحديث التالي
-  const s = height / sprite.h;
-  ctx.drawImage(sprite.img, x - sprite.ax * s, ground - sprite.ay * s, sprite.w * s, sprite.h * s);
 }
 
 // --- طور اللعب ---
@@ -149,20 +140,6 @@ const MODE_ICONS = {
     stroke(ctx, '#a9c8f0', 2.5);
     circle(ctx, 60, 42, 9);
     fill(ctx, GOLD);
-  },
-  // الإمبراطورية: القاعدة الرئيسية وبرج الرماية بصورتيهما في اليمامة، وقطعة نقاط ذهبية
-  empire(ctx) {
-    building(ctx, EMPIRE.art.yamamah.tower, 84, 66, 50);
-    building(ctx, 'tower_a', 50, 70, 76);
-    circle(ctx, 92, 62, 11);
-    fill(ctx, GOLD);
-    stroke(ctx, '#8a6420', 2);
-    ctx.beginPath();
-    ctx.moveTo(92, 56);
-    ctx.lineTo(92, 68);
-    ctx.moveTo(86, 62);
-    ctx.lineTo(98, 62);
-    stroke(ctx, '#3a2810', 2.6);
   }
 };
 

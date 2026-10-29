@@ -25,7 +25,7 @@ function applyDamageBonuses(state) {
   const armoryBonus = state.players.map(p =>
     ownsSpecial(state, p.id, 'armory') ? SPECIAL_BONUS.armory.damageBonus : 0);
   // +10% درع لكل مركز شرطة مملوك، بحد أقصى +20% (القسم 3.8)، وترقيتا الدفاع والضرر في طور الإمبراطورية
-  const empire = state.mode === 'empire';
+  const empire = state.economy;
   const armorBonus = state.players.map(p => policeArmorBonus(state, p.id) + (empire ? empireArmorBonus(state, p.id) : 0));
   const upDamage = state.players.map(p => (empire ? empireDamageBonus(state, p.id) : 0));
   // سمات الأمم "داخل أحيائك" (القسم 3.10): null لكل لاعب بلا سمة من هذا النوع

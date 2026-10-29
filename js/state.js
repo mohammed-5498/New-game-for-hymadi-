@@ -1,5 +1,5 @@
 // حالة المباراة: اللاعبون، الوحدات، الخريطة، الكاميرا، التحديد
-import { CAMERA, PLAYER_COLORS, UNITS, WEATHER, CITIES } from './config.js';
+import { CAMERA, PLAYER_COLORS, UNITS, WEATHER } from './config.js';
 import { createMap } from './map/generator.js';
 import { findFreeTiles } from './map/pathfinding.js';
 import { createUnit } from './game/units.js';
@@ -9,7 +9,7 @@ import { initBots } from './ai/bot.js';
 import { createPolicePlayer, initPolice } from './game/police.js';
 import { tileToWorld } from './map/coords.js';
 import { buildArena } from './game/arena.js';
-import { initMode, prepareModeUnits } from './game/modes.js';
+import { initMode, prepareModeUnits, economyOf } from './game/modes.js';
 import { nationOf, sideName, buildTerritory, traitNotice } from './game/nations.js';
 
 export function createMatch(settings) {
@@ -26,12 +26,8 @@ export function createMatch(settings) {
     homeDistrictId: -1
   }));
 
-  // طابع المدينة (القسم 3.9). مدينة طور واحد (اليمامة للإمبراطورية) لا تُلعب في غيره: تصير عشوائياً.
-  // والإمبراطورية (الطور الأساسي) في كل المدن وبلا أحياء مميزة، و"عشوائي" فيها يشمل مدينتها
-  const only = CITIES.modeOnly[settings.city];
-  let city = only && only !== settings.mode ? 'random' : settings.city;
-  if (settings.mode === 'empire' && !CITIES.order.includes(city)) city = CITIES.order[Math.floor(Math.random() * CITIES.order.length)];
-  const map = createMap(settings.mapSize, players, city, { specials: settings.mode !== 'empire' });
+  // طابع المدينة (القسم 3.9). ومع الاقتصاد (كل الأطوار) بلا أحياء مميزة: مكانها مباني الإمبراطورية بالنقاط
+  const map = createMap(settings.mapSize, players, settings.city, { specials: !economyOf(settings) });
   if (!map) throw new Error('تعذر توليد خريطة صالحة');
 
   // الشرطة طرف محايد يُضاف بعد توزيع الأحياء المنزلية فلا يأخذ حياً ولا مقراً
@@ -201,7 +197,9 @@ export function resetMatch(state, settings = state.settings) {
   state.cameraTween = null;
   state.arena = null;
   state.mode = fresh.mode;
+  state.economy = fresh.economy;
   state.modeState = fresh.modeState;
+  state.empireHinted = false;                // تلميح قائمة الحي مرة في كل مباراة
   // اللعب المحلي (القسم 16): مباراة بعد مباراة شبكية لا ترث كاميرات اللاعبين (مستويات التفصيل منها) ولا عدّادها
   state.netCams = null;
   state.netTick = 0;

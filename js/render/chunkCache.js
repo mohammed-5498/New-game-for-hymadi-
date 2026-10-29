@@ -205,7 +205,7 @@ function drawGround(ctx, state, tiles) {
     else if (isLane(map, k)) drawLanePaving(ctx, map, i, j, x, y);            // المدن المفتوحة
     else if (map.type[k] === 'Y' && roundaboutAnchor(map, i, j)) drawRoundaboutRing(ctx, x, y);
   }
-  drawBorders(ctx, map, tiles, state.mode === 'empire' ? EMPIRE.halo : null);
+  drawBorders(ctx, map, tiles, state.economy ? EMPIRE.halo : null);
   for (let t = 0; t < tiles.length; t += 2) {
     const i = tiles[t], j = tiles[t + 1], k = map.idx(i, j);
     if (!map.dash[k]) continue;

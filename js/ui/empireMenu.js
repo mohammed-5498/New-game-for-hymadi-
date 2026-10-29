@@ -45,7 +45,7 @@ export function closeEmpireMenu(state) {
 export function updateEmpireMenu(state, now) {
   if (!open) return;
   const district = state.map.districts[open.id];
-  if (state.map !== open.map || state.mode !== 'empire' || !state.running || state.matchResult ||
+  if (state.map !== open.map || !state.economy || !state.running || state.matchResult ||
       !district || district.owner !== state.humanId) {
     closeEmpireMenu(state);
     return;
@@ -198,7 +198,7 @@ function refresh(state) {
   const district = state.map.districts[open.id];
   if (!open.built || (district.building || null) !== open.building) build(state, district);
   const pid = state.humanId, ms = state.modeState;
-  el('emPoints').textContent = Math.floor(ms.points[pid]) + '  (+' + incomeOf(state, pid) + '/ث)';
+  el('emPoints').textContent = Math.floor(ms.points[pid]) + '  (+' + +incomeOf(state, pid).toFixed(1) + '/ث)';
 
   for (const entry of open.slots) {
     const { slot } = entry;

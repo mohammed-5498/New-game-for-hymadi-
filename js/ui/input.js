@@ -117,8 +117,8 @@ export function setupInput(canvas, state) {
       longPressTimer = null;
       if (moved || pointers.size !== 1) return;
 
-      // طور الإمبراطورية (بطلب المستخدم): ضغطة مطوّلة على مبناك أو أي حي لك تفتح قائمته، ولو كان معك جنود محددون
-      if (state.mode === 'empire') {
+      // الاقتصاد (بطلب المستخدم): ضغطة مطوّلة على مبناك أو أي حي لك تفتح قائمته، ولو كان معك جنود محددون
+      if (state.economy) {
         const target = ownBuildingAt(p.x, p.y) || ownAreaAt(p.x, p.y);
         if (target) {
           longPressFired = true;
@@ -178,9 +178,9 @@ export function setupInput(canvas, state) {
     const group = selectedUnits(state);
     const hit = findUnitAt(sx, sy);
 
-    // طور الإمبراطورية: اللمسة الثانية السريعة على مبناك تفتح قائمته وتلغي تحديد الجنود (بقرار المستخدم)،
-    // واللمسة على الخريطة تغلق المفتوحة. وأوامر الحركة فورية كما في الأطوار الأخرى
-    if (state.mode === 'empire') {
+    // الاقتصاد: اللمسة الثانية السريعة على مبناك تفتح قائمته وتلغي تحديد الجنود (بقرار المستخدم)،
+    // واللمسة على الخريطة تغلق المفتوحة. وأوامر الحركة فورية
+    if (state.economy) {
       const target = hit && hit.playerId === state.humanId ? null : menuDistrictAt(sx, sy);
       const now = performance.now();
       if (target && lastDistrictTap && lastDistrictTap.id === target.id && now - lastDistrictTap.time <= INPUT.doubleTapMs) {

@@ -1,4 +1,4 @@
-// طور الإمبراطورية (بطلب المستخدم): الطور الأساسي للعبة، في كل المدن:
+// اقتصاد الإمبراطورية (بطلب المستخدم): بنية اللعبة نفسها في كل الأطوار والمدن (والطور يحدد شرط الفوز وحده):
 // - النقاط: كل حي مملوك 0.5 في الثانية، والقاعدة الرئيسية 2 بدل ذلك، ومن يُسقط زعيم عصابة يأخذ 50
 // - الجنود من القاعدة الرئيسية بالنقاط وبطابور (لا ظهور تلقائي)، والزعيم (البطل) واحد فقط لكل عصابة
 // - ترقيات العصابة بثلاثة مستويات: الدم والضرر والدفاع وسرعة المشي (تبقى للعصابة مهما سقطت قواعدها)
@@ -50,7 +50,7 @@ export function initEmpire(state, modeState) {
   const players = state.players;
   modeState.points = players.map(() => E.startPoints);
   modeState.earned = players.map(() => 0);          // كل ما جمعه (لشاشة النهاية)
-  modeState.leaderKills = players.map(() => 0);
+  modeState.bounties = players.map(() => 0);        // زعماء أسقطهم كل لاعب
   modeState.levels = players.map(() => ({ hp: 0, damage: 0, armor: 0, speed: 0 }));
   modeState.queues = {};                             // رقم حي القاعدة -> [{ kind, t, payer }]
   modeState.shots = [];                              // سهام الأبراج في الهواء
@@ -83,10 +83,12 @@ export function updateEmpire(state) {
   updateHospitals(state);
 }
 
+// ms.incomeMul: مضاعف الدخل من الطور (الدقيقة الأخيرة في الوقت بالنقاط، والصمود)، والبوت المجنون أكثر (مزيته)
 function collectIncome(state, ms) {
+  const mul = (ms.incomeMul || 1) * TICK_SEC;
   for (const d of state.map.districts) {
     if (d.owner === null || !d.capture || state.players[d.owner].neutral) continue;
-    const gain = (d.building === 'hq' ? E.income.hq : E.income.district) * TICK_SEC;
+    const gain = (d.building === 'hq' ? E.income.hq : E.income.district) * mul * botIncome(state.players[d.owner]);
     ms.points[d.owner] += gain;
     ms.earned[d.owner] += gain;
   }
@@ -101,7 +103,7 @@ function rewardLeaderKills(state, ms) {
     if (killer < 0 || killer === unit.playerId || !state.players[killer] || state.players[killer].neutral) continue;
     ms.points[killer] += E.leaderKill;
     ms.earned[killer] += E.leaderKill;
-    ms.leaderKills[killer]++;
+    ms.bounties[killer]++;
     if (killer === state.humanId) {
       state.notice = { text: 'أسقطت زعيم ' + state.players[unit.playerId].gangName + ': +' + E.leaderKill + ' نقطة', mine: true, t: 3 };
     }
@@ -113,6 +115,10 @@ function rewardLeaderKills(state, ms) {
 function botFactor(player) {
   const lvl = !player.isHuman && !player.neutral && ai.levels[player.difficulty];
   return (lvl && lvl.spawnFactor) || 1;
+}
+function botIncome(player) {
+  const lvl = !player.isHuman && !player.neutral && ai.levels[player.difficulty];
+  return (lvl && lvl.incomeFactor) || 1;
 }
 
 // سرعة الإنتاج ترقية القاعدة نفسها (district.blv.production)
@@ -342,6 +348,7 @@ export function canBuild(state, playerId, district, type) {
   if (!owns(state, playerId, district)) return fail('ليس حيك');
   if (district.building) return fail('في الحي مبنى');
   if (district.police) return fail('مركز شرطة');
+  if (district.hill) return fail('التلة لا يُبنى فيها');         // ملك الحي: يبقى معلمها وتاجها
   if (buildSpot(state.map, district) < 0) return fail('لا مكان للبناء');
   if (pointsOf(state, playerId) < E.buildings[type].cost) return fail('النقاط لا تكفي');
   return OK;
@@ -402,14 +409,14 @@ export function empireCommand(state, playerId, a, d, x) {
   return fail('');
 }
 
-// --- للواجهة: دخل اللاعب في الثانية الآن ---
+// --- للواجهة: دخل اللاعب في الثانية الآن (بمضاعف الطور: الدقيقة الأخيرة، والصمود) ---
 export function incomeOf(state, playerId) {
   let total = 0;
   for (const d of state.map.districts) {
     if (d.owner !== playerId || !d.capture) continue;
     total += d.building === 'hq' ? E.income.hq : E.income.district;
   }
-  return total;
+  return total * (state.modeState.incomeMul || 1);
 }
 
 export { towerStats, hospitalStats };

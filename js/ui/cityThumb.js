@@ -2,7 +2,7 @@
 // تُرسم بنفس دوال المدينة، مرة واحدة لكل مدينة، وفي "عشوائي" تتبدل المدن كل ثانيتين.
 // وصور لوحة الطقس: الخريطة نفسها بطقسها (الثلج على الأسطح والأرض) وفوقها طبقته وجزيئاته وإضاءة الليل
 import { CITIES, TILE_HALF_W, TILE_HALF_H, PLAYER_COLORS, WEATHER } from '../config.js';
-import { createMap, OPEN_CITIES } from '../map/generator.js';
+import { createMap } from '../map/generator.js';
 import { drawWholeMap } from '../render/chunkCache.js';
 import { THEMES } from '../render/cityThemes.js';
 import { cityReady } from '../render/cityRender.js';
@@ -123,11 +123,11 @@ export function updateCityThumb(target, nameEl, city, isVisible) {
   timer = 0;
   if (city !== 'random') { show(target, nameEl, city); return; }
   // "عشوائي" يتبدل بين مدن الأطوار العادية فقط (العشوائي لا يختار مدينة طور واحد)
-  let k = Math.max(0, OPEN_CITIES.indexOf(shown));
+  let k = Math.max(0, CITIES.order.indexOf(shown));
   const next = () => {
     if (!isVisible()) { clearInterval(timer); timer = 0; return; }
-    k = (k + 1) % OPEN_CITIES.length;
-    show(target, nameEl, OPEN_CITIES[k]);
+    k = (k + 1) % CITIES.order.length;
+    show(target, nameEl, CITIES.order[k]);
     nameEl.textContent = 'عشوائي — ' + nameEl.textContent;
   };
   next();

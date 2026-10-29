@@ -1,5 +1,6 @@
-// شاشة اللعب المحلي (القسم 16): الاسم، والاستضافة، والبحث والانضمام، وغرفة انتظار المنضم.
-// المضيف يعدّ المباراة في قائمة الإعداد نفسها (menus.js: openLanSetup)، والجلسة كلها في net/session.js
+// شاشة اللعب المحلي (القسم 16، بطلب المستخدم: أسهل وأبسط): تبحث وحدها حين تُفتح، فتظهر المباريات القريبة
+// أزراراً ولمسة تنضم إليها، وزر استضافة كبير، والاسم معبأ سلفاً. وعنوان المضيف باليد مخفي تحت رابط صغير.
+// بعد الانضمام: غرفة انتظار المنضم. والمضيف يعدّ المباراة في قائمة الإعداد نفسها (menus.js: openLanSetup)
 import { NET, MAP_SIZES, PLAYER_COLORS, CITIES, gameModes as GM } from '../config.js';
 import { sound, startMusic } from '../audio/sound.js';
 import { getPref, setPref } from '../prefs.js';
@@ -14,7 +15,7 @@ import { closePicker } from './picker.js';
 
 const el = (id) => document.getElementById(id);
 
-let view = 'start';          // start (الاسم والزران) | search (البحث) | lobby (غرفة انتظار المنضم)
+let view = 'home';           // home (المباريات القريبة والاستضافة) | lobby (غرفة انتظار المنضم)
 let busy = false;            // استضافة أو اتصال جارٍ: لا تُكرر اللمسة
 let foundSign = '';          // ما في قائمة المباريات المعروضة (لا تُبنى أزرارها من جديد إلا حين يتغير)
 let foundTimer = 0;
@@ -25,11 +26,13 @@ function tap(id, action) {
 }
 
 export function setupLanScreen(state) {
-  el('lanName').value = getPref('lanName') || '';
-  el('lanName').placeholder = cleanName('');
+  // اسم جاهز من أول مرة (لاعب ورقم)، فلا خطوة قبل اللعب، ويبقى قابلاً للتغيير
+  if (!getPref('lanName')) setPref('lanName', cleanName('لاعب ' + (10 + Math.floor(Math.random() * 90))));
+  el('lanName').value = getPref('lanName');
+  el('lanName').addEventListener('change', myName);
   tap('btnLan', openLan);
   tap('btnLanHost', host);
-  tap('btnLanJoin', search);
+  tap('btnLanManual', () => { el('lanManual').hidden = !el('lanManual').hidden; });
   tap('btnLanConnect', () => connect(el('lanIp').value, NET.port));
   tap('btnLanSide', () => pickSide('اختر أمتك', () => mySide, (side) => {
     mySide = side;
@@ -41,7 +44,7 @@ export function setupLanScreen(state) {
 
   initLan(state, {
     lobbyChanged: () => { if (isLanSetup()) syncLanSlots(); else if (view === 'lobby') render(); },
-    foundChanged: (error) => { if (error) status(error, true); if (view === 'search') renderFound(); },
+    foundChanged: (error) => { if (error) status(error, true); if (view === 'home') renderFound(); },
     canSeat: lanHasSeat,
     // المضيف بدأ المباراة: المنضم يدخلها مباشرة (ولو كانت لوحة الأمم مفتوحة عنده)
     enterGame: () => {
@@ -53,14 +56,14 @@ export function setupLanScreen(state) {
     // انقطع المنضم عن المضيف (أو أغلق المضيف الجلسة)
     leftSession: (reason, inGame) => {
       closePicker();
-      view = 'start';
       if (inGame) {
+        view = 'home';
         leaveToMain(state);
         showMainNotice(reason);
         return;
       }
+      goHome();
       status(reason, true);
-      render();
     },
     // المضيف أنهى المباراة ورجع للغرفة: المنضم إلى غرفة الانتظار
     backToLobby: () => {
@@ -76,9 +79,16 @@ function openLan() {
     showMainNotice('اللعب المحلي في تطبيق أندرويد: ثبّتوا نفس ملف اللعبة على كل جوال.');
     return;
   }
-  view = 'start';
-  status('');
   showScreen('lan');
+  goHome();
+}
+
+// الشاشة الأولى: البحث يبدأ وحده (ويعاد بعد كل رجوع إليها)
+function goHome() {
+  view = 'home';
+  status('');
+  foundSign = null;
+  searchLan();
   render();
 }
 
@@ -87,25 +97,24 @@ export function lanBack() {
   if (isLanSetup()) {                // المضيف: يوقف الاستضافة ويعود لهذه الشاشة
     closeLanSetup();
     leaveLan();
-    view = 'start';
-    status('');
     showScreen('lan');
-    render();
+    goHome();
     return;
   }
-  if (view !== 'start') {            // البحث أو غرفة الانتظار: خطوة للخلف
+  if (view === 'lobby') {            // غرفة الانتظار: يغادر ويعود للمباريات القريبة
     leaveLan();
-    view = 'start';
-    status('');
-    render();
+    goHome();
     return;
   }
+  leaveLan();                        // يوقف البحث
+  clearInterval(foundTimer);
   showScreen('main');
 }
 
 function myName() {
   const name = cleanName(el('lanName').value);
-  setPref('lanName', el('lanName').value.trim() ? name : '');
+  el('lanName').value = name;
+  setPref('lanName', name);
   return name;
 }
 
@@ -116,39 +125,30 @@ async function host() {
   try {
     await hostLan(myName());
     status('');
+    clearInterval(foundTimer);
     openLanSetup();
   } catch (e) {
     status(e.message || 'تعذرت الاستضافة', true);
+    searchLan();
   }
   busy = false;
-}
-
-function search() {
-  myName();
-  view = 'search';
-  status('');
-  foundSign = null;
-  render();
-  searchLan();
 }
 
 async function connect(ip, port) {
   ip = String(ip || '').trim();
   if (busy || !ip) return;
   busy = true;
-  status('جارٍ الاتصال بـ ' + ip + '…');
+  status('جارٍ الاتصال…');
   try {
     await joinLan(ip, port, myName(), mySide);
     view = 'lobby';
     status('');
+    render();
   } catch (e) {
+    goHome();                        // البحث يعود فيختار غيرها أو يعيد المحاولة
     status(e.message || 'تعذر الاتصال', true);
-    view = 'search';
-    foundSign = null;
-    searchLan();                     // البحث يعود فيختار غيرها أو يعيد المحاولة
   }
   busy = false;
-  render();
 }
 
 function status(text, error = false) {
@@ -159,11 +159,10 @@ function status(text, error = false) {
 }
 
 function render() {
-  el('lanStart').hidden = view !== 'start';
-  el('lanSearch').hidden = view !== 'search';
+  el('lanHome').hidden = view !== 'home';
   el('lanLobby').hidden = view !== 'lobby';
   clearInterval(foundTimer);
-  if (view === 'search') {
+  if (view === 'home') {
     renderFound();
     foundTimer = setInterval(renderFound, 1000);     // المضيف الذي توقف إعلانه يختفي من القائمة
   }
@@ -173,7 +172,7 @@ function render() {
 // المباريات المعلنة على الشبكة في آخر ثوانٍ قليلة، كل واحدة زر انضمام
 function renderFound() {
   const now = Date.now();
-  const games = [...lan.found.values()].filter(g => now - g.at < 4000);
+  const games = [...lan.found.values()].filter(g => now - g.at < NET.foundSeconds * 1000);
   const sign = games.map(g => g.ip + g.name + g.version).join('|');
   if (sign === foundSign) return;
   foundSign = sign;
@@ -182,17 +181,19 @@ function renderFound() {
   if (!games.length) {
     const p = document.createElement('p');
     p.className = 'hint';
-    p.textContent = 'جارٍ البحث… تأكد أن المضيف ضغط "استضافة مباراة" وأنكم على نفس الشبكة.';
+    p.textContent = 'جارٍ البحث… تظهر هنا مباراة صديقك حين يضغط "استضافة مباراة جديدة".';
     list.appendChild(p);
   }
   for (const game of games) {
     const button = document.createElement('button');
     button.className = 'wide';
-    button.textContent = game.name;
-    const note = document.createElement('small');
-    note.className = 'hint';
-    note.textContent = ' • ' + game.ip + (game.version !== String(NET.version) ? ' • نسخة مختلفة' : '');
-    button.appendChild(note);
+    button.textContent = 'انضم إلى «' + game.name + '»';
+    if (game.version !== String(NET.version)) {
+      const note = document.createElement('small');
+      note.className = 'hint';
+      note.textContent = ' • نسخة مختلفة';
+      button.appendChild(note);
+    }
     button.addEventListener('click', () => { sound('ui_tap'); connect(game.ip, game.port); });
     list.appendChild(button);
   }

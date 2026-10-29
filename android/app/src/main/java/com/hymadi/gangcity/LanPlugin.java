@@ -53,15 +53,16 @@ public class LanPlugin extends Plugin implements LanCore.Listener {
         }
     }
 
+    // البحث: الاستماع لإعلانات المضيفين، وسؤال كل عناوين الشبكة على منفذهم كل بضع ثوانٍ (إن منعت الشبكة البث،
+    // أو كان منفذ الإعلان مشغولاً، يبقى السؤال)
     @PluginMethod
     public void discover(PluginCall call) {
+        holdLock(true);
+        core.startScan(call.getInt("port", 47821), call.getInt("scanMs", 6000), call.getInt("probeMs", 350));
         try {
             core.startDiscovery(call.getInt("beaconPort", 47820));
-            holdLock(true);
-            call.resolve();
-        } catch (Exception e) {
-            call.reject("تعذر البحث عن المباريات: " + e.getMessage());
-        }
+        } catch (Exception ignored) { }
+        call.resolve();
     }
 
     @PluginMethod

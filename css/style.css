@@ -1100,7 +1100,13 @@ input[type=range].muted { opacity: .4; }
 .lan-list { display: flex; flex-direction: column; gap: 6px; }
 .lan-list button.wide { margin: 0; }
 .lan-list button.wide small { font-weight: 400; }
-.lan-ip-row { display: flex; gap: 6px; }
+.lan-ip-row { display: flex; gap: 6px; margin-top: 6px; }
+.lan-name-row { display: flex; align-items: center; gap: 10px; margin: 6px 0 4px; }
+.lan-name-row label { flex: 0 0 auto; font-weight: 700; color: var(--text-dim); }
+.lan-name-row .text-input { flex: 1 1 auto; min-height: 44px; }
+#lanFound button.wide { background: linear-gradient(#3f5f3a, #2f4a2b); border-color: #6f9a62; }
+#btnLanHost { margin-top: 12px; }
+.lan-link { display: block; margin: 12px auto 0; background: none; border: 0; color: var(--gold); font: inherit; font-size: 15px; text-decoration: underline; }
 .lan-ip-row .text-input { flex: 1 1 auto; text-align: left; }
 .lan-ip-row .opt { flex: 0 0 96px; }
 .lan-player {

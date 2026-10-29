@@ -36,7 +36,8 @@ function nativeTransport() {
   return {
     host: (name) => call('host', { port: NET.port, beaconPort: NET.beaconPort, beaconMs: NET.beaconSeconds * 1000,
                                    name, version: String(NET.version) }),
-    discover: () => call('discover', { beaconPort: NET.beaconPort }),
+    discover: () => call('discover', { beaconPort: NET.beaconPort, port: NET.port,
+                                       scanMs: NET.scanSeconds * 1000, probeMs: NET.probeMs }),
     stopDiscover: () => { call('stopDiscover').catch(() => {}); },
     connect: (ip, port) => call('connect', { ip, port: port || NET.port, timeoutMs: 4000 }),
     send: (to, msg) => { call('send', { to, data: JSON.stringify(msg) }).catch(() => {}); },

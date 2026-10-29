@@ -13,7 +13,7 @@ const worldOf = (i, j) => ({ x: (i - j) * TILE_HALF_W, y: (i + j) * TILE_HALF_H 
 
 // --- الهالة الذهبية حول القواعد الرئيسية: قبل الوحدات فيمشي الجنود فوقها ---
 export function drawEmpireHalos(ctx, state, visible) {
-  if (state.mode !== 'empire') return;
+  if (!state.economy) return;
   const H = E.baseHalo, map = state.map;
   const pulse = 1 - H.pulse + H.pulse * (0.5 + 0.5 * Math.sin(state.time * H.speed));
   const rx = H.radius * TILE_HALF_W * Math.SQRT2, ry = H.radius * TILE_HALF_H * Math.SQRT2;
@@ -110,7 +110,7 @@ const ICONS = {
 
 // الشارات فوق طبقة الليل لتُقرأ دائماً، ولكل مبنى ظاهر في كل الأحياء (لك ولخصومك)
 export function drawEmpireBadges(ctx, state, visible) {
-  if (state.mode !== 'empire') return;
+  if (!state.economy) return;
   const B = E.badge, z = state.camera.z;
   for (const d of state.map.districts) {
     if (!d.building || d.buildTile === undefined) continue;
@@ -135,7 +135,7 @@ export function drawEmpireBadges(ctx, state, visible) {
 
 // السهام قبل طبقة الليل (كمقذوفات الوحدات)
 export function drawEmpireShots(ctx, state, alpha) {
-  if (state.mode !== 'empire' || !state.modeState.shots.length) return;
+  if (!state.economy || !state.modeState.shots.length) return;
   ctx.lineCap = 'round';
   for (const shot of state.modeState.shots) {
     const t = Math.min(1, (shot.prevT + (shot.t - shot.prevT) * alpha) / shot.duration);
@@ -160,7 +160,7 @@ export function drawEmpireShots(ctx, state, alpha) {
 
 // شريط الإنتاج ونقاط الطابور فوق قواعدك، ودائرة المدى للمبنى المفتوحة قائمته (فوق طبقة الليل لتُقرأ)
 export function drawEmpireMarks(ctx, state, visible, openDistrict) {
-  if (state.mode !== 'empire') return;
+  if (!state.economy) return;
   const map = state.map, ms = state.modeState, z = state.camera.z;
   for (const id of Object.keys(ms.queues)) {
     const queue = ms.queues[id], district = map.districts[id];

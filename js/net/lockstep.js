@@ -28,9 +28,9 @@ export function hashState(state) {
     mix(u.id); mix(u.x * 1000); mix(u.y * 1000); mix(u.hp * 100); mix(u.state.length); mix(u.playerId);
   }
   for (const d of state.map.districts) { mix(d.owner === null ? -1 : d.owner); mix(d.progress * 100); }
-  // ما يحسم الأطوار: نقاط الإمبراطورية، ونقاط طور الوقت، وزمن السيطرة على التلة
+  // ما يحسم الأطوار: النقاط الآن وما جُمع منها (نتيجة الوقت بالنقاط)، وزمن السيطرة على التلة
   const ms = state.modeState || {};
-  for (const list of [ms.points, ms.scores, ms.held]) if (Array.isArray(list)) for (const v of list) mix(v * 100);
+  for (const list of [ms.points, ms.earned, ms.held]) if (Array.isArray(list)) for (const v of list) mix(v * 100);
   return h;
 }
 
@@ -75,8 +75,8 @@ function applyCommand(state, c) {
     return;
   }
   if (!player.isHuman) return;              // لاعب صار بوتاً: أوامره القديمة لا تُنفذ
-  if (c.k === 'emp') {                      // طور الإمبراطورية: إنتاج وترقيات ومبانٍ من قائمة الحي
-    if (state.mode === 'empire') empireCommand(state, c.p, c.a, Math.round(+c.d), c.x);
+  if (c.k === 'emp') {                      // الاقتصاد: إنتاج وترقيات ومبانٍ من قائمة الحي
+    if (state.economy) empireCommand(state, c.p, c.a, Math.round(+c.d), c.x);
     return;
   }
   const units = unitsOf(state, c.p, c.u);

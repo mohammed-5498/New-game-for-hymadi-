@@ -33,11 +33,8 @@ function pickWeighted(table) {
 
 // ينشئ خريطة صالحة، ويعيد المحاولة إذا فشل الشرط (شوارع متصلة، أحياء منزلية كافية)
 // city: مفتاح طابع المدينة (القسم 3.9)، أو 'random'. المدينة شكل فقط: الشوارع والأحياء كما هي
-// "عشوائي" لا يختار مدينة محصورة في طور واحد (CITIES.modeOnly: اليمامة لطور الإمبراطورية)
-export const OPEN_CITIES = CITIES.order.filter(city => !CITIES.modeOnly[city]);
-
 export function resolveCity(city) {
-  return CITY_THEMES[city] ? city : OPEN_CITIES[ri(OPEN_CITIES.length)];
+  return CITY_THEMES[city] ? city : CITIES.order[ri(CITIES.order.length)];
 }
 
 // options.specials: false بلا أحياء مميزة (طور الإمبراطورية: مبانيه تُبنى بالنقاط)
