@@ -327,8 +327,8 @@ function startAttack(unit, target, state) {
   if (!unit.homePost) unit.chaseOrigin = { x: unit.x, y: unit.y };
   unit.repathTimer = 0;
 
-  // صافرة الشرطة عند بدء مطاردتها، متباعدة حتى لا تتحول إلى ضجيج
-  if (state && unit.homePost && state.time - unit.whistleAt > AUDIO.whistleSeconds) {
+  // صافرة الشرطة عند بدء مطاردتها، متباعدة حتى لا تتحول إلى ضجيج (لا حراس مزايا المدن)
+  if (state && unit.homePost && unit.gang === 'police' && state.time - unit.whistleAt > AUDIO.whistleSeconds) {
     unit.whistleAt = state.time;
     soundAt(state, 'whistle', unit.x, unit.y);
   }

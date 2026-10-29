@@ -103,6 +103,8 @@ export function createUnit(state, player, i, j, heroId = null, champion = false)
     // الشرطة المحايدة (القسم 3.8)
     stationId: -1,          // رقم حي المركز الذي تتبعه
     villageId: -1,          // أهل القرى (القسم 3.11): رقم حي قريتهم حتى ينضموا لمن يستولي عليها
+    garrisonOf: -1,         // ساموراي الدوجو وحراس الحصن (القسم 3.11): رقم حي مبناهم
+    recruitKind: null,      // المجنَّد في مبنى مميز (القسم 3.11): نوعه في CITY_FEATURES.recruits
     homePost: null,         // مركزها: لا تبتعد عنه أكثر من 6 مربعات
     vanishAt: -1,           // بعد الاستيلاء على مركزها تختفي عند هذا الزمن
 

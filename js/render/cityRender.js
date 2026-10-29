@@ -6,6 +6,7 @@ import { tintAmount } from '../game/capture.js';
 import { THEMES, setThemeContext, setTone, getCtx, streetDebris, ruinTile, hsh, mixc } from './cityThemes.js';
 import { PALETTES } from './colors.js';
 import { drawLandmark } from './landmarks.js';
+import { drawFeaturePlaza } from './featureArt.js';
 import {
   openOf, isLane, cleanRoad, drawSidewalks, drawCrosswalk, drawLaneDecor, roundaboutAnchor, drawRoundaboutIsland,
   drawStreetTree
@@ -41,6 +42,7 @@ export function groundColor(state, i, j) {
   else {
     color = T.ground;
     if (isLane(map, k)) color = mix(T.ground, T.plaza, 0.8);   // ممر مرصوف بين صفوف المباني
+    else if (map.kind[k] === 'fplaza') color = mix(T.plaza, '#d9c79c', 0.35);   // ساحة المبنى المميز (القسم 3.11)
     else if (T.groundAt) color = T.groundAt(i, j, color);
     else if (hsh(i, j, 200) < 0.3) color = mixc(color, '#5a5040', 0.12);
     const hint = REGION_HINT[map.region[k]];
@@ -109,7 +111,8 @@ export function drawCityTile(state, i, j, x, y) {
   }
   const type = map.type[k];
   if (type === '.') {
-    if (isLane(map, k)) drawLaneDecor(map, i, j, x, y);
+    if (map.kind[k] === 'fplaza') drawFeaturePlaza(map, i, j, x, y);     // أركان ساحة المبنى المميز (القسم 3.11)
+    else if (isLane(map, k)) drawLaneDecor(map, i, j, x, y);
     else {
       if (T.draw.ground) T.draw.ground(x, y, i, j, T);      // زينة الأرض الفارغة بطابع المدينة (تموجات الرمل)
       if (hsh(i, j, 210) < 0.4) streetDebris(x, y, i, j + 99, T);

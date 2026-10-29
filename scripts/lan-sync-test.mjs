@@ -6,7 +6,7 @@
 import { createMatch } from '../js/state.js';
 import * as LS from '../js/net/lockstep.js';
 import { packMatch, unpackMatch } from '../js/matchSave.js';
-import { EMPIRE } from '../js/config.js';
+import { EMPIRE, CITY_FEATURES } from '../js/config.js';
 
 const seconds = +(process.argv[2] || 60), mode = process.argv[3] || 'conquest', mapSize = process.argv[4] || 'small', city = process.argv[5] || 'random';
 let seed = 12345;
@@ -44,9 +44,16 @@ const C = LS.createLockstep('client', (to, msg) => sendLater(toHost, msg), 1, { 
 
 const pick = (list) => list[Math.floor(rnd() * list.length)];
 
-// الاقتصاد: إنتاج في قاعدة، أو ترقية، أو بناء في حي، أو ترقية مبنى (وما لا تكفيه النقاط يُرفض عند الجميع)
+// الاقتصاد: إنتاج في قاعدة، أو ترقية، أو بناء في حي، أو ترقية مبنى، أو تجنيد في مبنى مميز (القسم 3.11)
+// (وما لا تكفيه النقاط يُرفض عند الجميع)
 function empireCommand(state, L) {
   const own = state.map.districts.filter(d => d.owner === L.slot && d.capture);
+  const recruit = own.filter(d => d.feature && CITY_FEATURES[d.feature] && CITY_FEATURES[d.feature].recruits);
+  if (recruit.length && rnd() < 0.3) {
+    const d = pick(recruit);
+    LS.localCommand(L, { k: 'emp', a: 'queue', d: d.id, x: pick(CITY_FEATURES[d.feature].recruits) });
+    return;
+  }
   const r = rnd();
   const d = r < 0.4 ? pick(own.filter(x => x.building === 'hq')) : r < 0.7 ? pick(own.filter(x => !x.building)) : pick(own.filter(x => x.building));
   if (r < 0.4 && d) LS.localCommand(L, { k: 'emp', a: 'queue', d: d.id, x: pick(EMPIRE.units.order) });

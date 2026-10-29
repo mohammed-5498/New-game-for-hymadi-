@@ -36,7 +36,7 @@ export function createMatch(settings) {
 
   // الشرطة طرف محايد يُضاف بعد توزيع الأحياء المنزلية فلا يأخذ حياً ولا مقراً، ثم طرف الميزة إن احتاجته
   players.push(createPolicePlayer(players));
-  const featurePlayer = createFeaturePlayer(players, feature);
+  const featurePlayer = createFeaturePlayer(players, feature, map.city);
   if (featurePlayer) players.push(featurePlayer);
 
   const state = {

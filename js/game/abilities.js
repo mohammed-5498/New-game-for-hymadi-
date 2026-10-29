@@ -8,7 +8,7 @@ import { forEachNearby } from './spatialHash.js';
 import { soundAt } from '../audio/sound.js';
 import { homeMods, inOwnArea, brotherMods, phalanxMods, outnumberedMods, duelMods } from './nations.js';
 import { empireDamageBonus, empireArmorBonus } from './empire.js';
-import { pyramidZones, pyramidTaken, stormDamageMul } from './features.js';
+import { pyramidZones, pyramidTaken, stormDamageMul, featureDamageBonus } from './features.js';
 
 const isAlive = (unit) => unit.state !== 'dead' && unit.hp > 0;
 const allied = (state, a, b) => a.playerId === b.playerId || !isEnemy(state, a, b);
@@ -28,7 +28,8 @@ function applyDamageBonuses(state) {
   // +10% درع لكل مركز شرطة مملوك، بحد أقصى +20% (القسم 3.8)، وترقيتا الدفاع والضرر في طور الإمبراطورية
   const empire = state.economy;
   const armorBonus = state.players.map(p => policeArmorBonus(state, p.id) + (empire ? empireArmorBonus(state, p.id) : 0));
-  const upDamage = state.players.map(p => (empire ? empireDamageBonus(state, p.id) : 0));
+  // ومالك دوجو الساموراي: كل جنوده أقوى (القسم 3.11)
+  const upDamage = state.players.map(p => (empire ? empireDamageBonus(state, p.id) + featureDamageBonus(state, p.id) : 0));
   // سمات الأمم "داخل أحيائك" (القسم 3.10): null لكل لاعب بلا سمة من هذا النوع
   const home = state.players.map(homeMods);
   // «الـ108» (الصين) و«الكتيبة» (ألمانيا): null لكل لاعب بلا هذه السمة

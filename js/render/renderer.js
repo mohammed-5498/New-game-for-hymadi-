@@ -14,7 +14,7 @@ import { drawPoliceLamp } from './landmarks.js';
 import { drawUnitsOccluded } from './occlusion.js';
 import { shadedCount } from '../pacing.js';
 import { drawEmpireShots, drawEmpireMarks, drawEmpireHalos, drawEmpireBadges } from './empireArt.js';
-import { drawFeatureBadges, drawStorm } from './featureArt.js';
+import { drawFeatureBadges, drawStorm, featureHaloEntry, drawFeatureHalo } from './featureArt.js';
 
 export function resizeCanvas(canvas, state) {
   const view = state.view;
@@ -369,12 +369,21 @@ function drawUnitsLayer(ctx, state, alpha, visible) {
   }
   entries.sort((a, b) => a.key - b.key);
   pickShaded(entries, state.camera);
+  // هالات المباني المميزة (القسم 3.11): على الأرض بقطر مؤخرة الكتلة، فيلصق المبنى فوق ما خلفه منها
+  if (state.feature) {
+    for (const d of state.map.districts) {
+      const e = d.feature ? featureHaloEntry(state, d) : null;
+      if (e && visible(e.x, e.y)) entries.push(e);
+    }
+    entries.sort((a, b) => a.key - b.key);
+  }
   const halo = CITIES.unitHalo[state.map.city];
   // اهتزاز الأرض حول ارتطام المطرقة والعضو الضخم (القسم 5.4.8): الوحدات القريبة ترتجف، لا الكاميرا
   QUAKES.length = 0;
   for (const fx of state.fx) if (fx.t < FIGHT.quake.seconds && impactKind(fx) === 'quake') QUAKES.push(fx);
   const now = state.time + alpha * TICK_SEC;
   drawUnitsOccluded(ctx, state, entries, (c, e) => {
+    if (e.featureHalo) { drawFeatureHalo(c, state, e, now); return; }
     const unit = e.unit;
     if (halo && unit.state !== 'dead') {
       const p = unitWorldPos(unit, alpha);

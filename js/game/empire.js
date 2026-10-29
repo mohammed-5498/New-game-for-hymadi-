@@ -7,7 +7,7 @@
 //   مبناه بترقياته كما هي، ولا تعود نقاط لأحد (وطلبات الجنود في طابور القاعدة الساقطة تضيع)
 // الحالة كلها بيانات بسيطة في state.modeState وحقول الأحياء (building وbuildTile وblv)، فتُحفظ مع المباراة.
 // الأرقام كلها في EMPIRE داخل config.js
-import { TICK_SEC, EMPIRE as E, SPAWN, GANGS, ai } from '../config.js';
+import { TICK_SEC, EMPIRE as E, SPAWN, GANGS, ai, CITY_FEATURES } from '../config.js';
 import { createUnit } from './units.js';
 import { spawnChampion, championOf, countUnits } from './spawn.js';
 import { applyDamage, isEnemyId } from './combat.js';
@@ -16,7 +16,7 @@ import { findFreeTiles } from '../map/pathfinding.js';
 import { soundAt } from '../audio/sound.js';
 import { hypot } from './hypot.js';
 import { random } from './random.js';   // عشوائية المنطق: مشتركة بين الأجهزة في اللعب المحلي
-import { featureIncome, stormRangeMul, stormMiss } from './features.js';
+import { featureIncome, stormRangeMul, stormMiss, recruitsAt, spawnRecruit } from './features.js';
 
 const isAlive = (unit) => unit && unit.state !== 'dead' && unit.hp > 0;
 
@@ -129,8 +129,14 @@ function botIncome(player) {
 export function productionTime(state, district, kind) {
   const level = (district.blv && district.blv.production) || 0;
   const owner = state.players[district.owner];
-  return E.units[kind].seconds * E.buildings.hq.upgrades.production.times[level] * (owner ? botFactor(owner) : 1);
+  return unitCost(kind).seconds * E.buildings.hq.upgrades.production.times[level] * (owner ? botFactor(owner) : 1);
 }
+
+// كلفة الطلب وزمنه: جنود القاعدة، أو المجنَّدون في المباني المميزة (CITY_FEATURES.recruits، القسم 3.11)
+const unitCost = (kind) => E.units[kind] || CITY_FEATURES.recruits[kind];
+
+// هل يُنتج هذا الطلب في هذا الحي؟ جنود القاعدة في القاعدة الرئيسية، والمجنَّدون في مبناهم المميز
+const producesAt = (district, kind) => E.units[kind] ? district.building === 'hq' : (recruitsAt(district) || []).includes(kind);
 
 function updateQueues(state, ms) {
   for (const id of Object.keys(ms.queues)) {
@@ -139,7 +145,7 @@ function updateQueues(state, ms) {
     const district = state.map.districts[id];
     // القاعدة سقطت (صارت محايدة أو بيد غيره): طلبات من دفع تضيع بلا إرجاع نقاط (بقرار المستخدم)
     for (let k = queue.length - 1; k >= 0; k--) {
-      if (district.building !== 'hq' || district.owner !== queue[k].payer) queue.splice(k, 1);
+      if (!producesAt(district, queue[k].kind) || district.owner !== queue[k].payer) queue.splice(k, 1);
     }
     if (!queue.length) continue;
     const item = queue[0], owner = district.owner;
@@ -160,6 +166,7 @@ export function heroFor(player, kind) {
 }
 
 function produce(state, player, district, kind) {
+  if (!E.units[kind]) return spawnRecruit(state, player, district, kind);   // مجنَّد مبنى مميز (features.js)
   if (kind === 'leader') {
     const leader = spawnChampion(state, player, district);
     if (leader) applyUpgrades(state, leader);
@@ -287,11 +294,11 @@ function leaderTaken(state, playerId) {
 }
 
 export function canQueue(state, playerId, district, kind) {
-  if (!owns(state, playerId, district) || district.building !== 'hq') return fail('ليست قاعدتك');
+  if (!owns(state, playerId, district) || !producesAt(district, kind)) return fail(E.units[kind] ? 'ليست قاعدتك' : 'ليس مبناك');
   const queue = state.modeState.queues[district.id] || [];
   if (kind === 'leader' && leaderTaken(state, playerId)) return fail('لعصابتك زعيم');
   if (queue.length >= E.queueMax) return fail('الطابور ممتلئ');
-  if (pointsOf(state, playerId) < E.units[kind].cost) return fail('النقاط لا تكفي');
+  if (pointsOf(state, playerId) < unitCost(kind).cost) return fail('النقاط لا تكفي');
   return OK;
 }
 
@@ -300,7 +307,7 @@ export function queueUnit(state, playerId, districtId, kind) {
   const check = canQueue(state, playerId, district, kind);
   if (!check.ok) return check;
   const queues = state.modeState.queues;
-  state.modeState.points[playerId] -= E.units[kind].cost;
+  state.modeState.points[playerId] -= unitCost(kind).cost;
   if (!queues[districtId]) queues[districtId] = [];
   queues[districtId].push({ kind, t: 0, payer: playerId });
   return OK;
@@ -408,7 +415,7 @@ export function upgradeBuilding(state, playerId, districtId, key) {
 // a: queue (x نوع الجندي) | upgrade (x ترقية العصابة) | build (x نوع المبنى) | improve (x ترقية المبنى)، d رقم الحي
 export function empireCommand(state, playerId, a, d, x) {
   const district = state.map.districts[d];
-  if (a === 'queue' && E.units.order.includes(x)) return queueUnit(state, playerId, d, x);
+  if (a === 'queue' && (E.units.order.includes(x) || Object.hasOwn(CITY_FEATURES.recruits, x))) return queueUnit(state, playerId, d, x);
   if (a === 'upgrade' && E.upgrades.order.includes(x)) return buyUpgrade(state, playerId, x);
   if (a === 'build' && E.buildings.order.includes(x)) return buildDistrict(state, playerId, d, x);
   if (a === 'improve' && district && district.building && E.buildings[district.building].upgrades.order.includes(x)) {

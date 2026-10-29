@@ -118,7 +118,7 @@ export const CITY_CACHE = {
   // الوحدة خلف مبنى أمامها تختفي خلفه: قصاصة المبنى من صورة المدينة تُلصق فوقها (occlusion.js)
   occlusion: {
     enabled: true,               // للقياس فقط: false يرسم الوحدات فوق كل شيء
-    side: 28, down: 14,          // أقصى ما يرسمه المبنى حول مركز مربعه يميناً ويساراً وتحته
+    side: 38, down: 14,          // أقصى ما يرسمه المبنى حول مركز مربعه يميناً ويساراً وتحته (المبنى المميز 2×2 حتى 36)
     alphaCut: 160,               // البكسل أعتم من هذا يُعد من المبنى عند قياس حدوده (من 255)
     unitSide: 7.5, unitUp: 21, unitDown: 4,  // صندوق الفرد العادي حول قدميه (الجسم والسلاح وشريط الدم)، ويكبر مع حجم الوحدة
     maxPixels: 8e6,              // أقصى مجموع بكسلات القصاصات المخزنة، والأقدم يُحذف
@@ -201,7 +201,7 @@ export const MAP_GEN = {
   // إصلاح الفراغات المعزولة (القسم 3.4.1)
   pocketRepairRounds: 3,      // أقصى عدد مرات لإعادة الـ flood fill والإصلاح
   pocketFillType: 'H',        // الفراغ الذي لا يمكن وصله يُردم بهذا المبنى
-  protectedBuildings: ['Q', 'S', 'G', 'C', 'O', 'N', 'F', '~', 'Y'],  // لا تُفتح لعمل ممر (مقر، مستشفى، مخزن، ساعة، نافورة، مركز شرطة، مبنى ميزة المدينة، ماء، جزيرة الدوار)
+  protectedBuildings: ['Q', 'S', 'G', 'C', 'O', 'N', 'F', 'f', '~', 'Y'],  // لا تُفتح لعمل ممر (مقر، مستشفى، مخزن، ساعة، نافورة، مركز شرطة، مبنى ميزة المدينة وكتلته، ماء، جزيرة الدوار)
   devChecks: true             // وضع التطوير: يطبع تحذيراً إن بقي مربع معزول
 };
 
@@ -1425,7 +1425,8 @@ export const EMPIRE = {
     towerEvery: 4,                          // برج لكل 4 أحياء، على الحي الأقرب للأعداء
     hospitalAt: 4,                          // مستشفى واحد حين يملك 4 أحياء، قرب قاعدته
     hqAt: 8, maxHq: 2,                      // قاعدة رئيسية ثانية حين يملك 8 أحياء، في أبعد أحيائه عن الأعداء
-    buysPerDecision: 3                      // أقصى مشتريات في القرار الواحد
+    buysPerDecision: 3,                     // أقصى مشتريات في القرار الواحد
+    recruitEvery: 5                         // مجنَّد مبنى مميز (طبيب، أبطال عدوة) لكل 5 من جيشه، إن ملك مبناه (القسم 3.11)
   }
 };
 
@@ -1433,15 +1434,31 @@ export const EMPIRE = {
 // cities: المدينة ← ميزتها، والمدن التي لا تُذكر بلا ميزة. ground: أرض حي الميزة قبل الاستيلاء عليه تميل لهذا اللون
 // botValue: قيمة حي الميزة عند البوتات (الحي العادي 1، والحي المميز القديم ai.specialValue)
 export const CITY_FEATURES = {
-  cities: { diriyah: 'storm', shibam: 'villages', cairo: 'pyramid' },
+  cities: { diriyah: 'storm', shibam: 'villages', cairo: 'pyramid',
+            japan: 'dojo', gyeongju: 'bandits', kano: 'bandits', kaifeng: 'clinic', gondar: 'fortress', meroe: 'khartoum' },
   ground: ['#c9a24e', 0.24],
-  botValue: { pyramid: 3, village: 2 },
-  names: { pyramid: 'الهرم', village: 'القرية' },
+  // المبنى المميز (بطلب المستخدم: مساحة خاصة به، وحجم أكبر وفخامة وهالة): كتلة 2×2 وسط حيه لا يُمشى عليها،
+  // وبقية الحي ساحة مرصوفة حوله يُمشى عليها. حيه blockTiles مربعاً فأكثر (generator.js)
+  blockTiles: 9,
+  botValue: { pyramid: 3, village: 2, dojo: 2.5, clinic: 2, fortress: 2.5, khartoum: 3 },
+  names: { pyramid: 'الهرم', village: 'القرية', dojo: 'دوجو الساموراي', clinic: 'دار العلاج', fortress: 'الحصن',
+           khartoum: 'برج الخرطوم' },
   hintSeconds: 6,                     // إشعار ميزة المدينة في بداية المباراة (بعد تلميح قائمة الحي)
   // سطر ميزة المدينة في معاينة المدينة (قائمة الإعداد والمتجر) وإشعار البداية
   desc: { storm: 'العاصفة الرملية: كل 3 دقائق لنصف دقيقة، مدى الرماة أقل والضربات تخطئ',
           villages: 'القرى المحايدة: أهلها ينضمون لمن يستولي على قريتهم',
-          pyramid: 'الهرم: 5 نقاط في الثانية، وجنود مالكه حوله يتلقون ضرراً أقل' },
+          pyramid: 'الهرم: 5 نقاط في الثانية، وجنود مالكه حوله يتلقون ضرراً أقل',
+          dojo: 'دوجو الساموراي: ساموراي محايدون يحرسونه، ومن يحتله جنوده أقوى 10%',
+          bandits: 'قطاع الطرق: عصابة تظهر في الوسط كل دقيقتين، أكبر وأقوى في كل مرة، وتستولي على الأحياء',
+          clinic: 'دار العلاج: تعالج جنود مالكها حولها، ويجنّد فيها أطباء',
+          fortress: 'الحصن: حراس أقوياء وسهام، ومن يحتله يجنّد فيه أبطال عدوة',
+          khartoum: 'برج الخرطوم: برج رماية بعيد المدى بضعف الضرر، واحتلاله أطول بكثير' },
+  // الهالة حول كل مبنى مميز وحول القرية التي ينتظر أهلها (رسم فقط): نصف القطر بالمربعات من وسط الكتلة، ونبض بطيء،
+  // ونجوم صغيرة تدور عليها. colors: لون هالة كل ميزة
+  halo: { radius: 1.95, width: 1.6, glow: 8, alpha: 0.85, glowAlpha: 0.3, pulse: 0.3, speed: 1.8,
+          sparkles: 4, sparkleSpeed: 0.45, sparkleR: 1.6, light: 46 },
+  colors: { pyramid: '255,206,84', village: '120,140,225', dojo: '232,70,86', clinic: '96,220,150', fortress: '150,214,96',
+            khartoum: '255,150,60' },
   // العاصفة الرملية (الدرعية): أولها عند first ثانية ثم كل every ثانية، لمدة duration، وتنبيه قبلها بـ warn ثانية.
   // أثناءها: مدى الرماة والأبراج × rangeMul، والضربة القريبة والسهم وسهم البرج يخطئ باحتمال miss
   // ("أخطأ!" pop)، والنار وضربات الأبطال أضعف بنفس النسبة
@@ -1456,7 +1473,40 @@ export const CITY_FEATURES = {
               name: 'أهل القرية', color: '#8f7d5c', nation: 'yemen' },
   // الهرم (القاهرة): في الحي الأقرب لوسط المدينة. دخل حيه income في الثانية (بدل EMPIRE.income.district)،
   // وجنود مالكه داخل radius مربعاً منه يتلقون ضرراً أقل بنسبة damageTaken
-  pyramid: { income: 5, radius: 5, damageTaken: 0.2 }
+  pyramid: { income: 5, radius: 5, damageTaken: 0.2, top: 58 },
+  // دوجو الساموراي (إيدو): مبنى واحد قرب الوسط بعيد عن الأحياء المنزلية. ساموراي محايدون معادون للجميع بشكل hero
+  // أمة nation وإحصائيات stats فوقه: start منهم في البداية، ثم واحد كل every ثانية حتى max، ولا يبتعدون عنه أكثر من chase.
+  // أول استيلاء يوقف إنتاجهم ويختفي الباقون خلال vanishSeconds، ومالكه: كل جنوده +damageBonus ضرراً
+  dojo: { minHomeDistance: 6, start: 2, every: 12, max: 5, chase: 6, vanishSeconds: 5, damageBonus: 0.10, top: 50,
+          name: 'الساموراي', color: '#7d1f2c', nation: 'japan', hero: 'dual',
+          stats: { hp: 230, armor: 0.2, damage: 14, attackTime: 0.9, speed: 2.4, visionRange: 4.5 } },
+  // قطاع الطرق (غيونغجو وكانو): أول عصابة عند first ثانية ثم كل every، في وسط الخريطة، بشكل أفراد أمة المدينة بلون color.
+  // الموجة n: count + perWave × (n − 1) فرداً (حتى maxCount)، ودمهم وضررهم × (1 + grow × (n − 1))، ومن الموجة heroFrom
+  // شخصية مميزة لكل heroEvery أفراد. تستولي على الأحياء المجاورة حتى cap حياً، وتفكر كل think ثانية. لا تنتج جنوداً
+  bandits: { first: 120, every: 120, count: 3, perWave: 2, maxCount: 15, grow: 0.12, heroFrom: 3, heroEvery: 5,
+             cap: { small: 6, medium: 8, large: 10 }, think: 2, name: 'قطاع الطرق', color: '#3a312b' },
+  // دار العلاج (كايفنغ): عددها لكل حجم خريطة، موزعة بعيدة عن الأحياء المنزلية. تعالج جنود مالكها داخل radius
+  // بـ perSecond دم/ث لكل واحد (أقوى من مستشفى الاقتصاد)، وفي قائمتها تجنيد recruits
+  clinic: { count: { small: 1, medium: 2, large: 3 }, minHomeDistance: 5, radius: 4.5, perSecond: 9, top: 44,
+            recruits: ['doctor'] },
+  // الحصن (غوندر): عدده لكل حجم خريطة، موزع بعيد عن الأحياء المنزلية. فيه guards حراس محايدون بشكل hero أمة nation
+  // وإحصائيات stats (لا يُعوَّضون، ويختفي الباقون عند أول استيلاء)، ويرمي السهام كبرج (tower): على كل من يقترب وهو محايد،
+  // وعلى أعداء مالكه بعد احتلاله. ومالكه يجنّد فيه recruits
+  fortress: { count: { small: 1, medium: 2, large: 3 }, minHomeDistance: 6, guards: 4, chase: 6, vanishSeconds: 5, top: 52,
+              name: 'حراس الحصن', color: '#5b4a2e', nation: 'ethiopia', hero: 'boss',
+              stats: { hp: 260, armor: 0.25, damage: 15, speed: 2.1, aura: null },   // بلا هالة قارع النقارة: حرس لا قائد
+              tower: { range: 6, damage: 16, attackTime: 1.4 }, recruits: ['drummer', 'healer'] },
+  // برج الخرطوم (مروي): برج رماية واحد قرب الوسط، يرمي لمالكه: المدى range، والضرر ضرر برج الاقتصاد × damageMul،
+  // وزمن الرمية زمنه ÷ rateMul. واحتلاله أبطأ: سرعة الاستيلاء على حيه × captureMul
+  khartoum: { range: 9, damageMul: 2, rateMul: 1.5, captureMul: 0.3, top: 84 },
+  // التجنيد في المباني المميزة (من قائمتها، بطابور كالقاعدة): الكلفة والزمن، وشكل الوحدة (أمة nation وشخصيتها hero،
+  // وnull للفرد العادي) وما يُضاف إلى إحصائياتها stats، واسمها name (وإلا اسمها في أمتها)
+  recruits: {
+    doctor:  { name: 'طبيب', cost: 30, seconds: 6, nation: 'china', hero: null,
+               stats: { damage: 4, heal: { radius: 3, perSecond: 10 } } },
+    drummer: { cost: 45, seconds: 9, nation: 'ethiopia', hero: 'boss' },
+    healer:  { cost: 35, seconds: 8, nation: 'ethiopia', hero: 'medic' }
+  }
 };
 
 // --- القوائم (القسم 12.0) ---

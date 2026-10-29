@@ -10,6 +10,7 @@ import {
   empireCommand, towerStats, hospitalStats, incomeOf, tileOf
 } from '../game/empire.js';
 import { lanCommand } from '../net/session.js';
+import { recruitsAt, featureTowerStats } from '../game/features.js';
 import { worldToScreen } from '../map/coords.js';
 import { drawCharacters } from './charThumb.js';
 import { unitName } from './storeScreen.js';
@@ -64,8 +65,23 @@ function sectionsFor(state, district) {
   const side = player.nation || player.gang;
   const levels = state.modeState.levels[pid];
 
-  // مبنى ميزة المدينة (القسم 3.11): ما يعطيه، بلا خانات
-  if (district.featureTile !== undefined) return [{ title: 'ما يعطيه', stats: true, slots: [] }];
+  // مبنى ميزة المدينة (القسم 3.11): ما يعطيه، وخانات التجنيد فيه إن كان له تجنيد (دار العلاج والحصن)
+  if (district.featureTile !== undefined) {
+    const sections = [{ title: 'ما يعطيه', stats: true, slots: [] }];
+    const recruits = recruitsAt(district);
+    if (recruits) {
+      sections.push({ title: 'التجنيد', queue: true, slots: recruits.map(kind => {
+        const R = F.recruits[kind], art = R.hero || 'common';
+        return {
+          name: R.name || unitName(R.nation, art), art, side: R.nation, color: player.color,
+          cost: () => R.cost,
+          check: () => canQueue(state, pid, district, kind),
+          cmd: { a: 'queue', d: district.id, x: kind }
+        };
+      }) });
+    }
+    return sections;
+  }
 
   if (district.building === 'hq') {
     const art = (kind) => artOf(player, kind);
@@ -117,9 +133,17 @@ const TITLES = { hq: E.buildings.hq.name, tower: E.buildings.tower.name, hospita
 // سطر قدرة البرج أو المستشفى الآن (بعد ترقياته)، أو ما يعطيه مبنى ميزة المدينة
 function statsLine(district) {
   const fmt = (v) => String(Math.round(v * 10) / 10);
+  const pct = (v) => Math.round(v * 100) + '%';
   if (district.feature === 'pyramid') {
     const P = F.pyramid;
-    return '+' + P.income + ' نقاط في الثانية • جنودك داخل ' + P.radius + ' مربعات منه يتلقون ضرراً أقل ' + Math.round(P.damageTaken * 100) + '%';
+    return '+' + P.income + ' نقاط في الثانية • جنودك داخل ' + P.radius + ' مربعات منه يتلقون ضرراً أقل ' + pct(P.damageTaken);
+  }
+  if (district.feature === 'dojo') return 'كل جنودك +' + pct(F.dojo.damageBonus) + ' ضرر ما دمت تملكه';
+  if (district.feature === 'clinic') return 'يعالج ' + F.clinic.perSecond + ' دم/ث لكل جندي • المدى ' + F.clinic.radius + ' مربع';
+  if (district.feature === 'fortress' || district.feature === 'khartoum') {
+    const s = featureTowerStats(district);
+    return 'سهم بضرر ' + Math.round(s.damage) + ' كل ' + fmt(s.attackTime) + ' ث • المدى ' + fmt(s.range) + ' مربع' +
+           (district.feature === 'khartoum' ? ' • احتلاله أبطأ بكثير' : '');
   }
   if (district.building === 'tower') {
     const s = towerStats(district);
@@ -226,8 +250,10 @@ function refresh(state) {
     const queue = ms.queues[district.id] || [];
     const item = queue[0];
     const player = state.players[pid];
+    const R = item && F.recruits[item.kind];      // مجنَّد مبنى مميز (القسم 3.11)
     open.queue.text.textContent = item
-      ? 'الطابور ' + queue.length + '/' + E.queueMax + ': ' + unitName(player.nation || player.gang, artOf(player, item.kind))
+      ? 'الطابور ' + queue.length + '/' + E.queueMax + ': ' +
+        (R ? R.name || unitName(R.nation, R.hero || 'common') : unitName(player.nation || player.gang, artOf(player, item.kind)))
       : 'الطابور فارغ';
     const done = item ? Math.min(1, item.t / productionTime(state, district, item.kind)) : 0;
     open.queue.fill.style.width = (done * 100).toFixed(1) + '%';

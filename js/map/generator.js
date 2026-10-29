@@ -398,48 +398,84 @@ function assignPoliceDistricts(map, districts, size) {
 }
 
 // --- 4ج) مزايا المدن (القسم 3.11): أحياؤها ليست منزلية ولا مراكز شرطة ---
-// مبنى الميزة (F) في أقرب مربعات حيها لمركزه، كالمقر ومركز الشرطة
-const FEATURE_BUILDINGS = ['pyramid'];
+// المبنى المميز (بطلب المستخدم: مساحة خاصة به وحجم أكبر): كتلة 2×2 وسط حيه، مرسومة كلها من مربعها الأمامي (F)
+// والثلاثة الباقية f بلا رسم (لا يُمشى عليها)، وبقية الحي ساحة مرصوفة حوله يُمشى عليها (fplaza) إلا ساحة العلم.
+// center: الأقرب لوسط المدينة (بلا رقم عشوائي)، spread: موزعة بعيدة عن الأحياء المنزلية (الأولى عشوائية ثم الأبعد)
+const FEATURE_BUILDINGS = { pyramid: 'center', khartoum: 'center', dojo: 'center', clinic: 'spread', fortress: 'spread' };
+const DISTRICT_FEATURE = { pyramid: 'pyramid', villages: 'village', dojo: 'dojo', clinic: 'clinic', fortress: 'fortress',
+                           khartoum: 'khartoum' };
 
 function assignFeatures(map, districts, size) {
-  const feature = CITY_FEATURES.cities[map.city];
-  const free = (d) => d.capturable && !d.isHome && !d.police && !d.special;
-  if (feature === 'pyramid') {
-    // الحي الأقرب لوسط المدينة (بلا رقم عشوائي: بقية الخريطة كما هي)
+  const feature = DISTRICT_FEATURE[CITY_FEATURES.cities[map.city]];
+  if (!feature) return;
+  const cfg = CITY_FEATURES[feature === 'village' ? 'villages' : feature];
+  const homes = districts.filter(d => d.isHome);
+  const far = (d) => !cfg.minHomeDistance || homes.every(h => hypot(d.cx - h.cx, d.cy - h.cy) >= cfg.minHomeDistance);
+  const building = FEATURE_BUILDINGS[feature];
+  const candidates = districts.filter(d => d.capturable && !d.isHome && !d.police && !d.special && far(d) &&
+    (!building || (d.tiles.length >= CITY_FEATURES.blockTiles && hasBlock(map, d))));
+  if (!candidates.length) return;
+  const count = Math.min(cfg.count ? cfg.count[size.key] || 0 : 1, candidates.length);
+
+  if (building === 'center') {
     const ci = (map.land - 1) / 2, cj = (map.n - 1) / 2;
-    let best = null, bestD = Infinity;
-    for (const d of districts) {
-      if (!free(d)) continue;
-      const dist = hypot(d.cx - ci, d.cy - cj);
-      if (dist < bestD) { bestD = dist; best = d; }
-    }
-    if (best) markFeature(best, 'pyramid');
+    const order = candidates.slice().sort((a, b) => hypot(a.cx - ci, a.cy - cj) - hypot(b.cx - ci, b.cy - cj));
+    for (const d of order.slice(0, count)) markFeature(d, feature);
+    return;
   }
-  if (feature === 'villages') {
-    // قرى موزعة بعيدة عن الأحياء المنزلية: بعد الأولى نختار في كل مرة الأبعد عن القرى المختارة
-    const V = CITY_FEATURES.villages;
-    const homes = districts.filter(d => d.isHome);
-    const candidates = districts.filter(d => free(d) && homes.every(h => hypot(d.cx - h.cx, d.cy - h.cy) >= V.minHomeDistance));
-    if (!candidates.length) return;
-    const chosen = [candidates[ri(candidates.length)]];
-    const count = Math.min(V.count[size.key] || 0, candidates.length);
-    while (chosen.length < count) {
-      let best = null, bestDist = -1;
-      for (const d of candidates) {
-        if (chosen.includes(d)) continue;
-        const nearest = Math.min(...chosen.map(c => hypot(d.cx - c.cx, d.cy - c.cy)));
-        if (nearest > bestDist) { bestDist = nearest; best = d; }
-      }
-      if (!best) break;
-      chosen.push(best);
+  // موزعة: بعد الأولى نختار في كل مرة الأبعد عن المختارة (كمراكز الشرطة)
+  const chosen = [candidates[ri(candidates.length)]];
+  while (chosen.length < count) {
+    let best = null, bestDist = -1;
+    for (const d of candidates) {
+      if (chosen.includes(d)) continue;
+      const nearest = Math.min(...chosen.map(c => hypot(d.cx - c.cx, d.cy - c.cy)));
+      if (nearest > bestDist) { bestDist = nearest; best = d; }
     }
-    for (const d of chosen) markFeature(d, 'village');
+    if (!best) break;
+    chosen.push(best);
   }
+  for (const d of chosen) markFeature(d, feature);
 }
 
 function markFeature(district, feature) {
   district.feature = feature;
   district.region = 'feature';    // أرض تميل للذهبي قبل الاستيلاء عليه (cityRender.js)
+}
+
+// هل في الحي كتلة 2×2 من مربعاته؟
+function hasBlock(map, district) {
+  const inD = (i, j) => map.inBounds(i, j) && map.districtAt[map.idx(i, j)] === district.id;
+  return district.tiles.some(([i, j]) => inD(i + 1, j) && inD(i, j + 1) && inD(i + 1, j + 1));
+}
+
+// كتلة المبنى المميز الأقرب لمركز حيه بلا ساحة العلم، وبقية الحي ساحته. والحي الضيق: مبنى في مربع واحد كما كان
+function placeFeatureBuilding(map, district, point, inner) {
+  const inD = (i, j) => map.inBounds(i, j) && map.districtAt[map.idx(i, j)] === district.id;
+  const isPoint = (i, j) => i === point[0] && j === point[1];
+  let best = null, bestD = Infinity;
+  for (const [i, j] of district.tiles) {
+    const cells = [[i, j], [i + 1, j], [i, j + 1], [i + 1, j + 1]];
+    if (!cells.every(([a, b]) => inD(a, b) && !isPoint(a, b))) continue;
+    const dist = hypot(i + 0.5 - district.cx, j + 0.5 - district.cy);
+    if (dist < bestD) { bestD = dist; best = [i, j]; }
+  }
+  if (!best) {
+    if (!inner[0]) return;
+    district.featureTile = map.idx(inner[0][0], inner[0][1]);
+    map.type[district.featureTile] = 'F';
+    return;
+  }
+  const [i0, j0] = best;
+  for (const [i, j] of district.tiles) {
+    if (isPoint(i, j)) continue;
+    const k = map.idx(i, j), block = i - i0 >= 0 && i - i0 <= 1 && j - j0 >= 0 && j - j0 <= 1;
+    map.type[k] = block ? 'f' : '.';
+    map.kind[k] = block ? null : 'fplaza';
+  }
+  district.featureTile = map.idx(i0 + 1, j0 + 1);   // المربع الأمامي: منه تُرسم الكتلة كلها
+  map.type[district.featureTile] = 'F';
+  district.featureBig = true;
 }
 
 // --- 5) ملء الأحياء بالمباني ونقاط الاستيلاء ---
@@ -526,9 +562,8 @@ function fillDistricts(map, districts) {
       map.type[map.idx(inner[0][0], inner[0][1])] = 'Q';   // مبنى المقر
     } else if (district.police && inner[0]) {
       map.type[map.idx(inner[0][0], inner[0][1])] = 'N';   // مركز الشرطة
-    } else if (FEATURE_BUILDINGS.includes(district.feature) && inner[0]) {
-      district.featureTile = map.idx(inner[0][0], inner[0][1]);
-      map.type[district.featureTile] = 'F';                 // مبنى ميزة المدينة (القسم 3.11)
+    } else if (FEATURE_BUILDINGS[district.feature]) {
+      placeFeatureBuilding(map, district, point, inner);   // مبنى ميزة المدينة وساحته (القسم 3.11)
     } else if (district.special) {
       SPECIAL_BUILDINGS[district.special].forEach((letter, index) => {
         const tile = inner[index];

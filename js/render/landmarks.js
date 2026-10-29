@@ -202,9 +202,9 @@ export function drawLandmark(map, type, x, y, i, j, ownerColor, flagColor, light
   }
 
   if (type === 'F') {
-    // مبنى ميزة المدينة (القسم 3.11): الهرم في القاهرة. يُصبغ بلون مالكه، وشارته فوقه (featureArt.js)
+    // مبنى ميزة المدينة (القسم 3.11): كتلة 2×2 مرسومة من مربعها الأمامي، لا يُصبغ، وشارته فوقه (featureArt.js)
     const district = map.districtOf(i, j);
-    if (district && district.feature) drawFeatureBuilding(district.feature, x, y, i, j);
+    if (district && district.feature) drawFeatureBuilding(district.feature, x, y, i, j, !!district.featureBig);
     return null;
   }
 
