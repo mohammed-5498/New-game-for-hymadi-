@@ -1,7 +1,7 @@
 // شاشة المتجر (بطلب المستخدم): الخرائط والعصابات والمظاهر. في كل قسم تبويب لكل منطقة (كلوحة المدن في
 // قائمة الإعداد)، وخانات بصورها وتحت اسمها "مجانية" أو "السعر لاحقاً"، وبجانبها معاينة المختار ووصفه وسعره.
 // المظاهر فارغة حتى إشعار آخر، والأسعار تُحدد لاحقاً، وكل شيء متاح للعب في فترة الاختبار (js/store.js)
-import { CITIES, GANGS, HEROES, CHAMPIONS, PLAYER_COLORS, STORE, nations as NATIONS } from '../config.js';
+import { CITIES, GANGS, HEROES, CHAMPIONS, PLAYER_COLORS, STORE, nations as NATIONS, CITY_FEATURES } from '../config.js';
 import { sound } from '../audio/sound.js';
 import { CITY_GROUPS, SIDE_GROUPS } from './regions.js';
 import { drawCardThumb, updateCityThumb } from './cityThumb.js';
@@ -133,6 +133,8 @@ function mapAside(node, city) {
   const lines = ['منطقتها: ' + CITY_GROUPS.find(g => g.items.some(i => i.value === city)).name];
   const host = NATIONS.order.find(id => NATIONS[id].city === city);
   if (host) lines.push('مدينة أمة ' + NATIONS[host].name + ': مدينة المضيف حين تلعب بها.');
+  const feature = CITY_FEATURES.desc[CITY_FEATURES.cities[city]];      // ميزة المدينة (القسم 3.11)
+  if (feature) lines.push('ميزتها: ' + feature);
   asideText(node, title, isFreeCity(city), cityPrice(city), lines);
 }
 

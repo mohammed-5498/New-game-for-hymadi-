@@ -7,6 +7,7 @@
 // العلامات لا تُصبغ بلون المالك حتى تبقى واضحة دائماً.
 import { CITY_SPECIALS, CAPTURE, EMPIRE } from '../config.js';
 import { THEMES, getCtx, setThemeContext, setTone, getTone, getToneInfo, poly, circ, ln, box, el, empireTower } from './cityThemes.js';
+import { drawFeatureBuilding } from './featureArt.js';
 
 const cityOf = (map) => THEMES[map.city] || THEMES.arab;
 const specialsOf = (map) => CITY_SPECIALS[map.city] || CITY_SPECIALS.arab;
@@ -197,6 +198,13 @@ export function drawLandmark(map, type, x, y, i, j, ownerColor, flagColor, light
     });
     // ليلاً: ضوء ذهبي عند العلم
     if (lights) lights.push({ x, y: y - 4, r: CAPTURE.flagMark.light.r, c: CAPTURE.flagMark.glow, a: CAPTURE.flagMark.light.alpha });
+    return null;
+  }
+
+  if (type === 'F') {
+    // مبنى ميزة المدينة (القسم 3.11): الهرم في القاهرة. يُصبغ بلون مالكه، وشارته فوقه (featureArt.js)
+    const district = map.districtOf(i, j);
+    if (district && district.feature) drawFeatureBuilding(district.feature, x, y, i, j);
     return null;
   }
 

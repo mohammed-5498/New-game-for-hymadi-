@@ -12,6 +12,7 @@ import { setSummonHook } from './ults.js';
 import { sound } from '../audio/sound.js';
 import { hypot } from './hypot.js';
 import { initEmpire, updateEmpire, incomeOf } from './empire.js';
+import { featureBar } from './features.js';
 import { random } from './random.js';   // عشوائية المنطق: مشتركة بين الأجهزة في اللعب المحلي
 
 export const modeOf = (state) => (state.mode && GM[state.mode]) ? state.mode : 'conquest';
@@ -169,7 +170,8 @@ export function pickHill(map) {
   const center = (map.n - 1) / 2;
   let best = null, bestDist = Infinity;
   for (const d of map.districts) {
-    if (!d.capture || d.isHome || d.police || d.tiles.length < GM.king.hillMinTiles) continue;
+    // ولا حي ميزة مدينة (القسم 3.11): الهرم والقرى تبقى لما هي له
+    if (!d.capture || d.isHome || d.police || d.feature || d.tiles.length < GM.king.hillMinTiles) continue;
     const dist = hypot(d.cx - center, d.cy - center);
     if (dist < bestDist) { bestDist = dist; best = d; }
   }
@@ -590,7 +592,7 @@ function saveSurvivalBest(level, record) {
   try { localStorage.setItem(recordKey(level), JSON.stringify(record)); } catch { /* لا تخزين */ }
 }
 
-const policeAlive = (state) => state.units.filter(u => u.state !== 'dead' && state.players[u.playerId].neutral).length;
+const policeAlive = (state) => state.units.filter(u => u.state !== 'dead' && state.players[u.playerId].gang === 'police').length;
 
 // ================= الواجهة =================
 const clock = (seconds) => {
@@ -599,12 +601,15 @@ const clock = (seconds) => {
 };
 
 // شريط أعلى وسط الشاشة: { text, alarm } أو null حين لا يلزم. أوله نقاطك ودخلك في الثانية (الاقتصاد)، ثم ما يخص الطور
+// وآخره ميزة المدينة حين تعني شيئاً الآن (العاصفة الرملية الجارية أو القريبة، القسم 3.11)
 export function modeBar(state) {
   const bar = modeOnlyBar(state);
   if (!state.economy) return bar;
   const economy = 'النقاط: ' + Math.floor(state.modeState.points[state.humanId] || 0) +
     ' • +' + incomeOf(state, state.humanId).toFixed(1) + '/ث';
-  return bar ? { ...bar, text: economy + ' • ' + bar.text } : { text: economy };
+  const full = bar ? { ...bar, text: economy + ' • ' + bar.text } : { text: economy };
+  const feature = featureBar(state);
+  return feature ? { ...full, text: full.text + ' • ' + feature.text, alarm: full.alarm || feature.alarm } : full;
 }
 
 function modeOnlyBar(state) {

@@ -1,5 +1,5 @@
 // الهجوم التلقائي، أمر الهجوم، المقذوفات، الضرر والموت
-import { TICK_SEC, COMBAT, COMBAT_REALISM as CR, UNITS, UNIT_ART, POLICE, AUDIO } from '../config.js';
+import { TICK_SEC, COMBAT, COMBAT_REALISM as CR, UNITS, UNIT_ART, POLICE, AUDIO, CITY_FEATURES } from '../config.js';
 import { findPath } from '../map/pathfinding.js';
 import { facingFromAngle } from './units.js';
 import {
@@ -15,6 +15,7 @@ import { forEachNearby } from './spatialHash.js';
 import { soundAt, soundAlert } from '../audio/sound.js';
 import { raiseAlert } from './alerts.js';
 import { random } from './random.js';   // عشوائية المنطق: مشتركة بين الأجهزة في اللعب المحلي
+import { stormMiss, stormRangeMul } from './features.js';
 
 // اختيار الهدف للبوتات (القسم 11.2): يُسجَّل من ai/bot.js، ولا يغيّر قواعد القتال
 // يُستدعى فقط حين تحتاج الوحدة هدفاً جديداً، ويعيد undefined ليبقى الاختيار العادي
@@ -38,10 +39,13 @@ export function isEnemy(state, a, b) {
 }
 
 // نفس السؤال بأرقام اللاعبين مباشرة: بلا كائنات مؤقتة في الحلقات الساخنة (المرحلة 8)
+// وأهل القرى (القسم 3.11) مسالمون: ليسوا أعداء لأحد ولا أحد عدو لهم
 export function isEnemyId(state, a, b) {
   if (a === b) return false;
-  const teamA = state.players[a].team;
-  const teamB = state.players[b].team;
+  const pa = state.players[a], pb = state.players[b];
+  if (pa.passive || pb.passive) return false;
+  const teamA = pa.team;
+  const teamB = pb.team;
   if (teamA && teamB && teamA === teamB) return false;
   return true;
 }
@@ -165,6 +169,9 @@ function resolveHit(state, unit) {
   if (!isAlive(unit)) return;
 
   if (hit.ranged) { if (isAlive(hit.target)) spawnVolley(state, unit, hit.target, hit.damage); return; }
+
+  // العاصفة الرملية (القسم 3.11): الضربة القريبة تمر في الهواء أحياناً
+  if (stormMiss(state)) { addPop(state, unit, CITY_FEATURES.storm.pop, 'miss'); return; }
 
   // القتال الواقعي: الحركة تحدد من تصيب، والزاوية تحدد الضرر (القسم 5.4)
   if (hit.move) { resolveMove(state, unit, hit); return; }
@@ -400,11 +407,12 @@ function fightTarget(state, unit, budget) {
 
   // الرماة يتحولون للقتال القريب إذا اقترب العدو
   const melee = unit.stats.meleeRange !== undefined && dist <= unit.stats.meleeRange;
-  const range = melee ? unit.stats.meleeRange : unit.stats.attackRange;
-  const damage = melee ? unit.stats.meleeDamage : unit.stats.damage;
-  let attackTime = melee ? unit.stats.meleeAttackTime : unit.stats.attackTime;
   // الرمي البعيد وحده يُعتبر "بعيداً": حركات الرماة للقتال القريب فقط (القسم 5.4)
   const ranged = !melee && !!unit.stats.projectile;
+  // والعاصفة الرملية تقصّر مداه (القسم 3.11)
+  const range = melee ? unit.stats.meleeRange : unit.stats.attackRange * (ranged ? stormRangeMul(state) : 1);
+  const damage = melee ? unit.stats.meleeDamage : unit.stats.damage;
+  let attackTime = melee ? unit.stats.meleeAttackTime : unit.stats.attackTime;
 
   // المدى الفعلي للحركة القريبة يمتد بامتداد الحركة (الطعنة أطول)
   // المستويان المبسّط والإحصائي يضربان الضربة السريعة وحدها (القسم 5.4.5)،
@@ -668,8 +676,8 @@ export function spawnProjectile(state, unit, target, damage, offset = 0, fire = 
   const ratio = Math.min(1, dist / maxRange);
   const duration = COMBAT.projectileMinTime + (COMBAT.projectileMaxTime - COMBAT.projectileMinTime) * ratio;
 
-  // في المطر تخطئ بعض الرميات فتسقط قرب الهدف بلا ضرر
-  const hits = rangedShotHits(state, unit);
+  // في المطر تخطئ بعض الرميات فتسقط قرب الهدف بلا ضرر، وفي العاصفة الرملية أيضاً (القسم 3.11)
+  const hits = rangedShotHits(state, unit) && !stormMiss(state);
   const angle = random() * 6.2832;
   const spread = COMBAT.missSpread * (0.6 + random() * 0.4);
 

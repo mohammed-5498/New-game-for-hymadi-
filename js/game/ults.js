@@ -2,6 +2,7 @@
 // الأفراد العاديون لا يملكون ضربة مميزة، فلا شحن لهم.
 import { TICK_SEC, COMBAT, ULT, CAMERA, ai, nations } from '../config.js';
 import { isEnemy, applyDamage, spawnProjectile, spawnFalcon, spawnRain } from './combat.js';
+import { stormDamageMul } from './features.js';
 import { createFire } from './abilities.js';
 import { faceTowards, createUnit } from './units.js';
 import { forEachNearby } from './spatialHash.js';
@@ -173,7 +174,7 @@ export function resolveUlt(state, unit) {
     case 'buff':    buffAllies(state, unit, ult); break;
     case 'heal':    healAllies(state, unit, ult); break;
     // طلقة القناص البعيدة: الضربة المميزة الوحيدة التي تُتفادى، وبنصف الاحتمال (القسم 5.4)
-    case 'shot':    if (target) { spawnProjectile(state, unit, target, ultDamage(unit, ult.damage), 0, null, true);
+    case 'shot':    if (target) { spawnProjectile(state, unit, target, ultDamage(state, unit, ult.damage), 0, null, true);
                       registerSight(state, unit, target, true); } break;
     case 'fire':    createFire(state, unit.playerId, (target || unit).x, (target || unit).y, ult.fire); break;
     case 'arrows':  fireArrows(state, unit, ult, target); break;
@@ -204,7 +205,8 @@ function shakeCamera(state, unit) {
 }
 
 // ضرر الضربة يتأثر بمكافآت الضرر مثل الضربة العادية (مخزن السلاح، الهالات)
-const ultDamage = (unit, amount) => amount * unit.damageMultiplier;
+// والعاصفة الرملية تضعفها (القسم 3.11)
+const ultDamage = (state, unit, amount) => amount * unit.damageMultiplier * stormDamageMul(state);
 
 function harden(state, unit, duration) {
   unit.invulnUntil = state.time + duration;
@@ -218,7 +220,7 @@ function slam(state, unit, ult) {
   forEachNearby(state, unit.x, unit.y, ult.radius, (other) => {
     if (distanceSq(unit, other) > radiusSq) return;
     if (!isAlive(other) || !isEnemy(state, unit, other)) return;
-    applyDamage(state, unit, other, ultDamage(unit, ult.damage));
+    applyDamage(state, unit, other, ultDamage(state, unit, ult.damage));
     if (ult.slow) {
       other.slowFactor = ult.slow;
       other.slowUntil = state.time + ult.slowDuration;
@@ -239,7 +241,7 @@ function arc(state, unit, ult, target) {
     if (!isAlive(other) || !isEnemy(state, unit, other)) return;
     // أمامه فقط: نصف الدائرة في اتجاه الهدف
     if ((other.x - unit.x) * fx + (other.y - unit.y) * fy < 0) return;
-    applyDamage(state, unit, other, ultDamage(unit, ult.damage));
+    applyDamage(state, unit, other, ultDamage(state, unit, ult.damage));
   });
 }
 
@@ -264,7 +266,7 @@ function pierce(state, unit, ult, target) {
 
   online.sort((a, b) => a.along - b.along);
   for (const hit of online.slice(0, ult.targets)) {
-    applyDamage(state, unit, hit.unit, ultDamage(unit, ult.damage));
+    applyDamage(state, unit, hit.unit, ultDamage(state, unit, ult.damage));
   }
 }
 
@@ -289,7 +291,7 @@ export function updateFlurry(state, unit) {
   if (!isAlive(unit) || !isAlive(flurry.target)) { unit.flurry = null; return; }
   if (state.time < flurry.next) return;
 
-  applyDamage(state, unit, flurry.target, ultDamage(unit, flurry.damage));
+  applyDamage(state, unit, flurry.target, ultDamage(state, unit, flurry.damage));
   flurry.left--;
   flurry.next = state.time + flurry.interval;
   if (flurry.left <= 0) unit.flurry = null;
@@ -304,7 +306,7 @@ function updateWhirl(state, unit, whirl) {
   forEachNearby(state, unit.x, unit.y, whirl.radius, (other) => {
     if (distanceSq(unit, other) > radiusSq) return;
     if (!isAlive(other) || !isEnemy(state, unit, other)) return;
-    applyDamage(state, unit, other, ultDamage(unit, whirl.damage));
+    applyDamage(state, unit, other, ultDamage(state, unit, whirl.damage));
   });
   unit.attackStart = unit.ultStart = state.time;
   unit.attackRate = unit.ultRate = whirl.interval;
@@ -347,7 +349,7 @@ const heal = (unit, amount) => { unit.hp = Math.min(unit.maxHp, unit.hp + amount
 // صدّة بالدرع: ضرر ودفع العدو مربعاً للخلف مع إبطائه (الشرطي، القسم 3.8)
 function bash(state, unit, ult, target) {
   if (!target) return;
-  applyDamage(state, unit, target, ultDamage(unit, ult.damage));
+  applyDamage(state, unit, target, ultDamage(state, unit, ult.damage));
   if (!isAlive(target)) return;
 
   target.slowFactor = ult.slow;
@@ -379,7 +381,7 @@ function fireArrows(state, unit, ult, target) {
 
   for (let k = 0; k < ult.arrows; k++) {
     const offset = (k - (ult.arrows - 1) / 2) * COMBAT.multiShotSpread;
-    spawnProjectile(state, unit, targets[k] || target, ultDamage(unit, ult.damage), offset, ult.fire, false);
+    spawnProjectile(state, unit, targets[k] || target, ultDamage(state, unit, ult.damage), offset, ult.fire, false);
   }
 }
 
@@ -417,7 +419,7 @@ function falconDive(state, unit, ult, fallback) {
   if (!target) target = fallback;
   if (!target) return;
   const flight = Math.min(ult.flightMax, ult.flightMin + ult.flightPerTile * Math.sqrt(distanceSq(unit, target)));
-  spawnFalcon(state, unit, target, ultDamage(unit, ult.damage), flight);
+  spawnFalcon(state, unit, target, ultDamage(state, unit, ult.damage), flight);
   unit.awayUntil = state.time + flight * 2;          // يغيب الصقر عن ساعده ذهاباً وإياباً
   faceTowards(unit, target.x, target.y);
 }
@@ -444,7 +446,7 @@ function arrowRain(state, unit, ult, fallback) {
     if (around > most) { most = around; spot = other; }
   });
   if (!spot) return;
-  spawnRain(state, unit, spot.x, spot.y, ult, ultDamage(unit, ult.damage));
+  spawnRain(state, unit, spot.x, spot.y, ult, ultDamage(state, unit, ult.damage));
   addUltFx(state, 'ring', spot.x, spot.y, ult.area, ult.ring);
   faceTowards(unit, spot.x, spot.y);
 }
@@ -462,7 +464,7 @@ function enemiesAround(state, unit, spot, radius) {
 // رقصة الأباتشي (ملك الأباتشي): يقذف خصمه بعيداً ويسقطه أرضاً (ومن يصمد يتلقى الضرر وحده)
 function throwdown(state, unit, ult, target) {
   if (!target) return;
-  applyDamage(state, unit, target, ultDamage(unit, ult.damage));
+  applyDamage(state, unit, target, ultDamage(state, unit, ult.damage));
   if (isAlive(target)) knockDown(state, target, unit.x, unit.y, ult.throw);
 }
 

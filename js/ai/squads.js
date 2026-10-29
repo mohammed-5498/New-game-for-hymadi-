@@ -10,6 +10,7 @@ import { commandMove, commandAttackMove } from '../game/units.js';
 import { isEnemy, isEnemyId } from '../game/combat.js';
 import { forEachNearby, hashCells, cellBox } from '../game/spatialHash.js';
 import { hypot } from '../game/hypot.js';
+import { featureValue } from '../game/features.js';
 import { random } from '../game/random.js';   // عشوائية المنطق: مشتركة بين الأجهزة في اللعب المحلي
 
 const isAlive = (unit) => unit.state !== 'dead' && unit.hp > 0;
@@ -61,7 +62,8 @@ function aiSnapshot(state) {
   for (let k = 0; k < n; k++) {
     const u = H.list[k];
     xs[k] = u.x; ys[k] = u.y; pids[k] = u.playerId;
-    if (isAlive(u)) { alive[k] = 1; values[k] = unitValue(u); }
+    // أهل القرى (القسم 3.11) ليسوا قوة لأحد: لا يقاتلون
+    if (isAlive(u) && !state.players[u.playerId].passive) { alive[k] = 1; values[k] = unitValue(u); }
   }
   snap = { state, time: state.time, cells: H, xs, ys, pids, alive, values };
   return snap;
@@ -546,6 +548,8 @@ function targetList(state, player, lvl, armySize, helpers) {
     const enemy = reach ? Math.max(near, enemyPowerAround(state, player, d.capture, reach)) : near;
     let value = 1;
     if (d.special) value *= param(lvl, 'specialValue');
+    const feature = featureValue(d);                               // ميزة المدينة (القسم 3.11)
+    if (feature) value *= feature;
     if (d.police && lvl.policeEarly) value *= ai.stationValue;
     if (leader !== null && d.owner === leader) value *= ai.snowballValue;
     if (owner && !owner.neutral) {

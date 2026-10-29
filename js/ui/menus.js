@@ -1,7 +1,7 @@
 // القوائم (القسم 12): الرئيسية، الإعداد، المتجر، الإعدادات، الإحصائيات، سؤال الخروج، وتبديل الشاشات
 import {
   MAP_SIZES, PLAYER_COLORS, GANGS, GANG_IDS, BOT, BOT_LEVELS, COMBAT_REALISM,
-  WEATHER, WEATHER_KEYS, UNITS, MATCH_DEFAULTS, AUDIO, UI, CITIES, NET, gameModes as GM, nations as NATIONS
+  WEATHER, WEATHER_KEYS, UNITS, MATCH_DEFAULTS, AUDIO, UI, CITIES, NET, gameModes as GM, nations as NATIONS, CITY_FEATURES
 } from '../config.js';
 import { SIDE_CHOICES, resolveSide, nationOf } from '../game/nations.js';
 import { sound, audioSettings, setAudioSettings, startMusic } from '../audio/sound.js';
@@ -167,10 +167,14 @@ function openCityPicker() {
     aside: (node, choice) => {
       if (node.dataset.kind !== 'city') {
         node.dataset.kind = 'city';
-        node.innerHTML = '<canvas id="pickerThumb"></canvas><span id="pickerThumbName" class="hint"></span>';
+        node.innerHTML = '<canvas id="pickerThumb"></canvas><span id="pickerThumbName" class="hint"></span>' +
+                         '<small id="pickerFeature" class="hint"></small>';
       }
       const city = choice === 'host' ? hostCity(setup.slots[0].side) : choice;
       updateCityThumb(el('pickerThumb'), el('pickerThumbName'), city, isPickerOpen);
+      const feature = CITY_FEATURES.desc[CITY_FEATURES.cities[city]];    // ميزة المدينة (القسم 3.11)
+      el('pickerFeature').textContent = feature ? 'ميزتها: ' + feature : '';
+      el('pickerFeature').hidden = !feature;
     },
     close: showCity
   });

@@ -17,7 +17,7 @@ export const ALL = -1;
 
 // ما يخص هذا الجهاز ويبقى كما هو عند استلام المباراة كلها
 const LOCAL_KEYS = ['camera', 'humanId', 'lanRole', 'running', 'paused', 'lanOut', 'moveMarker', 'notice', 'alerts', 'alertSeen', 'hudAvoid',
-                    'empireOpen', 'empireHinted'];
+                    'empireOpen', 'empireHinted', 'featureHinted'];
 
 // بصمة المباراة: ما يغيّر اللعب فقط (المواقع والدم والحالات والأحياء والبذرة ونقاط الأطوار)، لا ما يخص الشاشة
 export function hashState(state) {

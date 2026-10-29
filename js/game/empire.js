@@ -16,6 +16,7 @@ import { findFreeTiles } from '../map/pathfinding.js';
 import { soundAt } from '../audio/sound.js';
 import { hypot } from './hypot.js';
 import { random } from './random.js';   // عشوائية المنطق: مشتركة بين الأجهزة في اللعب المحلي
+import { featureIncome, stormRangeMul, stormMiss } from './features.js';
 
 const isAlive = (unit) => unit && unit.state !== 'dead' && unit.hp > 0;
 
@@ -88,7 +89,7 @@ function collectIncome(state, ms) {
   const mul = (ms.incomeMul || 1) * TICK_SEC;
   for (const d of state.map.districts) {
     if (d.owner === null || !d.capture || state.players[d.owner].neutral) continue;
-    const gain = (d.building === 'hq' ? E.income.hq : E.income.district) * mul * botIncome(state.players[d.owner]);
+    const gain = districtIncome(d) * mul * botIncome(state.players[d.owner]);
     ms.points[d.owner] += gain;
     ms.earned[d.owner] += gain;
   }
@@ -109,6 +110,9 @@ function rewardLeaderKills(state, ms) {
     }
   }
 }
+
+// دخل الحي في الثانية: القاعدة الرئيسية، أو مبنى ميزة المدينة (الهرم، القسم 3.11)، أو الحي العادي
+const districtIncome = (d) => d.building === 'hq' ? E.income.hq : featureIncome(d) ?? E.income.district;
 
 // --- الإنتاج: طابور لكل قاعدة رئيسية، وأول طلب فيه يتقدم ---
 // البوت المجنون ينتج أسرع 25% (مزيته المعلنة في الظهور، ai.levels.insane.spawnFactor)
@@ -172,7 +176,8 @@ function produce(state, player, district, kind) {
 }
 
 // --- ترقيات العصابة على الوحدة: الدم هنا، والضرر والدفاع في abilities.js، وسرعة المشي في weather.js ---
-function applyUpgrades(state, unit) {
+// (ومن ينضم من أهل القرى لعصابة يأخذ ترقية دمها: features.js)
+export function applyUpgrades(state, unit) {
   const factor = 1 + state.modeState.levels[unit.playerId].hp * E.upgrades.hp.per;
   unit.maxHp = unit.stats.hp * factor;
   unit.hp = unit.maxHp;
@@ -192,10 +197,11 @@ export function empireSpeedMul(state, playerId) {
 // --- أبراج الرماية: سهم على أقرب عدو في المدى كل attackTime ثانية ---
 export const tileOf = (map, k) => ({ i: k % map.n, j: Math.floor(k / map.n) });
 
-const towerStats = (district) => {
+// والعاصفة الرملية تقصّر مداه (القسم 3.11)
+const towerStats = (district, state = null) => {
   const T = E.buildings.tower, lv = district.blv || {};
   return {
-    range: T.range,
+    range: T.range * (state ? stormRangeMul(state) : 1),
     damage: T.damage * (1 + (lv.damage || 0) * T.upgrades.damage.per),
     attackTime: T.attackTime * (1 - (lv.rate || 0) * T.upgrades.rate.per)
   };
@@ -205,7 +211,7 @@ function updateTowers(state, ms) {
   for (const d of state.map.districts) {
     if (d.building !== 'tower' || d.owner === null || state.players[d.owner].neutral) continue;
     if (d.cool > 0) { d.cool -= TICK_SEC; continue; }
-    const at = tileOf(state.map, d.buildTile), stats = towerStats(d);
+    const at = tileOf(state.map, d.buildTile), stats = towerStats(d, state);
     const target = nearestEnemy(state, d.owner, at, stats.range);
     if (!target) continue;                              // جاهز ينتظر عدواً
     d.cool = stats.attackTime;
@@ -232,7 +238,8 @@ function updateShots(state, ms) {
     shot.prevT = shot.t;
     shot.t += TICK_SEC;
     if (shot.t < shot.duration) { left.push(shot); continue; }
-    if (isAlive(shot.target)) applyDamage(state, { playerId: shot.owner }, shot.target, shot.damage);
+    // في العاصفة الرملية يخطئ السهم أحياناً (القسم 3.11)
+    if (isAlive(shot.target) && !stormMiss(state)) applyDamage(state, { playerId: shot.owner }, shot.target, shot.damage);
   }
   ms.shots = left;
 }
@@ -349,6 +356,7 @@ export function canBuild(state, playerId, district, type) {
   if (district.building) return fail('في الحي مبنى');
   if (district.police) return fail('مركز شرطة');
   if (district.hill) return fail('التلة لا يُبنى فيها');         // ملك الحي: يبقى معلمها وتاجها
+  if (district.featureTile !== undefined) return fail('معلم المدينة');   // مبنى ميزة المدينة (القسم 3.11)
   if (buildSpot(state.map, district) < 0) return fail('لا مكان للبناء');
   if (pointsOf(state, playerId) < E.buildings[type].cost) return fail('النقاط لا تكفي');
   return OK;
@@ -414,7 +422,7 @@ export function incomeOf(state, playerId) {
   let total = 0;
   for (const d of state.map.districts) {
     if (d.owner !== playerId || !d.capture) continue;
-    total += d.building === 'hq' ? E.income.hq : E.income.district;
+    total += districtIncome(d);
   }
   return total * (state.modeState.incomeMul || 1);
 }

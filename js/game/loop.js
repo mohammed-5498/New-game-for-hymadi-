@@ -14,6 +14,7 @@ import { updateMusicIntensity, flushSounds } from '../audio/sound.js';
 import { updateAlerts } from './alerts.js';
 import { updateArena } from './arena.js';
 import { updateMode, updateFades } from './modes.js';
+import { updateFeatures } from './features.js';
 
 export function updateMatch(state) {
   state.time += TICK_SEC;
@@ -31,6 +32,7 @@ export function updateMatch(state) {
     updateDistrictTints(state);   // الانتقال اللوني لأرض الحي ومبانيه
     updateSpawn(state);
     updatePolice(state);      // إنتاج الشرطة واختفاؤها بعد الاستيلاء
+    updateFeatures(state);    // مزايا المدن: العاصفة وانضمام أهل القرى (القسم 3.11)
     updateBots(state);
     updateMode(state);        // عدّادات الطور ونقاطه وشروط فوزه (القسم 9.5)
     updateFades(state);       // تلاشي وحدات من سقط زعيمه

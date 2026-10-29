@@ -1,20 +1,20 @@
 // فحص اللعب المحلي (القسم 16): مضيف ومنضم في عملية واحدة بشبكة وهمية بتأخير عشوائي، وأوامر عشوائية من الطرفين.
 // يقارن بصمة المباراة عند الجهازين في نفس التحديث: يجب أن تتطابق دائماً. ثم يُفسد المنضم عمداً في منتصف المدة،
 // فيجب أن يكتشف المضيف الاختلاف ويعيد المزامنة وتتطابق البصمتان بعدها.
-//   node scripts/lan-sync-test.mjs [ثوانٍ] [conquest|points|king|regicide] [small|medium|large]
+//   node scripts/lan-sync-test.mjs [ثوانٍ] [conquest|points|king|regicide] [small|medium|large] [مدينة]
 // شغّله بعد أي تعديل في المحاكاة: Math.random أو شيء يخص جهازاً واحداً داخل التحديث يكسر التطابق
 import { createMatch } from '../js/state.js';
 import * as LS from '../js/net/lockstep.js';
 import { packMatch, unpackMatch } from '../js/matchSave.js';
 import { EMPIRE } from '../js/config.js';
 
-const seconds = +(process.argv[2] || 60), mode = process.argv[3] || 'conquest', mapSize = process.argv[4] || 'small';
+const seconds = +(process.argv[2] || 60), mode = process.argv[3] || 'conquest', mapSize = process.argv[4] || 'small', city = process.argv[5] || 'random';
 let seed = 12345;
 const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
 Math.random = rnd;          // الخريطة والبذرة عند المضيف قابلة للتكرار (والمحاكاة نفسها لا تستعمله)
 
 const base = createMatch({
-  mode, modeOptions: { minutes: 5, holdMinutes: 2 }, mapSize, city: 'random', maxUnits: 60, weather: 'day',
+  mode, modeOptions: { minutes: 5, holdMinutes: 2 }, mapSize, city, maxUnits: 60, weather: 'day',
   players: [
     { name: 'المضيف', gang: 'crows', color: 'blue', isHuman: true, team: 0, difficulty: 'medium' },
     { name: 'صاحبي', gang: 'hammers', color: 'red', isHuman: true, team: 0, difficulty: 'medium' },

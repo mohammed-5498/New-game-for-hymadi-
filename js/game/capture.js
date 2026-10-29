@@ -51,8 +51,9 @@ export function updateCapture(state) {
   for (const unit of state.units) {
     if (unit.state === 'dead') continue;
     // الشرطة لا تستولي على أي حي ولا تُحسب جانباً يجمّد التقدم (القسم 3.8)،
-    // إلا في الصمود ضد الشرطة: موجاتها تستولي على الأحياء (القسم 9.5.5)
-    if (state.players[unit.playerId].neutral && !survival) continue;
+    // إلا في الصمود ضد الشرطة: موجاتها تستولي على الأحياء (القسم 9.5.5). وأهل القرى لا في أي طور (القسم 3.11)
+    const owner = state.players[unit.playerId];
+    if (owner.passive || (owner.neutral && !survival)) continue;
     const key = map.idx(Math.round(unit.x), Math.round(unit.y));
     const districtIds = map.zoneAt.get(key);
     if (!districtIds) continue;

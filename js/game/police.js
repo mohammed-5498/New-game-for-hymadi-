@@ -25,7 +25,7 @@ export function createPolicePlayer(players) {
   };
 }
 
-export const policePlayer = (state) => state.players.find(p => p.neutral) || null;
+export const policePlayer = (state) => state.players.find(p => p.gang === 'police') || null;
 export const policeStations = (state) => state.map.districts.filter(d => d.police);
 
 // مؤقتات كل مركز: شرطي كل 10 ثوانٍ، وضابط واحد يعود بعد موته بـ 40 ثانية

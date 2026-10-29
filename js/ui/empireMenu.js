@@ -4,7 +4,7 @@
 // - البرج والمستشفى: خانتا ترقيتهما
 // كل خيار خانة باسمه وكلفته (ومستواه)، والمعطلة تكتب سببها. تُغلق بزرها أو بلمسة على الخريطة
 // أو بزر الرجوع في أندرويد، ووحدها إن سقط الحي أو انتهت المباراة.
-import { EMPIRE as E, TILE_HALF_W, TILE_HALF_H } from '../config.js';
+import { EMPIRE as E, TILE_HALF_W, TILE_HALF_H, CITY_FEATURES as F } from '../config.js';
 import {
   canQueue, heroFor, productionTime, nextUpgrade, canUpgrade, canBuild, nextBuildingUpgrade, canUpgradeBuilding,
   empireCommand, towerStats, hospitalStats, incomeOf, tileOf
@@ -64,6 +64,9 @@ function sectionsFor(state, district) {
   const side = player.nation || player.gang;
   const levels = state.modeState.levels[pid];
 
+  // مبنى ميزة المدينة (القسم 3.11): ما يعطيه، بلا خانات
+  if (district.featureTile !== undefined) return [{ title: 'ما يعطيه', stats: true, slots: [] }];
+
   if (district.building === 'hq') {
     const art = (kind) => artOf(player, kind);
     return [
@@ -111,9 +114,13 @@ function buildingSlots(state, pid, district) {
 
 const TITLES = { hq: E.buildings.hq.name, tower: E.buildings.tower.name, hospital: E.buildings.hospital.name };
 
-// سطر قدرة البرج أو المستشفى الآن (بعد ترقياته)
+// سطر قدرة البرج أو المستشفى الآن (بعد ترقياته)، أو ما يعطيه مبنى ميزة المدينة
 function statsLine(district) {
   const fmt = (v) => String(Math.round(v * 10) / 10);
+  if (district.feature === 'pyramid') {
+    const P = F.pyramid;
+    return '+' + P.income + ' نقاط في الثانية • جنودك داخل ' + P.radius + ' مربعات منه يتلقون ضرراً أقل ' + Math.round(P.damageTaken * 100) + '%';
+  }
   if (district.building === 'tower') {
     const s = towerStats(district);
     return 'سهم بضرر ' + Math.round(s.damage) + ' كل ' + fmt(s.attackTime) + ' ث • المدى ' + fmt(s.range) + ' مربع';
@@ -138,7 +145,7 @@ function build(state, district) {
   open.slots = [];
   open.stats = null;
   open.queue = null;
-  el('emTitle').textContent = TITLES[district.building] || 'حي بلا مبنى';
+  el('emTitle').textContent = TITLES[district.building] || (district.featureTile !== undefined && F.names[district.feature]) || 'حي بلا مبنى';
   const arts = [];
   for (const section of sectionsFor(state, district)) {
     const head = body.appendChild(node('div', 'em-title', section.title));

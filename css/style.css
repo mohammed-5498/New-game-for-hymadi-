@@ -526,6 +526,7 @@ button.wide.ghost { background: transparent; color: var(--text-dim); }
 .aside-lines p { margin: 2px 0; }
 #pickerThumb { width: 236px; height: 118px; max-width: 100%; border-radius: 10px; border: 1px solid var(--line); background: #2a2622; }
 #pickerThumbName { text-align: center; }
+#pickerFeature { max-width: 236px; text-align: center; color: var(--gold); line-height: 1.45; }   /* ميزة المدينة (القسم 3.11) */
 .picker-footer { display: flex; align-items: center; gap: 6px; margin-top: 10px; }
 .picker-extras { display: flex; flex: 1 1 auto; gap: 6px; }
 .picker-extras .opt { flex: 0 1 150px; }

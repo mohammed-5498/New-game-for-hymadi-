@@ -1,6 +1,6 @@
 // رسم المدينة بطابعها (القسم 3.9): لون الأرض ومحتوى كل مربع (مبنى، أطلال، زينة، حطام)
 // الشكل فقط: مكان المباني والشوارع والأحياء يقرره مولّد الخريطة كما هو.
-import { CAPTURE, CITY_UNTINTED, CITIES } from '../config.js';
+import { CAPTURE, CITY_UNTINTED, CITIES, CITY_FEATURES } from '../config.js';
 import { mix, tint } from './colors.js';
 import { tintAmount } from '../game/capture.js';
 import { THEMES, setThemeContext, setTone, getCtx, streetDebris, ruinTile, hsh, mixc } from './cityThemes.js';
@@ -22,8 +22,8 @@ export function beginCity(ctx, map) {
   setTone(null);
 }
 
-// أرض الحي المميز وحي الشرطة تميل قليلاً لألوانهما القديمة حتى تُعرف من بعيد
-const REGION_HINT = { police: ['#6f7b8a', 0.35], special: ['#bba565', 0.22] };
+// أرض الحي المميز وحي الشرطة تميل قليلاً لألوانهما القديمة حتى تُعرف من بعيد، وحي ميزة المدينة للذهبي (القسم 3.11)
+const REGION_HINT = { police: ['#6f7b8a', 0.35], special: ['#bba565', 0.22], feature: CITY_FEATURES.ground };
 
 // لون أرضية المربع: طابع المدينة، ثم الطقس، ثم صبغ المالك فوقهما (الثلج لا يخفي لون المالك)
 export function groundColor(state, i, j) {
@@ -156,7 +156,7 @@ export function debrisLight(map, i, j) {
 
 // --- الطبقة الثابتة لمربع واحد: كل ما لا يتحرك (يُرسم مرة واحدة في القطع المخزنة) ---
 // lights: مصادر الإضاءة الثابتة ليلاً، lamps: نقاط المصابيح الوامضة (تُرسم كل إطار)
-const SPECIAL_TYPES = 'QNSGCOPTM';   // TM: برج الرماية والمستشفى في طور الإمبراطورية (empire.js)
+const SPECIAL_TYPES = 'QNSGCOPTMF';  // TM: برج الرماية والمستشفى في طور الإمبراطورية (empire.js)، F مبنى ميزة المدينة (القسم 3.11)
 
 export function specialType(state, k) {
   if (state.mode === 'king' && hillLandmarkTile(state) === k) return 'L';

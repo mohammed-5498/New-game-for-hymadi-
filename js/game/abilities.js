@@ -8,6 +8,7 @@ import { forEachNearby } from './spatialHash.js';
 import { soundAt } from '../audio/sound.js';
 import { homeMods, inOwnArea, brotherMods, phalanxMods, outnumberedMods, duelMods } from './nations.js';
 import { empireDamageBonus, empireArmorBonus } from './empire.js';
+import { pyramidZones, pyramidTaken, stormDamageMul } from './features.js';
 
 const isAlive = (unit) => unit.state !== 'dead' && unit.hp > 0;
 const allied = (state, a, b) => a.playerId === b.playerId || !isEnemy(state, a, b);
@@ -35,6 +36,8 @@ function applyDamageBonuses(state) {
   const phalanx = state.players.map(phalanxMods);
   const outnumbered = state.players.map(outnumberedMods);
   const duel = state.players.map(duelMods);
+  // الهرم (القسم 3.11): جنود مالكه حوله يتلقون ضرراً أقل (null بلا هرم مملوك)
+  const pyramids = pyramidZones(state);
 
   // نبدأ من الصفر (المضاعف النهائي يُحسب في الحلقة الأخيرة بنفس ترتيب الجمع)
   // كتابة العدد العشري في خاصية الوحدة تحجز ذاكرة: لا نكتب إلا ما تغيّر فعلاً
@@ -73,12 +76,12 @@ function applyDamageBonuses(state) {
     // تحفيز الزعيم أو بطل العقارب: مكافأة مؤقتة تُجمع فوق الباقي
     if (unit.buffUntil > state.time) multiplier += unit.buffDamage;
     // سمة الأمة داخل أحيائها: ضرر أكبر، أو ضرر متلقى أقل
+    let taken = 1;
     const mods = home[unit.playerId];
     if (mods) {
       const inside = inOwnArea(state.map, unit);
       if (inside && mods.homeDamage) multiplier += mods.homeDamage;
-      const taken = inside && mods.homeDamageTaken ? 1 - mods.homeDamageTaken : 1;
-      if (unit.takenMul !== taken) unit.takenMul = taken;
+      if (inside && mods.homeDamageTaken) taken = 1 - mods.homeDamageTaken;
     }
     if (unit.brothers) {
       const b = brothers[unit.playerId];
@@ -92,10 +95,9 @@ function applyDamageBonuses(state) {
     if (du && oneOnOne(state, unit, du.radius)) multiplier += du.bonus;
     // «الكتيبة»: ضرر متلقى أقل للوحدة داخل مجموعة كبيرة من وحدات لاعبها
     const ph = phalanx[unit.playerId];
-    if (ph) {
-      const taken = inGroup(state, unit, ph) ? 1 - ph.reduce : 1;
-      if (unit.takenMul !== taken) unit.takenMul = taken;
-    }
+    if (ph && inGroup(state, unit, ph)) taken = 1 - ph.reduce;
+    if (pyramids) taken *= pyramidTaken(pyramids, unit);
+    if (unit.takenMul !== taken) unit.takenMul = taken;
     if (unit.damageMultiplier !== multiplier) unit.damageMultiplier = multiplier;
   }
 }
@@ -255,6 +257,7 @@ export function createFire(state, playerId, i, j, fire) {
 function updateFires(state) {
   if (!state.fires.length) return;
   const remaining = [];
+  const weak = stormDamageMul(state);     // العاصفة الرملية تضعف النار (القسم 3.11)
 
   for (const fire of state.fires) {
     fire.life -= TICK_SEC;
@@ -266,7 +269,7 @@ function updateFires(state) {
       if (!isAlive(unit)) return;
       if (!isEnemyId(state, fire.playerId, unit.playerId)) return;   // العدو فقط
       // درع المطارق "ضد كل أنواع الضرر"، فيسري على النار أيضاً
-      applyDamage(state, { playerId: fire.playerId }, unit, fire.damagePerSecond * TICK_SEC);
+      applyDamage(state, { playerId: fire.playerId }, unit, fire.damagePerSecond * TICK_SEC * weak);
     });
 
     if (fire.life > 0) remaining.push(fire);

@@ -46,7 +46,8 @@ function pickNext(state, player, memo) {
   const owned = map.districts.filter(d => d.owner === pid && d.capture);
   if (!owned.length) return null;
   const hqs = owned.filter(d => d.building === 'hq');
-  const plain = owned.filter(d => !d.building && !d.police && buildSpot(map, d) >= 0);
+  // حي يُبنى فيه: بلا مبنى، لا مركز شرطة ولا مبنى ميزة المدينة (القسم 3.11)
+  const plain = owned.filter(d => !d.building && !d.police && d.featureTile === undefined && buildSpot(map, d) >= 0);
   const enemyDist = (d) => distanceToEnemy(state, pid, d);
 
   // بلا قاعدة رئيسية: لا إنتاج، فأول ما يُشترى قاعدة في أبعد أحيائه عن الأعداء

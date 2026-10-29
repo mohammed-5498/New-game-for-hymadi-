@@ -11,6 +11,7 @@ import { tileToWorld } from './map/coords.js';
 import { buildArena } from './game/arena.js';
 import { initMode, prepareModeUnits, economyOf } from './game/modes.js';
 import { nationOf, sideName, buildTerritory, traitNotice } from './game/nations.js';
+import { cityFeature, createFeaturePlayer, initFeatures } from './game/features.js';
 
 export function createMatch(settings) {
   const players = settings.players.map((p, index) => ({
@@ -26,12 +27,17 @@ export function createMatch(settings) {
     homeDistrictId: -1
   }));
 
-  // طابع المدينة (القسم 3.9). ومع الاقتصاد (كل الأطوار) بلا أحياء مميزة: مكانها مباني الإمبراطورية بالنقاط
-  const map = createMap(settings.mapSize, players, settings.city, { specials: !economyOf(settings) });
+  // طابع المدينة (القسم 3.9). ومع الاقتصاد (كل الأطوار) بلا أحياء مميزة: مكانها مباني الإمبراطورية بالنقاط،
+  // ومعه ميزة المدينة (القسم 3.11)
+  const economy = economyOf(settings);
+  const map = createMap(settings.mapSize, players, settings.city, { specials: !economy, features: economy });
   if (!map) throw new Error('تعذر توليد خريطة صالحة');
+  const feature = economy ? cityFeature(map.city) : null;
 
-  // الشرطة طرف محايد يُضاف بعد توزيع الأحياء المنزلية فلا يأخذ حياً ولا مقراً
+  // الشرطة طرف محايد يُضاف بعد توزيع الأحياء المنزلية فلا يأخذ حياً ولا مقراً، ثم طرف الميزة إن احتاجته
   players.push(createPolicePlayer(players));
+  const featurePlayer = createFeaturePlayer(players, feature);
+  if (featurePlayer) players.push(featurePlayer);
 
   const state = {
     settings,
@@ -43,6 +49,7 @@ export function createMatch(settings) {
     nextUnitId: 1,
     humanId: players.findIndex(p => p.isHuman),
     weather: WEATHER[settings.weather] ? settings.weather : 'day',
+    feature,                   // ميزة المدينة (القسم 3.11): storm | villages | pyramid، أو null
     maxUnits: settings.maxUnits,
     camera: { x: 0, y: 0, z: CAMERA.startZoom },
     view: { w: 1, h: 1, dpr: 1 },
@@ -88,6 +95,7 @@ export function createMatch(settings) {
   prepareModeUnits(state);       // ما يخص الطور في الوحدات الأولى (دم الزعيم مثلاً)
   initSpawnTimers(state);
   initPolice(state);
+  initFeatures(state);           // أهل القرى (القسم 3.11)
   initBots(state);
   centerCameraOnHome(state);
   state.notice = traitNotice(players[state.humanId]) || state.notice;   // سمة أمتك (القسم 3.10)
@@ -198,8 +206,10 @@ export function resetMatch(state, settings = state.settings) {
   state.arena = null;
   state.mode = fresh.mode;
   state.economy = fresh.economy;
+  state.feature = fresh.feature;
   state.modeState = fresh.modeState;
   state.empireHinted = false;                // تلميح قائمة الحي مرة في كل مباراة
+  state.featureHinted = false;               // وإشعار ميزة المدينة (القسم 3.11)
   // اللعب المحلي (القسم 16): مباراة بعد مباراة شبكية لا ترث كاميرات اللاعبين (مستويات التفصيل منها) ولا عدّادها
   state.netCams = null;
   state.netTick = 0;

@@ -14,6 +14,7 @@ import { drawPoliceLamp } from './landmarks.js';
 import { drawUnitsOccluded } from './occlusion.js';
 import { shadedCount } from '../pacing.js';
 import { drawEmpireShots, drawEmpireMarks, drawEmpireHalos, drawEmpireBadges } from './empireArt.js';
+import { drawFeatureBadges, drawStorm } from './featureArt.js';
 
 export function resizeCanvas(canvas, state) {
   const view = state.view;
@@ -97,6 +98,7 @@ export function render(ctx, state, alpha, cityBudgetMs = CITY_CACHE.frameBudgetM
   ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
   drawOverlay(ctx, state.weather, view);
   if (state.weather === 'night') drawLights(ctx, lights, camera, view);
+  drawStorm(ctx, state, view);                      // غبار العاصفة الرملية (القسم 3.11)
 
   // الهالات ودوائر التحديد وعلامة الحركة فوق طبقة الليل حتى تبقى واضحة
   worldTransform(ctx, state);
@@ -110,6 +112,7 @@ export function render(ctx, state, alpha, cityBudgetMs = CITY_CACHE.frameBudgetM
   drawMoveMarker(ctx, state);
   drawFlagArrows(ctx, state, visible);
   drawEmpireBadges(ctx, state, visible);            // تاج القاعدة وقوس البرج وصليب المستشفى
+  drawFeatureBadges(ctx, state, visible);           // شارة الهرم وشارة القرية التي ينتظر أهلها (القسم 3.11)
   drawEmpireMarks(ctx, state, visible, state.empireOpen);   // شريط الإنتاج ودائرة مدى المبنى المفتوح
   drawHillCrown(ctx, state, visible);
   drawGroupTags(ctx, state, alpha, visible);

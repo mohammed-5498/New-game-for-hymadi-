@@ -9,6 +9,7 @@ import { sound } from '../audio/sound.js';
 import { setInputMode } from './hud.js';
 import { unitWorldPos } from '../render/units.js';
 import { badgeOf } from '../render/empireArt.js';
+import { featureBadgeOf } from '../render/featureArt.js';
 import { openEmpireMenu, closeEmpireMenu, isEmpireMenuOpen } from './empireMenu.js';
 import { lanCommand } from '../net/session.js';
 
@@ -233,6 +234,7 @@ export function setupInput(canvas, state) {
   }
 
   // ما تفتح لمستاه قائمة (طور الإمبراطورية): مبنى تملكه، أو حي تملكه بلا مبنى. أرض حي فيه مبنى للحركة فقط
+  // (وحي ميزة المدينة بلا مبنى يفتح قائمة ميزته: empireMenu.js)
   function menuDistrictAt(sx, sy) {
     const building = ownBuildingAt(sx, sy);
     if (building) return building;
@@ -240,15 +242,19 @@ export function setupInput(canvas, state) {
     return area && !area.building ? area : null;
   }
 
-  // مبنى تملكه تحت الإصبع: صورته كلها مع شارتها فوقها (فهي أعلى من مربعها)، والقاعدة بقلعتها كلها
+  // مبنى تملكه تحت الإصبع: صورته كلها مع شارتها فوقها (فهي أعلى من مربعها)، والقاعدة بقلعتها كلها،
+  // ومبنى ميزة المدينة (القسم 3.11)
   function ownBuildingAt(sx, sy) {
     const z = state.camera.z;
-    for (const d of state.map.districts) {
-      if (d.owner !== state.humanId || !d.building || d.buildTile === undefined) continue;
-      const b = badgeOf(state, d), wide = d.building === 'hq' ? EMPIRE.menu.hqTapBox : 1;
+    const under = (b, wide) => {
       const base = worldToScreen(b.x, b.y, state.camera, state.view);
       const top = base.y - (b.y - b.cy + b.r) * z;
-      if (Math.abs(sx - base.x) <= TILE_HALF_W * wide * z && sy >= top && sy <= base.y + TILE_HALF_H * wide * z) return d;
+      return Math.abs(sx - base.x) <= TILE_HALF_W * wide * z && sy >= top && sy <= base.y + TILE_HALF_H * wide * z;
+    };
+    for (const d of state.map.districts) {
+      if (d.owner !== state.humanId) continue;
+      if (d.building && d.buildTile !== undefined && under(badgeOf(state, d), d.building === 'hq' ? EMPIRE.menu.hqTapBox : 1)) return d;
+      if (d.featureTile !== undefined && under(featureBadgeOf(state, d), 1)) return d;
     }
     return null;
   }
