@@ -402,7 +402,7 @@ export const COMBAT_REALISM = {
     seconds: 1.1,
     max: 40,                   // أقصى عدد ظاهر معاً (الأقدم يُحذف)
     colors: { dodge: '#b8f0a8', block: '#8fd0ff', back: '#ff8a7a', bump: '#ffd66e', clash: '#ffe08a', down: '#ffffff',
-              show: '#ffb3c2', bribe: '#9fe08a', miss: '#ecd39c' }   // show: «استعراض!» (سمة اليابان)، bribe: «رُشي!» (القسم 3.10)، miss: «أخطأ!» (العاصفة الرملية، 3.11)
+              show: '#ffb3c2', bribe: '#9fe08a', miss: '#ecd39c', loot: '#ffd25a' }   // show: «استعراض!» (سمة اليابان)، bribe: «رُشي!» (القسم 3.10)، miss: «أخطأ!» (العاصفة الرملية، 3.11)، loot: نهب تاجر القافلة
   },
   clashFxSeconds: 0.3,         // شرر التصادم
   burstSeconds: 0.22,          // نجمة الانفجار عند الارتطام (القسم 5.4.7)
@@ -1436,16 +1436,17 @@ export const EMPIRE = {
 export const CITY_FEATURES = {
   cities: { diriyah: 'storm', shibam: 'villages', cairo: 'pyramid',
             japan: 'dojo', gyeongju: 'bandits', kano: 'bandits', kaifeng: 'clinic', gondar: 'fortress', meroe: 'khartoum',
-            paris: 'coups', rothenburg: 'policeHQ', birmingham: 'clock', tenoch: 'cartel', rio: 'statue', laboca: 'mercs' },
+            paris: 'coups', rothenburg: 'policeHQ', birmingham: 'clock', tenoch: 'cartel', rio: 'statue', laboca: 'mercs',
+            yamamah: 'caravan', arab: 'souk', china: 'fireworks' },
   ground: ['#c9a24e', 0.24],
   // المبنى المميز (بطلب المستخدم: مساحة خاصة به، وحجم أكبر وفخامة وهالة): كتلة 2×2 وسط حيه لا يُمشى عليها،
   // وبقية الحي ساحة مرصوفة حوله يُمشى عليها. حيه blockTiles مربعاً فأكثر (generator.js)
   blockTiles: 9,
   botValue: { pyramid: 3, village: 2, dojo: 2.5, clinic: 2, fortress: 2.5, khartoum: 3,
-              policeHQ: 3, clock: 3, complex: 2.5, cartel: 1.6, statue: 3, mercs: 2 },
+              policeHQ: 3, clock: 3, complex: 2.5, cartel: 1.6, statue: 3, mercs: 2, souk: 2.5 },
   names: { pyramid: 'الهرم', village: 'القرية', dojo: 'دوجو الساموراي', clinic: 'دار العلاج', fortress: 'الحصن',
            khartoum: 'برج الخرطوم', policeHQ: 'مركز الشرطة الرئيسي', clock: 'برج الساعة', complex: 'المجمع السكني',
-           statue: 'تمثال ريو', mercs: 'بيت المرتزقة' },
+           statue: 'تمثال ريو', mercs: 'بيت المرتزقة', souk: 'السوق الكبير' },
   hintSeconds: 6,                     // إشعار ميزة المدينة في بداية المباراة (بعد تلميح قائمة الحي)
   // سطر ميزة المدينة في معاينة المدينة (قائمة الإعداد والمتجر) وإشعار البداية
   desc: { storm: 'العاصفة الرملية: كل 3 دقائق لنصف دقيقة، مدى الرماة أقل والضربات تخطئ',
@@ -1461,14 +1462,17 @@ export const CITY_FEATURES = {
           clock: 'برج الساعة: مالكه دخله +30% وإنتاجه أسرع 40%، واحتلاله أطول',
           cartel: 'المجمع السكني: عصابة محايدة تحرس أربعة أحياء، وكل حي تنتزعه منها يرخّص جنودك 5%',
           statue: 'تمثال ريو: جنود مالكه حوله أسرع ضرباً 20% وأقوى 15%، واحتلاله أطول',
-          mercs: 'بيوت المرتزقة: يستأجر مالكها مرتزقاً خفيفاً رخيصاً أو ثقيلاً غالياً' },
+          mercs: 'بيوت المرتزقة: يستأجر مالكها مرتزقاً خفيفاً رخيصاً أو ثقيلاً غالياً',
+          caravan: 'قافلة التجارة: كل 3 دقائق قافلة تعبر المدينة بحراسها، وكل تاجر تنهبه يعطيك 20 نقطة',
+          souk: 'السوق الكبير: مالكه يأخذ 10% من كل ما يصرفه غيره',
+          fireworks: 'مهرجان الألعاب النارية: كل دقيقتين ونصف تنفجر فوق أكبر تجمعات الجنود، فابتعد عن الدوائر الحمراء' },
   // الهالة حول كل مبنى مميز وحول القرية التي ينتظر أهلها (رسم فقط): نصف القطر بالمربعات من وسط الكتلة، ونبض بطيء،
   // ونجوم صغيرة تدور عليها. colors: لون هالة كل ميزة
   halo: { radius: 1.95, width: 1.6, glow: 8, alpha: 0.85, glowAlpha: 0.3, pulse: 0.3, speed: 1.8,
           sparkles: 4, sparkleSpeed: 0.45, sparkleR: 1.6, light: 46 },
   colors: { pyramid: '255,206,84', village: '120,140,225', dojo: '232,70,86', clinic: '96,220,150', fortress: '150,214,96',
             khartoum: '255,150,60', policeHQ: '95,160,240', clock: '240,205,120', complex: '47,190,175', statue: '140,230,120',
-            mercs: '235,95,110' },
+            mercs: '235,95,110', souk: '230,170,70' },
   // العاصفة الرملية (الدرعية): أولها عند first ثانية ثم كل every ثانية، لمدة duration، وتنبيه قبلها بـ warn ثانية.
   // أثناءها: مدى الرماة والأبراج × rangeMul، والضربة القريبة والسهم وسهم البرج يخطئ باحتمال miss
   // ("أخطأ!" pop)، والنار وضربات الأبطال أضعف بنفس النسبة
@@ -1533,6 +1537,22 @@ export const CITY_FEATURES = {
   statue: { radius: 7, attackSpeed: 0.2, damage: 0.15, captureMul: 0.5, top: 70 },
   // بيوت المرتزقة (لا بوكا): عددها لكل حجم خريطة، موزعة بعيدة عن الأحياء المنزلية. يستأجر مالكها فيها recruits
   mercs: { count: { small: 1, medium: 2, large: 3 }, minHomeDistance: 5, top: 46, recruits: ['blade', 'gaucho'] },
+  // قافلة التجارة (صحراء اليمامة): أولها عند first ثم كل every ثانية (لا قوافل في الصمود)، من بوابة في السور إلى الحافة
+  // المقابلة: merchants تجار لا يقاتلون يحملون البضائع، وguards حراس (شخصية كل حارس، null للفرد العادي) من حراس القوافل.
+  // كل تاجر يُقتل يعطي قاتله loot نقطة. كل think ثانية يمضي التجار ويرافقهم الحراس، ومن بلغ المخرج (exitRadius) يخرج،
+  // ومن بقي بعد maxSeconds يخرج على أي حال
+  caravan: { first: 150, every: 180, merchants: 4, guards: [null, null, 'sniper'], loot: 20, think: 2, exitRadius: 1.6,
+             maxSeconds: 150, escort: 1.5, name: 'القافلة', merchantName: 'تاجر', color: '#7a5a34', nation: 'saudi',
+             merchant: { hp: 120, damage: 0, speed: 0.9 }, guard: { hp: 200, armor: 0.15, speed: 1.6 } },
+  // السوق الكبير (المدينة العربية): مالكه يأخذ tax من كل ما يصرفه غيره، ولا يدفع الصارف أكثر من سعره
+  souk: { tax: 0.1, top: 50 },
+  // مهرجان الألعاب النارية (المدينة الصينية): أولها عند first ثم كل every ثانية، دوائر نصف قطرها radius فوق أكبر count
+  // تجمعات للجنود (minUnits فأكثر في الدائرة، ولا تتداخل)، وبعد warn ثانية تنفجر: damage لكل وحدة داخلها من أي طرف.
+  // كل بوت يُخرج جنوده من الدائرة إلى dodge مربع خارجها بفرصة dodgeChance حسب صعوبته (لكل دائرة).
+  // والانفجار يبقى مرسوماً fade ثانية
+  fireworks: { first: 150, every: 150, count: 3, minUnits: 3, radius: 2.5, warn: 5, damage: 40, dodge: 1.2, fade: 1.6,
+               dodgeChance: { easy: 0, medium: 0.5, hard: 0.8, insane: 1 },
+               name: 'الألعاب النارية', color: '#c0392b', nation: 'china' },
   // التجنيد في المباني المميزة (من قائمتها، بطابور كالقاعدة): الكلفة والزمن، وشكل الوحدة (أمة nation وشخصيتها hero،
   // وnull للفرد العادي) وما يُضاف إلى إحصائياتها stats، واسمها name (وإلا اسمها في أمتها)
   recruits: {

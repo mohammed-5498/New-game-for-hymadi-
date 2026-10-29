@@ -153,6 +153,9 @@ function statsLine(state, district) {
     return 'جنودك داخل ' + S.radius + ' مربعات منه: +' + pct(S.damage) + ' ضرر و+' + pct(S.attackSpeed) + ' سرعة ضرب • احتلاله أبطأ';
   }
   if (district.feature === 'mercs') return 'مرتزقة بالنقاط: الخفيف سريع ورخيص، والثقيل قوي وغالٍ';
+  if (district.feature === 'souk') {
+    return 'تأخذ ' + pct(F.souk.tax) + ' من كل ما يصرفه غيرك • جمعت منه ' + Math.floor(district.taxed || 0) + ' نقطة';
+  }
   if (district.feature === 'fortress' || district.feature === 'khartoum') {
     const s = featureTowerStats(district);
     return 'سهم بضرر ' + Math.round(s.damage) + ' كل ' + fmt(s.attackTime) + ' ث • المدى ' + fmt(s.range) + ' مربع' +

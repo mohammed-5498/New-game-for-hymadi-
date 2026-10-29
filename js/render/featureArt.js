@@ -5,7 +5,8 @@
 // - هالته الملونة تنبض حوله ونجوم صغيرة تدور عليها، مع الوحدات فيختفي ما خلف المبنى منها (renderer.js)
 // - شارة فوق كل مبنى مميز وفوق علم كل قرية ينتظر أهلها، كشارات مباني الاقتصاد (empireArt.js)
 // - غبار العاصفة الرملية فوق المشهد كله
-import { TILE_HALF_W, TILE_HALF_H, EMPIRE as E, CITY_FEATURES as F } from '../config.js';
+// - دوائر الألعاب النارية على الأرض قبل انفجارها، وانفجاراتها في السماء
+import { TILE_HALF_W, TILE_HALF_H, TICK_SEC, EMPIRE as E, CITY_FEATURES as F } from '../config.js';
 import { poly, ln, circ, el, rc, box, cyl, cone, dome, arch, ridgeRoof, hipRoof, qL, qR, wL, wR, hsh, getCtx, getTone, getToneInfo, setTone } from './cityThemes.js';
 import { streetPalm } from './openCity.js';
 import { tileOf } from '../game/empire.js';
@@ -624,7 +625,67 @@ function mercs(x, y, i, j) {
   circ(mx, my, 1.4, '#c99a2c');
 }
 
-const BUILDINGS = { pyramid, dojo, clinic, fortress, khartoum, policeHQ, clock, complex, statue, mercs };
+
+// دكان مقوس على وجه السوق: قوس داكن، ومظلة مخططة بارزة عن الجدار، وأكياس توابل أمامه
+// q دالة الوجه، وout اتجاه البروز عن الوجه على الشاشة
+function soukShop(q, u, out, k) {
+  arch(q, u, 0.16, 8, '#3a2a1e');
+  const a = q(u - 0.015, 9), b = q(u + 0.175, 9), o = (p) => [p[0] + out[0] * 2.6, p[1] + out[1] * 2.6 + 1.6];
+  const stripes = 4;
+  for (let n = 0; n < stripes; n++) {
+    const t0 = n / stripes, t1 = (n + 1) / stripes;
+    const p0 = [a[0] + (b[0] - a[0]) * t0, a[1] + (b[1] - a[1]) * t0], p1 = [a[0] + (b[0] - a[0]) * t1, a[1] + (b[1] - a[1]) * t1];
+    poly([p0, p1, o(p1), o(p0)], (n + k) % 2 ? '#f1e6cf' : '#b8382c');
+  }
+  ['#c0392b', '#e1a12a', '#7a4a2a'].forEach((col, n) => {
+    const p = q(u + 0.03 + n * 0.05, 0.6);
+    circ(p[0] + out[0] * 1.6, p[1] + out[1] * 1.6, 1.15, col);
+    circ(p[0] + out[0] * 1.6, p[1] + out[1] * 1.6 - 0.8, 0.7, n === 1 ? '#f2c14e' : col);
+  });
+}
+
+// --- السوق الكبير (المدينة العربية): منصة حجرية، وقاعة سوق مسقوفة بحزام من البلاط الفيروزي، ودكاكين مقوسة
+// بمظلات مخططة وأكياس توابل، وست قباب على السطح، وبوابة عالية بقوس مدبب وإطار فيروزي وفانوسين نحاسيين ---
+function souk(x, y, i, j) {
+  el(x, y + 6, 37, 16, 'rgba(40,25,10,0.22)');
+  box(x, y + 2, 33, 16.5, 3, '#a8946e', '#c2ad86', '#cdb991');
+  const by = y - 1, w = 26, d = 13, h = 14;
+  box(x, by, w, d, h, '#d6c4a0', '#eadcbf', '#e1d1b0');
+  const L = qL(x, by, w, d), R = qR(x, by, w, d);
+  for (const q of [L, R]) poly([q(0, h - 2.6), q(1, h - 2.6), q(1, h - 1.2), q(0, h - 1.2)], '#2f8f8a');
+  [0.08, 0.3, 0.52, 0.74].forEach((u, k) => soukShop(L, u, [-0.45, 0.9], k));
+  [0.06, 0.78].forEach((u, k) => soukShop(R, u, [0.45, 0.9], k + 1));
+  // القباب على السطح، الأبعد أولاً: P(s, t) نقطة على السطح بين ركنه الخلفي B وركنيه الأيسر والأيمن
+  const top = by - h, B = [x, top - d], Lc = [x - w, top], Rc = [x + w, top];
+  const P = (sv, tv) => [B[0] + (Lc[0] - B[0]) * sv + (Rc[0] - B[0]) * tv, B[1] + (Lc[1] - B[1]) * sv + (Rc[1] - B[1]) * tv];
+  const domes = [];
+  for (const sv of [0.28, 0.72]) for (const tv of [0.22, 0.5, 0.78]) domes.push([sv, tv]);
+  domes.sort((a, b) => a[0] + a[1] - (b[0] + b[1]));
+  for (const [sv, tv] of domes) {
+    const [px, py] = P(sv, tv), big = sv === 0.28 && tv === 0.5;
+    box(px, py, big ? 5 : 3.8, big ? 2.5 : 1.9, 1.6, '#cdb991', '#e1d1b0', '#d8c7a6');
+    dome(px, py - 1.6, big ? 5.4 : 4, '#efe2c6', '#cdb991', '#d4af4f');
+  }
+  // البوابة العالية في وسط الوجه الأيمن
+  const pw = [R(0.36, 0), R(0.64, 0), R(0.64, h + 8), R(0.36, h + 8)];
+  poly(pw, '#e6d6b4');
+  poly([R(0.385, 1), R(0.615, 1), R(0.615, h + 6.6), R(0.385, h + 6.6)], '#2f8f8a');
+  poly([R(0.405, 1.6), R(0.595, 1.6), R(0.595, h + 5.8), R(0.405, h + 5.8)], '#e9dcc0');
+  poly([R(0.43, 0), R(0.57, 0), R(0.57, 10.5), R(0.5, 15.5), R(0.43, 10.5)], '#3a2a1e');
+  poly([R(0.45, 0), R(0.55, 0), R(0.55, 8), R(0.45, 8)], '#6b4526');
+  for (let n = 0; n < 5; n++) {                                     // شُرَف صغيرة فوق البوابة
+    const a = R(0.37 + n * 0.06, h + 8), b = R(0.4 + n * 0.06, h + 8);
+    poly([a, b, [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2 - 2.2]], '#d6c4a0');
+  }
+  for (const u of [0.33, 0.67]) {                                   // فانوسان نحاسيان
+    const p = R(u, 11);
+    ln(p[0], p[1] - 1.6, p[0], p[1] + 0.6, '#5a3a22', 0.5);
+    poly([[p[0] - 1.1, p[1] + 0.6], [p[0] + 1.1, p[1] + 0.6], [p[0] + 0.7, p[1] + 3.4], [p[0] - 0.7, p[1] + 3.4]], '#c99a3c');
+    circ(p[0], p[1] + 2, 0.6, '#ffe7a3');
+  }
+}
+
+const BUILDINGS = { pyramid, dojo, clinic, fortress, khartoum, policeHQ, clock, complex, statue, mercs, souk };
 
 // --- ساحة المبنى المميز (fplaza) ---
 // البلاط في طبقة الأرض (chunkCache.js): مربع داخلي بحافة ذهبية خفيفة وفاصلان
@@ -695,6 +756,14 @@ const PROPS = {
   },
   complex(x, y) { featherStandard(x, y, 14); },
   statue: (x, y, i, j) => streetPalm(x, y, i, j),
+  souk(x, y) {                           // بسطة توابل بمظلة مخططة
+    ln(x - 3, y, x - 3, y - 9, '#5a3a22', 0.7);
+    ln(x + 3, y + 1.5, x + 3, y - 7.5, '#5a3a22', 0.7);
+    box(x, y + 0.5, 3.2, 1.6, 3, '#7a5432', '#94683f', '#a87a4a');
+    ['#c0392b', '#e1a12a', '#7a4a2a'].forEach((col, n) => circ(x - 1.8 + n * 1.8, y - 3.4 + (n % 2) * 0.6, 1.1, col));
+    poly([[x - 4, y - 9], [x + 4, y - 7], [x + 4, y - 9.6], [x - 4, y - 11.6]], '#b8382c');
+    poly([[x - 1.3, y - 8.35], [x + 1.3, y - 7.7], [x + 1.3, y - 10.3], [x - 1.3, y - 10.95]], '#f1e6cf');
+  },
   mercs(x, y) {                          // عمود بألوان لا بوكا وفانوس
     const cols = ['#c8392f', '#e8c23a', '#2f6db3', '#3f9b5a'];
     for (let k = 0; k < 4; k++) ln(x, y - k * 4, x, y - k * 4 - 4, cols[k], 1.3);
@@ -822,6 +891,30 @@ const ICONS = {
     ctx.beginPath();
     ctx.arc(x, y - s * 0.78, s * 0.22, 0, TAU);
     ctx.fill();
+  },
+  // ميزان ذهبي
+  souk(ctx, x, y, s) {
+    ctx.strokeStyle = '#e8c45a';
+    ctx.lineCap = 'round';
+    ctx.lineWidth = s * 0.16;
+    ctx.beginPath();
+    ctx.moveTo(x, y - s * 0.85); ctx.lineTo(x, y + s * 0.75);
+    ctx.moveTo(x - s * 0.8, y - s * 0.55); ctx.lineTo(x + s * 0.8, y - s * 0.55);
+    ctx.moveTo(x - s * 0.45, y + s * 0.8); ctx.lineTo(x + s * 0.45, y + s * 0.8);
+    ctx.stroke();
+    ctx.lineWidth = s * 0.08;
+    ctx.beginPath();
+    for (const side of [-1, 1]) {
+      ctx.moveTo(x + side * s * 0.8, y - s * 0.55); ctx.lineTo(x + side * s * 0.8 - s * 0.3, y + s * 0.15);
+      ctx.moveTo(x + side * s * 0.8, y - s * 0.55); ctx.lineTo(x + side * s * 0.8 + s * 0.3, y + s * 0.15);
+    }
+    ctx.stroke();
+    ctx.fillStyle = '#e8c45a';
+    for (const side of [-1, 1]) {
+      ctx.beginPath();
+      ctx.ellipse(x + side * s * 0.8, y + s * 0.15, s * 0.36, s * 0.14, 0, 0, Math.PI);
+      ctx.fill();
+    }
   },
   // كيس نقود ذهبي
   mercs(ctx, x, y, s) {
@@ -961,4 +1054,87 @@ export function drawStorm(ctx, state, view) {
     ctx.lineTo(p.x + p.l, p.y - p.l * 0.12);
   }
   ctx.stroke();
+}
+
+// --- مهرجان الألعاب النارية (القسم 3.11): دائرة حمراء على الأرض تنبض وعدّ ثوانيها حتى الانفجار، ثم انفجارات
+// ملونة في السماء فوقها تتساقط شراراتها، ووميض على الأرض. من state.fireworks (رسم فقط) ---
+const FW_COLORS = ['#ff5a4a', '#ffd25a', '#6ad7ff', '#8cff8a', '#ff8ce6', '#ffffff'];
+const RING = F.fireworks.radius * Math.SQRT2;          // نصف قطر الدائرة على الشاشة بوحدة نصف المربع
+
+export function drawFireworksMarks(ctx, state, visible) {
+  if (!state.fireworks || !state.fireworks.length) return;
+  const now = state.time / TICK_SEC;
+  for (const f of state.fireworks) {
+    if (f.done) continue;
+    const x = (f.x - f.y) * TILE_HALF_W, y = (f.x + f.y) * TILE_HALF_H;
+    if (!visible(x, y)) continue;
+    const left = Math.max(0, (f.at - now) * TICK_SEC), pulse = 0.5 + 0.5 * Math.sin(state.time * (10 - left));
+    const rx = RING * TILE_HALF_W, ry = RING * TILE_HALF_H;
+    ctx.beginPath();
+    ctx.ellipse(x, y, rx, ry, 0, 0, TAU);
+    ctx.fillStyle = 'rgba(230,40,30,' + (0.1 + 0.14 * pulse).toFixed(3) + ')';
+    ctx.fill();
+    ctx.setLineDash([4, 3]);
+    ctx.lineWidth = 1.4;
+    ctx.strokeStyle = 'rgba(255,70,50,0.9)';
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.font = '700 9px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(40,0,0,0.75)';
+    ctx.fillStyle = '#ffe0d0';
+    const text = String(Math.max(1, Math.ceil(left)));
+    ctx.strokeText(text, x, y + 3);
+    ctx.fillText(text, x, y + 3);
+  }
+}
+
+export function drawFireworksBursts(ctx, state, visible) {
+  if (!state.fireworks || !state.fireworks.length) return;
+  const W = F.fireworks, now = state.time / TICK_SEC;
+  for (const f of state.fireworks) {
+    if (!f.done) continue;
+    const age = (now - f.at) * TICK_SEC, k = Math.max(0, 1 - age / W.fade);
+    const x = (f.x - f.y) * TILE_HALF_W, y = (f.x + f.y) * TILE_HALF_H;
+    if (!visible(x, y) || k <= 0) continue;
+    ctx.beginPath();                                         // وميض على الأرض
+    ctx.ellipse(x, y, RING * TILE_HALF_W * (0.6 + 0.4 * (1 - k)), RING * TILE_HALF_H * (0.6 + 0.4 * (1 - k)), 0, 0, TAU);
+    ctx.fillStyle = 'rgba(255,190,90,' + (0.35 * k * k).toFixed(3) + ')';
+    ctx.fill();
+    const seed = Math.abs(Math.sin(f.x * 12.9898 + f.y * 78.233)) * 1000;
+    for (let b = 0; b < 3; b++) {                            // ثلاثة انفجارات بألوان وارتفاعات مختلفة
+      const delay = b * 0.18, t = age - delay;
+      if (t <= 0) continue;
+      const bx = x + (b - 1) * 14, by = y - 38 - (b % 2) * 12, col = FW_COLORS[(Math.floor(seed) + b * 2) % FW_COLORS.length];
+      const a = Math.max(0, 1 - t / (W.fade - delay));
+      ctx.globalAlpha = a;
+      ctx.fillStyle = col;
+      for (let n = 0; n < 16; n++) {
+        const ang = n * TAU / 16 + seed + b, dist = 28 * Math.min(1, t * 2.4), drop = 10 * t * t;
+        const px = bx + Math.cos(ang) * dist, py = by + Math.sin(ang) * dist * 0.75 + drop;
+        ctx.fillRect(px - 1.3, py - 1.3, 2.6, 2.6);
+        ctx.fillRect(px - Math.cos(ang) * 3 - 0.5, py - Math.sin(ang) * 2.2 - 0.5, 1, 1);   // ذيل الشرارة
+      }
+      if (t < 0.25) {                                       // قلب الانفجار
+        ctx.beginPath();
+        ctx.arc(bx, by, 7 * (1 - t / 0.25), 0, TAU);
+        ctx.fillStyle = '#fff6d8';
+        ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
+}
+
+// ضوء الانفجارات ليلاً (يُجمع مع أضواء المشهد في renderer.js)
+export function fireworksLights(state, lights) {
+  if (!state.fireworks || !state.fireworks.length) return;
+  const W = F.fireworks, now = state.time / TICK_SEC;
+  for (const f of state.fireworks) {
+    const x = (f.x - f.y) * TILE_HALF_W, y = (f.x + f.y) * TILE_HALF_H;
+    if (!f.done) { lights.push({ x, y, r: 26, c: '255,70,50', a: 0.35 }); continue; }
+    const k = Math.max(0, 1 - (now - f.at) * TICK_SEC / W.fade);
+    if (k > 0) lights.push({ x, y: y - 30, r: 70, c: '255,220,160', a: 0.8 * k });
+  }
 }

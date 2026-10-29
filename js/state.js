@@ -207,6 +207,7 @@ export function resetMatch(state, settings = state.settings) {
   state.mode = fresh.mode;
   state.economy = fresh.economy;
   state.feature = fresh.feature;
+  state.fireworks = fresh.fireworks;         // دوائر الألعاب النارية وانفجاراتها (المدينة الصينية)
   state.modeState = fresh.modeState;
   state.empireHinted = false;                // تلميح قائمة الحي مرة في كل مباراة
   state.featureHinted = false;               // وإشعار ميزة المدينة (القسم 3.11)

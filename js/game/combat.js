@@ -144,8 +144,8 @@ export function updateCombat(state) {
       else finishFight(state, unit);
     }
 
-    // الانتظار والهجوم المتحرك كلاهما يرصد الأعداء
-    if (unit.state === 'idle' || unit.state === 'attackMove') {
+    // الانتظار والهجوم المتحرك كلاهما يرصد الأعداء (إلا تاجر القافلة: لا يهاجم أحداً، القسم 3.11)
+    if ((unit.state === 'idle' || unit.state === 'attackMove') && !unit.harmless) {
       // بحث موزع على التحديثات: كل وحدة تبحث كل 0.25 ثانية
       if ((tick + unit.id) % scanTicks === 0) {
         const target = chooseTarget(state, unit);

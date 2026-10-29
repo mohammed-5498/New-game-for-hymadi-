@@ -16,7 +16,8 @@ import { findFreeTiles } from '../map/pathfinding.js';
 import { soundAt } from '../audio/sound.js';
 import { hypot } from './hypot.js';
 import { random } from './random.js';   // عشوائية المنطق: مشتركة بين الأجهزة في اللعب المحلي
-import { featureIncome, stormRangeMul, stormMiss, recruitsAt, spawnRecruit, featureCostMul, featureIncomeMul, featureProductionMul } from './features.js';
+import { featureIncome, stormRangeMul, stormMiss, recruitsAt, spawnRecruit, featureCostMul, featureIncomeMul, featureProductionMul,
+         payTax } from './features.js';
 
 const isAlive = (unit) => unit && unit.state !== 'dead' && unit.hp > 0;
 
@@ -295,6 +296,12 @@ function leaderTaken(state, playerId) {
   return Object.values(state.modeState.queues).some(q => q.some(item => item.payer === playerId && item.kind === 'leader'));
 }
 
+// الصرف من نقاط اللاعب، ولمالك السوق الكبير ضريبته مما يصرفه غيره (القسم 3.11)
+function spend(state, playerId, amount) {
+  state.modeState.points[playerId] -= amount;
+  payTax(state, playerId, amount);
+}
+
 export function canQueue(state, playerId, district, kind) {
   if (!owns(state, playerId, district) || !producesAt(district, kind)) return fail(E.units[kind] ? 'ليست قاعدتك' : 'ليس مبناك');
   const queue = state.modeState.queues[district.id] || [];
@@ -309,7 +316,7 @@ export function queueUnit(state, playerId, districtId, kind) {
   const check = canQueue(state, playerId, district, kind);
   if (!check.ok) return check;
   const queues = state.modeState.queues;
-  state.modeState.points[playerId] -= unitPrice(state, playerId, kind);
+  spend(state, playerId, unitPrice(state, playerId, kind));
   if (!queues[districtId]) queues[districtId] = [];
   queues[districtId].push({ kind, t: 0, payer: playerId });
   return OK;
@@ -333,7 +340,7 @@ export function buyUpgrade(state, playerId, key) {
   const check = canUpgrade(state, playerId, key);
   if (!check.ok) return check;
   const next = nextUpgrade(state, playerId, key);
-  state.modeState.points[playerId] -= next.cost;
+  spend(state, playerId, next.cost);
   state.modeState.levels[playerId][key] = next.level;
   // الدم: جنود اللاعب الحاليون أيضاً، بنفس نسبة دمهم
   if (key === 'hp') {
@@ -376,7 +383,7 @@ export function buildDistrict(state, playerId, districtId, type) {
   const check = canBuild(state, playerId, district, type);
   if (!check.ok) return check;
   const k = buildSpot(state.map, district);
-  state.modeState.points[playerId] -= E.buildings[type].cost;
+  spend(state, playerId, E.buildings[type].cost);
   district.building = type;
   district.buildTile = k;
   district.blv = {};
@@ -408,7 +415,7 @@ export function upgradeBuilding(state, playerId, districtId, key) {
   const check = canUpgradeBuilding(state, playerId, district, key);
   if (!check.ok) return check;
   const next = nextBuildingUpgrade(district, key);
-  state.modeState.points[playerId] -= next.cost;
+  spend(state, playerId, next.cost);
   district.blv = { ...district.blv, [key]: next.level };
   return OK;
 }

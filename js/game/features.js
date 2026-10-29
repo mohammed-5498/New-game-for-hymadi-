@@ -1,4 +1,4 @@
-// مزايا المدن (القسم 3.11، بطلب المستخدم): ميزة واحدة لكل مدينة أمة، في كل مباراة على الاقتصاد
+// مزايا المدن (القسم 3.11، بطلب المستخدم): ميزة واحدة لكل مدينة، في كل مباراة على الاقتصاد
 // - العاصفة الرملية (الدرعية): حدث يتكرر بزمن المباراة وحده (لا حالة تُحفظ)، يقصّر مدى الرماة والأبراج
 //   ويجعل الضربات والسهام تخطئ أحياناً، والنار وضربات الأبطال أضعف
 // - القرى المحايدة (شبام): أفراد طرف محايد مسالم (passive: لا يهاجم ولا يُهاجَم ولا يجمّد الاستيلاء)
@@ -15,12 +15,16 @@
 // - المجمع السكني (تينوتشتيتلان): عصابة محايدة تحرس أحياءها الأربعة وتستردها، وكل حي منها يرخّص جنود مالكه
 // - تمثال ريو (ريو): جنود مالكه حوله أسرع ضرباً وأقوى، واحتلاله أبطأ
 // - بيوت المرتزقة (لا بوكا): استئجار مرتزقين
+// - قافلة التجارة (صحراء اليمامة): تجار لا يقاتلون (harmless) وحراس يعبرون المدينة، ومن يقتل تاجراً ينهب حمولته
+// - السوق الكبير (المدينة العربية): مالكه يأخذ ضريبة مما يصرفه غيره (payTax في صرف empire.js)
+// - مهرجان الألعاب النارية (المدينة الصينية): دوائر فوق أكبر تجمعات الجنود تنفجر بعد ثوانٍ (state.fireworks)
 // الحي يحمل ميزته (district.feature، من مولّد الخريطة)، والمباراة ميزة مدينتها (state.feature).
 // الأرقام كلها في CITY_FEATURES داخل config.js
 import { TICK_SEC, CITY_FEATURES as F, EMPIRE as E, COMBAT, SPAWN, nations } from '../config.js';
-import { createUnit, commandAttackMove } from './units.js';
+import { createUnit, commandMove, commandAttackMove } from './units.js';
 import { applyUpgrades, heroFor, tileOf } from './empire.js';
-import { isEnemyId } from './combat.js';
+import { isEnemyId, applyDamage } from './combat.js';
+import { addPop } from './realism.js';
 import { forEachNearby } from './spatialHash.js';
 import { findFreeTiles } from '../map/pathfinding.js';
 import { sound, soundAt } from '../audio/sound.js';
@@ -36,10 +40,10 @@ export const cityFeature = (city) => F.cities[city] || null;
 
 // --- الطرف المحايد الذي تحتاجه الميزة (يُضاف بعد الشرطة)، وnull لغيرها ---
 // villages: أهل القرى المسالمون، dojo: الساموراي، fortress: حراس الحصن، bandits: قطاع الطرق بشكل أمة المدينة،
-// coups: المتمردون، cartel: عصابة المجمع
+// coups: المتمردون، cartel: عصابة المجمع، caravan: القافلة، fireworks: الألعاب النارية (بلا وحدات: صاحب ضررها)
 const RAIDERS = ['bandits', 'coups', 'cartel'];      // أطراف تستولي على الأحياء
 export function createFeaturePlayer(players, feature, city) {
-  const cfg = ['villages', 'dojo', 'fortress', 'bandits', 'coups', 'cartel'].includes(feature) ? F[feature] : null;
+  const cfg = ['villages', 'dojo', 'fortress', 'bandits', 'coups', 'cartel', 'caravan', 'fireworks'].includes(feature) ? F[feature] : null;
   if (!cfg) return null;
   const nation = feature === 'bandits' ? cityNation(city) : cfg.nation;
   if (!nation || !nations[nation]) return null;
@@ -54,6 +58,8 @@ export function createFeaturePlayer(players, feature, city) {
     neutral: true,                     // خارج حساب الفوز والخسارة والبوتات كالشرطة
     passive: feature === 'villages',   // لا يهاجم ولا يُهاجَم ولا يُحسب جانباً في الاستيلاء (combat.js وcapture.js)
     captures: RAIDERS.includes(feature),   // يستولي على الأحياء (capture.js)
+    // القافلة والشرطة لا تتقاتلان: القافلة غنيمة للعصابات وحدها (friendOf في isEnemyId)
+    friendOf: feature === 'caravan' ? players.find(p => p.gang === 'police').id : -1,
     ownOnly: feature === 'cartel',     // عصابة المجمع تحرس أحياءها الأربعة فقط: لا تستولي على غيرها
     feature,
     team: 0,
@@ -87,9 +93,11 @@ function boost(unit, extra, mul = 1) {
 export function initFeatures(state) {
   if (state.feature === 'villages') initVillages(state);
   if (state.feature === 'cartel') initCartel(state);
+  if (state.feature === 'fireworks') state.fireworks = [];
   for (const d of state.map.districts) {
     if (!d.capture || d.featureTile === undefined) continue;
     d.cool = 0;
+    if (d.feature === 'souk') d.taxed = 0;
     if (d.feature === 'dojo') {
       for (let k = 0; k < F.dojo.start; k++) spawnGuard(state, d, F.dojo);
       d.nextAt = F.dojo.every;
@@ -117,6 +125,8 @@ export function updateFeatures(state) {
     case 'bandits': updateBandits(state); break;
     case 'coups': updateCoups(state); break;
     case 'cartel': updateCartel(state); break;
+    case 'caravan': updateCaravan(state); break;
+    case 'fireworks': updateFireworks(state); break;
   }
 }
 
@@ -159,21 +169,30 @@ const clock = (seconds) => {
   return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
 };
 
-// سطر شريط الطور: العاصفة الجارية أو القادمة حين تقترب، وموجة قطاع الطرق أو الانقلاب القادم (null بعيداً عنها)
+// سطر شريط الطور: العاصفة الجارية أو القادمة حين تقترب، وموجة قطاع الطرق أو الانقلاب أو القافلة أو الألعاب النارية
+// القادمة، والجارية منها (null بعيداً عنها)
 export function featureBar(state) {
   if (state.feature === 'storm') {
     const now = stormAt(state.time);
     if (now.on) return { text: 'عاصفة رملية ' + clock(now.left), alarm: true };
     return now.left <= F.storm.duration ? { text: 'عاصفة بعد ' + clock(now.left), alarm: now.left <= F.storm.warn } : null;
   }
-  if ((state.feature === 'bandits' || state.feature === 'coups') && state.mode !== 'survival') {
+  if (state.feature === 'fireworks') {
+    const pending = state.fireworks && state.fireworks.find(f => !f.done);
+    if (pending) return { text: 'ألعاب نارية! ابتعد عن الدوائر ' + clock((pending.at - tickOf(state)) * TICK_SEC), alarm: true };
+  }
+  if (state.feature === 'caravan' && state.mode !== 'survival' && state.units.some(u => u.cargo && isAlive(u))) {
+    return { text: 'قافلة في المدينة', alarm: false };
+  }
+  const name = EVENT_NAMES[state.feature];
+  if (name && (state.feature === 'fireworks' || state.mode !== 'survival')) {
     const B = F[state.feature];
     const left = state.time < B.first ? B.first - state.time : B.every - ((state.time - B.first) % B.every);
-    const name = state.feature === 'bandits' ? 'قطاع الطرق' : 'انقلاب';
     return left <= 30 ? { text: name + ' بعد ' + clock(left), alarm: left <= 10 } : null;
   }
   return null;
 }
+const EVENT_NAMES = { bandits: 'قطاع الطرق', coups: 'انقلاب', caravan: 'قافلة', fireworks: 'ألعاب نارية' };
 
 // ================= القرى المحايدة (شبام) =================
 function initVillages(state) {
@@ -643,4 +662,196 @@ export function joinPolice(state, unit, owner) {
   unit.target = null;
   unit.stats = { ...unit.stats, capturePower: 1 };
   applyUpgrades(state, unit);
+}
+
+// ================= قافلة التجارة (صحراء اليمامة) =================
+// القافلة n عند first + (n − 1) × every (لا قوافل في الصمود): تجار لا يقاتلون يحملون البضائع، وحراس من حراس القوافل،
+// من بوابة في السور إلى أقرب شارع على الحافة المقابلة. كل تاجر يُقتل يعطي قاتله loot، ومن يبلغ المخرج يخرج بحمولته
+function updateCaravan(state) {
+  if (state.mode === 'survival') return;
+  const C = F.caravan, tick = tickOf(state), first = ticks(C.first), every = ticks(C.every);
+  if (tick >= first && (tick - first) % every === 0) spawnCaravan(state);
+  lootMerchants(state);
+  if (tick % ticks(C.think) === 0) moveCaravan(state);
+}
+
+// البوابات شوارع على الحافتين البعيدتين (buildCityWalls في المولّد): gateJ على i = 0 وgateI على j = 0،
+// والمخرج أقرب شارع موصول على الحافة المقابلة
+function caravanRoute(state) {
+  const map = state.map, gates = [], last = map.n - 1;
+  for (let k = 0; k < map.kind.length; k++) if (map.kind[k] === 'gateI' || map.kind[k] === 'gateJ') gates.push(k);
+  if (!gates.length) return null;
+  const k = gates[Math.floor(random() * gates.length)], gi = k % map.n, gj = Math.floor(k / map.n);
+  const alongI = map.kind[k] === 'gateJ';
+  let exit = null, best = Infinity;
+  for (let a = 0; a < map.n; a++) {
+    const i = alongI ? last : a, j = alongI ? a : last;
+    if (!map.isConnected(i, j)) continue;
+    const off = Math.abs(a - (alongI ? gj : gi));
+    if (off < best) { best = off; exit = { i, j, until: state.time + F.caravan.maxSeconds }; }
+  }
+  return exit && { gi, gj, exit };
+}
+
+function spawnCaravan(state) {
+  const C = F.caravan, player = featurePlayer(state);
+  const route = player && caravanRoute(state);
+  if (!route) return;
+  const spots = findFreeTiles(state.map, route.gi, route.gj, C.merchants + C.guards.length);
+  spots.forEach(([i, j], k) => {
+    const merchant = k < C.merchants;
+    const unit = createUnit(state, player, i, j, merchant ? null : C.guards[k - C.merchants]);
+    boost(unit, merchant ? C.merchant : C.guard);
+    unit.caravanExit = route.exit;
+    if (merchant) {
+      unit.harmless = true;          // لا يبحث عن هدف (combat.js)، ويُضرب كغيره
+      unit.cargo = true;             // حمولته فوق رأسه (render/units.js) حتى يُنهب
+      unit.name = C.merchantName;
+    }
+    state.units.push(unit);
+  });
+  if (!spots.length) return;
+  state.notice = { text: 'قافلة تجارية دخلت المدينة! كل تاجر تنهبه: ' + C.loot + ' نقطة', mine: false, t: 4 };
+  sound('alert');
+  moveCaravan(state);
+}
+
+// تاجر سقط: حمولته لمن ضربه آخر مرة، مرة واحدة (لا شيء إن سقط بيد طرف محايد)
+function lootMerchants(state) {
+  const C = F.caravan, ms = state.modeState;
+  for (const unit of state.units) {
+    if (!unit.cargo || unit.state !== 'dead') continue;
+    unit.cargo = false;
+    const killer = unit.lastHitBy;
+    if (killer < 0 || !state.players[killer] || state.players[killer].neutral) continue;
+    ms.points[killer] += C.loot;
+    ms.earned[killer] += C.loot;
+    addPop(state, unit, '+' + C.loot, 'loot');
+    soundAt(state, 'capture_done', unit.x, unit.y);
+    if (killer === state.humanId) state.notice = { text: 'نهبت تاجراً: +' + C.loot + ' نقطة', mine: true, t: 2.5 };
+  }
+}
+
+// كل think ثانية: من بلغ المخرج (أو انتهى وقت قافلته) يخرج بلا جثة، والتجار يمضون إليه،
+// والحراس يرافقونهم بهجوم متحرك نحو وسطهم، ثم يتبعونهم إلى المخرج إن لم يبقَ تاجر
+function moveCaravan(state) {
+  const C = F.caravan, player = featurePlayer(state);
+  if (!player) return;
+  const mine = state.units.filter(u => u.playerId === player.id && u.caravanExit && isAlive(u));
+  if (!mine.length) return;
+  const gone = new Set();
+  for (const u of mine) {
+    const exit = u.caravanExit;
+    if (state.time < exit.until && hypot(u.x - exit.i, u.y - exit.j) > C.exitRadius) continue;
+    u.cargo = false;
+    u.hp = 0;
+    u.state = 'dead';
+    u.deathTimer = 0;
+    u.path = [];
+    u.target = null;
+    gone.add(u);
+  }
+  if (gone.size) state.units = state.units.filter(u => !gone.has(u));
+  const merchants = mine.filter(u => u.harmless && !gone.has(u)), guards = mine.filter(u => !u.harmless && !gone.has(u));
+  const idle = merchants.filter(u => u.state === 'idle');
+  if (idle.length) commandMove(state, idle[0].caravanExit.i, idle[0].caravanExit.j, idle, false);
+  const free = guards.filter(u => u.state !== 'attacking');
+  if (!free.length) return;
+  if (!merchants.length) {
+    const moving = free.filter(u => u.state !== 'moving');
+    if (moving.length) commandMove(state, moving[0].caravanExit.i, moving[0].caravanExit.j, moving, false);
+    return;
+  }
+  const ci = merchants.reduce((a, u) => a + u.x, 0) / merchants.length, cj = merchants.reduce((a, u) => a + u.y, 0) / merchants.length;
+  const far = free.filter(u => hypot(u.x - ci, u.y - cj) > C.escort);
+  if (far.length) commandAttackMove(state, ci, cj, far, false);
+}
+
+// ================= السوق الكبير (المدينة العربية) =================
+// ضريبة السوق: tax مما يصرفه غير مالكه (spend في empire.js) تُضاف لمالكه، ولا يدفع الصارف أكثر من سعره.
+// d.taxed: ما جمعه السوق في المباراة (قائمته)
+export function payTax(state, payer, amount) {
+  if (state.feature !== 'souk') return;
+  const d = state.map.districts.find(x => x.feature === 'souk');
+  if (!d || d.owner === null || d.owner === payer || state.players[d.owner].neutral) return;
+  const gain = amount * F.souk.tax, ms = state.modeState;
+  ms.points[d.owner] += gain;
+  ms.earned[d.owner] += gain;
+  d.taxed += gain;
+}
+
+// ================= مهرجان الألعاب النارية (المدينة الصينية) =================
+// العرض n عند first + (n − 1) × every، في كل الأطوار: دوائر فوق أكبر count تجمعات للجنود، وبعد warn ثانية تنفجر:
+// damage لكل وحدة داخلها من أي طرف. state.fireworks: { x, y, at, done } (at رقم تحديث الانفجار)، ويبقى المنفجر fade ثانية
+function updateFireworks(state) {
+  const W = F.fireworks, tick = tickOf(state), first = ticks(W.first), every = ticks(W.every);
+  if (tick >= first && (tick - first) % every === 0) markFireworks(state, tick + ticks(W.warn));
+  if (!state.fireworks.length) return;
+  for (const f of state.fireworks) if (!f.done && tick >= f.at) burstFireworks(state, f);
+  if (state.fireworks.some(f => f.done && tick - f.at >= ticks(W.fade))) {
+    state.fireworks = state.fireworks.filter(f => !f.done || tick - f.at < ticks(W.fade));
+  }
+}
+
+const soldier = (state, u) => isAlive(u) && !state.players[u.playerId].neutral;
+
+// أكبر تجمع: الجندي الذي حوله أكثر الجنود داخل radius (الأول عند التساوي، بترتيب الوحدات المشترك بين الأجهزة)،
+// ثم لا يصلح من حوله مركزاً لدائرة أخرى فلا تتداخل الدوائر
+function markFireworks(state, at) {
+  const W = F.fireworks, r2 = W.radius * W.radius, used = new Set();
+  let marks = 0;
+  for (let n = 0; n < W.count; n++) {
+    let best = null, bestCount = W.minUnits - 1;
+    for (const u of state.units) {
+      if (used.has(u) || !soldier(state, u)) continue;
+      let count = 0;
+      forEachNearby(state, u.x, u.y, W.radius, (o) => {
+        const dx = o.x - u.x, dy = o.y - u.y;
+        if (dx * dx + dy * dy <= r2 && !used.has(o) && soldier(state, o)) count++;
+      });
+      if (count > bestCount) { bestCount = count; best = u; }
+    }
+    if (!best) break;
+    const x = best.x, y = best.y;
+    forEachNearby(state, x, y, 2 * W.radius, (o) => {
+      const dx = o.x - x, dy = o.y - y;
+      if (dx * dx + dy * dy <= 4 * r2) used.add(o);
+    });
+    state.fireworks.push({ x, y, at, done: false });
+    dodgeFireworks(state, x, y);
+    marks++;
+  }
+  if (!marks) return;
+  state.notice = { text: 'ألعاب نارية! ابتعد عن الدوائر الحمراء', mine: false, t: 3 };
+  sound('alert');
+}
+
+// البوتات تُخرج جنودها من الدائرة بفرصة لكل بوت حسب صعوبته (dodgeChance): كل جندي إلى نقطة خارجها
+// في اتجاهه من مركزها
+function dodgeFireworks(state, x, y) {
+  const W = F.fireworks, r = W.radius + 0.3, out = W.radius + W.dodge;
+  const movers = [], decided = new Map();
+  forEachNearby(state, x, y, r, (u) => {
+    const p = state.players[u.playerId];
+    if (!isAlive(u) || p.neutral || p.isHuman || hypot(u.x - x, u.y - y) > r) return;
+    if (!decided.has(p.id)) decided.set(p.id, random() < (W.dodgeChance[p.difficulty] || 0));
+    if (decided.get(p.id)) movers.push(u);
+  });
+  for (const u of movers) {
+    const d = hypot(u.x - x, u.y - y), ux = d > 0.01 ? (u.x - x) / d : 1, uy = d > 0.01 ? (u.y - y) / d : 0;
+    commandMove(state, x + ux * out, y + uy * out, [u], false);
+  }
+}
+
+function burstFireworks(state, f) {
+  const W = F.fireworks, r2 = W.radius * W.radius, player = featurePlayer(state), hit = [];
+  f.done = true;
+  if (!player) return;
+  const by = { playerId: player.id };          // صاحب الضرر: طرف الألعاب النارية المحايد (لا مكافأة لأحد)
+  forEachNearby(state, f.x, f.y, W.radius, (u) => {
+    const dx = u.x - f.x, dy = u.y - f.y;
+    if (dx * dx + dy * dy <= r2 && isAlive(u)) hit.push(u);
+  });
+  for (const u of hit) applyDamage(state, by, u, W.damage);
+  soundAt(state, 'fire', f.x, f.y);
 }

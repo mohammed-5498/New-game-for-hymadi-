@@ -104,6 +104,7 @@ export function drawUnit(ctx, unit, alpha, zoom = 99, time = 0, debug = false, c
   }
   drawOne(ctx, unit, key, x, y, scale, color, time, walking, ghosts, 1, shaded, sub);
   if (dead) return;
+  if (unit.cargo) drawCargo(ctx, x, y, scale / UNIT_ART.scale);
 
   // وضع التفاصيل (ثلاث لمسات على شريط المعلومات): اسم الحالة فوق الوحدة
   if (debug) {
@@ -124,6 +125,28 @@ export function drawUnit(ctx, unit, alpha, zoom = 99, time = 0, debug = false, c
   if (hasUlt(unit) && (unit.selected || ultReady(unit))) drawChargeBar(ctx, unit, x, y, bar);
   // نجمة ذهبية صغيرة فوق الوحدة عند الجاهزية
   if (ultReady(unit)) drawReadyStar(ctx, x, y, time);
+}
+
+// حمولة تاجر القافلة (القسم 3.11): صرة قماش مربوطة فوق رأسه وفيها لمعة ذهب، فيُعرف من يستحق النهب
+function drawCargo(ctx, x, y, k) {
+  const cy = y - 15.2 * k;
+  ctx.beginPath();
+  ctx.ellipse(x, cy, 3 * k, 1.9 * k, 0, 0, 6.2832);
+  ctx.fillStyle = '#8a5a2b';
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(x - 0.6 * k, cy - 0.7 * k, 1.8 * k, 0.8 * k, 0, 0, 6.2832);
+  ctx.fillStyle = '#a8743c';
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(x - 2.6 * k, cy + 0.4 * k); ctx.lineTo(x + 2.6 * k, cy - 0.4 * k);
+  ctx.strokeStyle = '#4a2e16';
+  ctx.lineWidth = 0.5 * k;
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(x + 1.4 * k, cy - 1.2 * k, 0.75 * k, 0, 6.2832);
+  ctx.fillStyle = '#ffd25a';
+  ctx.fill();
 }
 
 const isWalking = (unit) =>

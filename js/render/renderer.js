@@ -14,7 +14,8 @@ import { drawPoliceLamp } from './landmarks.js';
 import { drawUnitsOccluded } from './occlusion.js';
 import { shadedCount } from '../pacing.js';
 import { drawEmpireShots, drawEmpireMarks, drawEmpireHalos, drawEmpireBadges } from './empireArt.js';
-import { drawFeatureBadges, drawStorm, featureHaloEntry, drawFeatureHalo } from './featureArt.js';
+import { drawFeatureBadges, drawStorm, featureHaloEntry, drawFeatureHalo, drawFireworksMarks, drawFireworksBursts,
+         fireworksLights } from './featureArt.js';
 
 export function resizeCanvas(canvas, state) {
   const view = state.view;
@@ -85,6 +86,8 @@ export function render(ctx, state, alpha, cityBudgetMs = CITY_CACHE.frameBudgetM
                   r: fire.radius * 28, c: '255,150,60', a: 0.7 });
   }
   for (const zone of state.zones) drawZone(ctx, zone, state.time);   // الراية المغروسة (القسم 3.10)
+  drawFireworksMarks(ctx, state, visible);          // دوائر الألعاب النارية قبل انفجارها (القسم 3.11)
+  if (state.weather === 'night') fireworksLights(state, lights);
   drawEmpireHalos(ctx, state, visible);             // هالة ذهبية حول القواعد الرئيسية (طور الإمبراطورية)
   drawUnitsLayer(ctx, state, alpha, visible);
   // المصابيح الزرقاء الوامضة فوق أسطح الشرطة: بعد الوحدات حتى لا تغطيها قصاصات المباني
@@ -113,6 +116,7 @@ export function render(ctx, state, alpha, cityBudgetMs = CITY_CACHE.frameBudgetM
   drawFlagArrows(ctx, state, visible);
   drawEmpireBadges(ctx, state, visible);            // تاج القاعدة وقوس البرج وصليب المستشفى
   drawFeatureBadges(ctx, state, visible);           // شارة الهرم وشارة القرية التي ينتظر أهلها (القسم 3.11)
+  drawFireworksBursts(ctx, state, visible);         // انفجارات الألعاب النارية في السماء
   drawEmpireMarks(ctx, state, visible, state.empireOpen);   // شريط الإنتاج ودائرة مدى المبنى المفتوح
   drawHillCrown(ctx, state, visible);
   drawGroupTags(ctx, state, alpha, visible);
