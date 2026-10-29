@@ -1,13 +1,13 @@
 // البوتات في طور الإمبراطورية: تصرف نقاطها على الجنود والزعيم والترقيات والمباني (الأرقام في EMPIRE.bot).
 // لا ظهور تلقائي في هذا الطور فبلا هذا لا جيش للبوت. القتال والتوسع كما في الأطوار الأخرى (bot.js).
 // في كل قرار: "الشراء التالي" واحد، ويُدّخر له إن لم تكفِ النقاط (فلا تأكل الأفراد الرخيصة كل شيء)
-import { EMPIRE as E } from '../config.js';
+import { EMPIRE as E, CITY_FEATURES } from '../config.js';
 import {
   canQueue, queueUnit, unitPrice, nextUpgrade, buyUpgrade, buildDistrict,
   nextBuildingUpgrade, upgradeBuilding, buildSpot
 } from '../game/empire.js';
 import { isEnemyId } from '../game/combat.js';
-import { recruitsAt } from '../game/features.js';
+import { recruitsAt, canCallTriads, callTriads, triadTarget } from '../game/features.js';
 import { hypot } from '../game/hypot.js';
 
 const B = E.bot;
@@ -32,6 +32,7 @@ export function empireEconomy(state, player) {
   const ms = state.modeState, pid = player.id;
   if (!ms.bot) ms.bot = {};
   const memo = ms.bot[pid] || (ms.bot[pid] = { turn: 0, units: 0, tech: 0 });
+  botTriads(state, pid);
   for (let n = 0; n < B.buysPerDecision; n++) {
     const next = pickNext(state, player, memo);
     if (!next || ms.points[pid] < next.cost) return;     // يدّخر للشراء التالي
@@ -162,3 +163,21 @@ function distanceToEnemy(state, pid, district) {
 
 const nearest = (list, score) => list.reduce((a, b) => (!a || score(b) < score(a) ? b : a), null);
 const farthest = (list, score) => list.reduce((a, b) => (!a || score(b) > score(a) ? b : a), null);
+
+// مقر الترياد (القسم 3.11): متى كان جاهزاً ومع البوت كلفته وفضل botReserve، يرسلهم إلى حي العدو الأقرب إلى أحيائه
+function botTriads(state, pid) {
+  if (state.feature !== 'triads') return;
+  const T = CITY_FEATURES.triads, map = state.map;
+  const hq = map.districts.find(d => d.feature === 'triads' && d.owner === pid && d.featureTile !== undefined);
+  if (!hq || state.modeState.points[pid] < T.cost + T.botReserve || !canCallTriads(state, pid, hq).ok) return;
+  const mine = map.districts.filter(d => d.owner === pid && d.capture);
+  let best = null, bestDist = Infinity;
+  for (const d of map.districts) {
+    if (!triadTarget(state, pid, d)) continue;
+    for (const m of mine) {
+      const dist = hypot(d.capture.i - m.capture.i, d.capture.j - m.capture.j);
+      if (dist < bestDist) { bestDist = dist; best = d; }
+    }
+  }
+  if (best) callTriads(state, pid, hq.id, best.id);
+}

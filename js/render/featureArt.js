@@ -685,7 +685,111 @@ function souk(x, y, i, j) {
   }
 }
 
-const BUILDINGS = { pyramid, dojo, clinic, fortress, khartoum, policeHQ, clock, complex, statue, mercs, souk };
+// لافتة نيون رأسية بارزة عن وجه: لوح داكن بحافة متوهجة وخطوط حروف، q دالة الوجه وout اتجاه البروز على الشاشة
+function neonBoard(q, u, v0, v1, out, col) {
+  const a = q(u, v0), b = q(u, v1), o = (p, k) => [p[0] + out[0] * k, p[1] + out[1] * k];
+  const pts = [a, b, o(b, 4.2), o(a, 4.2)];
+  poly(pts, '#1c1220');
+  const c = getCtx();
+  c.beginPath();
+  c.moveTo(pts[0][0], pts[0][1]);
+  for (let k = 1; k < 4; k++) c.lineTo(pts[k][0], pts[k][1]);
+  c.closePath();
+  c.strokeStyle = col;
+  c.lineWidth = 0.8;
+  c.stroke();
+  const n = Math.floor((v1 - v0) / 4);
+  for (let k = 0; k < n; k++) {                                     // حروف متوهجة
+    const p = o(q(u, v0 + 2 + k * 4), 1.1), r = o(q(u, v0 + 2 + k * 4), 3.1);
+    ln(p[0], p[1], r[0], r[1], col, 0.9);
+  }
+}
+
+// --- مقر الترياد (هونغ كونغ): ساحة إسفلتية، وبرج سكني عالٍ بطوابق ونوافذ بعضها مضاء ومكيفات، ولافتتا نيون رأسيتان
+// ولوحة نيون فوق السطح، وبوابة حمراء بسقف أخضر ولوحة ذهبية، وفوانيس حمراء، وخزان ماء وهوائيات ---
+function triads(x, y, i, j) {
+  el(x, y + 6, 37, 16, 'rgba(20,15,25,0.25)');
+  box(x, y + 2, 33, 16.5, 2.5, '#55555d', '#6b6b74', '#74747d');
+  const by = y - 2, w = 19, d = 9.5, h = 58;
+  box(x, by, w, d, h, '#857c72', '#a39a8f');
+  const L = qL(x, by, w, d), R = qR(x, by, w, d);
+  for (let f = 0; f < 7; f++) {                                     // الطوابق: بلاطة ونوافذ (بعضها مضاء)
+    const v = 6 + f * 7.4;
+    for (const q of [L, R]) { const a = q(0, v - 1.2), b = q(1, v - 1.2); ln(a[0], a[1], b[0], b[1], 'rgba(40,30,25,0.35)', 0.6); }
+    for (let k = 0; k < 3; k++) {
+      const lit = (f * 3 + k + i + j) % 4 === 0;
+      wL(x, by, w, d, 0.1 + k * 0.3, v, 0.18, 4, lit ? '#ffd98a' : '#2b3442');
+      wR(x, by, w, d, 0.1 + k * 0.3, v, 0.18, 4, (f + k) % 3 === 0 ? '#ffd98a' : '#2b3442');
+    }
+    const ac = R(0.82, v + 0.6);                                     // مكيف تحت النافذة
+    box(ac[0], ac[1], 1.2, 0.6, 1.4, '#b8b4ae', '#d4d0ca', '#c8c4be');
+  }
+  neonBoard(R, 0.2, 14, 44, [0.45, 0.9], '#ff4fb4');
+  neonBoard(L, 0.82, 18, 46, [-0.45, 0.9], '#4fe3ff');
+  const top = by - h;                                               // السطح: خزان ماء وهوائيات ولوحة نيون
+  cyl(x - 6, top - 4, 2.6, 4.5, '#3c3f43', '#5a5e63', '#4a4d52');
+  ln(x + 7, top - 1, x + 7, top - 12, '#2a2a2e', 0.6);
+  ln(x + 9, top + 1, x + 9, top - 8, '#2a2a2e', 0.5);
+  const s0 = [x - 13, top - 1], s1 = [x + 3, top + 7];
+  poly([s0, s1, [s1[0], s1[1] - 7], [s0[0], s0[1] - 7]], '#1c1220');
+  for (let k = 0; k < 4; k++) {
+    const t = 0.15 + k * 0.22, p = [s0[0] + (s1[0] - s0[0]) * t, s0[1] + (s1[1] - s0[1]) * t - 3.5];
+    poly([[p[0] - 1.4, p[1] - 1.6], [p[0] + 1.4, p[1] - 0.9], [p[0] + 1.4, p[1] + 1.6], [p[0] - 1.4, p[1] + 0.9]], k % 2 ? '#ffd23f' : '#ff4fb4');
+  }
+  // البوابة الحمراء أمام الوجه الأيمن، والفوانيس
+  const g0 = R(0.3, 0), g1 = R(0.7, 0);
+  for (const p of [g0, g1]) { const o = [p[0] + 2.2, p[1] + 4.4]; ln(o[0], o[1], o[0], o[1] - 14, '#b3262f', 1.8); }
+  const c0 = [g0[0] + 2.2, g0[1] + 4.4 - 14], c1 = [g1[0] + 2.2, g1[1] + 4.4 - 14];
+  poly([[c0[0] - 2.5, c0[1] + 1], [c1[0] + 2.5, c1[1] - 0.5], [c1[0] + 1.5, c1[1] - 3.5], [c0[0] - 1.5, c0[1] - 2]], '#2f7a4a');
+  ln(c0[0] - 1, c0[1] + 2.5, c1[0] + 1, c1[1] + 1, '#b3262f', 1.6);
+  const pm = [(c0[0] + c1[0]) / 2, (c0[1] + c1[1]) / 2 + 3.6];
+  poly([[pm[0] - 2.4, pm[1] - 1.6], [pm[0] + 2.4, pm[1] - 2.6], [pm[0] + 2.4, pm[1] + 0.8], [pm[0] - 2.4, pm[1] + 1.8]], '#d4af4f');
+  for (const u of [0.12, 0.88]) {
+    const p = R(u, 9);
+    ln(p[0], p[1] - 1, p[0], p[1] + 1.5, '#3a2a20', 0.5);
+    el(p[0], p[1] + 3.4, 1.8, 2.2, '#d8402e');
+  }
+}
+
+// --- إسطبل الفيلة (جايبور): منصة من الحجر الرملي، وقصر وردي بحزامين أبيضين ونوافذ مشبكة (جالي)، وبوابة عالية
+// تسع الفيل، وأكشاك بقباب صغيرة (تشاتري) على أركان السطح، وقبة وسطى على قاعدة بعلم زعفراني ---
+function chhatri(px, py, r) {
+  for (const dx of [-r * 0.7, r * 0.7]) ln(px + dx, py, px + dx, py - r * 1.6, '#f4e3e6', 0.7);
+  box(px, py - r * 1.6, r, r / 2, 0.8, '#e8c9cf', '#f4e3e6', '#f0d9dc');
+  dome(px, py - r * 1.6 - 0.8, r * 0.9, '#f0d9dc', '#d8b6bb', '#d4af4f');
+}
+
+function stable(x, y, i, j) {
+  el(x, y + 6, 37, 16, 'rgba(50,25,20,0.22)');
+  box(x, y + 2, 33, 16.5, 3, '#c39c78', '#d8b48e', '#e0c09d');
+  const by = y - 1, w = 25, d = 12.5, h = 18;
+  box(x, by, w, d, h, '#cc6c7e', '#e48a9b', '#d9798a');
+  const L = qL(x, by, w, d), R = qR(x, by, w, d);
+  for (const q of [L, R]) {
+    for (const v of [1.4, h - 1.6]) { const a = q(0, v), b = q(1, v); ln(a[0], a[1], b[0], b[1], '#f4e3e6', 1.2); }
+  }
+  for (const u of [0.08, 0.34, 0.6, 0.84]) {                        // نوافذ مشبكة (جالي)
+    arch((a, b) => L(a, b + 5), u, 0.1, 7, '#f4e3e6');
+    for (let k = 0; k < 3; k++) { const p = L(u + 0.05, 7 + k * 1.8); circ(p[0], p[1], 0.35, '#b05a6a'); }
+  }
+  for (const u of [0.06, 0.82]) {
+    arch((a, b) => R(a, b + 5), u, 0.11, 7, '#f4e3e6');
+    for (let k = 0; k < 3; k++) { const p = R(u + 0.055, 7 + k * 1.8); circ(p[0], p[1], 0.35, '#b05a6a'); }
+  }
+  arch(R, 0.32, 0.36, 15, '#f4e3e6');                               // البوابة العالية بإطار أبيض
+  arch((a, b) => R(a + 0.02, b), 0.32, 0.32, 13.6, '#3a2420');
+  arch((a, b) => R(a + 0.05, b), 0.32, 0.26, 10, '#6b4526');
+  const top = by - h;
+  chhatri(x - w + 4, top + 0.5, 3.4);                               // الأكشاك على الأركان الظاهرة، ثم القبة الوسطى
+  chhatri(x + w - 4, top + 0.5, 3.4);
+  box(x, top - 1, 7, 3.5, 4, '#cc6c7e', '#e48a9b', '#d9798a');
+  dome(x, top - 5, 7.2, '#f0d9dc', '#d8b6bb', '#d4af4f');
+  ln(x, top - 18, x, top - 26, '#5a3a22', 0.7);
+  poly([[x, top - 26], [x + 7, top - 24.5], [x, top - 23]], '#f2a33a');
+  chhatri(x, top + d - 2, 3.4);
+}
+
+const BUILDINGS = { pyramid, dojo, clinic, fortress, khartoum, policeHQ, clock, complex, statue, mercs, souk, triads, stable };
 
 // --- ساحة المبنى المميز (fplaza) ---
 // البلاط في طبقة الأرض (chunkCache.js): مربع داخلي بحافة ذهبية خفيفة وفاصلان
@@ -756,6 +860,13 @@ const PROPS = {
   },
   complex(x, y) { featherStandard(x, y, 14); },
   statue: (x, y, i, j) => streetPalm(x, y, i, j),
+  triads(x, y) {                         // عمود بلافتة نيون صغيرة
+    ln(x, y, x, y - 15, '#2a2a2e', 0.9);
+    box(x + 1.6, y - 12, 2.2, 1.1, 5, '#1c1220', '#24182a', '#1c1220');
+    ln(x + 0.6, y - 13.5, x + 0.6, y - 17.5, '#ff4fb4', 0.8);
+    ln(x + 2.6, y - 13, x + 2.6, y - 16.5, '#4fe3ff', 0.8);
+  },
+  stable(x, y) { chhatri(x, y, 2.6); },  // كشك صغير بقبة
   souk(x, y) {                           // بسطة توابل بمظلة مخططة
     ln(x - 3, y, x - 3, y - 9, '#5a3a22', 0.7);
     ln(x + 3, y + 1.5, x + 3, y - 7.5, '#5a3a22', 0.7);
@@ -891,6 +1002,38 @@ const ICONS = {
     ctx.beginPath();
     ctx.arc(x, y - s * 0.78, s * 0.22, 0, TAU);
     ctx.fill();
+  },
+  // فانوس أحمر بشرابة ذهبية
+  triads(ctx, x, y, s) {
+    ctx.fillStyle = '#d8402e';
+    ctx.beginPath();
+    ctx.ellipse(x, y, s * 0.75, s * 0.62, 0, 0, TAU);
+    ctx.fill();
+    ctx.fillStyle = '#e8c45a';
+    ctx.fillRect(x - s * 0.4, y - s * 0.78, s * 0.8, s * 0.2);
+    ctx.fillRect(x - s * 0.4, y + s * 0.58, s * 0.8, s * 0.2);
+    ctx.fillRect(x - s * 0.06, y + s * 0.78, s * 0.12, s * 0.3);
+    ctx.strokeStyle = 'rgba(120,20,20,0.6)';
+    ctx.lineWidth = s * 0.08;
+    ctx.beginPath();
+    ctx.moveTo(x, y - s * 0.6); ctx.lineTo(x, y + s * 0.6);
+    ctx.stroke();
+  },
+  // رأس فيل: أذن وخرطوم ونابان
+  stable(ctx, x, y, s) {
+    ctx.fillStyle = '#b9b4ae';
+    ctx.beginPath(); ctx.ellipse(x - s * 0.45, y - s * 0.1, s * 0.45, s * 0.6, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#d6d1cb';
+    ctx.beginPath(); ctx.arc(x + s * 0.1, y - s * 0.2, s * 0.55, 0, TAU); ctx.fill();
+    ctx.strokeStyle = '#d6d1cb';
+    ctx.lineCap = 'round';
+    ctx.lineWidth = s * 0.3;
+    ctx.beginPath(); ctx.moveTo(x + s * 0.45, y); ctx.quadraticCurveTo(x + s * 0.7, y + s * 0.55, x + s * 0.4, y + s * 0.85); ctx.stroke();
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = s * 0.12;
+    ctx.beginPath(); ctx.moveTo(x + s * 0.25, y + s * 0.2); ctx.lineTo(x + s * 0.05, y + s * 0.45); ctx.stroke();
+    ctx.fillStyle = '#2a2420';
+    ctx.beginPath(); ctx.arc(x + s * 0.28, y - s * 0.32, s * 0.08, 0, TAU); ctx.fill();
   },
   // ميزان ذهبي
   souk(ctx, x, y, s) {

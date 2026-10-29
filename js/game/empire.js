@@ -17,7 +17,7 @@ import { soundAt } from '../audio/sound.js';
 import { hypot } from './hypot.js';
 import { random } from './random.js';   // عشوائية المنطق: مشتركة بين الأجهزة في اللعب المحلي
 import { featureIncome, stormRangeMul, stormMiss, recruitsAt, spawnRecruit, featureCostMul, featureIncomeMul, featureProductionMul,
-         payTax } from './features.js';
+         payTax, callTriads } from './features.js';
 
 const isAlive = (unit) => unit && unit.state !== 'dead' && unit.hp > 0;
 
@@ -297,9 +297,17 @@ function leaderTaken(state, playerId) {
 }
 
 // الصرف من نقاط اللاعب، ولمالك السوق الكبير ضريبته مما يصرفه غيره (القسم 3.11)
-function spend(state, playerId, amount) {
+export function spend(state, playerId, amount) {
   state.modeState.points[playerId] -= amount;
   payTax(state, playerId, amount);
+}
+
+// مجنَّدو اللاعب من نوع واحد: الأحياء منهم وما في الطوابير (حد التجنيد، الفيل الحربي)
+function recruitCount(state, playerId, kind) {
+  let n = 0;
+  for (const u of state.units) if (u.playerId === playerId && u.recruitKind === kind && u.state !== 'dead') n++;
+  for (const q of Object.values(state.modeState.queues)) for (const item of q) if (item.payer === playerId && item.kind === kind) n++;
+  return n;
 }
 
 export function canQueue(state, playerId, district, kind) {
@@ -307,6 +315,8 @@ export function canQueue(state, playerId, district, kind) {
   const queue = state.modeState.queues[district.id] || [];
   if (kind === 'leader' && leaderTaken(state, playerId)) return fail('لعصابتك زعيم');
   if (queue.length >= E.queueMax) return fail('الطابور ممتلئ');
+  const R = CITY_FEATURES.recruits[kind];
+  if (R && R.limit && recruitCount(state, playerId, kind) >= R.limit) return fail(R.limitText);
   if (pointsOf(state, playerId) < unitPrice(state, playerId, kind)) return fail('النقاط لا تكفي');
   return OK;
 }
@@ -426,6 +436,7 @@ export function empireCommand(state, playerId, a, d, x) {
   const district = state.map.districts[d];
   if (a === 'queue' && (E.units.order.includes(x) || Object.hasOwn(CITY_FEATURES.recruits, x))) return queueUnit(state, playerId, d, x);
   if (a === 'upgrade' && E.upgrades.order.includes(x)) return buyUpgrade(state, playerId, x);
+  if (a === 'triads') return callTriads(state, playerId, d, x);          // مقر الترياد: x رقم حي العدو (القسم 3.11)
   if (a === 'build' && E.buildings.order.includes(x)) return buildDistrict(state, playerId, d, x);
   if (a === 'improve' && district && district.building && E.buildings[district.building].upgrades.order.includes(x)) {
     return upgradeBuilding(state, playerId, d, x);

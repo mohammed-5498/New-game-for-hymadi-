@@ -18,13 +18,16 @@
 // - قافلة التجارة (صحراء اليمامة): تجار لا يقاتلون (harmless) وحراس يعبرون المدينة، ومن يقتل تاجراً ينهب حمولته
 // - السوق الكبير (المدينة العربية): مالكه يأخذ ضريبة مما يصرفه غيره (payTax في صرف empire.js)
 // - مهرجان الألعاب النارية (المدينة الصينية): دوائر فوق أكبر تجمعات الجنود تنفجر بعد ثوانٍ (state.fireworks)
+// - مقر الترياد (هونغ كونغ): مالكه يرسل مقاتلين مؤقتين إلى حي لعدوه (callTriads، أمر triads في empire.js)
+// - إسطبل الفيلة (جايبور): تجنيد فيل حربي (مخلوق creature يُرسم بشكله) يدهس من حوله
+// - ترول الجبل (القرية النرويجية): وحش محايد ضخم ينزل بموعد ويقصد أكبر تجمعات الجنود، ومن يقتله يأخذ مكافأته
 // الحي يحمل ميزته (district.feature، من مولّد الخريطة)، والمباراة ميزة مدينتها (state.feature).
 // الأرقام كلها في CITY_FEATURES داخل config.js
 import { TICK_SEC, CITY_FEATURES as F, EMPIRE as E, COMBAT, SPAWN, nations } from '../config.js';
 import { createUnit, commandMove, commandAttackMove } from './units.js';
-import { applyUpgrades, heroFor, tileOf } from './empire.js';
+import { applyUpgrades, heroFor, tileOf, spend } from './empire.js';
 import { isEnemyId, applyDamage } from './combat.js';
-import { addPop } from './realism.js';
+import { addPop, addUltFx } from './realism.js';
 import { forEachNearby } from './spatialHash.js';
 import { findFreeTiles } from '../map/pathfinding.js';
 import { sound, soundAt } from '../audio/sound.js';
@@ -40,10 +43,12 @@ export const cityFeature = (city) => F.cities[city] || null;
 
 // --- الطرف المحايد الذي تحتاجه الميزة (يُضاف بعد الشرطة)، وnull لغيرها ---
 // villages: أهل القرى المسالمون، dojo: الساموراي، fortress: حراس الحصن، bandits: قطاع الطرق بشكل أمة المدينة،
-// coups: المتمردون، cartel: عصابة المجمع، caravan: القافلة، fireworks: الألعاب النارية (بلا وحدات: صاحب ضررها)
+// coups: المتمردون، cartel: عصابة المجمع، caravan: القافلة، fireworks: الألعاب النارية (بلا وحدات: صاحب ضررها)،
+// troll: ترول الجبل
 const RAIDERS = ['bandits', 'coups', 'cartel'];      // أطراف تستولي على الأحياء
 export function createFeaturePlayer(players, feature, city) {
-  const cfg = ['villages', 'dojo', 'fortress', 'bandits', 'coups', 'cartel', 'caravan', 'fireworks'].includes(feature) ? F[feature] : null;
+  const cfg = ['villages', 'dojo', 'fortress', 'bandits', 'coups', 'cartel', 'caravan', 'fireworks', 'troll'].includes(feature)
+    ? F[feature] : null;
   if (!cfg) return null;
   const nation = feature === 'bandits' ? cityNation(city) : cfg.nation;
   if (!nation || !nations[nation]) return null;
@@ -58,8 +63,8 @@ export function createFeaturePlayer(players, feature, city) {
     neutral: true,                     // خارج حساب الفوز والخسارة والبوتات كالشرطة
     passive: feature === 'villages',   // لا يهاجم ولا يُهاجَم ولا يُحسب جانباً في الاستيلاء (combat.js وcapture.js)
     captures: RAIDERS.includes(feature),   // يستولي على الأحياء (capture.js)
-    // القافلة والشرطة لا تتقاتلان: القافلة غنيمة للعصابات وحدها (friendOf في isEnemyId)
-    friendOf: feature === 'caravan' ? players.find(p => p.gang === 'police').id : -1,
+    // القافلة والترول والشرطة لا تتقاتل: هي للعصابات وحدها، غنيمة أو خصماً (friendOf في isEnemyId)
+    friendOf: feature === 'caravan' || feature === 'troll' ? players.find(p => p.gang === 'police').id : -1,
     ownOnly: feature === 'cartel',     // عصابة المجمع تحرس أحياءها الأربعة فقط: لا تستولي على غيرها
     feature,
     team: 0,
@@ -98,6 +103,7 @@ export function initFeatures(state) {
     if (!d.capture || d.featureTile === undefined) continue;
     d.cool = 0;
     if (d.feature === 'souk') d.taxed = 0;
+    if (d.feature === 'triads') d.readyAt = 0;
     if (d.feature === 'dojo') {
       for (let k = 0; k < F.dojo.start; k++) spawnGuard(state, d, F.dojo);
       d.nextAt = F.dojo.every;
@@ -127,6 +133,9 @@ export function updateFeatures(state) {
     case 'cartel': updateCartel(state); break;
     case 'caravan': updateCaravan(state); break;
     case 'fireworks': updateFireworks(state); break;
+    case 'triads': expireTriads(state); break;
+    case 'elephants': trample(state); break;
+    case 'troll': updateTroll(state); break;
   }
 }
 
@@ -184,6 +193,9 @@ export function featureBar(state) {
   if (state.feature === 'caravan' && state.mode !== 'survival' && state.units.some(u => u.cargo && isAlive(u))) {
     return { text: 'قافلة في المدينة', alarm: false };
   }
+  if (state.feature === 'troll' && state.mode !== 'survival' && state.units.some(u => u.creature === 'troll' && isAlive(u))) {
+    return { text: 'ترول الجبل في المدينة!', alarm: true };
+  }
   const name = EVENT_NAMES[state.feature];
   if (name && (state.feature === 'fireworks' || state.mode !== 'survival')) {
     const B = F[state.feature];
@@ -192,7 +204,7 @@ export function featureBar(state) {
   }
   return null;
 }
-const EVENT_NAMES = { bandits: 'قطاع الطرق', coups: 'انقلاب', caravan: 'قافلة', fireworks: 'ألعاب نارية' };
+const EVENT_NAMES = { bandits: 'قطاع الطرق', coups: 'انقلاب', caravan: 'قافلة', fireworks: 'ألعاب نارية', troll: 'ترول الجبل' };
 
 // ================= القرى المحايدة (شبام) =================
 function initVillages(state) {
@@ -413,9 +425,12 @@ export function spawnRecruit(state, player, d, kind) {
   const spots = findFreeTiles(state.map, d.capture.i, d.capture.j, SPAWN.spotSearchTiles);
   if (!spots.length) return false;
   const [i, j] = spots[Math.floor(random() * spots.length)];
-  const unit = createUnit(state, { ...player, gang: nations[R.nation].style, nation: R.nation }, i, j, R.hero);
+  // المخلوق (الفيل الحربي) من عصابة مالكه نفسها ويُرسم بشكله (render/creatureArt.js)
+  const unit = R.creature ? createUnit(state, player, i, j, null)
+    : createUnit(state, { ...player, gang: nations[R.nation].style, nation: R.nation }, i, j, R.hero);
   if (R.stats) boost(unit, R.stats);
   if (R.name) unit.name = R.name;
+  if (R.creature) makeCreature(unit, R.creature, R.scale, R.barY);
   unit.recruitKind = kind;
   state.units.push(unit);
   applyUpgrades(state, unit);
@@ -854,4 +869,182 @@ function burstFireworks(state, f) {
   });
   for (const u of hit) applyDamage(state, by, u, W.damage);
   soundAt(state, 'fire', f.x, f.y);
+}
+
+// ================= المخلوقات: الفيل الحربي وترول الجبل =================
+// تُرسم بشكلها (creature) بحجم scale وشريط دمها عند barY، ولا تترنّح ولا تسقط (steadyUntil) ولا تُدفع (holdUntil)
+const FOREVER = 1e9;
+function makeCreature(unit, kind, scale, barY) {
+  unit.creature = kind;
+  unit.artScale = scale;
+  unit.barY = barY;
+  unit.steadyUntil = FOREVER;
+  unit.holdUntil = FOREVER;
+}
+
+// ================= مقر الترياد (هونغ كونغ) =================
+// مالك المقر يدفع cost ويختار حياً لعدو (لا لحليف ولا لطرف محايد إلا الشرطة في الصمود): مقاتلون بلونه يظهرون حوله ويهاجمون ما فيه،
+// وبعد seconds يختفون. مرة كل cooldown لكل مقر (d.readyAt). يعيد { ok, reason } كأوامر الاقتصاد
+export function canCallTriads(state, pid, d, target) {
+  const T = F.triads;
+  if (!d || d.feature !== 'triads' || d.featureTile === undefined || d.owner !== pid) return { ok: false, reason: 'ليس مبناك' };
+  if (state.time < d.readyAt) return { ok: false, reason: 'يعودون بعد ' + Math.ceil(d.readyAt - state.time) + ' ث' };
+  if (state.modeState.points[pid] < T.cost) return { ok: false, reason: 'النقاط لا تكفي' };
+  if (target === undefined) return { ok: true, reason: '' };
+  return triadTarget(state, pid, target) ? { ok: true, reason: '' } : { ok: false, reason: 'اختر حياً لعدوك' };
+}
+
+// حي يصلح هدفاً للترياد: لعدو من العصابات، وفي الصمود حي استولت عليه الشرطة أيضاً (عدو الفريق الوحيد)
+export function triadTarget(state, pid, d) {
+  if (!d || !d.capture || d.owner === null || d.owner === pid || !isEnemyId(state, pid, d.owner)) return false;
+  const owner = state.players[d.owner];
+  return !owner.neutral || (state.mode === 'survival' && owner.gang === 'police');
+}
+
+export function callTriads(state, pid, districtId, targetId) {
+  const T = F.triads, d = state.map.districts[districtId];
+  const target = Number.isInteger(targetId) ? state.map.districts[targetId] : null;
+  const check = canCallTriads(state, pid, d, target || null);
+  if (!check.ok) return check;
+  const player = state.players[pid];
+  const spots = findFreeTiles(state.map, target.capture.i, target.capture.j, T.heroes.length);
+  if (!spots.length) return { ok: false, reason: 'لا مكان هناك' };
+  spend(state, pid, T.cost);
+  d.readyAt = state.time + T.cooldown;
+  const look = { ...player, gang: nations[T.nation].style, nation: T.nation };
+  const fighters = spots.map(([i, j], k) => {
+    const unit = createUnit(state, look, i, j, T.heroes[k]);
+    boost(unit, T.stats);
+    unit.name = T.name;
+    unit.expireAt = state.time + T.seconds;
+    state.units.push(unit);
+    applyUpgrades(state, unit);
+    return unit;
+  });
+  addUltFx(state, 'dust', target.capture.i, target.capture.j);
+  commandAttackMove(state, target.capture.i, target.capture.j, fighters, false);
+  soundAt(state, 'spawn', target.capture.i, target.capture.j);
+  if (target.owner === state.humanId) {
+    state.notice = { text: 'الترياد يهاجمون حياً من أحيائك!', mine: true, t: 3 };
+    sound('alert');
+  }
+  return { ok: true, reason: '' };
+}
+
+// انتهى وقت مقاتلي الترياد: يختفون في غبار بلا جثث
+function expireTriads(state) {
+  let gone = null;
+  for (const u of state.units) {
+    if (u.expireAt < 0 || state.time < u.expireAt || !isAlive(u)) continue;
+    addUltFx(state, 'dust', u.x, u.y);
+    u.hp = 0;
+    u.state = 'dead';
+    u.deathTimer = 0;
+    u.path = [];
+    u.target = null;
+    (gone || (gone = new Set())).add(u);
+  }
+  if (gone) state.units = state.units.filter(u => !gone.has(u));
+}
+
+// ================= إسطبل الفيلة (جايبور) =================
+// كل فيل حي يدهس كل عدو داخل radius كل every ثانية، ما دام بجانبه عدو
+function trample(state) {
+  const T = F.stable.trample, r2 = T.radius * T.radius;
+  for (const u of state.units) {
+    if (u.creature !== 'elephant' || !isAlive(u) || state.time < u.trampleAt) continue;
+    const hit = [];
+    forEachNearby(state, u.x, u.y, T.radius, (o) => {
+      const dx = o.x - u.x, dy = o.y - u.y;
+      if (dx * dx + dy * dy <= r2 && isAlive(o) && isEnemyId(state, u.playerId, o.playerId)) hit.push(o);
+    });
+    if (!hit.length) continue;
+    u.trampleAt = state.time + T.every;
+    for (const o of hit) applyDamage(state, u, o, T.damage);
+    addUltFx(state, 'dust', u.x, u.y);
+  }
+}
+
+// ================= ترول الجبل (القرية النرويجية) =================
+// الترول n عند first + (n − 1) × every (لا ترول في الصمود): واحد في كل مرة، من مربع موصول على حافة الجبل (i = 0)،
+// يقصد كل think ثانية أكبر تجمع للجنود، وبعد stay ثانية يعود إلى حيث نزل ويختفي. من يقتله يأخذ reward
+function updateTroll(state) {
+  if (state.mode === 'survival') return;
+  const T = F.troll, tick = tickOf(state), first = ticks(T.first), every = ticks(T.every);
+  if (tick >= first && (tick - first) % every === 0) spawnTroll(state);
+  rewardTroll(state);
+  if (tick % ticks(T.think) === 0) moveTroll(state);
+}
+
+function spawnTroll(state) {
+  const T = F.troll, player = featurePlayer(state), map = state.map;
+  if (!player || state.units.some(u => u.creature === 'troll' && isAlive(u))) return;
+  const edge = [];
+  for (let j = 0; j < map.n; j++) if (map.isConnected(0, j)) edge.push(j);
+  if (!edge.length) return;
+  const j = edge[Math.floor(random() * edge.length)];
+  const unit = createUnit(state, player, 0, j, T.hero);
+  boost(unit, T.stats);
+  unit.name = T.name;
+  makeCreature(unit, 'troll', T.scale, T.barY);
+  unit.lair = { i: 0, j, until: state.time + T.stay };
+  state.units.push(unit);
+  addUltFx(state, 'dust', 0, j);
+  state.notice = { text: 'ترول الجبل نزل إلى المدينة! من يقتله يأخذ ' + T.reward + ' نقطة', mine: false, t: 4 };
+  sound('alert');
+  moveTroll(state);
+}
+
+// سقط الترول: مكافأته لمن ضربه آخر مرة (مرة واحدة، ولا شيء إن سقط بيد طرف محايد)
+function rewardTroll(state) {
+  const T = F.troll, ms = state.modeState;
+  for (const u of state.units) {
+    if (u.creature !== 'troll' || u.state !== 'dead' || !u.lair) continue;
+    u.lair = null;
+    const killer = u.lastHitBy;
+    if (killer < 0 || !state.players[killer] || state.players[killer].neutral) continue;
+    ms.points[killer] += T.reward;
+    ms.earned[killer] += T.reward;
+    addPop(state, u, '+' + T.reward, 'loot');
+    soundAt(state, 'capture_done', u.x, u.y);
+    state.notice = killer === state.humanId
+      ? { text: 'أسقطت ترول الجبل: +' + T.reward + ' نقطة', mine: true, t: 3 }
+      : { text: state.players[killer].gangName + ' أسقطوا ترول الجبل', mine: false, t: 3 };
+  }
+}
+
+// يقصد أكبر تجمع للجنود (الجندي الذي حوله أكثرهم داخل cluster مربع)، وإذا انتهى وقته يعود ويختفي عند الجبل
+function moveTroll(state) {
+  const T = F.troll;
+  for (const u of state.units) {
+    if (u.creature !== 'troll' || !isAlive(u) || !u.lair) continue;
+    const lair = u.lair;
+    if (state.time >= lair.until) {
+      if (hypot(u.x - lair.i, u.y - lair.j) <= 1.6) {
+        u.lair = null;
+        addUltFx(state, 'dust', u.x, u.y);
+        u.hp = 0;
+        u.state = 'dead';
+        u.deathTimer = 0;
+        state.units = state.units.filter(x => x !== u);
+        state.notice = { text: 'عاد ترول الجبل إلى الجبل', mine: false, t: 3 };
+        return;
+      }
+      if (u.state !== 'moving') commandMove(state, lair.i, lair.j, [u], false);
+      continue;
+    }
+    if (u.state === 'attacking') continue;
+    const r2 = T.cluster * T.cluster;
+    let best = null, bestCount = 0;
+    for (const o of state.units) {
+      if (!soldier(state, o)) continue;
+      let count = 0;
+      forEachNearby(state, o.x, o.y, T.cluster, (p) => {
+        const dx = p.x - o.x, dy = p.y - o.y;
+        if (dx * dx + dy * dy <= r2 && soldier(state, p)) count++;
+      });
+      if (count > bestCount) { bestCount = count; best = o; }
+    }
+    if (best) commandAttackMove(state, best.x, best.y, [u], false);
+  }
 }

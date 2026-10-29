@@ -245,6 +245,9 @@ function resolveMove(state, unit, hit) {
 
     if (died) corpseKnock(state, target, unit, hit.move);
     else if (!isAlive(target) || target.invulnUntil > state.time) { /* تصلّب: لا ترنّح ولا دفع */ }
+    else if (unit.stats.slam && target.cState !== 'down') {
+      knockDown(state, target, unit.x, unit.y, unit.stats.slam);    // ضربة ترول الجبل تُسقط وتقذف (القسم 3.11)
+    }
     else if (m.down && target.cState !== 'down' && unit.rng() < m.down) {
       knockDown(state, target, unit.x, unit.y, (m.knock || 1) * 1.3);   // الركلة العالية والقوية قد تُسقطه
     } else if (m.stagger) {

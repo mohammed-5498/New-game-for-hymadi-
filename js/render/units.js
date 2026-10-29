@@ -5,6 +5,7 @@ import { drawOne, stateLabel, drawSpeedLines } from './combatArt.js';
 import { flameLayers } from './anim.js';
 import { shadedCount } from '../pacing.js';
 import { nationArtKey, shotLook } from './nationArt.js';
+import { drawCreature } from './creatureArt.js';
 import { spriteShotLook } from './unitSprites.js';
 import './nationsArab.js';                 // مظاهر الدفعة العربية تُسجَّل في سجل الأمم (القسم 3.10)
 import './nationsAsia.js';                 // والدفعة الآسيوية
@@ -66,8 +67,15 @@ export function drawUnit(ctx, unit, alpha, zoom = 99, time = 0, debug = false, c
   if (!dead && zoom < PERFORMANCE.unitDetailZoom) {
     // بلون اللاعب دائماً: عند الإبعاد المهم معرفة جيش من أين لا من ضُرب
     ctx.fillStyle = artColor(unit);
-    const size = unit.champion ? 6 : unit.hero ? 5 : 4;
+    const size = unit.creature ? 9 : unit.champion ? 6 : unit.hero ? 5 : 4;
     ctx.fillRect(x - size / 2, y - size, size, size);
+    return;
+  }
+
+  // المخلوقات (الفيل الحربي وترول الجبل، القسم 3.11) بشكلها، وشريط دمها فوقها
+  if (unit.creature) {
+    drawCreature(ctx, unit, x, y, artScale(unit), artColor(unit), time, isWalking(unit));
+    if (!dead && (unit.hp < unit.maxHp || unit.selected)) drawHealthBar(ctx, unit, x, y);
     return;
   }
 
@@ -154,9 +162,9 @@ const isWalking = (unit) =>
   (unit.state === 'attacking' && unit.path.length > 0);
 
 function drawHealthBar(ctx, unit, x, y) {
-  const w = unit.champion ? 8 : unit.hero ? 6.5 : 5, h = 1.1;
-  const top = y + (unit.champion ? UNIT_ART.championHealthBarY
-                 : unit.hero ? UNIT_ART.heroHealthBarY : UNIT_ART.healthBarY);
+  const w = unit.creature ? 14 : unit.champion ? 8 : unit.hero ? 6.5 : 5, h = unit.creature ? 1.6 : 1.1;
+  const top = y + (unit.barY || (unit.champion ? UNIT_ART.championHealthBarY
+                 : unit.hero ? UNIT_ART.heroHealthBarY : UNIT_ART.healthBarY));
   const ratio = Math.max(0, unit.hp / unit.maxHp);
 
   ctx.fillStyle = 'rgba(20,18,16,.75)';
@@ -204,8 +212,9 @@ function drawReadyStar(ctx, x, y, time) {
 // دائرة التحديد عند القدمين (تُرسم فوق طبقة الليل حتى تبقى واضحة)
 export function drawSelectionRing(ctx, unit, alpha) {
   const { x, y } = unitWorldPos(unit, alpha);
+  const k = unit.creature ? unitSizeFactor(unit) * 0.6 : 1;        // حلقة المخلوق بحجمه
   ctx.beginPath();
-  ctx.ellipse(x, y, 5.5, 2.8, 0, 0, 6.2832);
+  ctx.ellipse(x, y, 5.5 * k, 2.8 * k, 0, 0, 6.2832);
   ctx.strokeStyle = UI_LIGHT;
   ctx.lineWidth = 1;
   ctx.stroke();

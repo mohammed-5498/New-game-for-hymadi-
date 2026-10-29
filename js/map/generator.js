@@ -403,10 +403,10 @@ function assignPoliceDistricts(map, districts, size) {
 // center: الأقرب لوسط المدينة (بلا رقم عشوائي)، spread: موزعة بعيدة عن الأحياء المنزلية (الأولى عشوائية ثم الأبعد)
 const FEATURE_BUILDINGS = { pyramid: 'center', khartoum: 'center', dojo: 'center', clinic: 'spread', fortress: 'spread',
                             policeHQ: 'center', clock: 'center', complex: 'center', statue: 'center', mercs: 'spread',
-                            souk: 'center' };
+                            souk: 'center', triads: 'center', stable: 'center' };
 const DISTRICT_FEATURE = { pyramid: 'pyramid', villages: 'village', dojo: 'dojo', clinic: 'clinic', fortress: 'fortress',
                            khartoum: 'khartoum', policeHQ: 'policeHQ', clock: 'clock', cartel: 'complex', statue: 'statue',
-                           mercs: 'mercs', souk: 'souk' };
+                           mercs: 'mercs', souk: 'souk', triads: 'triads', elephants: 'stable' };
 const FEATURE_CONFIG = { village: 'villages', complex: 'cartel' };   // قسم الأرقام في CITY_FEATURES إن اختلف اسمه
 
 function assignFeatures(map, districts, size) {

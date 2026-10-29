@@ -10,7 +10,8 @@ import {
   empireCommand, towerStats, hospitalStats, incomeOf, tileOf
 } from '../game/empire.js';
 import { lanCommand } from '../net/session.js';
-import { recruitsAt, featureTowerStats, featureCostMul } from '../game/features.js';
+import { recruitsAt, featureTowerStats, featureCostMul, canCallTriads } from '../game/features.js';
+import { drawCreatureIcon } from '../render/creatureArt.js';
 import { worldToScreen } from '../map/coords.js';
 import { drawCharacters } from './charThumb.js';
 import { unitName } from './storeScreen.js';
@@ -73,12 +74,23 @@ function sectionsFor(state, district) {
       sections.push({ title: 'التجنيد', queue: true, slots: recruits.map(kind => {
         const R = F.recruits[kind], art = R.hero || 'common';
         return {
-          name: R.name || unitName(R.nation, art), art, side: R.nation, color: player.color,
+          name: R.name || unitName(R.nation, art), art, side: R.nation, creature: R.creature, color: player.color,
           cost: () => unitPrice(state, pid, kind),
           check: () => canQueue(state, pid, district, kind),
           cmd: { a: 'queue', d: district.id, x: kind }
         };
       }) });
+    }
+    // مقر الترياد: الخانة تبدأ اختيار الحي (pick)، واللمسة التالية على الخريطة ترسلهم إليه (input.js)
+    if (district.feature === 'triads') {
+      const T = F.triads;
+      sections.push({ title: 'الترياد', slots: [{
+        name: 'هجوم الترياد', desc: T.heroes.length + ' مقاتلين لمدة ' + T.seconds + ' ث',
+        art: 'common', side: T.nation, color: player.color, pick: true,
+        cost: () => T.cost,
+        check: () => canCallTriads(state, pid, district),
+        cmd: { a: 'triads', d: district.id }
+      }] });
     }
     return sections;
   }
@@ -153,6 +165,15 @@ function statsLine(state, district) {
     return 'جنودك داخل ' + S.radius + ' مربعات منه: +' + pct(S.damage) + ' ضرر و+' + pct(S.attackSpeed) + ' سرعة ضرب • احتلاله أبطأ';
   }
   if (district.feature === 'mercs') return 'مرتزقة بالنقاط: الخفيف سريع ورخيص، والثقيل قوي وغالٍ';
+  if (district.feature === 'triads') {
+    const T = F.triads, wait = Math.ceil((district.readyAt || 0) - state.time);
+    return 'ترسل ' + T.heroes.length + ' مقاتلين إلى حي لعدوك يقاتلون ' + T.seconds + ' ث • مرة كل ' + T.cooldown + ' ث' +
+           (wait > 0 ? ' • جاهزون بعد ' + wait + ' ث' : '');
+  }
+  if (district.feature === 'stable') {
+    const R = F.recruits.elephant;
+    return 'الفيل الحربي: دم ' + R.stats.hp + '، يدهس كل من حوله • فيل واحد لك في كل مرة';
+  }
   if (district.feature === 'souk') {
     return 'تأخذ ' + pct(F.souk.tax) + ' من كل ما يصرفه غيرك • جمعت منه ' + Math.floor(district.taxed || 0) + ' نقطة';
   }
@@ -216,18 +237,43 @@ function build(state, district) {
       open.queue = { text: queue.appendChild(node('span')), fill: queue.appendChild(node('div', 'em-bar')).appendChild(node('i')) };
     }
   }
-  for (const [canvas, slot] of arts) drawCharacters(canvas, slot.side, [slot.art], slot.color);   // بعد وضعها: بمقاسها
+  for (const [canvas, slot] of arts) {             // بعد وضعها: بمقاسها
+    if (slot.creature) drawCreatureIcon(canvas, slot.creature, slot.color);
+    else drawCharacters(canvas, slot.side, [slot.art], slot.color);
+  }
 }
 
-// اللعب المحلي (القسم 16): الخانة المتاحة تُرسل أمرها فينفذه كل جهاز في نفس التحديث (بعد لحظة)
+// أمر من الواجهة: في اللعب المحلي (القسم 16) يُفحص هنا ثم يُرسل فينفذه كل جهاز في نفس التحديث (بعد لحظة)،
+// وإلا يُنفذ مباشرة. يعيد { ok, reason }
+export function sendEmpire(state, cmd, check) {
+  if (!state.lanRole) return empireCommand(state, state.humanId, cmd.a, cmd.d, cmd.x);
+  const result = check();
+  if (result.ok) lanCommand({ k: 'emp', ...cmd });
+  return result;
+}
+
+// اختيار حي على الخريطة بعد خانة pick (هجوم الترياد): حالة هذا الجهاز وحده، خارج حالة المباراة المشتركة
+let picking = null;
+export function takePick() {
+  const pick = picking;
+  picking = null;
+  return pick;
+}
+
 function press(state, entry) {
   const { cmd } = entry.slot;
   let result;
-  if (state.lanRole) {
+  if (entry.slot.pick) {
     result = entry.slot.check();
-    if (result.ok) lanCommand({ k: 'emp', ...cmd });
+    if (result.ok) {
+      picking = { ...cmd };
+      sound('select');
+      closeEmpireMenu(state);
+      state.notice = { text: 'المس حياً لعدوك ليهجم عليه الترياد', mine: true, t: 5 };
+      return;
+    }
   } else {
-    result = empireCommand(state, state.humanId, cmd.a, cmd.d, cmd.x);
+    result = sendEmpire(state, cmd, entry.slot.check);
   }
   if (result.ok) {
     sound('select');

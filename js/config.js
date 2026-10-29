@@ -1437,16 +1437,16 @@ export const CITY_FEATURES = {
   cities: { diriyah: 'storm', shibam: 'villages', cairo: 'pyramid',
             japan: 'dojo', gyeongju: 'bandits', kano: 'bandits', kaifeng: 'clinic', gondar: 'fortress', meroe: 'khartoum',
             paris: 'coups', rothenburg: 'policeHQ', birmingham: 'clock', tenoch: 'cartel', rio: 'statue', laboca: 'mercs',
-            yamamah: 'caravan', arab: 'souk', china: 'fireworks' },
+            yamamah: 'caravan', arab: 'souk', china: 'fireworks', hk: 'triads', jaipur: 'elephants', norway: 'troll' },
   ground: ['#c9a24e', 0.24],
   // المبنى المميز (بطلب المستخدم: مساحة خاصة به، وحجم أكبر وفخامة وهالة): كتلة 2×2 وسط حيه لا يُمشى عليها،
   // وبقية الحي ساحة مرصوفة حوله يُمشى عليها. حيه blockTiles مربعاً فأكثر (generator.js)
   blockTiles: 9,
   botValue: { pyramid: 3, village: 2, dojo: 2.5, clinic: 2, fortress: 2.5, khartoum: 3,
-              policeHQ: 3, clock: 3, complex: 2.5, cartel: 1.6, statue: 3, mercs: 2, souk: 2.5 },
+              policeHQ: 3, clock: 3, complex: 2.5, cartel: 1.6, statue: 3, mercs: 2, souk: 2.5, triads: 2.5, stable: 2.5 },
   names: { pyramid: 'الهرم', village: 'القرية', dojo: 'دوجو الساموراي', clinic: 'دار العلاج', fortress: 'الحصن',
            khartoum: 'برج الخرطوم', policeHQ: 'مركز الشرطة الرئيسي', clock: 'برج الساعة', complex: 'المجمع السكني',
-           statue: 'تمثال ريو', mercs: 'بيت المرتزقة', souk: 'السوق الكبير' },
+           statue: 'تمثال ريو', mercs: 'بيت المرتزقة', souk: 'السوق الكبير', triads: 'مقر الترياد', stable: 'إسطبل الفيلة' },
   hintSeconds: 6,                     // إشعار ميزة المدينة في بداية المباراة (بعد تلميح قائمة الحي)
   // سطر ميزة المدينة في معاينة المدينة (قائمة الإعداد والمتجر) وإشعار البداية
   desc: { storm: 'العاصفة الرملية: كل 3 دقائق لنصف دقيقة، مدى الرماة أقل والضربات تخطئ',
@@ -1465,14 +1465,17 @@ export const CITY_FEATURES = {
           mercs: 'بيوت المرتزقة: يستأجر مالكها مرتزقاً خفيفاً رخيصاً أو ثقيلاً غالياً',
           caravan: 'قافلة التجارة: كل 3 دقائق قافلة تعبر المدينة بحراسها، وكل تاجر تنهبه يعطيك 20 نقطة',
           souk: 'السوق الكبير: مالكه يأخذ 10% من كل ما يصرفه غيره',
-          fireworks: 'مهرجان الألعاب النارية: كل دقيقتين ونصف تنفجر فوق أكبر تجمعات الجنود، فابتعد عن الدوائر الحمراء' },
+          fireworks: 'مهرجان الألعاب النارية: كل دقيقتين ونصف تنفجر فوق أكبر تجمعات الجنود، فابتعد عن الدوائر الحمراء',
+          triads: 'مقر الترياد: مالكه يرسل 6 مقاتلين أقوياء إلى أي حي لعدوه، يقاتلون 45 ثانية ثم يختفون',
+          elephants: 'إسطبل الفيلة: مالكه يجنّد فيلاً حربياً ضخماً يدهس كل من حوله',
+          troll: 'ترول الجبل: كل 4 دقائق ينزل وحش ضخم يهاجم أكبر تجمعات الجنود، ومن يقتله يأخذ 120 نقطة' },
   // الهالة حول كل مبنى مميز وحول القرية التي ينتظر أهلها (رسم فقط): نصف القطر بالمربعات من وسط الكتلة، ونبض بطيء،
   // ونجوم صغيرة تدور عليها. colors: لون هالة كل ميزة
   halo: { radius: 1.95, width: 1.6, glow: 8, alpha: 0.85, glowAlpha: 0.3, pulse: 0.3, speed: 1.8,
           sparkles: 4, sparkleSpeed: 0.45, sparkleR: 1.6, light: 46 },
   colors: { pyramid: '255,206,84', village: '120,140,225', dojo: '232,70,86', clinic: '96,220,150', fortress: '150,214,96',
             khartoum: '255,150,60', policeHQ: '95,160,240', clock: '240,205,120', complex: '47,190,175', statue: '140,230,120',
-            mercs: '235,95,110', souk: '230,170,70' },
+            mercs: '235,95,110', souk: '230,170,70', triads: '255,80,170', stable: '255,140,190' },
   // العاصفة الرملية (الدرعية): أولها عند first ثانية ثم كل every ثانية، لمدة duration، وتنبيه قبلها بـ warn ثانية.
   // أثناءها: مدى الرماة والأبراج × rangeMul، والضربة القريبة والسهم وسهم البرج يخطئ باحتمال miss
   // ("أخطأ!" pop)، والنار وضربات الأبطال أضعف بنفس النسبة
@@ -1553,6 +1556,21 @@ export const CITY_FEATURES = {
   fireworks: { first: 150, every: 150, count: 3, minUnits: 3, radius: 2.5, warn: 5, damage: 40, dodge: 1.2, fade: 1.6,
                dodgeChance: { easy: 0, medium: 0.5, hard: 0.8, insane: 1 },
                name: 'الألعاب النارية', color: '#c0392b', nation: 'china' },
+  // مقر الترياد (هونغ كونغ): من قائمته يدفع مالكه cost ويلمس حياً لعدو، فيظهر حوله fighters مقاتلين بلونه (heroes:
+  // شخصية كل واحد، null للفرد العادي) بشكل أمة nation وإحصائيات stats، يقاتلون seconds ثانية ثم يختفون. مرة كل cooldown
+  // ثانية لكل مقر. والبوت يرسلهم إن بقي معه بعد الدفع botReserve نقطة
+  triads: { cost: 60, cooldown: 90, seconds: 45, nation: 'china', heroes: [null, null, null, null, 'boss', 'boss'],
+            name: 'مقاتل الترياد', stats: { hp: 230, armor: 0.15, damage: 14, speed: 2.6 }, botReserve: 30, top: 82 },
+  // إسطبل الفيلة (جايبور): يجنّد فيه مالكه الفيل الحربي (recruits.elephant). الفيل يدهس كل عدو داخل radius
+  // كل every ثانية بضرر damage، ولا يترنّح ولا يسقط ولا يُدفع
+  stable: { top: 62, recruits: ['elephant'], trample: { radius: 1.5, damage: 22, every: 1.5 } },
+  // ترول الجبل (القرية النرويجية): أوله عند first ثم كل every ثانية (لا ترول في الصمود)، ينزل من حافة الجبل (i = 0)
+  // ويقصد كل think ثانية أكبر تجمع للجنود (cluster مربع)، ولا يقاتل الشرطة، وبعد stay ثانية يعود إلى الجبل ويختفي. ضربته تُسقط المصاب
+  // وتدفعه slam مربع، ومن يقتله يأخذ reward نقطة. hero: شخصية الأساس من نمط أمته، وscale حجم رسمه
+  troll: { first: 180, every: 240, stay: 120, think: 3, cluster: 4, reward: 120, scale: 2.7, barY: -40,
+           name: 'ترول الجبل', color: '#5f6f58', nation: 'germany', hero: 'smasher',
+           stats: { hp: 2500, armor: 0.2, damage: 60, attackTime: 1.8, speed: 1.4, attackRange: 2.2, visionRange: 8,
+                    slam: 1.6, capturePower: 0 } },
   // التجنيد في المباني المميزة (من قائمتها، بطابور كالقاعدة): الكلفة والزمن، وشكل الوحدة (أمة nation وشخصيتها hero،
   // وnull للفرد العادي) وما يُضاف إلى إحصائياتها stats، واسمها name (وإلا اسمها في أمتها)
   recruits: {
@@ -1564,7 +1582,12 @@ export const CITY_FEATURES = {
     blade:   { name: 'مرتزق خفيف', cost: 15, seconds: 4, nation: 'argentina', hero: 'dual',
                stats: { hp: 90, damage: 7, attackTime: 0.55, speed: 2.7 } },
     gaucho:  { name: 'مرتزق ثقيل', cost: 140, seconds: 14, nation: 'argentina', hero: 'spear',
-               stats: { hp: 520, armor: 0.35, damage: 30, attackTime: 1.3, speed: 2.0 } }
+               stats: { hp: 520, armor: 0.35, damage: 30, attackTime: 1.3, speed: 2.0 } },
+    // الفيل الحربي (جايبور): مخلوق (creature) يُرسم بشكله لا بشكل أمة، بحجم scale وشريط دمه عند barY،
+    // وواحد فقط لكل لاعب في الوقت نفسه (limit، ومعه ما في الطوابير)
+    elephant: { name: 'فيل حربي', cost: 180, seconds: 18, creature: 'elephant', scale: 2.1, barY: -30, limit: 1,
+                limitText: 'لك فيل الآن',
+                stats: { hp: 1800, armor: 0.3, damage: 30, attackTime: 1.6, speed: 1.3, attackRange: 1.8 } }
   }
 };
 
