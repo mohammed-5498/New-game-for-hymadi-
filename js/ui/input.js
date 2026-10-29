@@ -11,7 +11,7 @@ import { unitWorldPos } from '../render/units.js';
 import { badgeOf } from '../render/empireArt.js';
 import { featureBadgeOf } from '../render/featureArt.js';
 import { openEmpireMenu, closeEmpireMenu, isEmpireMenuOpen, sendEmpire, takePick } from './empireMenu.js';
-import { canCallTriads } from '../game/features.js';
+import { canPick } from '../game/features.js';
 import { lanCommand } from '../net/session.js';
 
 export function setupInput(canvas, state) {
@@ -176,7 +176,7 @@ export function setupInput(canvas, state) {
   function handleTap(sx, sy) {
     // سهم التنبيه أولاً: لمسته تنقل الكاميرا إلى مكان الاشتباك (القسم 12.3)
     if (tapAlertArrow(sx, sy)) return;
-    // بعد خانة هجوم الترياد (القسم 3.11): هذه اللمسة تختار الحي
+    // بعد خانة هجوم الترياد أو القطار (القسم 3.11): هذه اللمسة تختار الحي
     const pick = takePick();
     if (pick) { pickDistrict(pick, sx, sy); return; }
 
@@ -277,13 +277,12 @@ export function setupInput(canvas, state) {
     return d && d.owner === state.humanId ? d : null;
   }
 
-  // هجوم الترياد إلى الحي الملموس، أو سبب الرفض في الإشعار
+  // هجوم الترياد أو رحلة القطار إلى الحي الملموس، أو سبب الرفض في الإشعار
   function pickDistrict(pick, sx, sy) {
     const target = areaAt(sx, sy);
-    const hq = state.map.districts[pick.d];
     const result = target
-      ? sendEmpire(state, { ...pick, x: target.id }, () => canCallTriads(state, state.humanId, hq, target))
-      : { ok: false, reason: 'اختر حياً لعدوك' };
+      ? sendEmpire(state, { ...pick, x: target.id }, () => canPick(state, state.humanId, pick, target))
+      : canPick(state, state.humanId, pick, null);
     state.notice = result.ok ? null : { text: result.reason, mine: true, t: 2.5 };
     sound(result.ok ? 'command' : 'ui_tap');
   }

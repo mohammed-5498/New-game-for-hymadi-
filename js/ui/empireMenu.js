@@ -10,7 +10,7 @@ import {
   empireCommand, towerStats, hospitalStats, incomeOf, tileOf
 } from '../game/empire.js';
 import { lanCommand } from '../net/session.js';
-import { recruitsAt, featureTowerStats, featureCostMul, canCallTriads } from '../game/features.js';
+import { recruitsAt, featureTowerStats, featureCostMul, canCallTriads, canSendTrain, onlyStation } from '../game/features.js';
 import { drawCreatureIcon } from '../render/creatureArt.js';
 import { worldToScreen } from '../map/coords.js';
 import { drawCharacters } from './charThumb.js';
@@ -86,10 +86,21 @@ function sectionsFor(state, district) {
       const T = F.triads;
       sections.push({ title: 'الترياد', slots: [{
         name: 'هجوم الترياد', desc: T.heroes.length + ' مقاتلين لمدة ' + T.seconds + ' ث',
-        art: 'common', side: T.nation, color: player.color, pick: true,
+        art: 'common', side: T.nation, color: player.color, pick: { text: 'المس حياً لعدوك ليهجم عليه الترياد' },
         cost: () => T.cost,
         check: () => canCallTriads(state, pid, district),
         cmd: { a: 'triads', d: district.id }
+      }] });
+    }
+    // محطة القطار: مع محطتين يذهب مباشرة إلى الأخرى، ومع أكثر يختار اللاعب المحطة بلمسة
+    if (district.feature === 'station') {
+      const T = F.station;
+      sections.push({ title: 'القطار', slots: [{
+        name: 'أرسل بالقطار', desc: 'جنودك حول المحطة (حتى ' + T.seats + ') يصلون محطة أخرى لك بعد ' + T.seconds + ' ث',
+        pick: { text: 'المس المحطة التي يذهبون إليها', direct: () => onlyStation(state, pid, district) },
+        cost: () => 'مجاناً',
+        check: () => canSendTrain(state, pid, district),
+        cmd: { a: 'train', d: district.id }
       }] });
     }
     return sections;
@@ -169,6 +180,16 @@ function statsLine(state, district) {
     const T = F.triads, wait = Math.ceil((district.readyAt || 0) - state.time);
     return 'ترسل ' + T.heroes.length + ' مقاتلين إلى حي لعدوك يقاتلون ' + T.seconds + ' ث • مرة كل ' + T.cooldown + ' ث' +
            (wait > 0 ? ' • جاهزون بعد ' + wait + ' ث' : '');
+  }
+  if (district.feature === 'station') {
+    const T = F.station, wait = Math.ceil((district.readyAt || 0) - state.time);
+    return 'تنقل جنودك حولها إلى محطة أخرى لك في ' + T.seconds + ' ث • مرة كل ' + T.cooldown + ' ث' + (wait > 0 ? ' • يعود بعد ' + wait + ' ث' : '');
+  }
+  if (district.feature === 'mine') {
+    return 'دخله الآن ' + district.mineRate + ' نقطة/ث • يكبر كل دقيقة حتى ' + F.mine.max + '، ويعود إلى ' + F.mine.base + ' إن احتُل';
+  }
+  if (district.feature === 'bank') {
+    return 'في الخزنة ' + Math.floor(district.vault) + ' نقطة لمن يحتله • رسومه لك ' + F.bank.fee + ' نقطة/ث';
   }
   if (district.feature === 'stable') {
     const R = F.recruits.elephant;
@@ -263,15 +284,19 @@ export function takePick() {
 function press(state, entry) {
   const { cmd } = entry.slot;
   let result;
-  if (entry.slot.pick) {
+  const pick = entry.slot.pick;
+  const direct = pick && pick.direct ? pick.direct() : null;
+  if (pick && direct === null) {
     result = entry.slot.check();
     if (result.ok) {
       picking = { ...cmd };
       sound('select');
       closeEmpireMenu(state);
-      state.notice = { text: 'المس حياً لعدوك ليهجم عليه الترياد', mine: true, t: 5 };
+      state.notice = { text: pick.text, mine: true, t: 5 };
       return;
     }
+  } else if (pick) {
+    result = sendEmpire(state, { ...cmd, x: direct }, entry.slot.check);
   } else {
     result = sendEmpire(state, cmd, entry.slot.check);
   }

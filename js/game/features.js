@@ -21,6 +21,9 @@
 // - مقر الترياد (هونغ كونغ): مالكه يرسل مقاتلين مؤقتين إلى حي لعدوه (callTriads، أمر triads في empire.js)
 // - إسطبل الفيلة (جايبور): تجنيد فيل حربي (مخلوق creature يُرسم بشكله) يدهس من حوله
 // - ترول الجبل (القرية النرويجية): وحش محايد ضخم ينزل بموعد ويقصد أكبر تجمعات الجنود، ومن يقتله يأخذ مكافأته
+// - محطة القطار (المدينة الأوروبية): من يملك محطتين ينقل جنوده بينهما (sendTrain، أمر train، وstate.trains في الطريق)
+// - منجم الفضة (المدينة المكسيكية): دخل يكبر كلما طال امتلاكه (d.mineRate)
+// - البنك (شيكاغو): خزنة تمتلئ (d.vault) يسرقها كلها من يحتل البنك
 // الحي يحمل ميزته (district.feature، من مولّد الخريطة)، والمباراة ميزة مدينتها (state.feature).
 // الأرقام كلها في CITY_FEATURES داخل config.js
 import { TICK_SEC, CITY_FEATURES as F, EMPIRE as E, COMBAT, SPAWN, nations } from '../config.js';
@@ -99,11 +102,14 @@ export function initFeatures(state) {
   if (state.feature === 'villages') initVillages(state);
   if (state.feature === 'cartel') initCartel(state);
   if (state.feature === 'fireworks') state.fireworks = [];
+  if (state.feature === 'trains') state.trains = [];
   for (const d of state.map.districts) {
     if (!d.capture || d.featureTile === undefined) continue;
     d.cool = 0;
     if (d.feature === 'souk') d.taxed = 0;
-    if (d.feature === 'triads') d.readyAt = 0;
+    if (d.feature === 'triads' || d.feature === 'station') d.readyAt = 0;
+    if (d.feature === 'mine') { d.mineOwner = null; d.mineSince = 0; d.mineRate = 0; }
+    if (d.feature === 'bank') { d.vault = 0; d.bankOwner = null; }
     if (d.feature === 'dojo') {
       for (let k = 0; k < F.dojo.start; k++) spawnGuard(state, d, F.dojo);
       d.nextAt = F.dojo.every;
@@ -136,6 +142,9 @@ export function updateFeatures(state) {
     case 'triads': expireTriads(state); break;
     case 'elephants': trample(state); break;
     case 'troll': updateTroll(state); break;
+    case 'trains': updateTrains(state); break;
+    case 'mine': updateMine(state); break;
+    case 'bank': updateBank(state); break;
   }
 }
 
@@ -250,12 +259,15 @@ export const villageWaiting = (d) => d.feature === 'village' && !d.villageJoined
 // قيمة حي الميزة عند البوتات (squads.js)، وnull لغيره (والقرية بعد انضمام أهلها حي عادي)
 export function featureValue(d) {
   if (!d.feature || (d.feature === 'village' && d.villageJoined)) return null;
+  if (d.feature === 'bank') return F.botValue.bank + d.vault / F.bank.botPer;     // كلما امتلأت الخزنة صار أغرى
   return F.botValue[d.feature] || null;
 }
 
 // ================= الهرم (القاهرة) =================
 // دخل الحي في الثانية: الهرم بدل نقطة الحي العادي، وnull لغير حي الهرم
-export const featureIncome = (d) => d.feature === 'pyramid' ? F.pyramid.income : null;
+// والمنجم دخله الحالي (يكبر مع مدة امتلاكه، updateMine)، والبنك رسومه
+export const featureIncome = (d) => d.feature === 'pyramid' ? F.pyramid.income : d.feature === 'mine' ? d.mineRate
+  : d.feature === 'bank' ? F.bank.fee : null;
 
 // الأهرام المملوكة الآن: { owner, x, y, r2 } لحساب الضرر المتلقى حولها (abilities.js)
 export function pyramidZones(state) {
@@ -1046,5 +1058,127 @@ function moveTroll(state) {
       if (count > bestCount) { bestCount = count; best = o; }
     }
     if (best) commandAttackMove(state, best.x, best.y, [u], false);
+  }
+}
+
+// ================= ما يُختار بلمسة على الخريطة (القائمة ثم input.js) =================
+// هجوم الترياد (حي عدو) ورحلة القطار (محطة أخرى للاعب). يعيد { ok, reason }
+export function canPick(state, pid, pick, target) {
+  const d = state.map.districts[pick.d];
+  return pick.a === 'train' ? canSendTrain(state, pid, d, target) : canCallTriads(state, pid, d, target);
+}
+
+// ================= محطة القطار (المدينة الأوروبية) =================
+const ownStations = (state, pid) =>
+  state.map.districts.filter(d => d.feature === 'station' && d.featureTile !== undefined && d.owner === pid);
+
+// الركاب: جنود اللاعب داخل radius من ساحة المحطة، الأقرب أولاً حتى seats (لا المخلوقات: لا تسعها العربات)
+function riders(state, pid, d) {
+  const T = F.station, near = [];
+  for (const u of state.units) {
+    if (u.playerId !== pid || !isAlive(u) || u.creature) continue;
+    const dist = hypot(u.x - d.capture.i, u.y - d.capture.j);
+    if (dist <= T.radius) near.push([dist, u]);
+  }
+  near.sort((a, b) => a[0] - b[0]);
+  return near.slice(0, T.seats).map(([, u]) => u);
+}
+
+export function canSendTrain(state, pid, from, to) {
+  if (!from || from.feature !== 'station' || from.featureTile === undefined || from.owner !== pid) return { ok: false, reason: 'ليست محطتك' };
+  if (state.time < from.readyAt) return { ok: false, reason: 'القطار يعود بعد ' + Math.ceil(from.readyAt - state.time) + ' ث' };
+  if (ownStations(state, pid).length < 2) return { ok: false, reason: 'تحتاج محطة ثانية' };
+  if (!riders(state, pid, from).length) return { ok: false, reason: 'لا جنود حول المحطة' };
+  if (to === undefined) return { ok: true, reason: '' };
+  if (!to || to === from || to.feature !== 'station' || to.featureTile === undefined || to.owner !== pid) {
+    return { ok: false, reason: 'اختر محطة أخرى لك' };
+  }
+  return { ok: true, reason: '' };
+}
+
+// المحطة الوحيدة التي يصل إليها القطار من هذه (حين يملك اللاعب محطتين فقط)، وإلا null فيختار بلمسة
+export function onlyStation(state, pid, from) {
+  const others = ownStations(state, pid).filter(d => d !== from);
+  return others.length === 1 ? others[0].id : null;
+}
+
+// الركاب يغادرون الخريطة (لا يُرى منهم شيء ولا يُضرب) حتى يصلوا: من كان يقصدهم يترك هدفه، والمقذوفات إليهم تسقط
+export function sendTrain(state, pid, fromId, toId) {
+  const T = F.station, from = state.map.districts[fromId];
+  const to = Number.isInteger(toId) ? state.map.districts[toId] : null;
+  const check = canSendTrain(state, pid, from, to || null);
+  if (!check.ok) return check;
+  const units = riders(state, pid, from), aboard = new Set(units);
+  from.readyAt = state.time + T.cooldown;
+  for (const u of units) {
+    u.path = []; u.flow = null; u.target = null; u.attackMove = null; u.state = 'idle';
+    u.pendingHit = null; u.cMove = null; u.cPhases = null;
+  }
+  state.units = state.units.filter(u => !aboard.has(u));
+  for (const u of state.units) if (u.target && aboard.has(u.target)) u.target = null;
+  state.projectiles = state.projectiles.filter(p => !aboard.has(p.target));
+  state.trains.push({ units, from: from.id, to: to.id, at: tickOf(state) + ticks(T.seconds) });
+  addUltFx(state, 'dust', from.capture.i, from.capture.j);
+  soundAt(state, 'whistle', from.capture.i, from.capture.j);
+  return { ok: true, reason: '' };
+}
+
+// القطار وصل: الركاب ينزلون حول ساحة المحطة الأخرى (ولو سقطت أثناء الرحلة)
+function updateTrains(state) {
+  if (!state.trains.length) return;
+  const tick = tickOf(state);
+  for (const train of state.trains) {
+    if (tick < train.at) continue;
+    const to = state.map.districts[train.to];
+    const spots = findFreeTiles(state.map, to.capture.i, to.capture.j, train.units.length);
+    train.units.forEach((u, k) => {
+      const [i, j] = spots[Math.min(k, spots.length - 1)] || [to.capture.i, to.capture.j];
+      u.x = u.prevX = i;
+      u.y = u.prevY = j;
+      u.vx = u.vy = 0;
+      u.chaseOrigin = { x: i, y: j };
+      state.units.push(u);
+    });
+    addUltFx(state, 'dust', to.capture.i, to.capture.j);
+    soundAt(state, 'whistle', to.capture.i, to.capture.j);
+    if (train.units.some(u => u.playerId === state.humanId)) {
+      state.notice = { text: 'وصل القطار: ' + train.units.length + ' من جنودك في ' + F.names.station, mine: true, t: 2.5 };
+    }
+    train.done = true;
+  }
+  state.trains = state.trains.filter(t => !t.done);
+}
+
+// ================= منجم الفضة (المدينة المكسيكية) =================
+// الدخل يبدأ من base عند كل احتلال، ويزيد step كل every ثانية حتى max. لا دخل والمنجم محايد
+function updateMine(state) {
+  const M = F.mine;
+  for (const d of state.map.districts) {
+    if (d.feature !== 'mine') continue;
+    if (d.owner !== d.mineOwner) { d.mineOwner = d.owner; d.mineSince = state.time; }
+    const rate = d.owner === null ? 0 : Math.min(M.max, M.base + M.step * Math.floor((state.time - d.mineSince) / M.every));
+    if (d.mineRate !== rate) d.mineRate = rate;
+  }
+}
+
+// ================= البنك (شيكاغو) =================
+// الخزنة تمتلئ fill نقطة/ث حتى cap، ومن يحتل البنك من العصابات يسرقها كلها فتبدأ من الصفر
+function updateBank(state) {
+  const B = F.bank, ms = state.modeState;
+  for (const d of state.map.districts) {
+    if (d.feature !== 'bank') continue;
+    if (d.vault < B.cap) d.vault = Math.min(B.cap, d.vault + B.fill * TICK_SEC);
+    if (d.owner === d.bankOwner) continue;
+    d.bankOwner = d.owner;
+    if (d.owner === null || state.players[d.owner].neutral) continue;
+    const loot = Math.floor(d.vault);
+    d.vault = 0;
+    if (!loot) continue;
+    ms.points[d.owner] += loot;
+    ms.earned[d.owner] += loot;
+    soundAt(state, 'capture_done', d.capture.i, d.capture.j);
+    state.notice = d.owner === state.humanId
+      ? { text: 'سرقت البنك: +' + loot + ' نقطة', mine: true, t: 3 }
+      : { text: state.players[d.owner].gangName + ' سرقوا البنك: ' + loot + ' نقطة', mine: false, t: 3 };
   }
 }

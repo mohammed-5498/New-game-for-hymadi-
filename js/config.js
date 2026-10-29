@@ -1437,16 +1437,19 @@ export const CITY_FEATURES = {
   cities: { diriyah: 'storm', shibam: 'villages', cairo: 'pyramid',
             japan: 'dojo', gyeongju: 'bandits', kano: 'bandits', kaifeng: 'clinic', gondar: 'fortress', meroe: 'khartoum',
             paris: 'coups', rothenburg: 'policeHQ', birmingham: 'clock', tenoch: 'cartel', rio: 'statue', laboca: 'mercs',
-            yamamah: 'caravan', arab: 'souk', china: 'fireworks', hk: 'triads', jaipur: 'elephants', norway: 'troll' },
+            yamamah: 'caravan', arab: 'souk', china: 'fireworks', hk: 'triads', jaipur: 'elephants', norway: 'troll',
+            europe: 'trains', mexico: 'mine', chicago: 'bank' },
   ground: ['#c9a24e', 0.24],
   // المبنى المميز (بطلب المستخدم: مساحة خاصة به، وحجم أكبر وفخامة وهالة): كتلة 2×2 وسط حيه لا يُمشى عليها،
   // وبقية الحي ساحة مرصوفة حوله يُمشى عليها. حيه blockTiles مربعاً فأكثر (generator.js)
   blockTiles: 9,
   botValue: { pyramid: 3, village: 2, dojo: 2.5, clinic: 2, fortress: 2.5, khartoum: 3,
-              policeHQ: 3, clock: 3, complex: 2.5, cartel: 1.6, statue: 3, mercs: 2, souk: 2.5, triads: 2.5, stable: 2.5 },
+              policeHQ: 3, clock: 3, complex: 2.5, cartel: 1.6, statue: 3, mercs: 2, souk: 2.5, triads: 2.5, stable: 2.5,
+              station: 2, mine: 3, bank: 2.5 },
   names: { pyramid: 'الهرم', village: 'القرية', dojo: 'دوجو الساموراي', clinic: 'دار العلاج', fortress: 'الحصن',
            khartoum: 'برج الخرطوم', policeHQ: 'مركز الشرطة الرئيسي', clock: 'برج الساعة', complex: 'المجمع السكني',
-           statue: 'تمثال ريو', mercs: 'بيت المرتزقة', souk: 'السوق الكبير', triads: 'مقر الترياد', stable: 'إسطبل الفيلة' },
+           statue: 'تمثال ريو', mercs: 'بيت المرتزقة', souk: 'السوق الكبير', triads: 'مقر الترياد', stable: 'إسطبل الفيلة',
+           station: 'محطة القطار', mine: 'منجم الفضة', bank: 'البنك' },
   hintSeconds: 6,                     // إشعار ميزة المدينة في بداية المباراة (بعد تلميح قائمة الحي)
   // سطر ميزة المدينة في معاينة المدينة (قائمة الإعداد والمتجر) وإشعار البداية
   desc: { storm: 'العاصفة الرملية: كل 3 دقائق لنصف دقيقة، مدى الرماة أقل والضربات تخطئ',
@@ -1468,14 +1471,18 @@ export const CITY_FEATURES = {
           fireworks: 'مهرجان الألعاب النارية: كل دقيقتين ونصف تنفجر فوق أكبر تجمعات الجنود، فابتعد عن الدوائر الحمراء',
           triads: 'مقر الترياد: مالكه يرسل 6 مقاتلين أقوياء إلى أي حي لعدوه، يقاتلون 45 ثانية ثم يختفون',
           elephants: 'إسطبل الفيلة: مالكه يجنّد فيلاً حربياً ضخماً يدهس كل من حوله',
-          troll: 'ترول الجبل: كل 4 دقائق ينزل وحش ضخم يهاجم أكبر تجمعات الجنود، ومن يقتله يأخذ 120 نقطة' },
+          troll: 'ترول الجبل: كل 4 دقائق ينزل وحش ضخم يهاجم أكبر تجمعات الجنود، ومن يقتله يأخذ 120 نقطة',
+          trains: 'محطات القطار: من يملك محطتين ينقل جنوده بينهما في ثوانٍ',
+          mine: 'منجم الفضة: دخله يكبر كلما طال امتلاكه حتى 4 نقاط في الثانية',
+          bank: 'سرقة البنك: خزنته تمتلئ طوال المباراة، ومن يحتل البنك يسرقها كلها' },
   // الهالة حول كل مبنى مميز وحول القرية التي ينتظر أهلها (رسم فقط): نصف القطر بالمربعات من وسط الكتلة، ونبض بطيء،
   // ونجوم صغيرة تدور عليها. colors: لون هالة كل ميزة
   halo: { radius: 1.95, width: 1.6, glow: 8, alpha: 0.85, glowAlpha: 0.3, pulse: 0.3, speed: 1.8,
           sparkles: 4, sparkleSpeed: 0.45, sparkleR: 1.6, light: 46 },
   colors: { pyramid: '255,206,84', village: '120,140,225', dojo: '232,70,86', clinic: '96,220,150', fortress: '150,214,96',
             khartoum: '255,150,60', policeHQ: '95,160,240', clock: '240,205,120', complex: '47,190,175', statue: '140,230,120',
-            mercs: '235,95,110', souk: '230,170,70', triads: '255,80,170', stable: '255,140,190' },
+            mercs: '235,95,110', souk: '230,170,70', triads: '255,80,170', stable: '255,140,190',
+            station: '120,170,255', mine: '200,215,230', bank: '120,230,150' },
   // العاصفة الرملية (الدرعية): أولها عند first ثانية ثم كل every ثانية، لمدة duration، وتنبيه قبلها بـ warn ثانية.
   // أثناءها: مدى الرماة والأبراج × rangeMul، والضربة القريبة والسهم وسهم البرج يخطئ باحتمال miss
   // ("أخطأ!" pop)، والنار وضربات الأبطال أضعف بنفس النسبة
@@ -1564,6 +1571,17 @@ export const CITY_FEATURES = {
   // إسطبل الفيلة (جايبور): يجنّد فيه مالكه الفيل الحربي (recruits.elephant). الفيل يدهس كل عدو داخل radius
   // كل every ثانية بضرر damage، ولا يترنّح ولا يسقط ولا يُدفع
   stable: { top: 62, recruits: ['elephant'], trample: { radius: 1.5, damage: 22, every: 1.5 } },
+  // محطة القطار (المدينة الأوروبية): count محطات حسب حجم الخريطة، متباعدة. من قائمة محطة يملكها من يملك محطتين:
+  // جنوده داخل radius مربع منها (حتى seats، الأقرب أولاً) يركبون القطار ويصلون محطة أخرى له بعد seconds ثانية،
+  // ومرة كل cooldown لكل محطة. والبوت يرسل منها إن كان حولها botRiders فأكثر وحول محطة أخرى له أعداء داخل botThreat
+  station: { count: { small: 2, medium: 2, large: 3 }, minHomeDistance: 4, radius: 4, seats: 12, seconds: 4, cooldown: 45,
+             botRiders: 5, botThreat: 6, top: 60 },
+  // منجم الفضة (المدينة المكسيكية): دخله base نقطة/ث في أول every ثانية من امتلاكه، ثم +step كل every حتى max،
+  // ويعود إلى base كلما احتُل
+  mine: { base: 1, step: 1, every: 60, max: 4, top: 58 },
+  // البنك (شيكاغو): خزنته تمتلئ fill نقطة/ث طوال المباراة حتى cap، ومن يحتل البنك يسرقها كلها، ومالكه يأخذ fee نقطة/ث.
+  // وقيمته عند البوتات تزيد نقطة لكل botPer في الخزنة
+  bank: { fill: 1.5, cap: 300, fee: 1, botPer: 100, top: 60 },
   // ترول الجبل (القرية النرويجية): أوله عند first ثم كل every ثانية (لا ترول في الصمود)، ينزل من حافة الجبل (i = 0)
   // ويقصد كل think ثانية أكبر تجمع للجنود (cluster مربع)، ولا يقاتل الشرطة، وبعد stay ثانية يعود إلى الجبل ويختفي. ضربته تُسقط المصاب
   // وتدفعه slam مربع، ومن يقتله يأخذ reward نقطة. hero: شخصية الأساس من نمط أمته، وscale حجم رسمه
