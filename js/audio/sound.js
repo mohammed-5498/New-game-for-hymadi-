@@ -13,8 +13,7 @@ let unlocked = false;
 let wantMusic = false;
 let wantTheme = false;      // لحن القوائم: القوائم ظاهرة
 let silenced = false;       // الشاشة السوداء لبدء المباراة: لا يُسمع إلا صوتا البداية والتحميل
-let introUntil = 0;         // صوت تشغيل اللعبة يُسمع إن جهزت الملفات قبل هذا الوقت
-let introPlaying = false;   // ولحن القوائم ينتظره
+let intro = false;          // شاشة التشغيل السوداء ظاهرة: صوت التشغيل (التطبيق)، ولحن القوائم بعدها مباشرة
 
 // --- الإعدادات: تُحفظ في localStorage وتُقرأ عند بدء اللعبة ---
 export function loadAudioSettings() {
@@ -77,13 +76,12 @@ function onUnlocked() {
 
 // الملفات جاهزة: صوت تشغيل اللعبة إن كان وقته (التطبيق)، ثم لحن القوائم
 function onSamplesLoaded() {
-  if (!silenced && performance.now() < introUntil &&
-      playTrack('game_start', 0, () => { introPlaying = false; refreshTheme(); })) introPlaying = true;
+  if (intro && !silenced && isNativeApp()) playTrack('game_start');
   refreshTheme();
 }
 
 function refreshTheme() {
-  themeOn(wantTheme && unlocked && !silenced && !introPlaying && !settings.muted && settings.music > 0);
+  themeOn(wantTheme && unlocked && !silenced && !intro && !settings.muted && settings.music > 0);
 }
 
 // لحن القوائم: يدور ما دامت القوائم ظاهرة (showScreen)
@@ -92,10 +90,11 @@ export function menuMusic(on) {
   refreshTheme();
 }
 
-// تشغيل اللعبة: صوته يُسمع إن جهز الصوت خلال introWindow ثانية، في التطبيق وحده (المتصفح لا يفتح الصوت قبل أول لمسة،
-// فيبدأ بها لحن القوائم)
-export function introSound() {
-  if (isNativeApp()) introUntil = performance.now() + AUDIO.tracks.introWindow * 1000;
+// شاشة التشغيل السوداء ظاهرة أو ارتفعت: صوتها في التطبيق وحده (المتصفح لا يفتح الصوت قبل أول لمسة، فيبدأ بها
+// لحن القوائم)، واللحن مع ارتفاعها
+export function introSound(on) {
+  intro = on;
+  refreshTheme();
 }
 
 // الشاشة السوداء لبدء المباراة: يصمت كل شيء إلا صوت البداية ثم صوت التحميل، ويعود ما كان مطلوباً بعدها
@@ -104,7 +103,6 @@ export function matchSilence(on) {
   if (on) {
     GameAudio.music.stop();
     stopSamples();
-    introPlaying = false;
     queue.length = 0;
     playTrack('match_start');
     playTrack('loading', AUDIO.tracks.loadingDelay);
@@ -174,8 +172,8 @@ export function soundAt(state, name, i, j, opt) {
   const at = screenPos(state, i, j);
   if (!at) return false;
   if (silenced) return true;
-  const o = { ...opt, pan: panOf(state, at), gain: nearness(state, at) };
   const priority = AUDIO.mix.priority[name];
+  const o = { ...opt, pan: panOf(state, at), gain: nearness(state, at) * (priority === undefined ? 1 : AUDIO.combatGain) };
   if (priority === undefined) play(name, o);
   else if (queue.length < AUDIO.mix.queueMax) {
     const centered = 1 - Math.min(1, Math.abs(at.x / state.view.w * 2 - 1));

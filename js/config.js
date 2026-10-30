@@ -1230,12 +1230,13 @@ export const AUDIO = {
   gainJitter: 0.15,
   softHz: 6000,          // مرشح يخفف حدة المؤثرات (بطلب المستخدم: خافتة لا حادة)، ثم ضاغط يمنع تراكم المتزامنة
   synthGain: 0.6,
+  combatGain: 0.8,       // مؤثرات القتال (mix.priority) كلها أخفض 20% (بطلب المستخدم)
 
   // لحن القوائم وأصوات البداية (بمؤشر الموسيقى): theme في القوائم بتلاشٍ، وmatch_start ثم loading بعد loadingDelay
-  // على الشاشة السوداء لبدء المباراة، وgame_start عند تشغيل اللعبة إن فُتح الصوت قبل introWindow ثانية (التطبيق)
-  // ثم يبدأ اللحن بعده
+  // على الشاشة السوداء لبدء المباراة، وgame_start على شاشة التشغيل السوداء إن جهز الصوت وهي ظاهرة (التطبيق)،
+  // واللحن يبدأ مع ارتفاعها مباشرة (بطلب المستخدم)
   tracks: { theme: 0.8, themeFadeIn: 1.5, themeFadeOut: 0.6, match_start: 0.9, loading: 0.85, loadingDelay: 0.6,
-            game_start: 0.9, introWindow: 4 }
+            game_start: 0.9 }
 };
 
 // --- الأداء ---
@@ -1664,7 +1665,7 @@ export const UI = {
   // الشاشة السوداء (بطلب المستخدم): عند بدء المباراة أو متابعتها seconds تُجهَّز فيها المدينة ولا يُسمع إلا صوتا البداية
   // والتحميل، وتظهر وتختفي بسرعة (fadeMs). وintro عند تشغيل اللعبة: مكان مقدمة التطبيق لاحقاً
   blackout: { seconds: 4, fadeMs: 250 },
-  intro: { seconds: 1.2, fadeMs: 400 },
+  intro: { seconds: 4.2, fadeMs: 400 },      // 1.2 ثم أطول بـ 3 ث (بطلب المستخدم)
   statsKey: 'gangcity.stats',    // الإحصائيات الدائمة في localStorage
   setupKey: 'gangcity.setup',    // آخر إعداد مباراة اختاره اللاعب
 

@@ -28,8 +28,8 @@ export function matchBlackout(work) {
 
 // تشغيل اللعبة: الشاشة سوداء من أول رسم (class="on" في index.html) ثم ترتفع
 export function introBlackout() {
-  introSound();
-  cover(UI.intro);
+  introSound(true);
+  cover(UI.intro, () => introSound(false));
 }
 
 export const blackoutHolds = (now) => now < until;
