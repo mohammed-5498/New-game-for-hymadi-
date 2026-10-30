@@ -1240,8 +1240,13 @@ export const AUDIO = {
 
   // موسيقى الخرائط (بطلب المستخدم، assets/audio/music/): لحن لكل مدينة يدور خلف المباراة، وبعض المدن تتشارك لحناً.
   // الملفات m01-m20 بترتيب إرساله ومسوّاة الارتفاع، وتُسمع بـ tracks.city (20%) قبل مؤشر الموسيقى، وتظهر بتلاشٍ
-  // بعد الشاشة السوداء. المدينة بلا لحن هنا: الموسيقى المولَّدة كما كانت
-  cityMusic: {}
+  // بعد الشاشة السوداء. والخريطة لكل لحن من كلامه. المدينة بلا لحن هنا: الموسيقى المولَّدة كما كانت
+  cityMusic: {
+    rio: 'm01', china: 'm02', kaifeng: 'm02', arab: 'm03', cairo: 'm04', diriyah: 'm04', europe: 'm05',
+    norway: 'm06', japan: 'm07', birmingham: 'm08', tenoch: 'm09', mexico: 'm09', jaipur: 'm10',
+    rothenburg: 'm11', shibam: 'm12', yamamah: 'm12', chicago: 'm13', gondar: 'm14', gyeongju: 'm15',
+    paris: 'm16', kano: 'm17', laboca: 'm18', meroe: 'm19', hk: 'm20'
+  }
 };
 
 // --- الأداء ---
