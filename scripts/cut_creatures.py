@@ -29,6 +29,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, 'docs', 'characters', 'creatures')
 OUT_JS = os.path.join(ROOT, 'js', 'render', 'creatureSpritesData.js')
 SCALE = 0.6          # الأطلس 60% من الصورة الأصلية: يكفي أقصى تقريب
+CLOTH = 0.88         # كسوة الفيل بلون مالكه أغمق بهذا القدر
 PAD = 3
 
 
@@ -56,14 +57,19 @@ def cap_under(img, c, r, color, edge=7):
     img[empty] = cap[empty]
 
 
-def fill_near(img, hole, keep, width):
-    """ما خلف القطعة المتحركة من الجسد: أقرب لون من الجسد (keep) ثم تنعيم، في شريط بعرض width داخل hole"""
-    dist, (iy, ix) = ndimage.distance_transform_edt(~keep, return_indices=True)
-    band = hole & (dist <= width)
-    img[band] = img[iy[band], ix[band]]
-    soft = ndimage.gaussian_filter(img[..., :3].astype(float), (7, 7, 0))
-    img[band, :3] = soft[band].astype(np.uint8)
-    img[band, 3] = 255
+def fill_with(img, hole, keep, width, color):
+    """ما خلف القطعة المتحركة من الجسد: لون الجلد في شريط بعرض width داخل hole يلي الجسد (keep)، فلا يظهر فراغ
+    حين تتحرك القطعة"""
+    band = hole & (ndimage.distance_transform_edt(~keep) <= width)
+    img[band] = (*color, 255)
+
+
+def grade(img, gamma, gain, gray):
+    """أغمق وأقتم (بطلب المستخدم): منحنى gamma يعتّم الألوان المتوسطة أكثر من الفاتحة، ثم gain، ثم مزج gray
+    نحو الرمادي (تشبع أقل)"""
+    c = (img[..., :3] / 255.0) ** gamma * gain
+    c += (c.mean(-1, keepdims=True) - c) * gray
+    img[..., :3] = np.clip(c * 255 + 0.5, 0, 255).astype(np.uint8)
 
 
 def crop(img):
@@ -86,10 +92,11 @@ def troll(img):
                             (779, 650), (768, 630), (760, 612)]) & a & ~club & ~body_blue
     flab, _ = ndimage.label(fore)
     fore = flab == np.argmax(np.bincount(flab[fore]))           # بلا فتات من حدود الساق
+    grade(img, 1.7, 0.74, 0.3)                                  # أغمق (بطلب المستخدم)، بعد قياس الأقنعة بألوان الأصل
     base = img.copy()
     base[fore | club] = 0
-    reg = img[300:520, 230:870].reshape(-1, 4).astype(int)
-    skin = tuple(int(v) for v in np.median(reg[(reg[:, 2] > reg[:, 0] + 40) & (reg[:, 3] > 200), :3], 0))   # أزرق الجلد
+    sel = blue[300:520, 230:870] & (img[300:520, 230:870, 3] > 200)
+    skin = tuple(int(v) for v in np.median(img[300:520, 230:870][sel][:, :3], 0))      # أزرق الجلد
     elbow = (832, 540)
     cap_under(base, elbow, 60, skin)
 
@@ -129,16 +136,34 @@ def elephant(img):
     lab, _ = ndimage.label(area & (s < 0.25) & (v > 0.3))
     ear = ndimage.binary_dilation(lab == lab[470, 960], iterations=12) & area & ((v < 0.3) | (s < 0.25))
     head = (area & ((xs >= 1060) | (ys < 345))) | ear
+    # طرف الخرطوم الملتف يتمايل وحده، والذيل يتأرجح حول أصله
+    trunk = poly(img.shape, [(1150, 812), (1275, 812), (1290, 840), (1290, 935), (1150, 935)]) & head
+    tail = poly(img.shape, [(100, 690), (300, 650), (340, 650), (318, 690), (300, 760), (245, 840), (200, 900),
+                            (100, 900)]) & a & ~head
+    grade(img, 1.6, 0.72, 0.15)                                 # أغمق (بطلب المستخدم)، بعد قياس الأقنعة بألوان الأصل
+    belly = img[700:760, 400:800][(s[700:760, 400:800] < 0.2) & a[700:760, 400:800]]
+    skin = tuple(int(c) for c in np.median(belly[:, :3], 0))    # رمادي الجلد
     body = img.copy()
-    body[head] = 0
-    fill_near(body, head, a & ~head, 34)
+    body[head | tail] = 0
+    keep = a & ~head & ~tail
+    fill_with(body, head, keep, 34, skin)                       # الرقبة خلف الأذن والرأس
+    fill_with(body, tail, keep, 12, skin)                       # أصل الذيل
+    cut = lambda m: np.where(m[..., None], img, 0).astype(np.uint8)
+    face = head & ~ear & ~trunk
+    head_img = cut(face)
+    fill_with(head_img, ear | trunk, face, 18, skin)            # تحت الأذن وعند أصل طرف الخرطوم
     parts = {
+        'tail': cut(tail),
         'body': body,
-        'head': np.where(head[..., None], img, 0).astype(np.uint8),
+        'trunk': cut(trunk),
+        'head': head_img,
+        'ear': cut(ear),
     }
     data = {
         'origin': [688, 1040], 'height': 815,
-        'neck': [1060, 540],
+        # محاور: الرقبة، وأعلى الأذن عند الوجه، وأعلى طرف الخرطوم، وأصل الذيل، والقدمان على الأرض
+        'neck': [1060, 540], 'ear': [1092, 440], 'trunk': [1270, 815], 'tail': [322, 668],
+        'rearFoot': [335, 1040], 'frontFoot': [1035, 1040],
         'mesh': {'y0': 690, 'y1': 1046, 'xs': [120, 530, 850, 1186], 'ny': 4},
     }
     gem = disc(img.shape, (1268, 414), 34)               # الجوهرة الحمراء على الخوذة تبقى حمراء
@@ -149,7 +174,9 @@ def elephant(img):
         red = ((ph < 12) | (ph > 345)) & (pv > 0.1) & (part[..., 3] > 0) & ~gem     # لا خشب الهودج البني
         return (red * np.clip((ps - 0.4) / 0.2, 0, 1)).astype(np.float32)
     sel = cloth(img) > 0.99
-    return parts, data, (cloth, (float(np.median(s[sel])), float(np.median(v[sel]))))
+    _, gs, gv = hsv(img[..., :3] / 255.0)
+    # القماش بلون مالكه أغمق قليلاً (CLOTH) كبقية الفيل
+    return parts, data, (cloth, (float(np.median(gs[sel])), float(np.median(gv[sel])) / CLOTH))
 
 
 def main():

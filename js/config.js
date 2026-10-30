@@ -1537,7 +1537,7 @@ export const CITY_FEATURES = {
           fireworks: 'مهرجان الألعاب النارية: كل دقيقتين ونصف تنفجر فوق أكبر تجمعات الجنود، فابتعد عن الدوائر الحمراء',
           triads: 'مقر الترياد: مالكه يرسل 6 مقاتلين أقوياء إلى أي حي لعدوه، يقاتلون 45 ثانية ثم يختفون',
           elephants: 'إسطبل الفيلة: مالكه يجنّد فيلاً حربياً ضخماً يدهس كل من حوله',
-          troll: 'ترول الجبل: كل 4 دقائق ينزل وحش ضخم يهاجم أكبر تجمعات الجنود، ومن يقتله يأخذ 120 نقطة',
+          troll: 'ترول الجبل: كل 4 دقائق ينزل وحش ضخم يهاجم أكبر تجمعات الجنود، ومن يقتله يأخذ 240 نقطة',
           trains: 'محطات القطار: من يملك محطتين ينقل جنوده بينهما في ثوانٍ',
           mine: 'منجم الفضة: دخله يكبر كلما طال امتلاكه حتى 4 نقاط في الثانية',
           bank: 'سرقة البنك: خزنته تمتلئ طوال المباراة، ومن يحتل البنك يسرقها كلها' },
@@ -1651,9 +1651,10 @@ export const CITY_FEATURES = {
   // ترول الجبل (القرية النرويجية): أوله عند first ثم كل every ثانية (لا ترول في الصمود)، ينزل من حافة الجبل (i = 0)
   // ويقصد كل think ثانية أكبر تجمع للجنود (cluster مربع)، ولا يقاتل الشرطة، وبعد stay ثانية يعود إلى الجبل ويختفي. ضربته تُسقط المصاب
   // وتدفعه slam مربع، ومن يقتله يأخذ reward نقطة. hero: شخصية الأساس من نمط أمته، وscale حجم رسمه
-  troll: { first: 180, every: 240, stay: 120, think: 3, cluster: 4, reward: 120, scale: 2.7, barY: -44,
+  // (بطلب المستخدم: أقوى 50% دماً وضرراً من 2500 و60، وجائزته 120 نقطة زيادة)
+  troll: { first: 180, every: 240, stay: 120, think: 3, cluster: 4, reward: 240, scale: 2.7, barY: -44,
            name: 'ترول الجبل', color: '#5f6f58', nation: 'germany', hero: 'smasher',
-           stats: { hp: 2500, armor: 0.2, damage: 60, attackTime: 1.8, speed: 1.4, attackRange: 2.2, visionRange: 8,
+           stats: { hp: 3750, armor: 0.2, damage: 90, attackTime: 1.8, speed: 1.4, attackRange: 2.2, visionRange: 8,
                     slam: 1.6, capturePower: 0 } },
   // التجنيد في المباني المميزة (من قائمتها، بطابور كالقاعدة): الكلفة والزمن، وشكل الوحدة (أمة nation وشخصيتها hero،
   // وnull للفرد العادي) وما يُضاف إلى إحصائياتها stats، واسمها name (وإلا اسمها في أمتها)
@@ -1667,9 +1668,9 @@ export const CITY_FEATURES = {
                stats: { hp: 90, damage: 7, attackTime: 0.55, speed: 2.7 } },
     gaucho:  { name: 'مرتزق ثقيل', cost: 140, seconds: 14, nation: 'argentina', hero: 'spear',
                stats: { hp: 520, armor: 0.35, damage: 30, attackTime: 1.3, speed: 2.0 } },
-    // الفيل الحربي (جايبور): مخلوق (creature) يُرسم بشكله لا بشكل أمة، بحجم scale وشريط دمه عند barY،
-    // وواحد فقط لكل لاعب في الوقت نفسه (limit، ومعه ما في الطوابير)
-    elephant: { name: 'فيل حربي', cost: 180, seconds: 18, creature: 'elephant', scale: 2.1, barY: -44, limit: 1,
+    // الفيل الحربي (جايبور): مخلوق (creature) يُرسم بشكله لا بشكل أمة، بحجم scale (أصغر 40% من 2.1 بطلب المستخدم)
+    // وشريط دمه عند barY، وواحد فقط لكل لاعب في الوقت نفسه (limit، ومعه ما في الطوابير)
+    elephant: { name: 'فيل حربي', cost: 180, seconds: 18, creature: 'elephant', scale: 1.26, barY: -28, limit: 1,
                 limitText: 'لك فيل الآن',
                 stats: { hp: 1800, armor: 0.3, damage: 30, attackTime: 1.6, speed: 1.3, attackRange: 1.8 } }
   }

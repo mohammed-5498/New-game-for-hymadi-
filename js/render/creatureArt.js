@@ -158,8 +158,8 @@ const SIZE = { troll: 29, elephant: 33 };
 export const CREATURE_WIDTH = { troll: 1.8, elephant: 2.2 };
 // pace سرعة الخطو (راديان/ث)، وstride وlift وbob مدى الخطوة ورفع القدم وصعود الجسد (بكسل)
 const GAIT = {
-  troll:    { pace: 8, stride: 55, lift: 24, bob: 14, hip: [515, 640] },
-  elephant: { pace: 6.5, stride: 48, lift: 20, bob: 10, hip: [688, 690] }
+  troll:    { pace: 8, stride: 72, lift: 36, bob: 20, hip: [515, 640] },
+  elephant: { pace: 6.5, stride: 60, lift: 30, bob: 12, hip: [688, 690] }
 };
 const CLUB_REST = 0.75;                         // ميل الهراوة في قبضة الترول واقفاً (راديان تحت الأفق، للأمام)
 const atlases = {}, waiting = {}, painted = new Map();
@@ -265,11 +265,10 @@ function gait(G, o) {
   return [[G.stride * s, G.lift * Math.max(0, c)], [-G.stride * s, G.lift * Math.max(0, -c)]];
 }
 
-// الجسد: يعلو حين تتجاوز الساقان إحداهما الأخرى (أو يتنفس واقفاً)، ويهبط حين يموت
-function bodyRise(G, o, breath) {
-  const sink = Math.min(1, o.deadT * 2.5) * 70;
-  return (o.walking ? -G.bob * (1 - Math.abs(Math.sin(o.walkT))) : Math.sin(o.time * 2) * breath) + sink;
-}
+// الجسد: يعلو حين تتجاوز الساقان إحداهما الأخرى ويهبط بحدة حين تنزل قدم (خطو ثقيل)، أو يتنفس واقفاً
+const bodyRise = (G, o, breath) => (o.walking ? -G.bob * Math.abs(Math.cos(o.walkT)) : Math.sin(o.time * 2) * breath);
+const easeOut = (u) => u * (2 - u);
+const clamp01 = (u) => Math.max(0, Math.min(1, u));
 
 // الضربة من -1 إلى 1: يستعد (إلى -1) حتى نهاية الاستعداد w، ثم يضرب (إلى 1) حتى لحظة الإصابة h،
 // ويثبت حتى g، ثم يعود إلى 0
@@ -283,6 +282,9 @@ function strike(o) {
   return 1 - u * u * (3 - 2 * u);
 }
 
+// ما مضى من لحظة الإصابة نسبةً إلى span من زمن الضربة (ليس بعدها: 1)
+const sinceHit = (o, span) => (o.swing && o.swing >= o.h ? (o.swing - o.h) / (1 - o.h) / span : 1);
+
 // ومضة الإصابة: الجسد يُعاد رسمه فوق نفسه مضيئاً
 function flashOn(ctx, S, p, y, f) {
   if (f <= 0) return;
@@ -293,13 +295,69 @@ function flashOn(ctx, S, p, y, f) {
   ctx.restore();
 }
 
-// --- الترول: يرفع الهراوة بساعده فوق رأسه ويميل للخلف، ثم يهوي بها إلى الأرض أمامه فيثور الغبار.
-// ويمشي والهراوة تتأرجح في يده ---
+// غبار يثور من الأرض عند (x, y) ويتسع ويخفت مع u (من 0 إلى 1)، وsize مداه، وring حلقة حوله للضربة القوية
+function dust(ctx, x, y, u, size, ring) {
+  if (!(u >= 0 && u < 1)) return;
+  ctx.save();
+  ctx.globalAlpha *= 0.6 * (1 - u);
+  for (let k = -1; k <= 1; k++) {
+    const r = size * (0.22 + 0.3 * u) * (k ? 0.75 : 1);
+    ell(ctx, x + k * size * (0.3 + 0.55 * u), y - size * (0.08 + 0.25 * u) * (k ? 0.6 : 1), r, r * 0.6, '#ab9874');
+  }
+  if (ring) {
+    const R = size * (0.5 + 1.4 * u);
+    ctx.beginPath();
+    ctx.ellipse(x, y, R, R * 0.28, 0, 0, TAU);
+    ctx.strokeStyle = '#d9c9a6';
+    ctx.lineWidth = size * 0.12;
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// حجارة تتطاير من موضع الضربة وتسقط
+function debris(ctx, x, y, u) {
+  if (!(u >= 0 && u < 1)) return;
+  ctx.save();
+  ctx.globalAlpha *= 1 - u * u;
+  for (let k = 0; k < 5; k++) {
+    const px = x + ((k - 2) * 95 + 30) * u, py = y - (260 + (k % 2) * 90) * u + 520 * u * u, r = 15 - k;
+    shape(ctx, [[px - r, py], [px, py - r * 0.8], [px + r, py - r * 0.1], [px + r * 0.3, py + r * 0.7]], '#3d342c');
+  }
+  ctx.restore();
+}
+
+// غبار القدم التي نزلت للتو: الخلفية عند ربع دورة الخطو والأمامية عند ثلاثة أرباعها، feet موضعاهما حين تنزلان
+function footfalls(ctx, o, feet, size) {
+  if (!o.walking) return;
+  for (let i = 0; i < 2; i++) {
+    const age = ((o.walkT - Math.PI / 2 - i * Math.PI) % TAU + TAU) % TAU / TAU;
+    dust(ctx, feet[i][0], feet[i][1], age / 0.35, size, false);
+  }
+}
+
+// --- الترول: يمشي مائلاً للأمام يدق الأرض بقدميه فيثور الغبار، والهراوة تتأرجح في يده. يضرب: ينحني قليلاً ثم يرفع
+// الهراوة فوق رأسه مائلاً للخلف، ثم يهوي بها إلى الأرض أمامه فيهبط جسده ويثور الغبار وتتطاير الحجارة. يموت:
+// تنثني ركبتاه وتسقط الهراوة، ثم يهوي على ظهره ويثور الغبار ---
 function trollSprite(ctx, S, o) {
   const D = CS.troll, P = D.parts, G = GAIT.troll, M = D.mesh, r = strike(o);
-  const arm = (r < 0 ? 2.3 * r : 0.3 * r) - (o.walking ? 0.15 * Math.sin(o.walkT) : 0);
-  const B = { ang: r < 0 ? 0.05 * r : 0.08 * r, dx: 0, dy: bodyRise(G, o, 4) };
+  const wind = o.swing && o.swing < o.w ? o.swing / o.w : 0;
+  const buckle = clamp01(o.deadT / 0.3), fall = clamp01((o.deadT - 0.3) / 0.45);
+  let arm = (r < 0 ? 2.3 * r : 0.3 * r) - (o.walking ? 0.22 * Math.sin(o.walkT) : 0);
+  if (o.deadT) arm = 0.9 * buckle;
+  const B = {
+    ang: (r < 0 ? 0.06 * r : 0.1 * r) + (o.walking ? 0.03 + 0.012 * Math.sin(2 * o.walkT) : 0.01 * Math.sin(o.time * 2))
+      - 0.05 * o.flash + 0.08 * buckle,
+    dx: 0,
+    dy: bodyRise(G, o, 5) + 16 * Math.sin(Math.PI * Math.min(1, wind * 1.8)) + 18 * Math.max(0, r) + 70 * easeOut(buckle)
+  };
+  ctx.save();
+  ctx.globalAlpha *= 1 - fall * 0.6;
   ell(ctx, 520, D.origin[1], 470, 90, 'rgba(0,0,0,0.25)');
+  ctx.restore();
+  footfalls(ctx, o, [[230 + G.stride, D.origin[1]], [740 + G.stride, D.origin[1] - 20]], 150);
+  ctx.save();
+  if (fall) turnAt(ctx, [230, D.origin[1]], -1.45 * fall * fall + 0.06 * Math.sin(Math.PI * clamp01((o.deadT - 0.75) / 0.12)));
   legs(ctx, S, P.base, M, G, B, gait(G, o));
   ctx.save();
   bodyOn(ctx, G, B);
@@ -315,35 +373,54 @@ function trollSprite(ctx, S, o) {
   ctx.restore();
   piece(ctx, S, P.fore);
   ctx.restore();
-  // غبار الضربة على الأرض أمامه
-  const u = o.swing && o.swing >= o.h ? (o.swing - o.h) / (1 - o.h) / 0.5 : 1;
-  if (u < 1) {
-    ctx.save();
-    ctx.globalAlpha *= 0.6 * (1 - u);
-    ctx.beginPath();
-    ctx.ellipse(1040, 1075, 90 + 240 * u, (90 + 240 * u) * 0.28, 0, 0, TAU);
-    ctx.strokeStyle = '#d9c9a6';
-    ctx.lineWidth = 18;
-    ctx.stroke();
-    ctx.restore();
-  }
+  ctx.restore();
+  // الضربة على الأرض أمامه، وسقوطه على ظهره
+  const u = sinceHit(o, 0.5);
+  dust(ctx, 1040, 1068, u, 230, true);
+  debris(ctx, 1040, 1050, u * 0.5 / 0.45);
+  dust(ctx, -300, D.origin[1], (o.deadT - 0.72) / 0.28, 330, true);
 }
 
-// --- الفيل: يخفض رأسه ويميل للخلف، ثم يندفع للأمام رافعاً رأسه فيطعن بنابيه، ويومئ مع خطوه ---
+// --- الفيل: يمشي يومئ برأسه ويخفق بأذنه ويتأرجح ذيله وخرطومه. يضرب: يقف على رجليه الخلفيتين رافعاً رأسه وذيله
+// وأذنه تخفق بسرعة، ثم يدق الأرض بالأماميتين فيثور الغبار ويندفع رافعاً نابيه. يموت: يبرك ويتدلى رأسه ---
 function elephantSprite(ctx, S, o) {
-  const D = CS.elephant, P = D.parts, G = GAIT.elephant, M = D.mesh, r = strike(o);
-  const B = { ang: r < 0 ? 0.03 * r : 0.02 * r, dx: 40 * Math.max(0, r), dy: bodyRise(G, o, 3) };
-  const nod = (o.walking ? 0.04 * Math.sin(2 * o.walkT) : 0.02 * Math.sin(o.time * 1.3)) + (r < 0 ? -0.12 * r : -0.2 * r);
+  const D = CS.elephant, P = D.parts, G = GAIT.elephant, M = D.mesh, r = strike(o), t = o.time;
+  const kneel = easeOut(clamp01(o.deadT / 0.5)), ws = o.walking ? Math.sin(o.walkT) : 0;
+  const B = { ang: (r > 0 ? 0.02 * r : 0) - 0.02 * o.flash, dx: 30 * Math.max(0, r), dy: bodyRise(G, o, 3) + 70 * kneel };
+  const nod = (o.walking ? 0.04 * Math.sin(2 * o.walkT) : 0.02 * Math.sin(t * 1.3)) + (r < 0 ? 0.08 * r : -0.2 * r) + 0.22 * kneel;
+  const tail = 0.15 * Math.sin(t * 2.3) + 0.2 * Math.sin(o.walkT + 1) * (o.walking ? 1 : 0) + 0.35 * Math.max(0, -r) - 0.2 * kneel;
+  const trunk = 0.08 * Math.sin(t * 1.4 + 1) + 0.12 * ws + (r < 0 ? 0.3 * r : -0.15 * r) + 0.25 * kneel;
+  const flap = r < 0 ? 0.5 + 0.5 * Math.sin(t * 12) : 0.5 + 0.5 * Math.sin(o.walking ? o.walkT : t * 1.6);
   ell(ctx, 690, D.origin[1], 520, 90, 'rgba(0,0,0,0.25)');
+  footfalls(ctx, o, [[335 + G.stride, D.origin[1]], [1035 + G.stride, D.origin[1]]], 110);
+  ctx.save();
+  turnAt(ctx, D.rearFoot, (r < 0 ? 0.2 * r : 0.025 * r) + 0.06 * kneel);   // يقف على الخلفيتين ثم يدق، ويبرك ميتاً
+  ctx.save();
+  bodyOn(ctx, G, B);
+  turnAt(ctx, D.tail, tail);
+  piece(ctx, S, P.tail);
+  ctx.restore();
   legs(ctx, S, P.body, M, G, B, gait(G, o));
   ctx.save();
   bodyOn(ctx, G, B);
   piece(ctx, S, P.body, M.y0 + 3);
   flashOn(ctx, S, P.body, M.y0 + 3, o.flash);
   turnAt(ctx, D.neck, nod);
+  ctx.save();
+  turnAt(ctx, D.trunk, trunk);
+  piece(ctx, S, P.trunk);
+  ctx.restore();
   piece(ctx, S, P.head);
   flashOn(ctx, S, P.head, Infinity, o.flash);
+  // الأذن تخفق: تضيق نحو الوجه وتميل قليلاً
+  ctx.translate(D.ear[0], D.ear[1]);
+  ctx.rotate(-0.05 * flap);
+  ctx.scale(1 - 0.14 * flap, 1);
+  ctx.translate(-D.ear[0], -D.ear[1]);
+  piece(ctx, S, P.ear);
   ctx.restore();
+  ctx.restore();
+  dust(ctx, D.frontFoot[0] + 40, D.origin[1], sinceHit(o, 0.55), 260, true);
 }
 
 const SPRITE = { elephant: elephantSprite, troll: trollSprite };
@@ -363,18 +440,20 @@ export function drawCreature(ctx, unit, x, y, scale, color, time, walking) {
   if (!draw) return;
   const dead = unit.state === 'dead';
   const deadT = dead ? Math.min(1, 1 - unit.deathTimer / COMBAT.deathTime) : 0;
+  const S = sheetOf(unit.creature, color), P = !dead && unit.cPhases;
   ctx.save();
   ctx.translate(x, y);
   if (dead) {
-    ctx.globalAlpha = deadT > 0.6 ? Math.max(0, 1 - (deadT - 0.6) / 0.4) : 1;
-    ctx.rotate(-(unit.facing || 1) * Math.min(1, deadT * 2.2) * 1.2);
+    // الصورة تسقط بأنميشنها (trollSprite وelephantSprite) وتختفي في آخرها، والرسم القديم يدور ساقطاً
+    const fade = S ? 0.75 : 0.6;
+    ctx.globalAlpha = deadT > fade ? Math.max(0, 1 - (deadT - fade) / (1 - fade)) : 1;
+    if (!S) ctx.rotate(-(unit.facing || 1) * Math.min(1, deadT * 2.2) * 1.2);
   }
   ctx.scale(scale * (unit.facing || 1), scale);
-  const S = sheetOf(unit.creature, color), P = !dead && unit.cPhases;
   if (S) {
     sprite(ctx, unit.creature, S, {
       walking: walking && !dead, walkT: time * GAIT[unit.creature].pace, time, deadT,
-      swing: P ? swingOf(unit) : 0, flash: dead ? 0 : unit.hitFlash / COMBAT.hitFlashTime,
+      swing: P ? swingOf(unit) : 0, flash: dead ? 0 : Math.max(0, unit.hitFlash) / COMBAT.hitFlashTime,
       w: P ? P.wind / P.total : 0, h: P ? (P.wind + P.strike * COMBAT_REALISM.strikeMoment) / P.total : 0,
       g: P ? (P.wind + P.strike + P.hold) / P.total : 0
     });
