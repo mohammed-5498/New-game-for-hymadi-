@@ -25,6 +25,10 @@
 | loading | Loading_the_game |
 | match_start | Start_the_match |
 | game_start | Start_the_game (2) |
+| capture | (اسمه العربي لم يصل) capture |
+| capture_special | (اسمه العربي لم يصل) special building capture |
+| lost | (اسمه العربي لم يصل) losing building |
+| victory | victory-3 |
 
 ## موسيقى الخرائط (`music/`، 2026-10-30)
 

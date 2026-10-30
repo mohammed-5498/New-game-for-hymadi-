@@ -88,7 +88,7 @@ export function setupMenus(handlers) {
   onTap('btnSettings', () => showScreen('settings'));
   onTap('btnStats', () => showScreen('stats'));
   onTap('btnBackToMain', () => { if (lanSetup) onLeaveLanSetup(); else showScreen('main'); });
-  onTap('btnSettingsBack', () => showScreen('main'));
+  onTap('btnSettingsBack', () => { if (!closeGameSettings()) showScreen('main'); });
   onTap('btnStatsBack', () => showScreen('main'));
   onTap('btnStoreBack', () => showScreen('main'));
   el('btnStart').addEventListener('click', startPressed);
@@ -125,6 +125,7 @@ export const currentScreen = () => screen;
 
 export function showScreen(name) {
   screen = name;
+  gameSettings = null;                // الإعدادات من قائمة الإيقاف تُغلق مع أي انتقال
   closeExitDialog();
   if (name === 'main') refreshContinue();
   if (name === 'setup') { el('setupSaveHint').hidden = lanSetup || !savedMatchInfo(); showCity(); }
@@ -475,6 +476,24 @@ function refreshSettings() {
   }
   setSwitch('tglMute', audio.muted);
   setSwitch('tglPops', !!getPref('pops'));
+}
+
+// الإعدادات من قائمة الإيقاف (بطلب المستخدم): نفس الشاشة فوق المباراة، و"رجوع" يعيد إلى الإيقاف (onClose) لا إلى
+// القائمة الرئيسية
+let gameSettings = null;
+export function openGameSettings(onClose) {
+  gameSettings = onClose;
+  refreshSettings();
+  fadeIn(el('screenSettings'));
+}
+
+export function closeGameSettings() {
+  if (!gameSettings) return false;
+  const back = gameSettings;
+  gameSettings = null;
+  fadeOut(el('screenSettings'));
+  back();
+  return true;
 }
 
 function setSwitch(id, on) {

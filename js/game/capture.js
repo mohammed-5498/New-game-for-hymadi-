@@ -156,7 +156,7 @@ function decayProgress(state, district) {
 function announceCapture(state, district) {
   const player = state.players[district.owner];
   const mine = district.owner === state.humanId;
-  if (mine) sound('capture_done');
+  if (mine) sound(district.feature || district.building ? 'capture_special' : 'capture_done');   // مبنى مميز: صوته
   if (!mine && state.notice && state.notice.keep) return;   // سمة أمتك في بداية المباراة تبقى ظاهرة
   const name = district.special ? specialName(district.special) : 'حي';
   state.notice = {

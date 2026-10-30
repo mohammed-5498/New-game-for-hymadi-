@@ -15,7 +15,7 @@ import { setupPower, updatePower } from './ui/power.js';
 import { setupGroups, updateGroups, hudRects } from './ui/groups.js';
 import {
   setupMenus, showScreen, currentScreen, isLanSetup,
-  openExitDialog, closeExitDialog, isExitDialogOpen
+  openExitDialog, closeExitDialog, isExitDialogOpen, closeGameSettings
 } from './ui/menus.js';
 import { setupLanScreen, lanBack } from './ui/lanScreen.js';
 import { lanActive, lanFrame, startLanHost } from './net/session.js';
@@ -107,6 +107,7 @@ onBackButton(() => {
   if (isPickerOpen()) { closePicker(); return; }         // لوحة المدن أو الأمم في الإعداد: تُغلق وحدها
 
   if (currentScreen() === 'game') {
+    if (closeGameSettings()) return;                    // الإعدادات من قائمة الإيقاف: رجوع إليها
     if (isEndOpen()) { leaveToMain(state); return; }    // شاشة النهاية: رجوع للقائمة الرئيسية
     if (isPauseOpen()) { closePause(state); return; }   // الإيقاف مفتوح: رجوع خطوة
     if (isEmpireMenuOpen()) { closeEmpireMenu(state); return; }   // قائمة الحي (طور الإمبراطورية)

@@ -1204,7 +1204,7 @@ export const AUDIO = {
     dir: 'assets/audio/',
     sfx: ['swing', 'whoosh', 'slash', 'knife', 'stab', 'hit', 'thump', 'clang', 'tap', 'scrape', 'unsheathe', 'fall',
           'arrow', 'click', 'punch1', 'punch2', 'punch3', 'punch4', 'punch5', 'punch6',
-          'heavy1', 'heavy2', 'heavy3', 'heavy4', 'heavy5'],
+          'heavy1', 'heavy2', 'heavy3', 'heavy4', 'heavy5', 'capture', 'capture_special', 'lost', 'victory'],
     music: ['theme', 'loading', 'match_start', 'game_start']
   },
   events: {
@@ -1224,7 +1224,13 @@ export const AUDIO = {
     ult_cast:   { gain: 0.8, any: ['slash'] },
     ui_tap:     { gain: 0.6, any: ['click'] },
     select:     { gain: 0.5, any: ['click'] },
-    command:    { gain: 0.5, rate: 0.85, any: ['click'] }
+    command:    { gain: 0.5, rate: 0.85, any: ['click'] },
+    // الاستيلاء والخسارة والفوز (بطلب المستخدم: منخفضة، والفوز منخفض جداً). capture_special: حي بمبنى مميز
+    // (مبنى المدينة أو قاعدة أو برج أو مستشفى)، وcapture_done لكل نجاح آخر (حي، بناء، غنيمة)
+    capture_done:    { gain: 0.35, any: ['capture'] },
+    capture_special: { gain: 0.4, any: ['capture_special'] },
+    district_lost:   { gain: 0.35, any: ['lost'] },
+    victory:         { gain: 0.15, any: ['victory'] }
   },
   rateJitter: 0.06,
   gainJitter: 0.15,
