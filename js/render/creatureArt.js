@@ -1,7 +1,10 @@
 // المخلوقات (القسم 3.11): الفيل الحربي (جايبور) وترول الجبل (القرية النرويجية) يُرسمان بشكلهما لا بهيكل الوحدات.
 // الرسم بوحدات محلية: الفرد العادي نحو 30 وحدة طولاً بمقياس 1، فيُضرب كل شيء في مقياس الوحدة (artScale)،
-// ويُعكس حسب اتجاهها (facing). المشي يحرك الأرجل، والضربة (cMove) تحرك الخرطوم أو الهراوة، والموت يُسقطه ويخفيه
-import { COMBAT } from '../config.js';
+// ويُعكس حسب اتجاهها (facing). المشي يحرك الأرجل، والضربة (cMove) تحرك الخرطوم أو الهراوة، والموت يُسقطه ويخفيه.
+// يُرسمان بصورتي المستخدم (أسفل الملف)، وبالرسم بالكود هنا حتى تُحمَّل الصورة
+import { COMBAT, COMBAT_REALISM } from '../config.js';
+import { CREATURE_SPRITES as CS } from './creatureSpritesData.js';
+import { paintAtlas } from './unitSprites.js';
 
 const TAU = 6.2831853;
 
@@ -145,6 +148,206 @@ function troll(ctx, color, walkT, swing, flash) {
 
 const DRAW = { elephant, troll };
 
+// ================= صورتا المستخدم: الترول والفيل أجزاءً من أطلس تتحرك (scripts/cut_creatures.py) =================
+// الحساب كله بإحداثيات الصورة الأصلية (بكسل) والقدمان عند origin، وSIZE طول المخلوق (حتى height) بالوحدات المحلية.
+// الجسد قطعة واحدة تعلو وتهبط وتميل حول hip، وأسفله (من mesh.y0) شبكة مثلثات: كل ساق بما حولها كتلة واحدة تخطو
+// وتُرفع، وأعلى الشبكة مع الجسد وأسفلها على الأرض، فلا فجوات
+const K = 1 / CS.scale;                         // بكسل من الصورة لكل بكسل من الأطلس
+const SIZE = { troll: 29, elephant: 33 };
+// عرض المخلوق نسبة إلى طوله مقارنة بالفرد العادي: صندوقه عند إخفائه خلف المباني وحلقة تحديده (units.js)
+export const CREATURE_WIDTH = { troll: 1.8, elephant: 2.2 };
+// pace سرعة الخطو (راديان/ث)، وstride وlift وbob مدى الخطوة ورفع القدم وصعود الجسد (بكسل)
+const GAIT = {
+  troll:    { pace: 8, stride: 55, lift: 24, bob: 14, hip: [515, 640] },
+  elephant: { pace: 6.5, stride: 48, lift: 20, bob: 10, hip: [688, 690] }
+};
+const CLUB_REST = 0.75;                         // ميل الهراوة في قبضة الترول واقفاً (راديان تحت الأفق، للأمام)
+const atlases = {}, waiting = {}, painted = new Map();
+
+// أطلس المخلوق (null حتى يُحمَّل، ثم then)، والفيل مصبوغ بلون مالكه مرة لكل لون
+function sheetOf(kind, color, then) {
+  const img = atlases[kind];
+  if (!img) {
+    if (!waiting[kind]) {
+      waiting[kind] = [];
+      const im = new Image();
+      im.onload = () => { atlases[kind] = im; for (const fn of waiting[kind].splice(0)) fn(); };
+      im.src = CS[kind].src;
+    }
+    if (then) waiting[kind].push(then);
+    return null;
+  }
+  if (!CS[kind].tint) return img;
+  const id = kind + color;
+  let S = painted.get(id);
+  if (!S) painted.set(id, S = paintAtlas(img, CS[kind].h, CS[kind].tint, color));
+  return S;
+}
+
+// الجزء p في مكانه من الصورة الأصلية (أو ما فوق السطر y منه وحده)
+function piece(ctx, S, p, y = Infinity) {
+  const h = Math.min(p[3], (y - p[5]) / K);
+  if (h > 0) ctx.drawImage(S, p[0], p[1], p[2], h, p[4], p[5], p[2] * K, h * K);
+}
+
+function turnAt(ctx, c, ang) {
+  ctx.translate(c[0], c[1]);
+  ctx.rotate(ang);
+  ctx.translate(-c[0], -c[1]);
+}
+
+// الجسد B: ميل ang حول hip ثم إزاحة (dx, dy)، على اللوحة (bodyOn) أو لنقطة (bodyAt)
+function bodyOn(ctx, G, B) {
+  ctx.translate(B.dx, B.dy);
+  turnAt(ctx, G.hip, B.ang);
+}
+function bodyAt(G, B, x, y) {
+  const c = Math.cos(B.ang), s = Math.sin(B.ang), u = x - G.hip[0], v = y - G.hip[1];
+  return [G.hip[0] + u * c - v * s + B.dx, G.hip[1] + u * s + v * c + B.dy];
+}
+
+// مثلث من الجزء p: من رؤوسه في الصورة (src) إلى رؤوسه الآن (dst)، مكبَّراً e حول مركزه فلا تظهر خطوط بين المثلثات
+function tri(ctx, S, p, src, dst, i, j, k, e) {
+  const sx = src[i], sy = src[i + 1], ux = src[j] - sx, uy = src[j + 1] - sy, vx = src[k] - sx, vy = src[k + 1] - sy;
+  const det = ux * vy - vx * uy;
+  if (!det) return;
+  const dx = dst[i], dy = dst[i + 1], px = dst[j] - dx, py = dst[j + 1] - dy, qx = dst[k] - dx, qy = dst[k + 1] - dy;
+  const a = (px * vy - qx * uy) / det, c = (qx * ux - px * vx) / det;
+  const b = (py * vy - qy * uy) / det, d = (qy * ux - py * vx) / det;
+  const cx = (dst[i] + dst[j] + dst[k]) / 3, cy = (dst[i + 1] + dst[j + 1] + dst[k + 1]) / 3;
+  ctx.save();
+  ctx.beginPath();
+  for (const v of [i, j, k]) {
+    const x = dst[v], y = dst[v + 1], l = Math.hypot(x - cx, y - cy) || 1;
+    ctx.lineTo(x + (x - cx) / l * e, y + (y - cy) / l * e);
+  }
+  ctx.clip();
+  ctx.transform(a, b, c, d, dx - a * sx - c * sy, dy - b * sx - d * sy);
+  piece(ctx, S, p);
+  ctx.restore();
+}
+
+// أسفل الجسد بالشبكة: الأعمدة mesh.xs (نصفها الأول للساق الخلفية ونصفها الثاني للأمامية) والصفوف ny.
+// step لكل ساق [إزاحتها للأمام، رفعها] عند القدم، وتقل نحو أعلاها
+function legs(ctx, S, p, M, G, B, step) {
+  const n = M.xs.length, src = [], dst = [];
+  for (let r = 0; r <= M.ny; r++) {
+    const t = r / M.ny, y = M.y0 + (M.y1 - M.y0) * t;
+    for (let c = 0; c < n; c++) {
+      const x = M.xs[c], b = bodyAt(G, B, x, y), L = step[c < n / 2 ? 0 : 1];
+      src.push(x, y);
+      dst.push(b[0] + (x - b[0]) * t + L[0] * t ** 1.3, b[1] + (y - b[1]) * t - L[1] * t ** 1.5);
+    }
+  }
+  const m = ctx.getTransform(), e = 0.9 / Math.hypot(m.a, m.b);
+  for (let r = 0; r < M.ny; r++) {
+    for (let c = 0; c < n - 1; c++) {
+      const a = 2 * (r * n + c), w = 2 * n;
+      tri(ctx, S, p, src, dst, a, a + 2, a + w + 2, e);
+      tri(ctx, S, p, src, dst, a, a + w + 2, a + w, e);
+    }
+  }
+}
+
+// الخطو: الساقان متعاكستان، وكل ساق تُرفع وهي تتقدم
+function gait(G, o) {
+  if (!o.walking) return [[0, 0], [0, 0]];
+  const s = Math.sin(o.walkT), c = Math.cos(o.walkT);
+  return [[G.stride * s, G.lift * Math.max(0, c)], [-G.stride * s, G.lift * Math.max(0, -c)]];
+}
+
+// الجسد: يعلو حين تتجاوز الساقان إحداهما الأخرى (أو يتنفس واقفاً)، ويهبط حين يموت
+function bodyRise(G, o, breath) {
+  const sink = Math.min(1, o.deadT * 2.5) * 70;
+  return (o.walking ? -G.bob * (1 - Math.abs(Math.sin(o.walkT))) : Math.sin(o.time * 2) * breath) + sink;
+}
+
+// الضربة من -1 إلى 1: يستعد (إلى -1) حتى نهاية الاستعداد w، ثم يضرب (إلى 1) حتى لحظة الإصابة h،
+// ويثبت حتى g، ثم يعود إلى 0
+function strike(o) {
+  const s = o.swing;
+  if (!s) return 0;
+  if (s < o.w) { const u = s / o.w; return -u * (2 - u); }
+  if (s < o.h) { const u = (s - o.w) / (o.h - o.w); return -1 + 2 * u * u; }
+  if (s < o.g) return 1;
+  const u = (s - o.g) / (1 - o.g);
+  return 1 - u * u * (3 - 2 * u);
+}
+
+// ومضة الإصابة: الجسد يُعاد رسمه فوق نفسه مضيئاً
+function flashOn(ctx, S, p, y, f) {
+  if (f <= 0) return;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.globalAlpha *= 0.45 * f;
+  piece(ctx, S, p, y);
+  ctx.restore();
+}
+
+// --- الترول: يرفع الهراوة بساعده فوق رأسه ويميل للخلف، ثم يهوي بها إلى الأرض أمامه فيثور الغبار.
+// ويمشي والهراوة تتأرجح في يده ---
+function trollSprite(ctx, S, o) {
+  const D = CS.troll, P = D.parts, G = GAIT.troll, M = D.mesh, r = strike(o);
+  const arm = (r < 0 ? 2.3 * r : 0.3 * r) - (o.walking ? 0.15 * Math.sin(o.walkT) : 0);
+  const B = { ang: r < 0 ? 0.05 * r : 0.08 * r, dx: 0, dy: bodyRise(G, o, 4) };
+  ell(ctx, 520, D.origin[1], 470, 90, 'rgba(0,0,0,0.25)');
+  legs(ctx, S, P.base, M, G, B, gait(G, o));
+  ctx.save();
+  bodyOn(ctx, G, B);
+  piece(ctx, S, P.base, M.y0 + 3);
+  flashOn(ctx, S, P.base, M.y0 + 3, o.flash);
+  // الساعد والهراوة في قبضته (تحت أصابعها)
+  turnAt(ctx, D.elbow, arm);
+  ctx.save();
+  ctx.translate(D.fist[0], D.fist[1]);
+  ctx.rotate(CLUB_REST - D.clubAngle);
+  ctx.translate(-D.clubGrip[0], -D.clubGrip[1]);
+  piece(ctx, S, P.club);
+  ctx.restore();
+  piece(ctx, S, P.fore);
+  ctx.restore();
+  // غبار الضربة على الأرض أمامه
+  const u = o.swing && o.swing >= o.h ? (o.swing - o.h) / (1 - o.h) / 0.5 : 1;
+  if (u < 1) {
+    ctx.save();
+    ctx.globalAlpha *= 0.6 * (1 - u);
+    ctx.beginPath();
+    ctx.ellipse(1040, 1075, 90 + 240 * u, (90 + 240 * u) * 0.28, 0, 0, TAU);
+    ctx.strokeStyle = '#d9c9a6';
+    ctx.lineWidth = 18;
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+// --- الفيل: يخفض رأسه ويميل للخلف، ثم يندفع للأمام رافعاً رأسه فيطعن بنابيه، ويومئ مع خطوه ---
+function elephantSprite(ctx, S, o) {
+  const D = CS.elephant, P = D.parts, G = GAIT.elephant, M = D.mesh, r = strike(o);
+  const B = { ang: r < 0 ? 0.03 * r : 0.02 * r, dx: 40 * Math.max(0, r), dy: bodyRise(G, o, 3) };
+  const nod = (o.walking ? 0.04 * Math.sin(2 * o.walkT) : 0.02 * Math.sin(o.time * 1.3)) + (r < 0 ? -0.12 * r : -0.2 * r);
+  ell(ctx, 690, D.origin[1], 520, 90, 'rgba(0,0,0,0.25)');
+  legs(ctx, S, P.body, M, G, B, gait(G, o));
+  ctx.save();
+  bodyOn(ctx, G, B);
+  piece(ctx, S, P.body, M.y0 + 3);
+  flashOn(ctx, S, P.body, M.y0 + 3, o.flash);
+  turnAt(ctx, D.neck, nod);
+  piece(ctx, S, P.head);
+  flashOn(ctx, S, P.head, Infinity, o.flash);
+  ctx.restore();
+}
+
+const SPRITE = { elephant: elephantSprite, troll: trollSprite };
+
+function sprite(ctx, kind, S, o) {
+  const D = CS[kind], k = SIZE[kind] / D.height;
+  ctx.save();
+  ctx.scale(k, k);
+  ctx.translate(-D.origin[0], -D.origin[1]);
+  SPRITE[kind](ctx, S, o);
+  ctx.restore();
+}
+
 // x وy موضع القدمين، وscale مقياس الوحدة، وcolor لون مالكها
 export function drawCreature(ctx, unit, x, y, scale, color, time, walking) {
   const draw = DRAW[unit.creature];
@@ -158,11 +361,23 @@ export function drawCreature(ctx, unit, x, y, scale, color, time, walking) {
     ctx.rotate(-(unit.facing || 1) * Math.min(1, deadT * 2.2) * 1.2);
   }
   ctx.scale(scale * (unit.facing || 1), scale);
-  draw(ctx, color, walking && !dead ? time * 7 : 0, dead ? 0 : swingOf(unit), unit.hitFlash > 0);
+  const S = sheetOf(unit.creature, color), P = !dead && unit.cPhases;
+  if (S) {
+    sprite(ctx, unit.creature, S, {
+      walking: walking && !dead, walkT: time * GAIT[unit.creature].pace, time, deadT,
+      swing: P ? swingOf(unit) : 0, flash: dead ? 0 : unit.hitFlash / COMBAT.hitFlashTime,
+      w: P ? P.wind / P.total : 0, h: P ? (P.wind + P.strike * COMBAT_REALISM.strikeMoment) / P.total : 0,
+      g: P ? (P.wind + P.strike + P.hold) / P.total : 0
+    });
+  } else {
+    draw(ctx, color, walking && !dead ? time * 7 : 0, dead ? 0 : swingOf(unit), unit.hitFlash > 0);
+  }
   ctx.restore();
 }
 
-// صورة المخلوق في خانة التجنيد (قائمة الإسطبل)
+const REST = { walking: false, walkT: 0, time: 0, deadT: 0, swing: 0, flash: 0, w: 0, h: 0, g: 0 };
+
+// صورة المخلوق في خانة التجنيد (قائمة الإسطبل)، تُعاد حين تُحمَّل صورته
 export function drawCreatureIcon(canvas, kind, color) {
   const box = canvas.getBoundingClientRect();
   const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -171,10 +386,26 @@ export function drawCreatureIcon(canvas, kind, color) {
   const ctx = canvas.getContext('2d');
   const draw = DRAW[kind];
   if (!draw) return;
-  const s = Math.min(w / 34, h / 48);
+  const S = sheetOf(kind, color, () => { if (canvas.isConnected) drawCreatureIcon(canvas, kind, color); });
   ctx.save();
-  ctx.translate(w / 2, h * 0.94);
-  ctx.scale(s, s);
-  draw(ctx, color, 0, 0, false);
+  if (S) {
+    // حدود أجزائه بالوحدات المحلية: يتوسط الخانة
+    const D = CS[kind], k = SIZE[kind] / D.height;
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity;
+    for (const p of Object.values(D.parts)) {
+      x0 = Math.min(x0, p[4]);
+      x1 = Math.max(x1, p[4] + p[2] * K);
+      y0 = Math.min(y0, p[5]);
+    }
+    const s = Math.min(w / ((x1 - x0) * k * 1.06), h * 0.92 / ((D.origin[1] - y0) * k));
+    ctx.translate(w / 2 - ((x0 + x1) / 2 - D.origin[0]) * k * s, h * 0.95);
+    ctx.scale(s, s);
+    sprite(ctx, kind, S, REST);
+  } else {
+    const s = Math.min(w / 34, h / 48);
+    ctx.translate(w / 2, h * 0.94);
+    ctx.scale(s, s);
+    draw(ctx, color, 0, 0, false);
+  }
   ctx.restore();
 }

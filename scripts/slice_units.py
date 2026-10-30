@@ -361,6 +361,8 @@ NATIONS = {
         'dual': ('06_Japan_02_Dual_Swordsman_مبارز السيفين', [I('sword', 'hand', 0, tip='down', grip=0.14, length=7.6)], {'pair': True}),
         'spear': ('07_Japan_03_Flail_Bearer_حامل الفليون', [I('pipe', 'hand', 0, grip=0.2, length=15)], {'twoH': True}),
         'common': ('08_Japan_04_Kabukimono_كابوكيمونو', [I('sword', 'hand', 0, tip='down', grip=0.14, length=8)], {}),
+        # ساموراي دوجو إيدو (القسم 3.11، بطلب المستخدم): شكل حراس الدوجو (unit.lookKind)، بالكاتانا
+        'samurai': ('09_Japan_Samurai_ساموراي', [I('katana', 'hand', 0, tip='down', grip=0.14, length=9.5)], {}),
     }),
     'korea': ('china_japan_korea/Korea', 142, {
         'champion': ('09_Korea_01_Hwarang_Leader_قائد الهوارانغ',

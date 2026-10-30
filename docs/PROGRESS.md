@@ -95,6 +95,10 @@
   - **الفحص لكل دفعة:** بصمات المدن الأخرى مطابقة، والتطابق المحلي سليم في مدن الدفعة (`node scripts/lan-sync-test.mjs 150 conquest medium <المدينة>`)، والأطوار الخمسة بلا أخطاء.
   - **قواعد مشتركة:** حي الميزة ليس منزلياً ولا مركز شرطة ولا تلة، وأرضه تميل للذهبي، ومبناه (الحرف F) لا يُصبغ وعليه شارة، وقائمته بلمستين. والبوتات تقدّر أحياء المزايا أكثر.
   - **في بداية المباراة** إشعار بميزة المدينة، وسطر الميزة تحت صورة المدينة في قائمة الإعداد والمتجر.
+- **الساموراي والترول والفيل بصور المستخدم (2026-10-30، القسم 13.1):**
+  - ساموراي إيدو بصورته (`samurai` في أطلس اليابان، و`look` في `CITY_FEATURES.dojo`).
+  - الترول والفيل: `scripts/cut_creatures.py` يقطّع صورتيهما (أصلهما خارج المستودع في `docs/characters/creatures/`)، و`creatureArt.js` يحركهما: ساقان بشبكة مثلثات، وساعد الترول بالهراوة، ورأس الفيل، وكسوة الفيل بلون مالكه (`paintAtlas` في unitSprites.js).
+  - الحجم من `SIZE` في creatureArt.js و`scale` في الإعداد، وعرضهما لإخفائهما خلف المباني `CREATURE_WIDTH`. البصمات مطابقة (رسم فقط).
 - **صوتيات المستخدم والشاشة السوداء (2026-10-30، القسم 13.5، بطلب المستخدم):**
   - ملفاته في `assets/audio/` بدل المولَّد حيث وُجدت، بنسخ عشوائية وحسب السلاح، وخافتة، وارتفاعها من قرب الكاميرا، وحد 20 لمؤثرات القتال معاً، ولحن في القوائم.
   - شاشة سوداء 4 ث عند بدء المباراة بصوتي البداية والتحميل وحدهما، وأخرى 4.2 ث عند تشغيل اللعبة (مكان مقدمة لاحقاً) بصوت التشغيل في التطبيق، واللحن مع ارتفاعها. ومؤثرات القتال أخفض 20% (بطلبه بعد التجربة).
@@ -304,7 +308,8 @@
 | `js/audio/` | الصوت المولّد ومُجمِّع المؤثرات |
 | `assets/yamamah/` | صور مباني اليمامة الـ27 |
 | `assets/units/`، `js/render/unitSprites.js` | أجزاء صور الشخصيات (الكلاسيكية png، والأمم والشرطة webp) ورسمها على الهيكل (يولّدها `scripts/slice_units.py`) |
+| `assets/units/creature_*.webp`، `js/render/creatureArt.js` | صورتا الترول والفيل وأنميشنهما (يولّد الأطلس `scripts/cut_creatures.py`) |
 | `docs/` | المراجع: `GAME_SPEC.md`، `NATIONS.md`، `nations/` (ملفات الدفعات وstyle-v5 وskins-v6)، `combat-reference.html`، `prototype.html`، `units-art.js`، `audio.js`، `city-themes.js`، و`rig-test/` |
-| `scripts/` | `build-web.sh` (نسخ الويب للتطبيق)، و`bot-battle.mjs`، و`survival-test.mjs`، و`lan-sync-test.mjs` (تطابق اللعب المحلي)، و`slice_units.py` (تقطيع صور الشخصيات) |
+| `scripts/` | `build-web.sh` (نسخ الويب للتطبيق)، و`bot-battle.mjs`، و`survival-test.mjs`، و`lan-sync-test.mjs` (تطابق اللعب المحلي)، و`slice_units.py` (تقطيع صور الشخصيات)، و`cut_creatures.py` (تقطيع الترول والفيل) |
 | `android/`، `package.json`، `capacitor.config.json` | تطبيق أندرويد، ومعه إضافة الشبكة المحلية `LanPlugin.java` و`LanCore.java` في `android/app/src/main/java/com/hymadi/gangcity/` |
 | `.github/workflows/android.yml` | بناء APK (عند الدفع إلى `main` أو يدوياً) |

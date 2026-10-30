@@ -5,7 +5,7 @@ import { drawOne, stateLabel, drawSpeedLines } from './combatArt.js';
 import { flameLayers } from './anim.js';
 import { shadedCount } from '../pacing.js';
 import { nationArtKey, shotLook } from './nationArt.js';
-import { drawCreature } from './creatureArt.js';
+import { drawCreature, CREATURE_WIDTH } from './creatureArt.js';
 import { spriteShotLook } from './unitSprites.js';
 import './nationsArab.js';                 // مظاهر الدفعة العربية تُسجَّل في سجل الأمم (القسم 3.10)
 import './nationsAsia.js';                 // والدفعة الآسيوية
@@ -44,8 +44,8 @@ const artScale = (unit) => UNIT_ART.scale *
   (unit.traits ? unit.traits.size : 1) *     // تنويع حجم بسيط بين الأفراد (القسم 5.4)
   (unit.artScale || 1);                      // قائد الشرطة في الصمود أكبر ×1.3
 
-// حجم رسم الوحدة نسبة إلى الفرد العادي (لصندوقها عند إخفائها خلف المباني)
-export const unitSizeFactor = (unit) => artScale(unit) / UNIT_ART.scale;
+// حجم رسم الوحدة نسبة إلى الفرد العادي (لصندوقها عند إخفائها خلف المباني)، والمخلوق بعرضه
+export const unitSizeFactor = (unit) => artScale(unit) / UNIT_ART.scale * (unit.creature ? CREATURE_WIDTH[unit.creature] : 1);
 
 // الشرطة تُرسم بلونها الثابت مهما كان اللاعب
 // (ووحدة التدخل في الصمود بلونها الأغمق الخاص)

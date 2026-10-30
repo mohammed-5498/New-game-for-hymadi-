@@ -301,6 +301,7 @@ function spawnGuard(state, d, cfg) {
   const [i, j] = spots[Math.floor(random() * spots.length)];
   const unit = createUnit(state, player, i, j, cfg.hero);
   boost(unit, cfg.stats);
+  unit.lookKind = cfg.look || null;           // ساموراي الدوجو بصورتهم
   const c = featureCenter(state.map, d);
   unit.garrisonOf = d.id;
   unit.homePost = { x: c.i, y: c.j };

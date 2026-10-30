@@ -37,8 +37,11 @@ function hexHsv(hex) {
 // ترتيب (v, p, q, t) في (أحمر، أخضر، أزرق) لكل سدس من دائرة الألوان
 const SECTORS = [[0, 3, 1], [2, 0, 1], [1, 0, 3], [1, 2, 0], [3, 1, 0], [0, 1, 2]];
 
-function paint(gang, color) {
-  const g = SPRITES.gangs[gang], img = loaded[gang], w = img.width, h = g.h;
+const paint = (gang, color) => paintAtlas(loaded[gang], SPRITES.gangs[gang].h, SPRITES.gangs[gang], color);
+
+// أطلس (ألوان فوق وقناع تحت، ارتفاع كل نصف h) مصبوغ بلون: g.sat وg.val تشبع لون الأصل وإضاءته (والمخلوقات أيضاً)
+export function paintAtlas(img, h, g, color) {
+  const w = img.width;
   const work = document.createElement('canvas');
   work.width = w;
   work.height = h * 2;

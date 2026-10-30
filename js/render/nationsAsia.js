@@ -275,7 +275,7 @@ function seigaiha(c, J, hb) {
 }
 function japan(lite) {
   const hair = lite ? wildHair : wildHairFull;
-  return {
+  const o = {
     common: { sx: 0.96, sy: 1.05, lw: 2.8, headR: 3.5, wlen: 7, legFrom: lite ? 0.72 : 0,
       head: hair,
       robe: (c, J, p, col) => kimono(c, J, col, 0.72, lite),
@@ -321,6 +321,8 @@ function japan(lite) {
       },
       weapon: (c, J, p) => katana(c, J.handF[0], J.handF[1], p.wa, 8.6, 1.4, lite) }
   };
+  o.samurai = o.common;            // ساموراي الدوجو (lookKind): صورته في الأطلس، وبالكود مثل الكابوكيمونو
+  return o;
 }
 
 // ---------- كوريا «الهوارانغ» (نمط الرامي) ----------

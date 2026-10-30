@@ -1568,7 +1568,7 @@ export const CITY_FEATURES = {
   // أمة nation وإحصائيات stats فوقه: start منهم في البداية، ثم واحد كل every ثانية حتى max، ولا يبتعدون عنه أكثر من chase.
   // أول استيلاء يوقف إنتاجهم ويختفي الباقون خلال vanishSeconds، ومالكه: كل جنوده +damageBonus ضرراً
   dojo: { minHomeDistance: 6, start: 2, every: 12, max: 5, chase: 6, vanishSeconds: 5, damageBonus: 0.10, top: 50,
-          name: 'الساموراي', color: '#7d1f2c', nation: 'japan', hero: 'dual',
+          name: 'الساموراي', color: '#7d1f2c', nation: 'japan', hero: 'dual', look: 'samurai',   // look: صورة الساموراي (بطلب المستخدم)
           stats: { hp: 230, armor: 0.2, damage: 14, attackTime: 0.9, speed: 2.4, visionRange: 4.5 } },
   // قطاع الطرق (غيونغجو وكانو): أول عصابة عند first ثانية ثم كل every، في وسط الخريطة، بشكل أفراد أمة المدينة بلون color.
   // الموجة n: count + perWave × (n − 1) فرداً (حتى maxCount)، ودمهم وضررهم × (1 + grow × (n − 1))، ومن الموجة heroFrom
@@ -1651,7 +1651,7 @@ export const CITY_FEATURES = {
   // ترول الجبل (القرية النرويجية): أوله عند first ثم كل every ثانية (لا ترول في الصمود)، ينزل من حافة الجبل (i = 0)
   // ويقصد كل think ثانية أكبر تجمع للجنود (cluster مربع)، ولا يقاتل الشرطة، وبعد stay ثانية يعود إلى الجبل ويختفي. ضربته تُسقط المصاب
   // وتدفعه slam مربع، ومن يقتله يأخذ reward نقطة. hero: شخصية الأساس من نمط أمته، وscale حجم رسمه
-  troll: { first: 180, every: 240, stay: 120, think: 3, cluster: 4, reward: 120, scale: 2.7, barY: -40,
+  troll: { first: 180, every: 240, stay: 120, think: 3, cluster: 4, reward: 120, scale: 2.7, barY: -44,
            name: 'ترول الجبل', color: '#5f6f58', nation: 'germany', hero: 'smasher',
            stats: { hp: 2500, armor: 0.2, damage: 60, attackTime: 1.8, speed: 1.4, attackRange: 2.2, visionRange: 8,
                     slam: 1.6, capturePower: 0 } },
@@ -1669,7 +1669,7 @@ export const CITY_FEATURES = {
                stats: { hp: 520, armor: 0.35, damage: 30, attackTime: 1.3, speed: 2.0 } },
     // الفيل الحربي (جايبور): مخلوق (creature) يُرسم بشكله لا بشكل أمة، بحجم scale وشريط دمه عند barY،
     // وواحد فقط لكل لاعب في الوقت نفسه (limit، ومعه ما في الطوابير)
-    elephant: { name: 'فيل حربي', cost: 180, seconds: 18, creature: 'elephant', scale: 2.1, barY: -30, limit: 1,
+    elephant: { name: 'فيل حربي', cost: 180, seconds: 18, creature: 'elephant', scale: 2.1, barY: -44, limit: 1,
                 limitText: 'لك فيل الآن',
                 stats: { hp: 1800, armor: 0.3, damage: 30, attackTime: 1.6, speed: 1.3, attackRange: 1.8 } }
   }
