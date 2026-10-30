@@ -164,20 +164,29 @@ const GAIT = {
 const CLUB_REST = 0.75;                         // ميل الهراوة في قبضة الترول واقفاً (راديان تحت الأفق، للأمام)
 const atlases = {}, waiting = {}, painted = new Map();
 
-// أطلس المخلوق (null حتى يُحمَّل، ثم then)، والفيل مصبوغ بلون مالكه مرة لكل لون
-function sheetOf(kind, color, then) {
-  const img = atlases[kind];
-  if (!img) {
-    if (!waiting[kind]) {
-      waiting[kind] = [];
-      const im = new Image();
-      im.onload = () => { atlases[kind] = im; for (const fn of waiting[kind].splice(0)) fn(); };
-      im.src = CS[kind].src;
-    }
-    if (then) waiting[kind].push(then);
-    return null;
+// صورة المخلوق بعد تحميلها (null قبله، ثم then)
+function load(kind, then) {
+  if (atlases[kind]) return atlases[kind];
+  if (!waiting[kind]) {
+    waiting[kind] = [];
+    const im = new Image();
+    im.onload = () => { atlases[kind] = im; for (const fn of waiting[kind].splice(0)) fn(); };
+    im.src = CS[kind].src;
   }
-  if (!CS[kind].tint) return img;
+  if (then) waiting[kind].push(then);
+  return null;
+}
+
+// تُحمَّل صورة مخلوق المدينة مع بداية مباراتها، فلا يظهر رسمه القديم لحظة نزوله
+const OF_FEATURE = { troll: 'troll', elephants: 'elephant' };
+export function preloadCreature(feature) {
+  if (OF_FEATURE[feature]) load(OF_FEATURE[feature]);
+}
+
+// أطلس المخلوق للرسم، والفيل مصبوغ بلون مالكه مرة لكل لون
+function sheetOf(kind, color, then) {
+  const img = load(kind, then);
+  if (!img || !CS[kind].tint) return img;
   const id = kind + color;
   let S = painted.get(id);
   if (!S) painted.set(id, S = paintAtlas(img, CS[kind].h, CS[kind].tint, color));

@@ -4,6 +4,7 @@ import { enemyLeaders } from '../game/modes.js';
 import { onScreen } from '../game/alerts.js';
 import { BACKGROUND, UI_LIGHT } from './colors.js';
 import { drawUnit, drawSelectionRing, drawProjectile, drawAura, drawFire, drawZone, unitWorldPos, unitSizeFactor } from './units.js';
+import { preloadCreature } from './creatureArt.js';
 import { drawOverlay, drawLights, drawParticles } from './weather.js';
 import { worldToTile } from '../map/coords.js';
 import { drawClash, drawImpact } from './combatArt.js';
@@ -377,6 +378,7 @@ function drawUnitsLayer(ctx, state, alpha, visible) {
   pickShaded(entries, state.camera);
   // هالات المباني المميزة (القسم 3.11): على الأرض بقطر مؤخرة الكتلة، فيلصق المبنى فوق ما خلفه منها
   if (state.feature) {
+    preloadCreature(state.feature);
     for (const d of state.map.districts) {
       const e = d.feature ? featureHaloEntry(state, d) : null;
       if (e && visible(e.x, e.y)) entries.push(e);
