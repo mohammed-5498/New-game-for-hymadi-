@@ -21,7 +21,35 @@
 | click | Menu_Selection_Click |
 | punch1-6 | independent_nu_ljudbank hits_and_punches: hit10، hit17، hit15، hit28، hit26، hit32 |
 | heavy1-5 | independent_nu_ljudbank hits_and_punches: hit30، hit20، hit22، hit31، hit33 |
-| theme | Main_game_theme |
+| theme | Main_game_theme (The Old Tower Inn (Loop)، RandomMind) |
 | loading | Loading_the_game |
 | match_start | Start_the_match |
 | game_start | Start_the_game (2) |
+
+## موسيقى الخرائط (`music/`، 2026-10-30)
+
+عشرون لحناً أرسلها المستخدم، مرقّمة بترتيب إرساله، ومحوّلة إلى صوت واحد 64 ك.ب/ث، ومسوّاة الارتفاع (−21.5 LUFS).
+أسماؤها الأصلية عربية (اسم الخريطة) ولم تصل حروفها، فالخريطة لكل لحن في `AUDIO.cityMusic` من كلام المستخدم.
+
+| الملف | المدة | العنوان المكتوب داخله |
+|---|---|---|
+| m01 | 2:21 | |
+| m02 | 1:16 | |
+| m03 | 0:42 | |
+| m04 | 5:14 | |
+| m05 | 2:01 | |
+| m06 | 2:11 | Echoes of Angeland (Udio) |
+| m07 | 2:43 | Lament For A Warrior's Soul (RandomMynd) |
+| m08 | 2:19 | |
+| m09 | 2:03 | |
+| m10 | 1:53 | |
+| m11 | 1:02 | A New Town (The Cynic Project) |
+| m12 | 1:44 | |
+| m13 | 2:55 | |
+| m14 | 1:38 | |
+| m15 | 2:14 | |
+| m16 | 2:26 | |
+| m17 | 0:47 | The Fish is Blue (Rick Hoppmann) |
+| m18 | 2:33 | Night Prowler (Section 31 - Tech) |
+| m19 | 1:45 | |
+| m20 | 1:46 | |

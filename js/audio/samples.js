@@ -1,6 +1,6 @@
 // ملفات الصوت (بطلب المستخدم، assets/audio/): تُحمَّل بعد فتح الصوت، ولكل حدث نسخ يُختار منها عشوائياً بلا تكرار
 // متتالٍ، بسرعة وارتفاع يتغيران قليلاً كل مرة. المؤثرات تمر بمرشح يخفف حدتها ثم ضاغط يمنع تراكم المتزامنة،
-// ومؤثرات القتال بحد AUDIO.combatVoices معاً. ولحن القوائم وأصوات البداية بمسار الموسيقى ومؤشرها
+// ومؤثرات القتال بحد AUDIO.combatVoices معاً. ولحن القوائم وأصوات البداية ولحن الخريطة بمسار الموسيقى ومؤشرها
 import { AUDIO } from '../config.js';
 
 let ctx = null, sfxIn = null, sfxOut = null, musicOut = null;
@@ -124,8 +124,58 @@ export function themeOn(on) {
   }
 }
 
-// كل ما يُسمع من الملفات يصمت فوراً (الشاشة السوداء)
+// كل ما يُسمع من الملفات يصمت فوراً (الشاشة السوداء)، ولحن الخريطة يبدأ من أوله في المباراة التالية
 export function stopSamples() {
   for (const src of live) { try { src.stop(); } catch (e) { /* انتهى أصلاً */ } }
   theme = null;
+  cityMusicOff(0);
+  parked = null;
+}
+
+// لحن الخريطة (AUDIO.cityMusic): يُبَثّ من ملفه ولا يُفك كله في الذاكرة لطوله، ويدور بتلاشٍ في أوله، وبعد الإيقاف
+// يكمل من حيث وقف (parked). يعيد false إن لم يبدأ (لا صوت بعد)
+let city = null, parked = null;
+export function cityMusicOn(name) {
+  if (!ctx || ctx.state !== 'running') return false;
+  if (city && city.name === name) return true;
+  cityMusicOff(0);
+  const T = AUDIO.tracks, now = ctx.currentTime;
+  let el, src;
+  if (parked && parked.name === name) ({ el, src } = parked);
+  else {
+    el = new Audio(AUDIO.files.dir + 'music/' + name + '.mp3');
+    el.loop = true;
+    src = ctx.createMediaElementSource(el);
+  }
+  parked = null;
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, now);
+  g.gain.exponentialRampToValueAtTime(T.city, now + T.cityFadeIn);
+  src.connect(g);
+  g.connect(musicOut);
+  el.play().catch(() => {});
+  city = { name, el, src, g };
+  return true;
+}
+
+export function cityMusicOff(fade = AUDIO.tracks.cityFadeOut) {
+  if (!city) return;
+  const c = city, now = ctx.currentTime;
+  city = null;
+  parked = c;
+  c.g.gain.cancelScheduledValues(now);
+  c.g.gain.setValueAtTime(Math.max(0.0001, c.g.gain.value), now);
+  c.g.gain.exponentialRampToValueAtTime(0.0001, now + Math.max(0.01, fade));
+  setTimeout(() => {
+    c.src.disconnect(c.g);
+    c.g.disconnect();
+    if (!city || city.el !== c.el) c.el.pause();      // لم يعد إليه اللحن أثناء التلاشي
+  }, fade * 1000 + 50);
+}
+
+// تصغير التطبيق: يتوقف اللحن ثم يكمل من حيث وقف
+export function cityMusicHold(hidden) {
+  if (!city) return;
+  if (hidden) city.el.pause();
+  else city.el.play().catch(() => {});
 }

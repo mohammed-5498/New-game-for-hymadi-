@@ -5,7 +5,7 @@
 // الكبيرة إلى ضجيج (المرحلة 5ب)
 import { AUDIO, TILE_HALF_W, TILE_HALF_H, TICK_SEC } from '../config.js';
 import { GameAudio } from './audio.js';
-import { initSamples, setSampleVolumes, playSample, playTrack, themeOn, stopSamples } from './samples.js';
+import { initSamples, setSampleVolumes, playSample, playTrack, themeOn, stopSamples, cityMusicOn, cityMusicOff, cityMusicHold } from './samples.js';
 import { isNativeApp } from '../platform.js';
 
 let settings = { sfx: AUDIO.sfxVolume, music: AUDIO.musicVolume, muted: AUDIO.muted };
@@ -30,8 +30,8 @@ export function setAudioSettings(next) {
   settings = { ...settings, ...next };
   applyVolumes();
   try { localStorage.setItem(AUDIO.storageKey, JSON.stringify(settings)); } catch (e) { /* تجاهل */ }
-  if (settings.muted || !settings.music) GameAudio.music.stop();
-  else if (wantMusic && unlocked && !silenced) GameAudio.music.start();
+  if (settings.muted || !settings.music) { GameAudio.music.stop(); cityMusicOff(); }
+  else if (wantMusic && unlocked && !silenced) matchMusic();
   refreshTheme();
 }
 
@@ -107,7 +107,7 @@ export function matchSilence(on) {
     playTrack('match_start');
     playTrack('loading', AUDIO.tracks.loadingDelay);
   } else if (wantMusic && unlocked && !settings.muted && settings.music) {
-    GameAudio.music.start();
+    matchMusic();
   }
   refreshTheme();
 }
@@ -116,6 +116,7 @@ export function matchSilence(on) {
 function onVisibility() {
   const ctx = GameAudio.context;
   if (!ctx) return;
+  cityMusicHold(document.visibilityState === 'hidden');
   if (document.visibilityState === 'hidden') { ctx.suspend().catch(() => {}); return; }
   ctx.resume().then(() => { if (ctx.state !== 'running') armUnlock(); }, armUnlock);
 }
@@ -124,12 +125,23 @@ function onVisibility() {
 export function startMusic() {
   wantMusic = true;
   if (!unlocked || silenced || settings.muted || !settings.music) return;
-  GameAudio.music.start();
+  matchMusic();
 }
 
 export function stopMusic() {
   wantMusic = false;
   GameAudio.music.stop();
+  cityMusicOff();
+}
+
+// موسيقى المباراة: لحن مدينتها إن كان لها (AUDIO.cityMusic، بطلب المستخدم)، وإلا المولَّدة
+let musicCity = () => null;
+export function setMusicCity(fn) { musicCity = fn; }
+
+function matchMusic() {
+  const track = AUDIO.cityMusic[musicCity()];
+  if (track && cityMusicOn(track)) return;
+  GameAudio.music.start();
 }
 
 // --- التشغيل ---

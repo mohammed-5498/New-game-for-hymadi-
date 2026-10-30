@@ -22,7 +22,7 @@ import { lanActive, lanFrame, startLanHost } from './net/session.js';
 import { setupMenuScene, menuSceneFrame } from './ui/menuScene.js';
 import { isPickerOpen, closePicker } from './ui/picker.js';
 import { setupEmpireMenu, updateEmpireMenu, isEmpireMenuOpen, closeEmpireMenu } from './ui/empireMenu.js';
-import { initSound, startMusic } from './audio/sound.js';
+import { initSound, startMusic, setMusicCity } from './audio/sound.js';
 import { matchBlackout, introBlackout, blackoutHolds } from './ui/blackout.js';
 import { saveMatch, loadMatch, clearSavedMatch, canSaveMatch } from './matchSave.js';
 import { onBackButton, keepScreenAwake } from './platform.js';
@@ -35,6 +35,7 @@ initSound();
 
 // مباراة مبدئية حتى تكون هناك حالة صالحة قبل اختيار الإعدادات
 const state = createMatch(MATCH_DEFAULTS);
+setMusicCity(() => state.map.city);     // لحن الخريطة في المباراة (AUDIO.cityMusic)
 
 setupInput(canvas, state);
 setupHud(state);
