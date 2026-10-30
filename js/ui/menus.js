@@ -4,7 +4,7 @@ import {
   WEATHER, WEATHER_KEYS, UNITS, MATCH_DEFAULTS, AUDIO, UI, CITIES, NET, gameModes as GM, nations as NATIONS, CITY_FEATURES
 } from '../config.js';
 import { SIDE_CHOICES, resolveSide, nationOf } from '../game/nations.js';
-import { sound, audioSettings, setAudioSettings, startMusic } from '../audio/sound.js';
+import { sound, audioSettings, setAudioSettings, startMusic, menuMusic } from '../audio/sound.js';
 import { isNativeApp, exitApp } from '../platform.js';
 import { getPref, setPref } from '../prefs.js';
 import { loadStats, favoriteGang } from '../stats.js';
@@ -134,6 +134,7 @@ export function showScreen(name) {
     if (key === name) fadeIn(el(id));
     else fadeOut(el(id));
   }
+  menuMusic(name !== 'game');                  // لحن القوائم (بطلب المستخدم)، ويصمت في المباراة
   if (name === 'setup') drawSetupIcons();      // بعد الظهور: الأيقونات بمقاسها الحقيقي
   if (name === 'store') showStore();           // وصور المتجر بمقاس خاناتها
   // الخلفية الحية لكل القوائم، وتتوقف تماماً أثناء المباراة

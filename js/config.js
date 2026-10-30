@@ -1178,17 +1178,64 @@ export const AUDIO = {
   unlockEvents: ['pointerdown', 'touchend', 'click', 'keydown'],
 
   // مزج مؤثرات القتال (المرحلة 5ب): المعركة الكبيرة تطلب مئات المؤثرات في الثانية (200 وحدة: ~560)،
-  // فتُجمع طلبات كل تحديث ويُسمع أهمها فقط: perSecond مؤثراً في الثانية بمخزون burst، وحتى maxPerTick
-  // في التحديث الواحد بلا تكرار نفس المؤثر فيه. الأعلى priority يُسمع أولاً، وjitter عشوائي بين
+  // فتُجمع طلبات كل تحديث ويُسمع أهمها فقط: حتى maxPerTick في التحديث الواحد بلا تكرار نفس المؤثر فيه،
+  // وحتى combatVoices مسموعة معاً (بطلب المستخدم). الأعلى priority يُسمع أولاً، وjitter عشوائي بين
   // المتساويين، وcenter مكافأة لما قرب وسط الشاشة. المعركة الصغيرة تُسمع كاملة تقريباً.
-  // minGap: أقل زمن بين مرتين لنفس المؤثر (أعلى من حد الملف 0.045): دويّ الضربة المميزة لا يتلاحق.
-  // ما ليس في priority (الظهور والعلاج والاستيلاء والصافرة واكتمال الشحن) يُسمع مباشرة بحد الملف وحده
+  // minGap: أقل زمن بين مرتين لنفس المؤثر (أعلى من الحد العام 0.045): دويّ الضربة المميزة لا يتلاحق.
+  // ما ليس في priority (الظهور والعلاج والاستيلاء والصافرة واكتمال الشحن) يُسمع مباشرة بالحد العام وحده
+  combatVoices: 20,
   mix: {
-    perSecond: 12, burst: 5, maxPerTick: 3, queueMax: 64, jitter: 0.6, center: 0.5,
+    maxPerTick: 3, queueMax: 64, jitter: 0.6, center: 0.5,
     priority: { death: 3, ult_cast: 2.8, hit_heavy: 2.5, fire: 2.2, hit_shield: 2, hit_melee: 1.8,
                 arrow: 1.4, stone: 1.4, swing: 1 },
     minGap: { ult_cast: 0.6, death: 0.12 }
-  }
+  },
+
+  // قرب الكاميرا (بطلب المستخدم): ارتفاع صوت الحدث على الخريطة من تقريبها، floor (يكاد لا يُسمع) حتى التقريب quiet،
+  // ثم يعلو حتى 1 عند loud بمنحنى curve، وعند أطراف الشاشة أخفض حتى edge. وما خرج عن الشاشة لا يُسمع (screenMargin)
+  near: { quiet: 1.0, loud: 3.4, floor: 0.04, curve: 1.3, edge: 0.45 },
+
+  // ملفات الصوت (بطلب المستخدم، 2026-10-30): assets/audio/ من صوتياته بعد قص الصمت، وبداية الضربة عند ارتطامها،
+  // وتسوية الارتفاع (CREDITS.md هناك). لكل حدث نسخ يُختار منها عشوائياً بلا تكرار متتالٍ، وحسب أسلوب سلاح الضارب
+  // إن كان له (FIGHT.weapons: knife وblade وspear وhammer وfists وshield وranged)، وإلا any. rate سرعة التشغيل
+  // (أقل = أثقل) وgain الارتفاع، ويتغيران قليلاً كل مرة (rateJitter وgainJitter). وقائمة فارغة: الحدث صامت لهذا
+  // الأسلوب (قوس الرامي: يُسمع سهمه). والأحداث بلا ملفات بالصوت المولَّد كما كان، أخفض بـ synthGain
+  files: {
+    dir: 'assets/audio/',
+    sfx: ['swing', 'whoosh', 'slash', 'knife', 'stab', 'hit', 'thump', 'clang', 'tap', 'scrape', 'unsheathe', 'fall',
+          'arrow', 'click', 'punch1', 'punch2', 'punch3', 'punch4', 'punch5', 'punch6',
+          'heavy1', 'heavy2', 'heavy3', 'heavy4', 'heavy5'],
+    music: ['theme', 'loading', 'match_start', 'game_start']
+  },
+  events: {
+    swing:      { gain: 0.45, any: ['swing', 'whoosh'], knife: ['knife', 'swing'], ranged: [] },
+    hit_melee:  { gain: 0.7, any: ['hit', 'thump'], knife: ['stab', 'thump'], spear: ['stab', 'hit'],
+                  fists: ['punch1', 'punch2', 'punch3', 'punch4', 'punch5', 'punch6'],
+                  hammer: ['heavy1', 'heavy2', 'heavy3', 'heavy4', 'heavy5'], shield: ['heavy1', 'heavy4', 'thump'],
+                  ranged: ['punch1', 'punch3', 'punch5'] },
+    hit_heavy:  { gain: 0.8, rate: 0.88, any: ['hit', 'thump', 'heavy1', 'heavy4'], knife: ['stab'], spear: ['stab'],
+                  fists: ['heavy1', 'heavy2', 'heavy3', 'heavy4', 'heavy5'], hammer: ['heavy1', 'heavy2', 'heavy3', 'heavy4', 'heavy5'],
+                  shield: ['heavy1', 'heavy4'], ranged: ['punch2', 'punch4', 'punch6'] },
+    hit_shield: { gain: 0.5, any: ['tap', 'clang', 'scrape'] },
+    death:      { gain: 0.6, any: ['fall'] },
+    arrow:      { gain: 0.55, any: ['arrow'] },
+    stone:      { gain: 0.45, rate: 1.25, any: ['whoosh'] },       // الرمي: الحجارة والزجاجات
+    ult_ready:  { gain: 0.6, any: ['unsheathe'] },
+    ult_cast:   { gain: 0.8, any: ['slash'] },
+    ui_tap:     { gain: 0.6, any: ['click'] },
+    select:     { gain: 0.5, any: ['click'] },
+    command:    { gain: 0.5, rate: 0.85, any: ['click'] }
+  },
+  rateJitter: 0.06,
+  gainJitter: 0.15,
+  softHz: 6000,          // مرشح يخفف حدة المؤثرات (بطلب المستخدم: خافتة لا حادة)، ثم ضاغط يمنع تراكم المتزامنة
+  synthGain: 0.6,
+
+  // لحن القوائم وأصوات البداية (بمؤشر الموسيقى): theme في القوائم بتلاشٍ، وmatch_start ثم loading بعد loadingDelay
+  // على الشاشة السوداء لبدء المباراة، وgame_start عند تشغيل اللعبة إن فُتح الصوت قبل introWindow ثانية (التطبيق)
+  // ثم يبدأ اللحن بعده
+  tracks: { theme: 0.8, themeFadeIn: 1.5, themeFadeOut: 0.6, match_start: 0.9, loading: 0.85, loadingDelay: 0.6,
+            game_start: 0.9, introWindow: 4 }
 };
 
 // --- الأداء ---
@@ -1614,6 +1661,10 @@ export const CITY_FEATURES = {
 // --- القوائم (القسم 12.0) ---
 export const UI = {
   fadeMs: 200,                   // مدة التلاشي بين الشاشات
+  // الشاشة السوداء (بطلب المستخدم): عند بدء المباراة أو متابعتها seconds تُجهَّز فيها المدينة ولا يُسمع إلا صوتا البداية
+  // والتحميل، وتظهر وتختفي بسرعة (fadeMs). وintro عند تشغيل اللعبة: مكان مقدمة التطبيق لاحقاً
+  blackout: { seconds: 4, fadeMs: 250 },
+  intro: { seconds: 1.2, fadeMs: 400 },
   statsKey: 'gangcity.stats',    // الإحصائيات الدائمة في localStorage
   setupKey: 'gangcity.setup',    // آخر إعداد مباراة اختاره اللاعب
 

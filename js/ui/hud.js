@@ -2,6 +2,7 @@
 import { PERFORMANCE, UI } from '../config.js';
 import { clearSelection, selectAllUnitsOf, resetMatch, districtsOwnedBy } from '../state.js';
 import { sound, startMusic, stopMusic } from '../audio/sound.js';
+import { matchBlackout } from './blackout.js';
 import { showScreen, buildMatchSettings, fillStatCards } from './menus.js';
 import { fadeIn, fadeOut, isShown } from './transition.js';
 import { recordMatch } from '../stats.js';
@@ -62,10 +63,12 @@ export function setupHud(state) {
 
   el('btnRestartMatch').addEventListener('click', () => {
     sound('ui_tap');
-    clearSavedMatch();                 // البداية من جديد تحل محل المحفوظة
-    resetMatch(state);                 // نفس الإعدادات
-    startMusic();
-    closeOverlays();
+    matchBlackout(() => {
+      clearSavedMatch();               // البداية من جديد تحل محل المحفوظة
+      resetMatch(state);               // نفس الإعدادات
+      startMusic();
+      closeOverlays();
+    });
   });
 
   el('btnQuitToMain').addEventListener('click', () => leaveToMain(state));
@@ -80,10 +83,12 @@ export function setupHud(state) {
       backToLobby(state, 'setup');
       return;
     }
-    clearSavedMatch();
-    resetMatch(state, state.settings.arena ? state.settings : buildMatchSettings());
-    startMusic();
-    closeOverlays();
+    matchBlackout(() => {
+      clearSavedMatch();
+      resetMatch(state, state.settings.arena ? state.settings : buildMatchSettings());
+      startMusic();
+      closeOverlays();
+    });
   });
 
   el('btnEndToMain').addEventListener('click', () => leaveToMain(state));

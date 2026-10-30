@@ -3,6 +3,7 @@
 // بعد الانضمام: غرفة انتظار المنضم. والمضيف يعدّ المباراة في قائمة الإعداد نفسها (menus.js: openLanSetup)
 import { NET, MAP_SIZES, PLAYER_COLORS, CITIES, gameModes as GM } from '../config.js';
 import { sound, startMusic } from '../audio/sound.js';
+import { matchBlackout } from './blackout.js';
 import { getPref, setPref } from '../prefs.js';
 import { lan, initLan, cleanName, hostLan, searchLan, joinLan, leaveLan, setMySide } from '../net/session.js';
 import { lanAvailable } from '../net/transport.js';
@@ -49,9 +50,11 @@ export function setupLanScreen(state) {
     // المضيف بدأ المباراة: المنضم يدخلها مباشرة (ولو كانت لوحة الأمم مفتوحة عنده)
     enterGame: () => {
       closePicker();
-      state.running = true;
-      showScreen('game');
-      startMusic();
+      matchBlackout(() => {
+        state.running = true;
+        showScreen('game');
+        startMusic();
+      });
     },
     // انقطع المنضم عن المضيف (أو أغلق المضيف الجلسة)
     leftSession: (reason, inGame) => {

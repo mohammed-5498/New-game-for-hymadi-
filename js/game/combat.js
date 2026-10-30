@@ -12,7 +12,7 @@ import { createFire } from './abilities.js';
 import { chargeOverTime, chargeOnHit, chargeOnDamageTaken, tryCastUlt, resolveUlt, updateFlurry } from './ults.js';
 import { visionRange, rangedShotHits, moveSpeed } from './weather.js';
 import { forEachNearby } from './spatialHash.js';
-import { soundAt, soundAlert } from '../audio/sound.js';
+import { soundAt, soundAlert, onScreen } from '../audio/sound.js';
 import { raiseAlert } from './alerts.js';
 import { random } from './random.js';   // عشوائية المنطق: مشتركة بين الأجهزة في اللعب المحلي
 import { stormMiss, stormRangeMul } from './features.js';
@@ -492,7 +492,7 @@ function rangedSwing(state, unit, target, damage, attackTime) {
   unit.attackStart = state.time;
   unit.attackRate = attackTime;
   unit.ultStart = null;
-  soundAt(state, 'swing', unit.x, unit.y);
+  soundAt(state, 'swing', unit.x, unit.y, { style: fightStyle(unit) });
   unit.pendingHit = {
     target,
     damage: damage * unit.damageMultiplier * showoff(state, unit),
@@ -556,7 +556,7 @@ function meleeSwing(state, unit, target, dist, range, damage, attackTime, aimOff
   unit.attackStart = state.time;
   unit.attackRate = phases.total;
   unit.ultStart = null;
-  soundAt(state, 'swing', unit.x, unit.y);
+  soundAt(state, 'swing', unit.x, unit.y, { style: fightStyle(unit) });
 
   unit.pendingHit = {
     target, move: key, range,
@@ -603,11 +603,13 @@ function retaliateIfCloser(state, attacker, target) {
   target.path = [];
 }
 
-// صوت الارتطام حسب قوة الضربة ودرع المُصاب (القسم 13.5)
-function hitSound(state, target, amount) {
+// صوت الارتطام حسب قوة الضربة ودرع المُصاب (القسم 13.5)، ونسخه حسب سلاح الضارب (طعنة السكين، لكمة القبضة...).
+// ما ليس وحدة (نار الأرض، سهام الأبراج) بلا صوت ارتطام: لها صوتها حين تشتعل أو تنطلق
+function hitSound(state, attacker, target, amount) {
   const name = target.stats.armor >= AUDIO.shieldArmor ? 'hit_shield'
              : amount >= AUDIO.heavyDamage ? 'hit_heavy' : 'hit_melee';
-  const heard = soundAt(state, name, target.x, target.y);
+  const heard = attacker.stats ? soundAt(state, name, target.x, target.y, { style: fightStyle(attacker) })
+                               : onScreen(state, target.x, target.y);
 
   // تنبيه: وحدة للاعب تتعرض للهجوم خارج الشاشة (سهم أحمر + صوت يُسمع دائماً)
   if (heard || target.playerId !== state.humanId) return;
@@ -639,7 +641,7 @@ export function applyDamage(state, attacker, target, amount) {
   if (!isAlive(target)) return false;
   if (target.invulnUntil > state.time) return false;     // تصلّب: لا يتلقى ضرراً ولا يترنّح ولا يُدفع
   retaliateIfCloser(state, attacker, target);
-  hitSound(state, target, amount);
+  hitSound(state, attacker, target, amount);
   // درع الوحدة + مكافأة مراكز الشرطة المملوكة (القسم 3.8)
   const armor = Math.min(COMBAT.maxArmor, target.stats.armor + target.armorBonus);
   const taken = amount * (1 - armor) * target.takenMul;   // takenMul: سمة الأمة داخل أحيائها (القسم 3.10)
@@ -687,7 +689,7 @@ export function spawnProjectile(state, unit, target, damage, offset = 0, fire = 
   const angle = random() * 6.2832;
   const spread = COMBAT.missSpread * (0.6 + random() * 0.4);
 
-  soundAt(state, unit.stats.projectile === 'stone' ? 'stone' : 'arrow', unit.x, unit.y);
+  soundAt(state, unit.stats.projectile === 'arrow' ? 'arrow' : 'stone', unit.x, unit.y);   // الحجارة والزجاجات: صوت الرمي
 
   state.projectiles.push({
     kind: unit.stats.projectile,

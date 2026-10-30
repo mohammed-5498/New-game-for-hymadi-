@@ -23,6 +23,7 @@ import { setupMenuScene, menuSceneFrame } from './ui/menuScene.js';
 import { isPickerOpen, closePicker } from './ui/picker.js';
 import { setupEmpireMenu, updateEmpireMenu, isEmpireMenuOpen, closeEmpireMenu } from './ui/empireMenu.js';
 import { initSound, startMusic } from './audio/sound.js';
+import { matchBlackout, introBlackout, blackoutHolds } from './ui/blackout.js';
 import { saveMatch, loadMatch, clearSavedMatch, canSaveMatch } from './matchSave.js';
 import { onBackButton, keepScreenAwake } from './platform.js';
 
@@ -44,28 +45,35 @@ setupEmpireMenu(state);
 setupMenuScene(document.getElementById('menuBg'), document.getElementById('menuBack'));
 setupMenus({
   // "ابدأ" من قائمة الإعداد
+  // (كل بداية خلف الشاشة السوداء: js/ui/blackout.js)
   startMatch(settings) {
     // مباراة جديدة تحل محل المحفوظة؛ أما ساحة التجربة فلا تُحفظ ولا تمس المحفوظة
-    if (!settings.arena) clearSavedMatch();
-    resetMatch(state, settings);
-    state.running = true;
-    showScreen('game');
+    matchBlackout(() => {
+      if (!settings.arena) clearSavedMatch();
+      resetMatch(state, settings);
+      state.running = true;
+      showScreen('game');
+    });
   },
   // اللعب المحلي (القسم 16): المضيف يبدأ، فتُرسل المباراة لكل صديق ويدخلها الجميع معاً
   // (لا تمس المباراة المحفوظة: المحلية لا تُحفظ)
   startLan(settings, peerOfPlayer) {
-    resetMatch(state, settings);
-    startLanHost(state, peerOfPlayer);
-    state.running = true;
-    showScreen('game');
+    matchBlackout(() => {
+      resetMatch(state, settings);
+      startLanHost(state, peerOfPlayer);
+      state.running = true;
+      showScreen('game');
+    });
   },
   leaveLanSetup: lanBack,
   // "متابعة المباراة": تعود من حيث توقفت (false إن كان الحفظ تالفاً)
   continueMatch() {
     if (!loadMatch(state)) return false;
-    state.running = true;
-    showScreen('game');
-    startMusic();
+    matchBlackout(() => {
+      state.running = true;
+      showScreen('game');
+      startMusic();
+    });
     return true;
   },
   // تُستدعى عند ظهور شاشة المباراة: اللوحة تأخذ مقاسها الآن
@@ -81,6 +89,7 @@ setupMenus({
 setupLanScreen(state);
 
 showScreen('main');
+introBlackout();          // تشغيل اللعبة: شاشة سوداء قصيرة (مكان مقدمة التطبيق لاحقاً)
 
 // تصغير التطبيق أو إغلاقه أو مغادرة الصفحة: تُحفظ المباراة الجارية للعودة إليها
 function saveOnLeave() {
@@ -92,6 +101,7 @@ window.addEventListener('pagehide', () => { if (canSaveMatch(state)) saveMatch(s
 // زر الرجوع في أندرويد: أثناء المباراة يفتح الإيقاف، وفي القوائم يرجع خطوة،
 // وفي القائمة الرئيسية يسأل "هل تريد الخروج؟" (القسم 2.1). في المتصفح لا يفعل شيئاً.
 onBackButton(() => {
+  if (blackoutHolds(performance.now())) return;          // الشاشة السوداء: المباراة لم تبدأ بعد
   if (isExitDialogOpen()) { closeExitDialog(); return; }
   if (isPickerOpen()) { closePicker(); return; }         // لوحة المدن أو الأمم في الإعداد: تُغلق وحدها
 
@@ -151,20 +161,17 @@ function loop(now) {
   if (now - hudMeasuredAt > 500) { state.hudAvoid = hudRects(); hudMeasuredAt = now; }
 
   // خريطة جديدة (بداية أو إعادة أو متابعة): المدينة الظاهرة تُجهَّز على دفعات في الإطارات الأولى
-  // والمباراة لا تتقدم حتى تكتمل (أو حتى الحد الأقصى)، ولا يُعوَّض وقت التجهيز لعباً
+  // والمباراة لا تتقدم حتى تكتمل (أو حتى الحد الأقصى) وحتى ترتفع الشاشة السوداء، ولا يُعوَّض الانتظار لعباً
   if (state.map !== warmedMap && state.view.w) {
     warmedMap = state.map;
     warmUntil = now + CITY_CACHE.warmMaxMs;
   }
-  if (warmUntil) {
-    const ready = warmCity(ctx, state, CITY_CACHE.warmBudgetMs);
+  if (warmUntil || blackoutHolds(now)) {
+    if (warmUntil && (warmCity(ctx, state, CITY_CACHE.warmBudgetMs) || performance.now() > warmUntil)) warmUntil = 0;
     render(ctx, state, 0, 0);
     updateHud(state);
-    if (ready || performance.now() > warmUntil) {
-      warmUntil = 0;
-      lastTime = performance.now();
-      accumulator = 0;
-    }
+    lastTime = performance.now();
+    accumulator = 0;
     requestAnimationFrame(loop);
     return;
   }

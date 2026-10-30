@@ -1,12 +1,20 @@
-// جسر الصوت (القسم 13.5): يربط أحداث اللعبة بـ docs/audio.js
-// قواعد إلزامية: لا صوت قبل أول لمسة، ولا يُشغَّل صوت حدث خارج الشاشة إلا التنبيهات.
-// ومؤثرات القتال تمر بمازج يُسمع أهمها فقط حتى لا تتحول المعركة الكبيرة إلى ضجيج (المرحلة 5ب).
+// جسر الصوت (القسم 13.5): يربط أحداث اللعبة بالصوت. ما له ملفات من المستخدم (assets/audio/، js/audio/samples.js)
+// يُسمع منها، والباقي بالمولَّد (docs/audio.js).
+// قواعد إلزامية: لا صوت قبل أول لمسة (إلا في التطبيق: يُفتح عند تشغيله)، ولا يُشغَّل صوت حدث خارج الشاشة إلا التنبيهات،
+// وارتفاع الحدث من قرب الكاميرا (بطلب المستخدم). ومؤثرات القتال تمر بمازج يُسمع أهمها فقط حتى لا تتحول المعركة
+// الكبيرة إلى ضجيج (المرحلة 5ب)
 import { AUDIO, TILE_HALF_W, TILE_HALF_H, TICK_SEC } from '../config.js';
 import { GameAudio } from './audio.js';
+import { initSamples, setSampleVolumes, playSample, playTrack, themeOn, stopSamples } from './samples.js';
+import { isNativeApp } from '../platform.js';
 
 let settings = { sfx: AUDIO.sfxVolume, music: AUDIO.musicVolume, muted: AUDIO.muted };
 let unlocked = false;
 let wantMusic = false;
+let wantTheme = false;      // لحن القوائم: القوائم ظاهرة
+let silenced = false;       // الشاشة السوداء لبدء المباراة: لا يُسمع إلا صوتا البداية والتحميل
+let introUntil = 0;         // صوت تشغيل اللعبة يُسمع إن جهزت الملفات قبل هذا الوقت
+let introPlaying = false;   // ولحن القوائم ينتظره
 
 // --- الإعدادات: تُحفظ في localStorage وتُقرأ عند بدء اللعبة ---
 export function loadAudioSettings() {
@@ -21,11 +29,18 @@ export function audioSettings() { return { ...settings }; }
 
 export function setAudioSettings(next) {
   settings = { ...settings, ...next };
-  GameAudio.setVolume(settings.sfx, settings.music);
-  GameAudio.setMuted(settings.muted);
+  applyVolumes();
   try { localStorage.setItem(AUDIO.storageKey, JSON.stringify(settings)); } catch (e) { /* تجاهل */ }
   if (settings.muted || !settings.music) GameAudio.music.stop();
-  else if (wantMusic && unlocked) GameAudio.music.start();
+  else if (wantMusic && unlocked && !silenced) GameAudio.music.start();
+  refreshTheme();
+}
+
+// المولَّد أخفض بـ synthGain ليناسب الملفات
+function applyVolumes() {
+  GameAudio.setVolume(settings.sfx * AUDIO.synthGain, settings.music);
+  GameAudio.setMuted(settings.muted);
+  setSampleVolumes(settings.sfx, settings.music, settings.muted);
 }
 
 // --- التهيئة: الصوت لا يعمل قبل أول لمسة في متصفحات الجوال ---
@@ -33,10 +48,10 @@ export function setAudioSettings(next) {
 // حتى يعمل فعلاً: بعض المتصفحات لا تسمح به في pointerdown وتسمح في touchend أو click
 export function initSound() {
   loadAudioSettings();
-  GameAudio.setVolume(settings.sfx, settings.music);
-  GameAudio.setMuted(settings.muted);
+  applyVolumes();
   armUnlock();
   document.addEventListener('visibilitychange', onVisibility);
+  if (isNativeApp()) tryUnlock();       // التطبيق يسمح بالصوت قبل أي لمسة: صوت التشغيل ثم لحن القوائم
 }
 
 function armUnlock() {
@@ -55,7 +70,48 @@ function onUnlocked() {
   for (const name of AUDIO.unlockEvents) document.removeEventListener(name, tryUnlock, true);
   if (unlocked) return;
   unlocked = true;
+  initSamples(GameAudio.context, onSamplesLoaded);
+  applyVolumes();
   if (wantMusic) startMusic();
+}
+
+// الملفات جاهزة: صوت تشغيل اللعبة إن كان وقته (التطبيق)، ثم لحن القوائم
+function onSamplesLoaded() {
+  if (!silenced && performance.now() < introUntil &&
+      playTrack('game_start', 0, () => { introPlaying = false; refreshTheme(); })) introPlaying = true;
+  refreshTheme();
+}
+
+function refreshTheme() {
+  themeOn(wantTheme && unlocked && !silenced && !introPlaying && !settings.muted && settings.music > 0);
+}
+
+// لحن القوائم: يدور ما دامت القوائم ظاهرة (showScreen)
+export function menuMusic(on) {
+  wantTheme = on;
+  refreshTheme();
+}
+
+// تشغيل اللعبة: صوته يُسمع إن جهز الصوت خلال introWindow ثانية، في التطبيق وحده (المتصفح لا يفتح الصوت قبل أول لمسة،
+// فيبدأ بها لحن القوائم)
+export function introSound() {
+  if (isNativeApp()) introUntil = performance.now() + AUDIO.tracks.introWindow * 1000;
+}
+
+// الشاشة السوداء لبدء المباراة: يصمت كل شيء إلا صوت البداية ثم صوت التحميل، ويعود ما كان مطلوباً بعدها
+export function matchSilence(on) {
+  silenced = on;
+  if (on) {
+    GameAudio.music.stop();
+    stopSamples();
+    introPlaying = false;
+    queue.length = 0;
+    playTrack('match_start');
+    playTrack('loading', AUDIO.tracks.loadingDelay);
+  } else if (wantMusic && unlocked && !settings.muted && settings.music) {
+    GameAudio.music.start();
+  }
+  refreshTheme();
 }
 
 // تصغير التطبيق أو تبديل الصفحة: يصمت كل الصوت، ويعود عند الرجوع (أو بأول لمسة إن رفض المتصفح)
@@ -69,7 +125,7 @@ function onVisibility() {
 // الموسيقى لا تبدأ قبل أول لمسة ولا داخل القوائم
 export function startMusic() {
   wantMusic = true;
-  if (!unlocked || settings.muted || !settings.music) return;
+  if (!unlocked || silenced || settings.muted || !settings.music) return;
   GameAudio.music.start();
 }
 
@@ -82,10 +138,14 @@ export function stopMusic() {
 // sound: تنبيهات اللاعب وأصوات الواجهة. لا موقع لها على الخريطة فتُسمع دائماً،
 // وهي المقصودة بالاستثناء في القسم 13.5: alert، capture_done، district_lost،
 // victory، defeat، وأصوات الأزرار. أما مؤثرات الوحدات فتمر بـ soundAt وحدها.
-export const sound = (name, opt) => GameAudio.play(name, opt);
+export function sound(name, opt) {
+  if (!silenced) play(name, opt);
+}
+
+const play = (name, opt) => { if (!playSample(name, opt)) GameAudio.play(name, opt); };
 
 // موقع مربع اللعبة على الشاشة، أو null إذا كان خارجها
-function screenX(state, i, j) {
+function screenPos(state, i, j) {
   const { camera, view } = state;
   if (!view.w) return null;
   const wx = (i - j) * TILE_HALF_W, wy = (i + j) * TILE_HALF_H;
@@ -93,57 +153,66 @@ function screenX(state, i, j) {
   const y = (wy - camera.y) * camera.z + view.h / 2;
   const m = AUDIO.screenMargin;
   if (x < -m || x > view.w + m || y < -m || y > view.h + m) return null;
-  return x;
+  return { x, y };
 }
 
-// صوت حدث في مكان من الخريطة: موزّع يمين/يسار، ولا يُسمع إن كان خارج الشاشة.
-// مؤثرات القتال (AUDIO.mix.priority) تُجمع لمازج آخر التحديث، والباقي يُسمع فوراً.
+export const onScreen = (state, i, j) => screenPos(state, i, j) !== null;
+const panOf = (state, at) => (at.x / state.view.w * 2 - 1) * 0.7;
+
+// ارتفاع الحدث من قرب الكاميرا (AUDIO.near): يكاد لا يُسمع والكاميرا بعيدة، ويعلو كلما اقتربت، وأخفض عند أطراف الشاشة
+function nearness(state, at) {
+  const N = AUDIO.near, { view, camera } = state;
+  const t = Math.max(0, Math.min(1, (camera.z - N.quiet) / (N.loud - N.quiet)));
+  const dx = at.x / view.w * 2 - 1, dy = at.y / view.h * 2 - 1;
+  return (N.floor + (1 - N.floor) * t ** N.curve) * (1 - N.edge * Math.min(1, (dx * dx + dy * dy) / 2));
+}
+
+// صوت حدث في مكان من الخريطة: موزّع يمين/يسار وبارتفاع من قرب الكاميرا، ولا يُسمع إن كان خارج الشاشة.
+// مؤثرات القتال (AUDIO.mix.priority) تُجمع لمازج آخر التحديث، والباقي يُسمع فوراً. opt.style أسلوب سلاح الضارب.
 // تعيد true إن كان الحدث على الشاشة (سُمع أو دخل المازج)
 export function soundAt(state, name, i, j, opt) {
-  const x = screenX(state, i, j);
-  if (x === null) return false;
+  const at = screenPos(state, i, j);
+  if (!at) return false;
+  if (silenced) return true;
+  const o = { ...opt, pan: panOf(state, at), gain: nearness(state, at) };
   const priority = AUDIO.mix.priority[name];
-  if (priority === undefined) GameAudio.playAt(name, x, state.view.w, opt);
+  if (priority === undefined) play(name, o);
   else if (queue.length < AUDIO.mix.queueMax) {
-    const centered = 1 - Math.min(1, Math.abs(x / state.view.w * 2 - 1));
-    const gap = AUDIO.mix.minGap[name];
-    queue.push({ name, x, w: state.view.w, opt: gap ? { ...opt, minGap: gap } : opt,
-                 score: priority + jitter() * AUDIO.mix.jitter + centered * AUDIO.mix.center });
+    const centered = 1 - Math.min(1, Math.abs(at.x / state.view.w * 2 - 1));
+    if (AUDIO.mix.minGap[name]) o.minGap = AUDIO.mix.minGap[name];
+    queue.push({ name, opt: o, score: priority + jitter() * AUDIO.mix.jitter + centered * AUDIO.mix.center });
   }
   return true;
 }
 
 // --- مازج مؤثرات القتال (المرحلة 5ب) ---
-// طلبات التحديث الواحد تُرتب بالأهمية، ويُسمع منها ما تسمح به ميزانية ثابتة في الثانية
-// (perSecond بمخزون burst)، وحتى maxPerTick بلا تكرار نفس المؤثر. المعركة الصغيرة تُسمع كاملة تقريباً،
-// والكبيرة يُسمع فيها الموت والضربات الثقيلة والضربات المميزة أولاً بدل جدار متصل من الضربات
+// طلبات التحديث الواحد تُرتب بالأهمية، ويُسمع منها حتى maxPerTick بلا تكرار نفس المؤثر، وحتى AUDIO.combatVoices
+// مسموعة معاً (samples.js). المعركة الصغيرة تُسمع كاملة تقريباً، والكبيرة يُسمع فيها الموت والضربات الثقيلة
+// والضربات المميزة أولاً بدل جدار متصل من الضربات
 const queue = [];
-let tokens = AUDIO.mix.burst;
 // عشوائية خاصة بالمازج: لا تستهلك Math.random فلا يتغير شيء في المباراة بسبب الصوت
 let seed = 0x2545f491;
 const jitter = () => (seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296;
 
 // تُستدعى آخر كل تحديث للمباراة (loop.js)
 export function flushSounds() {
-  tokens = Math.min(AUDIO.mix.burst, tokens + AUDIO.mix.perSecond * TICK_SEC);
   if (!queue.length) return;
   queue.sort((a, b) => b.score - a.score);
   const used = [];
   for (const s of queue) {
-    if (tokens < 1 || used.length >= AUDIO.mix.maxPerTick) break;
+    if (used.length >= AUDIO.mix.maxPerTick) break;
     if (used.includes(s.name)) continue;
     used.push(s.name);
-    tokens--;
-    GameAudio.playAt(s.name, s.x, s.w, s.opt);
+    play(s.name, s.opt);
   }
   queue.length = 0;
 }
 
-// التنبيهات وحدها تُسمع ولو كان مصدرها خارج الشاشة
+// التنبيهات وحدها تُسمع ولو كان مصدرها خارج الشاشة، وبارتفاعها كاملاً
 export function soundAlert(state, name, i, j) {
-  const x = screenX(state, i, j);
-  if (x === null) GameAudio.play(name);
-  else GameAudio.playAt(name, x, state.view.w);
+  if (silenced) return;
+  const at = screenPos(state, i, j);
+  play(name, at ? { pan: panOf(state, at) } : undefined);
 }
 
 // --- حرارة الموسيقى: تزداد الطبول كلما اشتدت معركة اللاعب ---
