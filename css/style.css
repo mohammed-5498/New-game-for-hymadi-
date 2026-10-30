@@ -103,10 +103,19 @@ button:active { transform: scale(.96); filter: brightness(.8); }
 
 .btn.on { background: var(--gold); border-color: var(--gold); color: var(--gold-dark); }
 
-#info {
+/* أعلى اليسار: شريط المعلومات في الزاوية، ونقاطك بجانبه */
+#topLeft {
   position: absolute;
   top: 10px;
   left: 10px;
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  direction: ltr;
+}
+#topLeft > * { direction: rtl; }
+
+#info, #points {
   background: rgba(27, 22, 18, .8);
   color: var(--text-dim);
   border: 1px solid rgba(224, 176, 74, .25);
@@ -117,6 +126,7 @@ button:active { transform: scale(.96); filter: brightness(.8); }
   gap: 5px;
   align-items: center;
 }
+#points { color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 /* زر الإيقاف في الوسط */
 #btnPause { min-height: 36px; padding: 0 10px; font-size: 13px; }
@@ -131,6 +141,7 @@ button:active { transform: scale(.96); filter: brightness(.8); }
     gap: 2px 8px;
     font-size: 11px;
   }
+  #points { font-size: 11px; }
   #info .sep { display: none; }
 }
 
@@ -956,7 +967,8 @@ input[type=range].muted { opacity: .4; }
   color: var(--text);
 }
 
-#powerRows { overflow-y: auto; -webkit-overflow-scrolling: touch; }
+/* عمود مرن: الأسطر ترتَّب بخاصية order (power.js) */
+#powerRows { overflow-y: auto; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column; }
 #power.folded #powerRows { display: none; }
 
 .power-row {
@@ -967,25 +979,33 @@ input[type=range].muted { opacity: .4; }
   padding: 0 6px;
   border-top: 1px solid rgba(243, 236, 224, .07);
   white-space: nowrap;
+  flex: none;
 }
-.power-row:first-child { border-top: 0; }
 
 .power-dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
-.power-name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; }
-.power-team { color: var(--text-dim); font-size: 10px; }
+.power-name { flex: 1 1 auto; overflow: hidden; }
+.power-name > span { display: inline-block; }
+/* الاسم الأطول من مكانه يُمرَّر من أوله إلى آخره ثم يعود (--shift و--dur من power.js) */
+.power-name.scroll > span { animation: power-scroll var(--dur, 4s) ease-in-out infinite alternate; }
+@keyframes power-scroll {
+  0%, 15% { transform: none; }
+  85%, 100% { transform: translateX(var(--shift, 0)); }
+}
 .power-num { font-variant-numeric: tabular-nums; }
 .power-num.districts { font-weight: 700; }
-.power-num.units { color: var(--text-dim); }
+.power-num.units { color: var(--text-dim); min-width: 2ch; text-align: left; }
 .power-bar { flex: 0 0 28px; height: 4px; border-radius: 2px; background: rgba(243, 236, 224, .15); overflow: hidden; }
 .power-bar > span { display: block; height: 100%; }
 
 /* سطر اللاعب نفسه مميز بإطار خفيف */
 .power-row.me { border: 1px solid var(--gold); border-radius: 5px; }
-/* حلفاؤه تحتهم خط سفلي خفيف */
-.power-row.ally .power-name { border-bottom: 1px solid rgba(224, 176, 74, .55); }
+/* الفريق: سطر باسمه وقيمته (متوسط نقاط أفراده)، وأفراده تحته بخط ذهبي على اليمين وأرقامهم أخف */
+.power-row.team-head { height: 14px; font-size: 10px; color: var(--gold); font-weight: 700; background: rgba(224, 176, 74, .08); }
+.power-row.member { border-right: 2px solid rgba(224, 176, 74, .55); }
+.power-row.member .power-num.districts { font-weight: 400; }
 /* المهزوم: اسمه مشطوب ووضوحه منخفض */
 .power-row.out { opacity: .4; }
-.power-row.out .power-name { text-decoration: line-through; }
+.power-row.out .power-name > span { text-decoration: line-through; }
 
 /* --- طور الإمبراطورية: قائمة الحي (js/ui/empireMenu.js) — صغيرة أسفل الوسط، واللعب مستمر خلفها --- */
 #empireMenu {

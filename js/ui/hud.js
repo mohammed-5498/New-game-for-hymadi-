@@ -1,12 +1,12 @@
 // أزرار المباراة، شريط المعلومات، قائمة الإيقاف، وشاشة النهاية
-import { WEATHER, PERFORMANCE, UI } from '../config.js';
+import { PERFORMANCE, UI } from '../config.js';
 import { clearSelection, selectAllUnitsOf, resetMatch, districtsOwnedBy } from '../state.js';
 import { sound, startMusic, stopMusic } from '../audio/sound.js';
 import { showScreen, buildMatchSettings, fillStatCards } from './menus.js';
 import { fadeIn, fadeOut, isShown } from './transition.js';
 import { recordMatch } from '../stats.js';
 import { saveMatch, clearSavedMatch } from '../matchSave.js';
-import { modeBar, modeExtras } from '../game/modes.js';
+import { modeBar, pointsBar, modeExtras } from '../game/modes.js';
 import { pacingState } from '../pacing.js';
 import { lanPause, lanBackToLobby, leaveLan, lanStatus } from '../net/session.js';
 
@@ -229,21 +229,13 @@ function updateEndScreen(state) {
 }
 
 // تحديث شريط المعلومات (بدون لمس DOM إلا عند تغير القيم)
-const last = { sel: -1, units: -1, max: -1, districts: -1, weather: '', notice: '', result: null, modeBar: null, lan: '' };
+const last = { units: -1, max: -1, districts: -1, points: '', notice: '', result: null, modeBar: null, lan: '' };
 
 export function updateHud(state) {
-  let selected = 0, playerUnitCount = 0;
-  for (const unit of state.units) {
-    if (unit.state === 'dead') continue;
-    if (unit.selected) selected++;
-    if (unit.playerId === state.humanId) playerUnitCount++;
-  }
+  let playerUnitCount = 0;
+  for (const unit of state.units) if (unit.state !== 'dead' && unit.playerId === state.humanId) playerUnitCount++;
   const districts = districtsOwnedBy(state, state.humanId);
 
-  if (selected !== last.sel) {
-    last.sel = selected;
-    el('infoSel').textContent = 'محدد: ' + selected;
-  }
   // مباراة جديدة بحد أقصى مختلف تحدّث النص ولو تساوى عدد الوحدات
   if (playerUnitCount !== last.units || state.maxUnits !== last.max) {
     last.units = playerUnitCount;
@@ -254,9 +246,12 @@ export function updateHud(state) {
     last.districts = districts;
     el('infoDistricts').textContent = 'أحياء: ' + districts;
   }
-  if (state.weather !== last.weather) {
-    last.weather = state.weather;
-    el('infoWeather').textContent = WEATHER[state.weather].name;
+  // نقاطك ودخلك في الثانية بجانب شريط المعلومات (الاقتصاد)
+  const points = pointsBar(state) || '';
+  if (points !== last.points) {
+    last.points = points;
+    el('points').hidden = !points;
+    el('points').textContent = points;
   }
 
   updateModeBar(state);

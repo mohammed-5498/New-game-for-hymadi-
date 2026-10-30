@@ -2,7 +2,7 @@
 import { POWER_PANEL } from '../config.js';
 import { sound } from '../audio/sound.js';
 import { isPlayerAlive } from '../game/victory.js';
-import { powerColumn } from '../game/modes.js';
+import { powerColumn, sideKey } from '../game/modes.js';
 
 const el = (id) => document.getElementById(id);
 
@@ -47,45 +47,61 @@ export function updatePower(state, force = false) {
 
   const column = powerColumn(state);              // عمود الطور: نقاط أو زمن أو دم الزعيم (القسم 9.5)
   if (column && column.summary) { renderSummary(column, force); return; }
-  const rows = collectRows(state, column);
-  const signature = rows.map(r => r.id + ':' + r.value + ':' + r.units + ':' + r.out + ':' + (r.bar ?? '')).join('|') + (folded ? 'f' : '');
+  const groups = collectGroups(state, column);
+  const signature = state.humanId + '#' + groups.map(g => g.value + '=' + g.rows.map(r =>
+    [r.id, r.name, r.color, r.value, r.units, r.out, r.bar ?? ''].join(':')).join(',')).join('|') + (folded ? 'f' : '');
   if (!force && signature === lastSignature) return;
   lastSignature = signature;
 
   // مطوية: سطر واحد فيه عدد أحياء اللاعب فقط
-  const mine = rows.find(r => r.id === state.humanId);
+  const mine = groups.flatMap(g => g.rows).find(r => r.id === state.humanId);
   el('powerTitle').textContent = folded
     ? (column ? column.folded : 'أحيائي: ' + (mine ? mine.districts : 0))
     : 'القوة';
 
   if (folded) { el('powerRows').innerHTML = ''; return; }
-  render(state, rows);
+  render(state, groups);
 }
 
-// سطر لكل لاعب: عدد أحيائه ووحداته، مرتبة تنازلياً، والمهزوم في الأسفل
-function collectRows(state, column) {
+// سطر لكل لاعب: قيمته (الأحياء أو ما يخص الطور) ووحداته. وأفراد الفريق معاً تحت سطر الفريق بقيمته:
+// متوسط نقاطهم، أو مجموع ما يعدّه الطور (القسم 12.3). الأعلى أولاً، والمهزوم في الأسفل
+function collectGroups(state, column) {
   const districts = state.players.map(() => 0);
   const units = state.players.map(() => 0);
 
   for (const d of state.map.districts) if (d.owner !== null) districts[d.owner]++;
   for (const u of state.units) if (u.state !== 'dead') units[u.playerId]++;
 
-  return state.players
-    .filter(p => !p.neutral)                  // الشرطة ليست لاعباً
-    .map(p => ({
+  const show = column ? column.show : (v) => v;
+  const rank = (a, b) => (a.out - b.out) || (b.sortValue - a.sortValue) || (b.units - a.units);
+  const groups = new Map();
+  for (const p of state.players) {
+    if (p.neutral) continue;                  // الشرطة ليست لاعباً
+    const key = sideKey(p);
+    if (!groups.has(key)) groups.set(key, { team: p.team, rows: [] });
+    const sortValue = column ? column.sortValue(p.id) : districts[p.id];
+    groups.get(key).rows.push({
       id: p.id,
       name: p.gangName,
-      team: p.team,
       color: p.color,
       districts: districts[p.id],
       units: units[p.id],
       out: !isPlayerAlive(state, p.id),
-      // الرقم الأبرز في السطر: الأحياء، أو ما يخص الطور
-      value: column ? column.value(p.id) : districts[p.id],
-      sortValue: column ? column.sortValue(p.id) : districts[p.id],
+      value: show(sortValue),
+      sortValue,
       bar: column && column.bar ? column.bar(p.id) : null
-    }))
-    .sort((a, b) => (a.out - b.out) || (b.sortValue - a.sortValue) || (b.units - a.units));
+    });
+  }
+  for (const g of groups.values()) {
+    g.rows.sort(rank);
+    const total = g.rows.reduce((sum, r) => sum + r.sortValue, 0);
+    g.sortValue = column && column.teamAverage ? total / g.rows.length : total;
+    g.value = show(g.sortValue);
+    g.units = g.rows.reduce((sum, r) => sum + r.units, 0);
+    g.out = g.rows.every(r => r.out);
+    g.head = g.rows.length > 1;               // فريق بفرد واحد سطر عادي
+  }
+  return [...groups.values()].sort(rank);
 }
 
 // الصمود ضد الشرطة: رقم الموجة وعدد الشرطة الأحياء بدل قائمة اللاعبين
@@ -112,56 +128,64 @@ function renderSummary(column, force) {
   }
 }
 
-function render(state, rows) {
-  const me = state.players[state.humanId];
-  const container = el('powerRows');
-  container.innerHTML = '';
+// عقد الأسطر تبقى بين التحديثات (بمفتاح اللاعب أو الفريق)، والترتيب بخاصية order لا بنقلها في الصفحة:
+// نقل العقدة يعيد تمرير الاسم الطويل من أوله
+const nodes = new Map();
 
-  for (const row of rows) {
-    const line = document.createElement('div');
-    line.className = 'power-row';
-    if (row.id === state.humanId) line.classList.add('me');
-    // حليف: نفس الفريق ولست أنا (الفريق 0 يعني بلا فريق)
-    else if (me && me.team && row.team === me.team) line.classList.add('ally');
-    if (row.out) line.classList.add('out');
-
-    const dot = document.createElement('span');
-    dot.className = 'power-dot';
-    dot.style.background = row.color;
-    line.appendChild(dot);
-
-    const name = document.createElement('span');
-    name.className = 'power-name';
-    name.textContent = row.name + (row.team ? ' ' : '');
-    if (row.team) {
-      const team = document.createElement('span');
-      team.className = 'power-team';
-      team.textContent = 'ف' + row.team;
-      name.appendChild(team);
-    }
-    line.appendChild(name);
-
-    const districts = document.createElement('span');
-    districts.className = 'power-num districts';
-    districts.textContent = row.value;
-    line.appendChild(districts);
-
-    // شريط صغير (دم الزعيم في حماية الزعيم)
-    if (row.bar !== null) {
-      const track = document.createElement('span');
-      track.className = 'power-bar';
-      const fill = document.createElement('span');
-      fill.style.width = Math.round(Math.max(0, Math.min(1, row.bar)) * 100) + '%';
-      fill.style.background = row.color;
-      track.appendChild(fill);
-      line.appendChild(track);
-    }
-
-    const units = document.createElement('span');
-    units.className = 'power-num units';
-    units.textContent = row.units;
-    line.appendChild(units);
-
-    container.appendChild(line);
+function rowNode(key) {
+  let line = nodes.get(key);
+  if (!line) {
+    line = document.createElement('div');
+    line.innerHTML = '<span class="power-dot"></span><span class="power-name"><span></span></span>' +
+      '<span class="power-num districts"></span><span class="power-bar" hidden><span></span></span><span class="power-num units"></span>';
+    nodes.set(key, line);
   }
+  return line;
+}
+
+const setText = (node, text) => { if (node.textContent !== String(text)) node.textContent = text; };
+
+// يملأ السطر ويعيده. color فارغ: بلا دائرة (سطر الفريق)، وbar رقم من 0 إلى 1 أو null
+function fill(line, className, color, name, value, bar, units) {
+  if (line.className !== className) line.className = className;
+  const [dot, nameBox, num, track, count] = line.children;
+  dot.hidden = !color;
+  dot.style.background = color;
+  setText(nameBox.firstChild, name);
+  setText(num, value);
+  track.hidden = bar === null;
+  if (bar !== null) {
+    track.firstChild.style.width = Math.round(Math.max(0, Math.min(1, bar)) * 100) + '%';
+    track.firstChild.style.background = color;
+  }
+  setText(count, units);
+  return line;
+}
+
+// الاسم الأطول من مكانه يُمرَّر من أوله (يمينه) إلى آخره ثم يعود
+function fitName(box) {
+  const over = Math.ceil(box.firstChild.offsetWidth - box.clientWidth);
+  box.classList.toggle('scroll', over > 1);
+  if (over > 1 && box.style.getPropertyValue('--shift') !== over + 'px') {
+    box.style.setProperty('--shift', over + 'px');
+    box.style.setProperty('--dur', (POWER_PANEL.scrollSeconds + over / POWER_PANEL.scrollSpeed).toFixed(2) + 's');
+  }
+}
+
+function render(state, groups) {
+  const order = [];
+  for (const g of groups) {
+    if (g.head) order.push(fill(rowNode('team' + g.team), 'power-row team-head' + (g.out ? ' out' : ''), '', 'فريق ' + g.team, g.value, null, ''));
+    for (const row of g.rows) {
+      const className = 'power-row' + (g.head ? ' member' : '') + (row.id === state.humanId ? ' me' : '') + (row.out ? ' out' : '');
+      order.push(fill(rowNode(row.id), className, row.color, row.name, row.value, row.bar, row.units));
+    }
+  }
+  const container = el('powerRows');
+  for (const line of [...container.children]) if (!order.includes(line)) line.remove();
+  order.forEach((line, k) => {
+    line.style.order = k;
+    if (line.parentNode !== container) container.appendChild(line);
+  });
+  for (const line of order) fitName(line.children[1]);
 }

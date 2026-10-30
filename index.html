@@ -21,14 +21,14 @@
   <div id="screenGame" hidden>
     <canvas id="game"></canvas>
 
-    <div id="info">
-      <span id="infoSel">محدد: 0</span>
-      <span class="sep">|</span>
-      <span id="infoUnits">0/100</span>
-      <span class="sep">|</span>
-      <span id="infoDistricts">أحياء: 0</span>
-      <span class="sep">|</span>
-      <span id="infoWeather">نهار</span>
+    <!-- أعلى اليسار: شريط المعلومات، وبجانبه نقاطك ودخلك في الثانية (الاقتصاد) -->
+    <div id="topLeft">
+      <div id="info">
+        <span id="infoUnits">0/100</span>
+        <span class="sep">|</span>
+        <span id="infoDistricts">أحياء: 0</span>
+      </div>
+      <div id="points" hidden></div>
     </div>
 
     <button id="btnMode" class="btn" style="top:10px;right:10px">تحريك الخريطة</button>

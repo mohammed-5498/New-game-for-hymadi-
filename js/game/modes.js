@@ -600,16 +600,20 @@ const clock = (seconds) => {
   return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
 };
 
-// شريط أعلى وسط الشاشة: { text, alarm } أو null حين لا يلزم. أوله نقاطك ودخلك في الثانية (الاقتصاد)، ثم ما يخص الطور
-// وآخره ميزة المدينة حين تعني شيئاً الآن (العاصفة الرملية الجارية أو القريبة، القسم 3.11)
+// نقاطك ودخلك في الثانية (الاقتصاد): مؤشر صغير أعلى اليسار بجانب شريط المعلومات، أو null بلا اقتصاد
+export function pointsBar(state) {
+  if (!state.economy) return null;
+  return 'النقاط: ' + Math.floor(state.modeState.points[state.humanId] || 0) +
+    ' • +' + incomeOf(state, state.humanId).toFixed(1) + '/ث';
+}
+
+// شريط أعلى وسط الشاشة: { text, alarm } أو null حين لا يلزم. ما يخص الطور، ثم ميزة المدينة
+// حين تعني شيئاً الآن (العاصفة الرملية الجارية أو القريبة، القسم 3.11)
 export function modeBar(state) {
   const bar = modeOnlyBar(state);
-  if (!state.economy) return bar;
-  const economy = 'النقاط: ' + Math.floor(state.modeState.points[state.humanId] || 0) +
-    ' • +' + incomeOf(state, state.humanId).toFixed(1) + '/ث';
-  const full = bar ? { ...bar, text: economy + ' • ' + bar.text } : { text: economy };
-  const feature = featureBar(state);
-  return feature ? { ...full, text: full.text + ' • ' + feature.text, alarm: full.alarm || feature.alarm } : full;
+  const feature = state.economy ? featureBar(state) : null;
+  if (!feature) return bar;
+  return bar ? { ...bar, text: bar.text + ' • ' + feature.text, alarm: bar.alarm || feature.alarm } : feature;
 }
 
 function modeOnlyBar(state) {
@@ -640,14 +644,16 @@ function modeOnlyBar(state) {
   return null;
 }
 
-// عمود شريط القوة: قيمة كل لاعب حسب الطور، وعنوان الطي
+// عمود شريط القوة: قيمة كل لاعب حسب الطور (sortValue رقماً وshow نصاً)، وعنوان الطي.
+// وقيمة الفريق مجموع أفراده كما يحسبه الطور، إلا النقاط: متوسطهم (teamAverage، بطلب المستخدم)
 export function powerColumn(state) {
   // الوقت بالنقاط: ما جمعه كل لاعب (نتيجته). والسيطرة الكاملة: نقاطه الآن
   if (state.economy && (state.mode === 'points' || state.mode === 'conquest')) {
     const points = state.mode === 'points' ? state.modeState.earned : state.modeState.points;
     return {
-      value: (playerId) => Math.floor(points[playerId]),
       sortValue: (playerId) => points[playerId],
+      show: Math.floor,
+      teamAverage: true,
       folded: 'نقاطي: ' + Math.floor(points[state.humanId] || 0)
     };
   }
@@ -661,8 +667,8 @@ export function powerColumn(state) {
     };
     const mine = championOf(state, state.humanId);
     return {
-      value: (playerId) => counts[playerId],
       sortValue: (playerId) => counts[playerId],
+      show: (v) => v,
       bar: ratio,
       folded: 'زعيمي: ' + (mine ? Math.round(100 * mine.hp / mine.maxHp) + '%' : 'سقط')
     };
@@ -670,8 +676,8 @@ export function powerColumn(state) {
   if (state.mode === 'king') {
     const held = state.modeState.held;
     return {
-      value: (playerId) => clock(held[playerId]),
       sortValue: (playerId) => held[playerId],
+      show: clock,
       folded: 'التلة: ' + clock(held[state.humanId] || 0)
     };
   }
