@@ -556,3 +556,218 @@ function dummy(px, py) {
 }
 
 const ctx = () => getCtx();
+
+// ================= القاعدة الرئيسية بطراز كل منطقة (12ب، بطلب المستخدم: مظهر جديد للقاعدة) =================
+// كانت بيتاً من بيوت المدينة لا يُعرف إلا بشارته، فصارت قصر العصابة: منصة حجرية بدرج، وبوابة كبيرة مقوسة بين
+// ستارتين بلون المالك وفوقها شعاره بحلقة ذهبية، وصفوف نوافذ، وسقف منطقتها أو تاجها، وبرجان على ركنيها، وزينة
+// كل منطقة (extras). لا تُصبغ بلون المالك (plain في landmarks.js): لونه في الستارتين والشعار والرايات.
+// roof: flat مسطح بتاج crown (teeth، square، round، stepped، horns)، hip قرميد (curve منحنٍ شرقي)، hip2 سقفان شرقيان،
+// gable جملون، mansard مانسارد باريسي، long بيت طويل نرويجي، domes قباب نوبية، modern حديث. floors طوابقه في الحي المتوسط
+// (3 إن لم يُذكر): أعلى في المدن العالية (هونغ كونغ وشيكاغو وأوروبا) فلا تختفي بين مبانيها
+const Q_STYLE = {
+  arab:     { wall: '#e2cfae', trim: '#f4ecdc', roof: 'flat', crown: 'teeth', turret: 'round', tcap: 'teeth', win: 'arch', door: '#5a3a22' },
+  diriyah:  { wall: '#c9a476', trim: '#efe2c8', roof: 'flat', crown: 'teeth', turret: 'round', tcap: 'teeth', win: 'tri', door: '#5a3a22' },
+  shibam:   { wall: '#b98b5e', trim: '#f4efe6', roof: 'flat', crown: 'teeth', floors: 4, win: 'framed', door: '#4a3020', whiteTop: true },
+  cairo:    { wall: '#dcc8a0', trim: '#f0e4c8', roof: 'flat', crown: 'round', turret: 'square', tcap: 'dome', capC: '#cbb68c', win: 'arch',
+              extras: ['stripes'], door: '#4a3a2a' },
+  japan:    { wall: '#ece6d8', base: '#8c8a84', roof: 'hip2', curve: true, roofC: '#3d4656', win: 'rect', trim: '#3a2a20', door: '#3a2a20' },
+  gyeongju: { wall: '#e8e2d4', base: '#8c8a84', roof: 'hip', curve: true, roofC: '#4a5058', win: 'rect', trim: '#2f5a3a', door: '#7a2a22' },
+  china:    { wall: '#b4473a', base: '#8a8478', roof: 'hip2', curve: true, roofC: '#4d6a5a', ridge: '#d9b44a', win: 'rect', trim: '#d9b44a', door: '#6a1f1a' },
+  kaifeng:  { wall: '#a8473c', base: '#8a8478', roof: 'hip2', curve: true, roofC: '#5a5a5e', ridge: '#d9b44a', win: 'rect', trim: '#d9b44a', door: '#6a1f1a' },
+  hk:       { wall: '#3a4654', trim: '#8fa0b0', roof: 'modern', floors: 7, win: 'glass', extras: ['neon', 'heli'], door: '#1e2228' },
+  jaipur:   { wall: '#e0a28c', trim: '#f4e8da', roof: 'flat', crown: 'round', turret: 'round', tcap: 'chhatri', capC: '#f4e8da', win: 'arch',
+              extras: ['balcony'], door: '#6a2a1a' },
+  europe:   { wall: '#b3ada0', trim: '#d8d2c4', roof: 'flat', floors: 4, crown: 'square', turret: 'round', tcap: 'cone', capC: '#4e5866', win: 'rect', door: '#4a3424' },
+  paris:    { wall: '#ddd3bd', trim: '#f0e9da', roof: 'mansard', floors: 4, roofC: '#4e5866', win: 'rect', extras: ['balcony'], door: '#2f3a4a' },
+  rothenburg: { wall: '#ece4d2', trim: '#4a3424', roof: 'gable', roofC: '#a8452e', win: 'rect', extras: ['timber'], turret: 'square', tcap: 'cone',
+                capC: '#a8452e', door: '#4a3424' },
+  birmingham: { wall: '#9c4e36', trim: '#d8cbb6', roof: 'flat', crown: 'square', win: 'rect', extras: ['chimneys'], door: '#2a2a2c' },
+  chicago:  { wall: '#8e4a36', trim: '#d8cbb6', roof: 'flat', floors: 5, win: 'rect', extras: ['neon'], door: '#2a2a2c' },
+  norway:   { wall: '#8a6440', trim: '#c9a66b', roof: 'long', roofC: '#3a2a22', win: 'rect', extras: ['dragons'], door: '#3a2414', floors: 2 },
+  kano:     { wall: '#b8774a', trim: '#ecd6b6', roof: 'flat', crown: 'horns', win: 'arch', extras: ['relief'], door: '#3a2414' },
+  meroe:    { wall: '#a9744e', trim: '#e8d6b8', roof: 'domes', win: 'arch', door: '#2f5a7a' },
+  gondar:   { wall: '#8f7b62', trim: '#b8a488', roof: 'flat', crown: 'square', turret: 'round', tcap: 'dome', capC: '#7a6a58', win: 'arch', door: '#3a2414' },
+  mexico:   { wall: '#efe2c8', trim: '#c96a3a', roof: 'hip', roofC: '#b85a35', win: 'rect', extras: ['arcade'], door: '#4a2a1a' },
+  rio:      { wall: '#f3e3a0', trim: '#f4efe6', roof: 'hip', roofC: '#b85a35', win: 'rect', extras: ['arcade'], door: '#2f5a8a' },
+  tenoch:   { wall: '#a39a86', trim: '#3a9a8a', roof: 'flat', crown: 'stepped', win: 'rect', extras: ['bands'], door: '#3a2a1a' },
+  laboca:   { wall: '#e0c23a', trim: '#2f6db3', roof: 'modern', floors: 3, win: 'rect', extras: ['tin', 'tank'], door: '#c8392f' }
+};
+const GOLD = '#e0b440';
+
+// نافذة القاعدة على وجه q عند u وارتفاع v بطراز st.win
+function hqWin(q, u, v, kind, trim) {
+  const up = (a, b) => q(a, b + v);
+  if (kind === 'arch') { arch(up, u - 0.012, 0.124, 4.6, trim); arch(up, u, 0.1, 4, DARK); return; }
+  if (kind === 'tri') { tri(q, u, v, 0.1, 3.2, DARK); return; }
+  if (kind === 'glass') { quad(q, u - 0.02, v - 1, 0.16, 6.4, '#6f8fae'); quad(q, u, v + 3.8, 0.12, 0.7, 'rgba(255,255,255,0.35)'); return; }
+  if (kind === 'framed') quad(q, u - 0.025, v - 0.6, 0.15, 4.8, trim);
+  quad(q, u, v, 0.1, 3.6, DARK);
+  quad(q, u - 0.012, v - 0.5, 0.124, 0.55, trim);
+  quad(q, u + 0.01, v + 2.6, 0.08, 0.6, 'rgba(255,255,255,0.28)');
+}
+
+// ستارة معلقة بلون المالك على وجه q بين v0 (طرفها السفلي المشقوق) وv1، بقضيب ذهبي
+function drape(q, u, v0, v1, color) {
+  poly([q(u, v1), q(u + 0.075, v1), q(u + 0.075, v0), q(u + 0.0375, v0 + 1.4), q(u, v0)], color);
+  quad(q, u + 0.05, v0 + 1, 0.025, v1 - v0 - 1.2, 'rgba(0,0,0,0.18)');
+  const a = q(u - 0.015, v1 + 0.3), b = q(u + 0.09, v1 + 0.3);
+  ln(a[0], a[1], b[0], b[1], GOLD, 0.9);
+}
+
+// برج ركن القاعدة: مستدير أو مربع بغطاء tcap
+function hqTurret(px, py, h, st, wall, side) {
+  const capC = st.capC || st.trim || wall, r = 2.7;
+  if (st.turret === 'round') cyl(px, py, r, h, side, wall, lt(wall, 0.12));
+  else box(px, py, r, r / 2, h, side, wall, lt(wall, 0.12));
+  const t = py - h;
+  if (st.tcap === 'cone') cone(px, t, r + 0.7, r * 2.8, dk(capC, 0.2), capC);
+  else if (st.tcap === 'dome') dome(px, t, r + 0.1, lt(capC, 0.08), dk(capC, 0.2), GOLD);
+  else if (st.tcap === 'teeth') for (const [dx, dy] of [[-r, 0], [-r * 0.5, r * 0.42], [0, r * 0.5], [r * 0.5, r * 0.42], [r, 0]]) {
+    poly([[px + dx - 0.7, t + dy], [px + dx, t + dy - 2.2], [px + dx + 0.7, t + dy]], st.trim || lt(wall, 0.3));
+  } else if (st.tcap === 'chhatri') {
+    for (const dx of [-r * 0.75, r * 0.75]) ln(px + dx, t + 0.3, px + dx, t - 3, capC, 0.8);
+    dome(px, t - 3, r * 0.95, capC, dk(capC, 0.15), GOLD);
+  }
+}
+
+export function drawCityHQ(x, y, i, j, T, city, size, owner) {
+  const st = Q_STYLE[city] || Q_STYLE.arab, s = sizeStyle(size), ex = st.extras || [];
+  const W = s.small ? 12 : s.big ? 14.5 : 13.5, D = W / 2, fh = 8;            // أعلى وأعرض من بيوت الحي فيُرى من بينها
+  const floors = Math.max(1, (st.floors || 3) + (s.big ? 1 : 0) - (s.small ? 1 : 0)), H = floors * fh + 3;
+  const wall = st.wall, side = dk(wall, 0.14), trim = st.trim || lt(wall, 0.35), stone = st.base || '#8f887a';
+  const flatTop = st.roof === 'flat' || st.roof === 'modern' || st.roof === 'domes';
+  // المنصة، ثم الجسم وقاعدته الحجرية
+  box(x, y + 1, W + 2, (W + 2) / 2, 1.6, dk(stone, 0.2), stone, lt(stone, 0.12));
+  box(x, y, W, D, H, side, wall, flatTop ? lt(wall, 0.1) : null);
+  const ql = qL(x, y, W, D), qr = qR(x, y, W, D);
+  if (st.base) { quad(ql, 0, 0, 1, 4.2, dk(stone, 0.12)); quad(qr, 0, 0, 1, 4.2, stone); }
+  // زينة الوجهين قبل النوافذ
+  if (ex.includes('stripes')) for (let v = 4.5; v < H - 2; v += 3.2) { quad(ql, 0, v, 1, 1.1, '#a8493a'); quad(qr, 0, v, 1, 1.1, '#bb5a44'); }
+  if (ex.includes('tin')) ['#c8392f', '#2f6db3', '#3f9b5a', '#e8c23a', '#c8392f'].forEach((c, k) => { quad(ql, k * 0.2, 0, 0.2, H, k % 2 ? c : dk(c, 0.1)); });
+  if (ex.includes('bands')) for (const q of [ql, qr]) { quad(q, 0, H - 4.2, 1, 1.3, trim); quad(q, 0, H - 2.4, 1, 0.9, '#b8432e'); }
+  if (st.whiteTop) for (const q of [ql, qr]) quad(q, 0, H - 4, 1, 4, trim);
+  if (ex.includes('relief')) for (const q of [ql, qr]) {
+    for (let k = 0; k < 6; k++) { const u = 0.05 + k * 0.16, a = q(u, H - 6), b = q(u + 0.08, H - 4), c = q(u + 0.16, H - 6); ln(a[0], a[1], b[0], b[1], trim, 0.7); ln(b[0], b[1], c[0], c[1], trim, 0.7); }
+    for (const u of [0.2, 0.8]) { const p = q(u, fh * 0.8); circ(p[0], p[1], 1.3, trim); circ(p[0], p[1], 0.7, wall); }
+  }
+  // النوافذ: صفوف على الوجهين، والوجه الأيمن يترك وسطه للبوابة؛ وفي البيت الطويل والرواق نوافذ أقل
+  for (let f = 0; f < floors; f++) {
+    const v = 3 + f * fh + (f === 0 ? 0.5 : 0);
+    if (f === 0 && ex.includes('arcade')) for (const u of [0.06, 0.29, 0.52, 0.75]) { arch(ql, u - 0.01, 0.2, 6.6, trim); arch(ql, u, 0.18, 6, DARK); }
+    else for (const u of [0.1, 0.3, 0.5, 0.7]) hqWin(ql, u + 0.03, v, st.win, trim);
+    for (const u of [0.08, 0.8]) hqWin(qr, u, v, st.win, trim);
+    if (f > 0) hqWin(qr, 0.45, v, st.win, trim);
+    if (f > 0 && !st.base) { const a = ql(0, f * fh + 1.2), b = ql(1, f * fh + 1.2), c = qr(1, f * fh + 1.2); ln(a[0], a[1], b[0], b[1], dk(trim, 0.08), 0.8); ln(b[0], b[1], c[0], c[1], dk(trim, 0.08), 0.8); }
+  }
+  if (ex.includes('timber')) for (const q of [ql, qr]) for (let f = 1; f < floors; f++) {
+    for (let u = 0; u <= 1.001; u += 0.25) { const a = q(u, f * fh + 1), b = q(u, f * fh + fh); ln(a[0], a[1], b[0], b[1], trim, 0.8); }
+    for (let u = 0; u < 1; u += 0.5) { const a = q(u, f * fh + 1), b = q(u + 0.25, f * fh + fh); ln(a[0], a[1], b[0], b[1], trim, 0.6); }
+  }
+  if (ex.includes('balcony')) {
+    const v = fh + 2.4, a = ql(0.04, v), b = ql(0.96, v);
+    poly([a, b, [b[0] + 1.6, b[1] + 0.8], [a[0] + 1.6, a[1] + 0.8]], city === 'paris' ? '#2f343a' : trim);
+    for (let u = 0.06; u < 0.96; u += 0.06) { const p = ql(u, v); ln(p[0] + 1.6, p[1] + 0.8, p[0] + 1.6, p[1] - 1.6, city === 'paris' ? '#2f343a' : trim, 0.4); }
+  }
+  // البوابة: قوس كبير بإطار، ومصراعان، وستارتان بلون المالك، وشعاره بحلقة ذهبية فوقها
+  const dv = Math.min(10.5, H - 4);
+  arch(qr, 0.355, 0.29, dv + 1.6, trim);
+  arch(qr, 0.38, 0.24, dv, st.door);
+  { const a = qr(0.5, 0), b = qr(0.5, dv * 0.6); ln(a[0], a[1], b[0], b[1], 'rgba(0,0,0,0.4)', 0.6); }
+  for (const u of [0.43, 0.57]) { const p = qr(u, dv * 0.35); circ(p[0], p[1], 0.45, GOLD); }
+  if (owner) {
+    drape(qr, 0.255, 3, Math.min(H - 2, fh * 1.7), owner);
+    drape(qr, 0.67, 3, Math.min(H - 2, fh * 1.7), owner);
+    const e = qr(0.5, dv + 3.4);
+    circ(e[0], e[1], 2.5, GOLD);
+    circ(e[0], e[1], 1.9, owner);
+    circ(e[0], e[1], 0.7, GOLD);
+  }
+  // درج أمام البوابة
+  { const p = qr(0.5, 0); box(p[0] + 1.6, p[1] + 1.1, 3.4, 1.7, 1.1, dk(stone, 0.2), stone, lt(stone, 0.15)); }
+  // السقف أو التاج
+  let top = H;
+  const roofSet = (c, curve) => curve
+    ? { ov: 3, sag: 2.2, flare: 2.4, front: c, front2: dk(c, 0.12), end: dk(c, 0.2), end2: dk(c, 0.3), ridge: st.ridge || '#1e2228', ridgeW: st.ridge ? 1.4 : 1, tile: dk(c, 0.35) }
+    : { ov: 1.6, front: c, end: dk(c, 0.18), ridge: dk(c, 0.35), tile: dk(c, 0.25) };
+  if (st.roof === 'flat') {
+    const yt = y - H, C = st.crown;
+    if (C === 'teeth') teeth(x, yt, W, trim, 7, 3.2);
+    else if (C === 'square') merlons(x, yt, W, side, wall, lt(wall, 0.12), () => {}, 6, 1.6, 2.6);
+    else if (C === 'round') for (const back of [true, false]) for (const [px, py] of rim(x, yt, W, back, 6)) el(px, py - 0.9, 1.1, 1.5, trim);
+    else if (C === 'stepped') for (const back of [true, false]) for (const [px, py] of rim(x, yt, W, back, 5)) {
+      box(px, py, 1.3, 0.65, 1.4, side, wall, lt(wall, 0.1)); box(px, py - 1.4, 0.7, 0.35, 1.2, side, wall, lt(wall, 0.1));
+    } else if (C === 'horns') for (const [px, py] of [[x - W, yt], [x, yt + D], [x + W, yt], [x, yt - D]]) {
+      poly([[px - 1.1, py], [px + 1.1, py], [px + 0.4, py - 5]], wall); ln(px - 1.1, py, px + 0.4, py - 5, side, 0.4);
+    }
+    top = H + (C ? 3 : 0);
+  } else if (st.roof === 'domes') {
+    for (const [dx, dy] of [[0, -D * 0.5], [-W * 0.45, 0], [W * 0.45, 0], [0, D * 0.5]]) dome(x + dx, y - H + dy, 3, lt(wall, 0.1), dk(wall, 0.18), null);
+    top = H + 3.5;
+  } else if (st.roof === 'modern') {
+    for (const [px, py] of rim(x, y - H, W, false, 6)) poly([[px - 1, py], [px - 1, py - 1.1], [px + 1, py - 1.1], [px + 1, py]], side);
+    if (ex.includes('heli')) {
+      const ctx = getCtx();
+      ctx.save(); ctx.translate(x, y - H); ctx.scale(1, 0.5);
+      ctx.beginPath(); ctx.arc(0, 0, 5.4, 0, 6.2832); ctx.fillStyle = '#4a4c52'; ctx.fill();
+      ctx.lineWidth = 0.6; ctx.strokeStyle = GOLD; ctx.stroke();
+      ctx.fillStyle = '#f4f1ea'; ctx.fillRect(-2.2, -2.6, 0.9, 5.2); ctx.fillRect(1.3, -2.6, 0.9, 5.2); ctx.fillRect(-1.3, -0.45, 2.6, 0.9);
+      ctx.restore();
+    }
+    if (ex.includes('tank')) { cyl(x - W * 0.45, y - H, 2.4, 4.5, '#8a9096', '#a8aeb4', '#c2c7cc'); cone(x - W * 0.45, y - H - 4.5, 2.7, 2.2, '#6f757b', '#8a9096'); }
+    top = H + 1;
+  } else if (st.roof === 'hip') {
+    ridgeRoof(x, y, W, D, H, 8, roofSet(st.roofC, st.curve));
+    top = H + 8;
+  } else if (st.roof === 'hip2') {
+    ridgeRoof(x, y, W, D, H, 5, { ...roofSet(st.roofC, true), ov: 3.4 });
+    const w2 = W * 0.6, h2 = 7;
+    box(x, y - H - 2, w2, w2 / 2, h2, side, wall, null);
+    for (const u of [0.25, 0.6]) { wL(x, y - H - 2, w2, w2 / 2, u, 2, 0.14, 3.4, DARK); wR(x, y - H - 2, w2, w2 / 2, u, 2, 0.14, 3.4, DARK); }
+    ridgeRoof(x, y - H - 2, w2, w2 / 2, h2, 6, roofSet(st.roofC, true));
+    top = H + 2 + h2 + 6;
+  } else if (st.roof === 'gable' || st.roof === 'long') {
+    const rh = st.roof === 'long' ? 13 : 11;
+    const R = ridgeRoof(x, y, W, D, H, rh, { ov: st.roof === 'long' ? 2.2 : 1.5, gable: true, front: st.roofC, end: dk(st.roofC, 0.2),
+                                            wallEnd: lt(wall, 0.05), eave: dk(st.roofC, 0.3), ridge: dk(st.roofC, 0.4), tile: dk(st.roofC, 0.3) });
+    if (ex.includes('dragons') && R) for (const [p, s2] of [[R.P1, -1], [R.P2, 1]]) {
+      ln(p[0], p[1], p[0] + s2 * 2.4, p[1] - 3.4, '#5a3a22', 1.1);
+      ln(p[0] + s2 * 2.4, p[1] - 3.4, p[0] + s2 * 3.6, p[1] - 3, '#5a3a22', 1);
+      circ(p[0] + s2 * 3.7, p[1] - 3.1, 0.6, '#c9a66b');
+    }
+    top = H + rh;
+  } else if (st.roof === 'mansard') {
+    frustum(x, y - H, W + 0.6, W - 3.6, 7, dk(st.roofC, 0.15), st.roofC, lt(st.roofC, 0.1));
+    const fl = fL(x, y - H, W + 0.6, W - 3.6, 7), fr = fR(x, y - H, W + 0.6, W - 3.6, 7);
+    for (const u of [0.2, 0.5, 0.8]) { quad(fl, u, 1.6, 0.1, 3.4, '#f0e9da'); quad(fl, u + 0.015, 1.9, 0.07, 2.7, DARK); }
+    for (const u of [0.25, 0.7]) { quad(fr, u, 1.6, 0.12, 3.4, '#f0e9da'); quad(fr, u + 0.02, 1.9, 0.08, 2.7, DARK); }
+    top = H + 7;
+  }
+  // المداخن (برمنغهام) واللافتة المضيئة (هونغ كونغ وشيكاغو) بلون المالك
+  if (ex.includes('chimneys')) for (const dx of [-W * 0.5, W * 0.15]) box(x + dx, y - H - D * 0.25, 1.7, 0.85, 10, '#7a3a28', '#9c4e36', '#5a2a1e');
+  if (ex.includes('neon') && owner) {
+    const a = ql(0.82, 5), b = ql(0.82, H - 3);
+    poly([a, b, [b[0] - 2.6, b[1] - 1.3], [a[0] - 2.6, a[1] - 1.3]], '#1e2228');
+    ln(a[0] - 1.3, a[1] - 1.6, b[0] - 1.3, b[1] + 0.6, owner, 1.2);
+    for (let v = 7; v < H - 4; v += 3) { const p = ql(0.82, v); circ(p[0] - 1.3, p[1] - 0.65, 0.5, '#fff4c8'); }
+  }
+  // برجا الركنين الجانبيين (لا في الحي الصغير)
+  if (st.turret && !s.small) for (const sx of [-1, 1]) hqTurret(x + sx * W, y, H + 5, st, wall, side);
+  return { w: W, h: H, top: Math.max(top, st.turret && !s.small ? H + 9 : 0) };
+}
+
+// راية المالك على برج الرماية (معلقة على واجهته) أو على سطح المستشفى (على سارية): البرج والمستشفى بلا صبغ (12ب)
+// فلونه فيهما هنا. a جذع المبنى { w, h, top }
+export function ownerBanner(x, y, a, color, roof = false) {
+  if (!color || !a) return;
+  if (roof) {
+    const px = x - a.w * 0.62, py = y - a.h - 1;
+    ln(px, py, px, py - 9, '#3a322a', 0.9);
+    poly([[px, py - 9], [px + 6.5, py - 7.4], [px, py - 5.6]], color);
+    circ(px, py - 9.4, 0.6, GOLD);
+    return;
+  }
+  const bx = x + a.w * 0.42, t = y - a.h * 0.84, b = y - a.h * 0.46;
+  poly([[bx - 1.3, t], [bx + 1.3, t + 0.6], [bx + 1.3, b + 0.6], [bx, b + 2], [bx - 1.3, b]], color);
+  ln(bx - 1.6, t - 0.2, bx + 1.6, t + 0.6, GOLD, 0.9);
+  circ(bx, t + (b - t) * 0.42, 0.7, GOLD);
+}

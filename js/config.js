@@ -1557,7 +1557,51 @@ export const EMPIRE = {
     merlon: { every: 4.2, w: 1.7, h: 1.6 }, banner: { pole: 6, w: 4.2, h: 2.8 },
     // البوابة على كل ضلع مدخل (ساحة أو أرض أو ممر يطل على الشارع): أعلى من السور بـ extra، وقوسها المفتوح يبدأ
     // من spring وقمته apex (نسبتان من ارتفاعها)، وعمودان على طرفيها (pillar: عرض وزيادة ارتفاع)، فيحيط السور بالحي كله
-    gate: { extra: 3.2, spring: 0.5, apex: 0.78, pillar: { w: 2.2, extra: 1.4 } }
+    gate: { extra: 3.2, spring: 0.5, apex: 0.78, pillar: { w: 2.2, extra: 1.4 } },
+    // طراز السور لكل منطقة (12ب، بطلب المستخدم: مظهر جديد للأسوار). face لون الوجه (أو colors لكل قطعة)، وtop سطح الممشى
+    // من فوق، وbase أسفل الجص، وtexture نقش الوجه (mud طين، toron طين بأوتاد، blocks حجارة، bricks طوب، plaster جص على
+    // حجر، logs جذوع، tin صفيح، panels خرسانة)، وcrown تاج السور من المستوى 2 (teeth مثلثة نجدية، round مستديرة، square
+    // مربعة، stepped مدرجة، stakes رؤوس جذوع، tiles سقف قرميد، spikes أسياخ)، وtower شكل أبراج الأركان (round أو square)
+    // وcap غطاؤها (teeth، cone، dome، pagoda، chhatri، roof، flat، stepped، lamp) بلون capColor، وgate البوابة (wood
+    // مصراعان، iron شبكة مرفوعة، roofed سقف فوقها، open قوس فقط). ولون المالك: شريط تحت الحافة، وأغطية أعمدة البوابة، والرايات
+    thick: 1.5,
+    styles: {
+      najdi:    { face: '#c99a62', top: '#dcb07a', edge: 'rgba(96,58,26,0.6)', texture: 'mud', crown: 'teeth', crownColor: '#efe2c8',
+                  tower: 'round', cap: 'teeth', gate: 'wood' },
+      sahel:    { face: '#b8774a', top: '#cf9264', edge: 'rgba(86,44,20,0.6)', texture: 'toron', crown: 'round', crownColor: '#c98a5c',
+                  tower: 'round', cap: 'cone', capColor: '#b8774a', gate: 'wood' },
+      stone:    { face: '#a9a396', top: '#c4beb0', edge: 'rgba(52,48,42,0.6)', texture: 'blocks', crown: 'square',
+                  tower: 'round', cap: 'cone', capColor: '#4e5866', gate: 'wood' },
+      asian:    { face: '#ece6d6', base: '#8c8a84', top: '#4a4f58', edge: 'rgba(44,44,48,0.55)', texture: 'plaster', crown: 'tiles',
+                  tile: '#4a4f58', tower: 'square', cap: 'pagoda', capColor: '#4a4f58', gate: 'roofed' },
+      rajput:   { face: '#dc9984', top: '#efb9a6', edge: 'rgba(112,52,36,0.55)', texture: 'blocks', crown: 'round', crownColor: '#f2e6d8',
+                  tower: 'round', cap: 'chhatri', capColor: '#f2e6d8', gate: 'wood' },
+      brick:    { face: '#9c4e36', top: '#b5674b', edge: 'rgba(60,24,14,0.6)', texture: 'bricks', crown: 'square',
+                  tower: 'square', cap: 'flat', gate: 'iron' },
+      wood:     { face: '#8a6440', top: '#a27a50', edge: 'rgba(48,30,14,0.7)', texture: 'logs', crown: 'stakes',
+                  tower: 'square', cap: 'roof', capColor: '#4a3a2c', gate: 'wood' },
+      colonial: { face: '#efe2c8', base: '#b9a78a', top: '#e0d0b0', edge: 'rgba(90,70,40,0.5)', texture: 'plaster', crown: 'tiles',
+                  tile: '#b85a35', tower: 'square', cap: 'dome', capColor: '#d77b4a', gate: 'wood' },
+      aztec:    { face: '#a39a86', top: '#bdb39e', edge: 'rgba(56,50,40,0.6)', texture: 'blocks', crown: 'stepped',
+                  tower: 'square', cap: 'stepped', gate: 'open' },
+      tin:      { colors: ['#c8392f', '#e8c23a', '#2f6db3', '#3f9b5a'], top: '#9aa0a6', edge: 'rgba(30,30,34,0.55)', texture: 'tin',
+                  crown: 'flat', tower: 'square', cap: 'roof', capColor: '#8a9096', gate: 'iron' },
+      modern:   { face: '#9ba2a8', top: '#b8bec4', edge: 'rgba(40,44,48,0.55)', texture: 'panels', crown: 'spikes',
+                  tower: 'square', cap: 'lamp', gate: 'iron' }
+    },
+    // طراز كل مدينة، وما يخالفه منها
+    cities: {
+      arab: 'najdi', yamamah: 'najdi', diriyah: ['najdi', { face: '#bf8c56', top: '#d4a46e' }], shibam: 'najdi',
+      cairo: ['stone', { face: '#d2bd92', top: '#e3d2ac', crown: 'round', crownColor: '#e3d2ac', tower: 'square', cap: 'dome', capColor: '#d2bd92' }],
+      kano: 'sahel', meroe: ['sahel', { face: '#a9744e', top: '#c08a62', cap: 'dome', capColor: '#a9744e' }],
+      gondar: ['stone', { face: '#8f7b62', top: '#a8927a', cap: 'dome', capColor: '#7a6a58' }],
+      japan: 'asian', gyeongju: 'asian', china: ['asian', { face: '#b4473a', tile: '#4d6a5a', capColor: '#4d6a5a', top: '#4d6a5a' }],
+      kaifeng: ['asian', { face: '#a8473c', tile: '#5a5a5e', capColor: '#5a5a5e', top: '#5a5a5e' }], hk: 'modern', jaipur: 'rajput',
+      europe: 'stone', paris: ['stone', { face: '#cdc4ae', top: '#ddd5c2' }], rothenburg: ['stone', { capColor: '#a8452e' }],
+      birmingham: 'brick', chicago: ['brick', { crown: 'spikes', cap: 'lamp' }], norway: 'wood',
+      mexico: 'colonial', rio: ['colonial', { face: '#f3e3a0', top: '#e8d58e' }], tenoch: 'aztec', laboca: 'tin',
+      default: 'stone'
+    }
   },
   halo: { width: 5, alpha: 0.32 },          // هالة على حدود الحي المملوك (تحت الحد الملون)
   // قائمة الحي (لمستان على حيك): تحديثها، ومكان الحي فوقها حين تغطيه (نسبة من ارتفاع ما فوقها)

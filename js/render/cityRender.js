@@ -177,7 +177,7 @@ export function drawTileStatic(state, i, j, x, y, lights, lamps) {
     if (lights && debrisLight(map, i, j)) lights.push({ x, y: y - 7, r: 34, c: '255,150,60', a: 0.65 });
     return;
   }
-  // المباني الحاسمة بطراز المدينة: المبنى يُصبغ بلون المالك، وعلاماته لا
+  // المباني الحاسمة بطراز المدينة: المبنى يُصبغ بلون المالك، وعلاماته لا. وقصر القاعدة والبرج والمستشفى بمادتها (12ب)
   const district = map.districtOf(i, j);
   const ownerColor = district && district.owner !== null ? state.players[district.owner].color : null;
   const flagColor = (PALETTES[map.region[k]] || PALETTES.neutral).flag;

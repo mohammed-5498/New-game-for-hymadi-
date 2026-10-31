@@ -11,8 +11,10 @@ import { tintAmount } from '../game/capture.js';
 import { beginCity, groundColor, drawRoadSurface, drawTileStatic, debrisLight, specialType, cityOf, cityReady } from './cityRender.js';
 import { isLane, drawLanePaving, roundaboutAnchor, drawRoundaboutRing, laneLight, roundaboutLights } from './openCity.js';
 import { lampSpot } from './landmarks.js';
+import { mixc } from './cityThemes.js';
 import { drawFeaturePaving, featureLight, featureLamp } from './featureArt.js';
 
+const TAU = Math.PI * 2;
 const PAD = 1;   // كل قطعة تتجاوز حدودها بوحدة: لا خطوط شعرية بين القطع
 
 let cache = null;
@@ -357,147 +359,320 @@ function wallsOf(map, look, x, y, back, segs, towers, gates) {
   for (const c of CORNERS) if (c.back === back && (look.walls & c.need) === c.need) towers.push(x + c.x, y + c.y);
 }
 
-// السور: وجه حجري بظل حسب ميله، وأعلاه بلون المالك بحافة فاتحة، وشرافات من المستوى 2
-function drawWalls(ctx, segs, color, alpha, fort) {
-  const F = EMPIRE.fortify, L = F.levels[fort - 1], h = L.wall;
-  const faces = (slant) => {
-    ctx.beginPath();
-    for (let n = 0; n < segs.length; n += 5) {
-      if (slant !== null && segs[n + 4] !== slant) continue;
-      const ax = segs[n], ay = segs[n + 1], bx = segs[n + 2], by = segs[n + 3];
-      ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.lineTo(bx, by - h); ctx.lineTo(ax, ay - h); ctx.closePath();
-    }
-  };
-  ctx.globalAlpha = Math.max(alpha, 0.85);          // السور حجر ظاهر حتى في الحي المحايد
-  faces(null);
-  ctx.fillStyle = F.stone;
-  ctx.fill();
-  ctx.lineWidth = 0.5;
-  ctx.strokeStyle = F.edge;
-  ctx.stroke();
-  for (const slant of [0, 1]) { faces(slant); ctx.fillStyle = F.shade[slant]; ctx.fill(); }
-  // أعلى السور بلون المالك، وفوقه شرافات
-  ctx.beginPath();
-  for (let n = 0; n < segs.length; n += 5) { ctx.moveTo(segs[n], segs[n + 1] - h); ctx.lineTo(segs[n + 2], segs[n + 3] - h); }
-  ctx.globalAlpha = alpha;
-  ctx.lineCap = 'round';
-  ctx.strokeStyle = color;
-  ctx.lineWidth = L.band;
-  ctx.stroke();
-  if (!L.merlons) return;
-  const M = F.merlon;
-  ctx.beginPath();
-  for (let n = 0; n < segs.length; n += 5) {
-    const ax = segs[n], ay = segs[n + 1] - h, dx = segs[n + 2] - ax, dy = segs[n + 3] - ay - h, len = Math.hypot(dx, dy);
-    const count = Math.max(1, Math.round(len / M.every));
-    for (let m = 0; m < count; m++) {
-      const t = (m + 0.5) / count, mx = ax + dx * t, my = ay + dy * t;
-      ctx.rect(mx - M.w / 2, my - L.band / 2 - M.h, M.w, M.h);
-    }
+// ================= الأسوار بطراز كل منطقة (12ب، بطلب المستخدم: "تحسين وتغيير مظهر الجدران") =================
+// المادة ولونها ونقشها، وتاجها من المستوى 2، وأبراج أركانها وغطاؤها، وبوابتها: من EMPIRE.fortify.styles بطراز المدينة.
+// للسور سمك ظاهر من فوق (الممشى)، وشريط بلون المالك تحت حافته العليا، وأغطية أعمدة البوابة ورايات المستوى 3 بلونه
+const styleCache = new Map();
+function wallStyle(map) {
+  let s = styleCache.get(map.city);
+  if (!s) {
+    const F = EMPIRE.fortify, c = F.cities[map.city] || F.cities.default;
+    const [name, extra] = Array.isArray(c) ? c : [c, null];
+    styleCache.set(map.city, s = { ...F.styles[name], ...(extra || {}) });
   }
-  ctx.globalAlpha = Math.max(alpha, 0.85);
-  ctx.fillStyle = F.stone;
+  return s;
+}
+const WALL_LIGHT = ['rgba(40,28,14,0.26)', 'rgba(255,240,215,0.08)'];   // ظل الوجه: على محور i (يواجه +j) أغمق
+const fillPath = (ctx, pts, col) => {
+  ctx.beginPath();
+  ctx.moveTo(pts[0], pts[1]);
+  for (let k = 2; k < pts.length; k += 2) ctx.lineTo(pts[k], pts[k + 1]);
+  ctx.closePath();
+  ctx.fillStyle = col;
   ctx.fill();
-  ctx.strokeStyle = F.edge;
-  ctx.lineWidth = 0.45;
-  ctx.stroke();
+};
+// سمك السور خلف وجهه الظاهر: على محور i (slant 0) نحو −j، وعلى محور j (slant 1) نحو −i
+const backOf = (slant) => { const t = EMPIRE.fortify.thick; return slant ? [-t, -t / 2] : [t, -t / 2]; };
+// لون قطعة الصفيح ثابت لموضعها
+const pieceColor = (S, ax, ay) => S.colors ? S.colors[Math.abs(Math.round(ax * 7 + ay * 13)) % S.colors.length] : S.face;
+
+// صندوق بقاعدة معين (نصف عرضه w وعمقه w/2) وعمود أسطواني: أبراج الأركان وأعمدة البوابات
+function isoBox(ctx, x, y, w, h, L, R, T) {
+  const d = w / 2;
+  fillPath(ctx, [x - w, y, x, y + d, x, y + d - h, x - w, y - h], L);
+  fillPath(ctx, [x, y + d, x + w, y, x + w, y - h, x, y + d - h], R);
+  fillPath(ctx, [x - w, y - h, x, y - d - h, x + w, y - h, x, y + d - h], T);
+}
+function isoCyl(ctx, x, y, r, h, L, R, T) {
+  const ry = r / 2;
+  ctx.beginPath();
+  ctx.moveTo(x - r, y - h); ctx.lineTo(x - r, y); ctx.ellipse(x, y, r, ry, 0, Math.PI, 0, true); ctx.lineTo(x + r, y - h);
+  ctx.closePath();
+  ctx.fillStyle = R;
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(x - r, y - h); ctx.lineTo(x - r, y); ctx.ellipse(x, y, r, ry, 0, Math.PI, Math.PI * 0.6, true);
+  ctx.lineTo(x + r * Math.cos(Math.PI * 0.6), y - h);
+  ctx.closePath();
+  ctx.fillStyle = L;
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(x, y - h, r, ry, 0, 0, TAU);
+  ctx.fillStyle = T;
+  ctx.fill();
 }
 
-// عمود حجري بجانبين (الأيمن أغمق) عرضه w وارتفاعه h، وسقف معين بلون المالك: أبراج الأركان وأعمدة البوابات
-function pillars(ctx, list, color, alpha, w, h) {
-  const F = EMPIRE.fortify;
-  ctx.globalAlpha = Math.max(alpha, 0.85);
-  for (const half of [0, 1]) {
+// نقش الوجه بين A وB بارتفاع h (P: نقطة على الوجه بنسبة t على طوله وارتفاع v)
+function wallTexture(ctx, S, ax, ay, bx, by, h) {
+  const len = Math.hypot(bx - ax, by - ay);
+  if (len < 0.6) return;
+  const P = (t, v) => [ax + (bx - ax) * t, ay + (by - ay) * t - v];
+  const seg = (t0, v0, t1, v1) => { const p = P(t0, v0), q = P(t1, v1); ctx.moveTo(p[0], p[1]); ctx.lineTo(q[0], q[1]); };
+  const stroke = (col, w) => { ctx.strokeStyle = col; ctx.lineWidth = w; ctx.stroke(); };
+  const T = S.texture;
+  if (T === 'blocks' || T === 'bricks' || T === 'plaster') {
+    const course = T === 'bricks' ? 1.3 : 2.1, joint = T === 'bricks' ? 2.6 : 4.2, top = T === 'plaster' ? h * 0.36 : h;
+    if (T === 'plaster') fillPath(ctx, [...P(0, 0), ...P(1, 0), ...P(1, top), ...P(0, top)], S.base);
     ctx.beginPath();
-    for (let n = 0; n < list.length; n += 2) ctx.rect(half ? list[n] : list[n] - w / 2, list[n + 1] - h, w / 2, h);
-    ctx.fillStyle = F.stone;
-    ctx.fill();
-    ctx.fillStyle = F.shade[half];
-    ctx.fill();
-    ctx.lineWidth = 0.5;
-    ctx.strokeStyle = F.edge;
+    for (let v = course; v < top - 0.3; v += course) seg(0, v, 1, v);
+    for (let v = 0, k = 0; v < top - 0.3; v += course, k++) {
+      for (let s = (k % 2) * joint / 2 + joint * 0.5; s < len - 0.3; s += joint) seg(s / len, v, s / len, Math.min(v + course, top));
+    }
+    stroke(T === 'bricks' ? 'rgba(255,225,200,0.28)' : 'rgba(30,24,18,0.24)', 0.4);
+    if (T === 'plaster') { ctx.beginPath(); seg(0, top, 1, top); stroke('rgba(30,30,30,0.35)', 0.6); }
+  } else if (T === 'logs' || T === 'tin' || T === 'panels') {
+    const step = T === 'logs' ? 1.5 : T === 'tin' ? 0.9 : 5;
+    ctx.beginPath();
+    for (let s = step; s < len - 0.2; s += step) seg(s / len, 0, s / len, h);
+    if (T === 'panels') seg(0, h * 0.5, 1, h * 0.5);
+    stroke(T === 'logs' ? 'rgba(40,24,10,0.5)' : 'rgba(0,0,0,0.2)', T === 'logs' ? 0.55 : 0.4);
+  } else {
+    // طين: خط تشقق خفيف، وأسفل أغمق، وفي الساحلي صف أوتاد خشبية بارزة (toron) تحت الحافة
+    fillPath(ctx, [...P(0, 0), ...P(1, 0), ...P(1, 0.9), ...P(0, 0.9)], 'rgba(70,36,14,0.2)');
+    ctx.beginPath();
+    seg(0.05, h * 0.42, 0.55, h * 0.47);
+    seg(0.5, h * 0.62, 0.95, h * 0.58);
+    stroke('rgba(90,50,20,0.22)', 0.45);
+    if (T === 'toron') {
+      ctx.beginPath();
+      for (let s = 1.6; s < len - 0.8; s += 3.2) { const p = P(s / len, h * 0.7); ctx.moveTo(p[0], p[1]); ctx.lineTo(p[0] + 0.9, p[1] + 0.9); }
+      stroke('#5a3a20', 0.6);
+    }
+  }
+}
+
+// تاج السور على حافته العليا الأمامية (A إلى B) من المستوى 2؛ (tx, ty) سمكه للخلف
+function wallCrown(ctx, S, ax, ay, bx, by, tx, ty) {
+  const len = Math.hypot(bx - ax, by - ay);
+  if (len < 0.6) return;
+  const M = EMPIRE.fortify.merlon, ux = (bx - ax) / len, uy = (by - ay) / len, col = S.crownColor || S.face || S.top;
+  const at = (s) => [ax + ux * s, ay + uy * s];
+  const C = S.crown;
+  if (C === 'flat') return;
+  if (C === 'stakes' || C === 'spikes') {
+    ctx.beginPath();
+    for (let s = 0.75; s < len; s += 1.5) {
+      const [px, py] = at(s);
+      if (C === 'stakes') { ctx.moveTo(px - ux * 0.7, py - uy * 0.7); ctx.lineTo(px + tx * 0.4, py + ty * 0.4 - 2); ctx.lineTo(px + ux * 0.7, py + uy * 0.7); }
+      else { ctx.moveTo(px, py); ctx.lineTo(px, py - 2.4); }
+    }
+    if (C === 'stakes') { ctx.fillStyle = S.face; ctx.fill(); ctx.strokeStyle = S.edge; ctx.lineWidth = 0.35; ctx.stroke(); return; }
+    ctx.strokeStyle = '#2a2a2e';
+    ctx.lineWidth = 0.45;
     ctx.stroke();
+    ctx.beginPath();                                          // سلك شائك بين الأسياخ
+    const p = at(0), q = at(len);
+    ctx.moveTo(p[0], p[1] - 1.7); ctx.lineTo(q[0], q[1] - 1.7);
+    ctx.moveTo(p[0], p[1] - 0.9); ctx.lineTo(q[0], q[1] - 0.9);
+    ctx.strokeStyle = 'rgba(40,40,44,0.7)';
+    ctx.lineWidth = 0.3;
+    ctx.stroke();
+    return;
   }
-  ctx.beginPath();
-  for (let n = 0; n < list.length; n += 2) {
-    const x = list[n], y = list[n + 1] - h;
-    ctx.moveTo(x - w / 2 - 0.6, y); ctx.lineTo(x, y - w * 0.35); ctx.lineTo(x + w / 2 + 0.6, y); ctx.lineTo(x, y + w * 0.35); ctx.closePath();
+  if (C === 'tiles') {                                        // سقف قرميد صغير على طول السور بحافتين بارزتين
+    const p0 = at(-0.5), p1 = at(len + 0.5), r0 = [p0[0] + tx * 0.5, p0[1] + ty * 0.5 - 1.7], r1 = [p1[0] + tx * 0.5, p1[1] + ty * 0.5 - 1.7];
+    fillPath(ctx, [r0[0], r0[1], r1[0], r1[1], p1[0] + tx * 1.3, p1[1] + ty * 1.3, p0[0] + tx * 1.3, p0[1] + ty * 1.3], mixc(S.tile, '#000000', 0.25));
+    fillPath(ctx, [p0[0], p0[1] + 0.7, p1[0], p1[1] + 0.7, r1[0], r1[1], r0[0], r0[1]], S.tile);
+    ctx.beginPath();
+    for (let s = 1.2; s < len; s += 1.2) { const p = at(s); ctx.moveTo(p[0], p[1] + 0.6); ctx.lineTo(p[0] + tx * 0.5, p[1] + ty * 0.5 - 1.6); }
+    ctx.moveTo(r0[0], r0[1]); ctx.lineTo(r1[0], r1[1]);
+    ctx.strokeStyle = 'rgba(0,0,0,0.28)';
+    ctx.lineWidth = 0.4;
+    ctx.stroke();
+    return;
   }
-  ctx.globalAlpha = alpha;
-  ctx.fillStyle = color;
-  ctx.fill();
-  ctx.strokeStyle = F.edge;
-  ctx.stroke();
+  const count = Math.max(1, Math.round(len / M.every)), w = M.w, mh = M.h;
+  for (let m = 0; m < count; m++) {
+    const [cx, cy] = at((m + 0.5) * len / count), lx = cx - ux * w / 2, ly = cy - uy * w / 2, rx = cx + ux * w / 2, ry = cy + uy * w / 2;
+    if (C === 'teeth') fillPath(ctx, [lx, ly, cx + tx * 0.3, cy + ty * 0.3 - mh * 1.6, rx, ry], col);
+    else if (C === 'round') {
+      ctx.beginPath(); ctx.ellipse(cx + tx * 0.3, cy + ty * 0.3, w / 2, mh, 0, Math.PI, 0); ctx.closePath();
+      ctx.fillStyle = col; ctx.fill();
+    } else if (C === 'stepped') {
+      const step = (k, sw) => fillPath(ctx, [cx - ux * sw, cy - uy * sw - k, cx + ux * sw, cy + uy * sw - k,
+                                             cx + ux * sw, cy + uy * sw - k - mh * 0.55, cx - ux * sw, cy - uy * sw - k - mh * 0.55], col);
+      step(0, w * 0.6); step(mh * 0.55, w * 0.38); step(mh * 1.1, w * 0.18);
+    } else {                                                  // مربعة: وجه وسطح
+      fillPath(ctx, [lx, ly, rx, ry, rx, ry - mh, lx, ly - mh], col);
+      fillPath(ctx, [lx, ly - mh, rx, ry - mh, rx + tx, ry + ty - mh, lx + tx, ly + ty - mh], S.top);
+    }
+  }
 }
 
-// البوابات: عتبة حجرية فوق قوس مفتوح يُمشى من تحته (أعلى من السور)، وأعلاها بلون المالك، وعمودان على طرفيها،
-// وراية معلقة في وسطها في المستوى 3
-function drawGates(ctx, segs, color, alpha, fort) {
+function drawWalls(ctx, segs, color, alpha, fort, S) {
+  const L = EMPIRE.fortify.levels[fort - 1], h = L.wall;
+  for (let n = 0; n < segs.length; n += 5) {
+    const ax = segs[n], ay = segs[n + 1], bx = segs[n + 2], by = segs[n + 3], slant = segs[n + 4], [tx, ty] = backOf(slant);
+    ctx.globalAlpha = Math.max(alpha, 0.85);                 // السور ظاهر حتى في الحي المحايد
+    fillPath(ctx, [ax, ay - h, bx, by - h, bx + tx, by + ty - h, ax + tx, ay + ty - h], S.top);   // الممشى
+    fillPath(ctx, [ax, ay, bx, by, bx, by - h, ax, ay - h], pieceColor(S, ax, ay));
+    wallTexture(ctx, S, ax, ay, bx, by, h);
+    fillPath(ctx, [ax, ay, bx, by, bx, by - h, ax, ay - h], WALL_LIGHT[slant]);
+    ctx.beginPath();
+    ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.lineTo(bx, by - h); ctx.lineTo(ax, ay - h); ctx.closePath();
+    ctx.strokeStyle = S.edge;
+    ctx.lineWidth = 0.45;
+    ctx.stroke();
+    ctx.globalAlpha = alpha;                                 // شريط المالك تحت الحافة العليا
+    ctx.beginPath();
+    ctx.moveTo(ax, ay - h + 1.1); ctx.lineTo(bx, by - h + 1.1);
+    ctx.lineCap = 'butt';
+    ctx.strokeStyle = color;
+    ctx.lineWidth = L.band * 0.75;
+    ctx.stroke();
+    if (L.merlons) { ctx.globalAlpha = Math.max(alpha, 0.85); wallCrown(ctx, S, ax, ay - h, bx, by - h, tx, ty); }
+  }
+}
+
+// غطاء برج الركن فوق قمته (x, yt) بنصف عرض r
+function towerCap(ctx, S, x, yt, r) {
+  const col = S.capColor || S.top, dark = mixc(col, '#000000', 0.22), light = mixc(col, '#ffffff', 0.12), C = S.cap;
+  if (C === 'cone' || C === 'roof') {
+    const o = r + 0.7, hh = C === 'cone' ? r * 2.6 : r * 1.6, dy = C === 'cone' ? r / 2 : o / 2;
+    fillPath(ctx, [x - o, yt, x, yt + dy, x, yt - hh], dark);
+    fillPath(ctx, [x, yt + dy, x + o, yt, x, yt - hh], light);
+  } else if (C === 'dome') {
+    ctx.beginPath(); ctx.ellipse(x, yt, r + 0.2, r * 1.15, 0, Math.PI, 0); ctx.closePath(); ctx.fillStyle = light; ctx.fill();
+    ctx.beginPath(); ctx.ellipse(x, yt, r + 0.2, r * 1.15, 0, Math.PI, Math.PI * 1.45); ctx.lineTo(x, yt); ctx.closePath(); ctx.fillStyle = dark; ctx.fill();
+    ctx.beginPath(); ctx.moveTo(x, yt - r * 1.15); ctx.lineTo(x, yt - r * 1.15 - 1.3); ctx.strokeStyle = '#d9b44a'; ctx.lineWidth = 0.6; ctx.stroke();
+  } else if (C === 'pagoda') {
+    const o = r + 1.6;
+    fillPath(ctx, [x - o, yt + 0.3, x, yt + o / 2 + 0.6, x, yt - 2.8], dark);
+    fillPath(ctx, [x, yt + o / 2 + 0.6, x + o, yt + 0.3, x, yt - 2.8], col);
+    ctx.beginPath();
+    ctx.moveTo(x - o, yt + 0.3); ctx.lineTo(x - o - 0.6, yt - 0.5);
+    ctx.moveTo(x + o, yt + 0.3); ctx.lineTo(x + o + 0.6, yt - 0.5);
+    ctx.moveTo(x, yt - 2.8); ctx.lineTo(x, yt - 3.8);
+    ctx.strokeStyle = dark; ctx.lineWidth = 0.6; ctx.stroke();
+  } else if (C === 'chhatri') {
+    ctx.beginPath();
+    for (const dx of [-r * 0.7, r * 0.7]) { ctx.moveTo(x + dx, yt + 0.3); ctx.lineTo(x + dx, yt - 2.4); }
+    ctx.strokeStyle = col; ctx.lineWidth = 0.6; ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(x, yt - 2.4, r * 0.95, r * 0.95, 0, Math.PI, 0); ctx.closePath(); ctx.fillStyle = col; ctx.fill();
+    ctx.beginPath(); ctx.moveTo(x, yt - 2.4 - r * 0.95); ctx.lineTo(x, yt - 3.6 - r * 0.95); ctx.strokeStyle = '#d9b44a'; ctx.lineWidth = 0.5; ctx.stroke();
+  } else if (C === 'teeth') {
+    for (const [dx, dy] of [[-r, 0], [-r * 0.5, r * 0.4], [0, r * 0.5], [r * 0.5, r * 0.4], [r, 0]]) {
+      fillPath(ctx, [x + dx - 0.6, yt + dy, x + dx, yt + dy - 1.8, x + dx + 0.6, yt + dy], S.crownColor || light);
+    }
+  } else if (C === 'flat' || C === 'stepped') {
+    const m = r * 0.42;
+    for (const [dx, dy] of [[0, -r / 2], [-r + m, 0], [r - m, 0], [0, r / 2]]) isoBox(ctx, x + dx, yt + dy + m / 2, m, C === 'flat' ? 1.4 : 1, mixc(S.face || S.top, '#000000', 0.15), S.face || S.top, S.top);
+    if (C === 'stepped') isoBox(ctx, x, yt, r * 0.45, 2.2, mixc(S.face, '#000000', 0.15), S.face, S.top);
+  } else if (C === 'lamp') {
+    isoBox(ctx, x, yt, 1.1, 1.4, '#2f3236', '#44484c', '#55595e');
+    ctx.beginPath(); ctx.arc(x + 0.6, yt - 2.3, 0.9, 0, TAU); ctx.fillStyle = '#f4e3a0'; ctx.fill();
+  }
+}
+
+// عمود بطراز السور (مستدير أو مربع) عرضه w وارتفاعه h؛ cap: غطاء بلون المالك (أعمدة البوابة)
+function wallPost(ctx, S, x, y, w, h, capColor) {
+  const L = mixc(S.face || S.colors[0], '#000000', 0.2), R = S.face || S.colors[1], r = w * 0.62;
+  if (S.tower === 'round') isoCyl(ctx, x, y, r, h, L, R, S.top);
+  else isoBox(ctx, x, y, r, h, L, R, S.top);
+  if (capColor) fillPath(ctx, [x - r - 0.4, y - h, x, y - h - r * 0.55, x + r + 0.4, y - h, x, y - h + r * 0.55], capColor);
+}
+
+// البوابات: عتبة بطراز السور فوق قوس مفتوح يُمشى من تحته (أعلى من السور)، وأعلاها بلون المالك، وعمودان على طرفيها،
+// ومن المستوى 2 مصراعان مفتوحان (wood) أو شبكة مرفوعة (iron) أو سقف فوقها (roofed)، وراية في وسطها في المستوى 3
+function drawGates(ctx, segs, color, alpha, fort, S) {
   const F = EMPIRE.fortify, L = F.levels[fort - 1], G = F.gate, h = L.wall + G.extra;
   const spring = h * G.spring, apex = h * G.apex;
-  const lintel = (slant) => {
-    ctx.beginPath();
-    for (let n = 0; n < segs.length; n += 5) {
-      if (slant !== null && segs[n + 4] !== slant) continue;
-      const ax = segs[n], ay = segs[n + 1], bx = segs[n + 2], by = segs[n + 3];
-      ctx.moveTo(ax, ay - h); ctx.lineTo(bx, by - h);
-      for (let k = 0; k <= 12; k++) {
-        const t = 1 - k / 12, lift = spring + Math.sin(Math.PI * t) * (apex - spring);
-        ctx.lineTo(ax + (bx - ax) * t, ay + (by - ay) * t - lift);
+  for (let n = 0; n < segs.length; n += 5) {
+    const ax = segs[n], ay = segs[n + 1], bx = segs[n + 2], by = segs[n + 3], slant = segs[n + 4], [tx, ty] = backOf(slant);
+    const P = (t, v) => [ax + (bx - ax) * t, ay + (by - ay) * t - v];
+    const lintel = [];
+    lintel.push(...P(0, h), ...P(1, h));
+    for (let k = 0; k <= 12; k++) { const t = 1 - k / 12; lintel.push(...P(t, spring + Math.sin(Math.PI * t) * (apex - spring))); }
+    ctx.globalAlpha = Math.max(alpha, 0.85);
+    if (L.merlons && S.gate === 'wood') {                    // مصراعان مفتوحان على جانبي الفتحة بألواح ومسامير
+      for (const [t0, t1] of [[0.02, 0.17], [0.83, 0.98]]) {
+        fillPath(ctx, [...P(t0, 0), ...P(t1, 0), ...P(t1, spring), ...P(t0, spring)], '#5e3c22');
+        ctx.beginPath();
+        for (const v of [spring * 0.3, spring * 0.7]) { const p = P(t0, v), q = P(t1, v); ctx.moveTo(p[0], p[1]); ctx.lineTo(q[0], q[1]); }
+        ctx.strokeStyle = '#2e2014'; ctx.lineWidth = 0.4; ctx.stroke();
       }
-      ctx.closePath();
     }
-  };
-  ctx.globalAlpha = Math.max(alpha, 0.85);
-  lintel(null);
-  ctx.fillStyle = F.stone;
-  ctx.fill();
-  ctx.lineWidth = 0.5;
-  ctx.strokeStyle = F.edge;
-  ctx.stroke();
-  for (const slant of [0, 1]) { lintel(slant); ctx.fillStyle = F.shade[slant]; ctx.fill(); }
-  ctx.beginPath();                                   // أعلى البوابة بلون المالك
-  for (let n = 0; n < segs.length; n += 5) { ctx.moveTo(segs[n], segs[n + 1] - h); ctx.lineTo(segs[n + 2], segs[n + 3] - h); }
-  ctx.globalAlpha = alpha;
-  ctx.lineCap = 'round';
-  ctx.strokeStyle = color;
-  ctx.lineWidth = L.band;
-  ctx.stroke();
-  if (L.banners) {                                   // راية معلقة في وسط العتبة
+    fillPath(ctx, [...P(0, h), ...P(1, h), ...P(1, h).map((c, k) => c + (k ? ty : tx)), ...P(0, h).map((c, k) => c + (k ? ty : tx))], S.top);
+    fillPath(ctx, lintel, pieceColor(S, ax, ay));
+    fillPath(ctx, lintel, WALL_LIGHT[slant]);
     ctx.beginPath();
-    for (let n = 0; n < segs.length; n += 5) {
-      const cx = (segs[n] + segs[n + 2]) / 2, cy = (segs[n + 1] + segs[n + 3]) / 2 - h + 0.8;
-      ctx.rect(cx - 1.3, cy, 2.6, apex - spring + 0.4);
+    ctx.moveTo(lintel[0], lintel[1]);
+    for (let k = 2; k < lintel.length; k += 2) ctx.lineTo(lintel[k], lintel[k + 1]);
+    ctx.closePath();
+    ctx.strokeStyle = S.edge; ctx.lineWidth = 0.45; ctx.stroke();
+    if (L.merlons && S.gate === 'iron') {                    // شبكة حديد مرفوعة تحت العتبة
+      ctx.beginPath();
+      for (let t = 0.1; t < 0.95; t += 0.1) { const p = P(t, apex + 0.4), q = P(t, apex - 1.6); ctx.moveTo(p[0], p[1]); ctx.lineTo(q[0], q[1]); }
+      const p = P(0.08, apex - 0.6), q = P(0.92, apex - 0.6);
+      ctx.moveTo(p[0], p[1]); ctx.lineTo(q[0], q[1]);
+      ctx.strokeStyle = '#2c2c30'; ctx.lineWidth = 0.45; ctx.stroke();
     }
-    ctx.fillStyle = color;
-    ctx.fill();
+    ctx.globalAlpha = alpha;                                 // أعلى البوابة بلون المالك
+    ctx.beginPath();
+    { const p = P(0, h - 1.1), q = P(1, h - 1.1); ctx.moveTo(p[0], p[1]); ctx.lineTo(q[0], q[1]); }
+    ctx.lineCap = 'butt';
+    ctx.strokeStyle = color;
+    ctx.lineWidth = L.band * 0.75;
+    ctx.stroke();
+    ctx.globalAlpha = Math.max(alpha, 0.85);
+    if (L.merlons) {
+      if (S.gate === 'roofed') {                             // سقف بوابة شرقية أعرض من التاج بطرفين مرفوعين
+        const p0 = P(-0.12, h), p1 = P(1.12, h), up = 3.4;
+        const r0 = [p0[0] + tx * 0.5, p0[1] + ty * 0.5 - up], r1 = [p1[0] + tx * 0.5, p1[1] + ty * 0.5 - up];
+        fillPath(ctx, [r0[0], r0[1], r1[0], r1[1], p1[0] + tx * 1.4, p1[1] + ty * 1.4 - 0.4, p0[0] + tx * 1.4, p0[1] + ty * 1.4 - 0.4], mixc(S.capColor, '#000000', 0.25));
+        fillPath(ctx, [p0[0], p0[1] + 1.2, p1[0], p1[1] + 1.2, r1[0], r1[1], r0[0], r0[1]], S.capColor);
+        ctx.beginPath();
+        ctx.moveTo(p0[0], p0[1] + 1.2); ctx.lineTo(p0[0] - 0.8, p0[1] - 0.2);
+        ctx.moveTo(p1[0], p1[1] + 1.2); ctx.lineTo(p1[0] + 0.8, p1[1] - 0.2);
+        ctx.moveTo(r0[0], r0[1]); ctx.lineTo(r1[0], r1[1]);
+        ctx.strokeStyle = mixc(S.capColor, '#000000', 0.4); ctx.lineWidth = 0.6; ctx.stroke();
+      } else wallCrown(ctx, S, ...P(0, h), ...P(1, h), tx, ty);
+    }
+    if (L.banners) {                                         // راية معلقة في وسط العتبة
+      ctx.globalAlpha = alpha;
+      const [cx, cy] = P(0.5, h - 0.8);
+      fillPath(ctx, [cx - 1.3, cy, cx + 1.3, cy, cx + 1.3, cy + apex - spring + 0.4, cx, cy + apex - spring + 1.4, cx - 1.3, cy + apex - spring + 0.4], color);
+    }
+    ctx.globalAlpha = Math.max(alpha, 0.85);
+    for (const t of [0, 1]) wallPost(ctx, S, ...P(t, 0), G.pillar.w, h + G.pillar.extra, null);
+    ctx.globalAlpha = alpha;
+    for (const t of [0, 1]) {
+      const [px, py] = P(t, h + G.pillar.extra), r = G.pillar.w * 0.62;
+      fillPath(ctx, [px - r - 0.4, py, px, py - r * 0.55, px + r + 0.4, py, px, py + r * 0.55], color);
+    }
   }
-  const ends = [];
-  for (let n = 0; n < segs.length; n += 5) ends.push(segs[n], segs[n + 1], segs[n + 2], segs[n + 3]);
-  pillars(ctx, ends, color, alpha, G.pillar.w, h + G.pillar.extra);
 }
 
-// أبراج الأركان: الأعمدة نفسها أكبر، وراية على سارية في المستوى 3
-function drawTowers(ctx, list, color, alpha, fort) {
-  const F = EMPIRE.fortify, L = F.levels[fort - 1], T = L.tower;
-  pillars(ctx, list, color, alpha, T.w, T.h);
-  if (!L.banners) return;
-  const B = F.banner;
-  ctx.beginPath();                                   // السارية
+// أبراج الأركان بطراز المنطقة وغطائها، وراية على سارية في المستوى 3
+function drawTowers(ctx, list, color, alpha, fort, S) {
+  const F = EMPIRE.fortify, L = F.levels[fort - 1], T = L.tower, r = T.w * 0.7;
   for (let n = 0; n < list.length; n += 2) {
-    const x = list[n], y = list[n + 1] - T.h;
-    ctx.moveTo(x, y); ctx.lineTo(x, y - B.pole);
+    const x = list[n], y = list[n + 1];
+    ctx.globalAlpha = Math.max(alpha, 0.85);
+    wallPost(ctx, S, x, y, T.w * 1.13, T.h, null);
+    ctx.globalAlpha = alpha;                                 // شريط المالك حول البرج
+    ctx.beginPath();
+    ctx.moveTo(x - r, y - T.h + 1.4); ctx.lineTo(x, y - T.h + 1.4 + r / 2); ctx.lineTo(x + r, y - T.h + 1.4);
+    ctx.strokeStyle = color; ctx.lineWidth = L.band * 0.7; ctx.lineCap = 'butt'; ctx.stroke();
+    ctx.globalAlpha = Math.max(alpha, 0.85);
+    towerCap(ctx, S, x, y - T.h, r);
+    if (!L.banners) continue;
+    const B = F.banner, top = y - T.h - (S.cap === 'cone' ? r * 2.6 : S.cap === 'roof' ? r * 1.6 : S.cap === 'dome' ? r * 1.15 : 2.6);
+    ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x, top - B.pole);
+    ctx.lineWidth = 0.6; ctx.strokeStyle = '#3a3229'; ctx.stroke();
+    ctx.globalAlpha = alpha;
+    fillPath(ctx, [x, top - B.pole, x + B.w, top - B.pole + B.h * 0.35, x, top - B.pole + B.h], color);
   }
-  ctx.lineWidth = 0.6;
-  ctx.strokeStyle = F.edge;
-  ctx.stroke();
-  ctx.beginPath();                                   // الراية بلون المالك
-  for (let n = 0; n < list.length; n += 2) {
-    const x = list[n], y = list[n + 1] - T.h - B.pole;
-    ctx.moveTo(x, y); ctx.lineTo(x + B.w, y + B.h * 0.35); ctx.lineTo(x, y + B.h); ctx.closePath();
-  }
-  ctx.fillStyle = color;
-  ctx.fill();
 }
 
 // halo (طور الإمبراطورية): هالة خفيفة بلون المالك على الحد نفسه، أعرض منه وتحته
@@ -530,6 +705,7 @@ function drawBorders(ctx, map, tiles, halo) {
     for (let n = 0; n < list.length; n += 4) { ctx.moveTo(list[n], list[n + 1] - lift); ctx.lineTo(list[n + 2], list[n + 3] - lift); }
   };
   for (const g of groups.values()) {
+    ctx.lineCap = 'round';                           // الأسوار ترسم شريطها بطرف مستقيم
     const S = DISTRICT_SIZES.border[g.size];
     if (halo && g.owned) {
       path(g.halo, 0);
@@ -572,9 +748,9 @@ function drawBorders(ctx, map, tiles, halo) {
       }
     }
     if (g.posts.length) drawPosts(ctx, g.posts, g.color, g.alpha, S.post, g.accent);
-    if (g.walls.length) drawWalls(ctx, g.walls, g.color, g.alpha, g.fort);
-    if (g.gates.length) drawGates(ctx, g.gates, g.color, g.alpha, g.fort);
-    if (g.towers.length) drawTowers(ctx, g.towers, g.color, g.alpha, g.fort);
+    if (g.walls.length) drawWalls(ctx, g.walls, g.color, g.alpha, g.fort, wallStyle(map));
+    if (g.gates.length) drawGates(ctx, g.gates, g.color, g.alpha, g.fort, wallStyle(map));
+    if (g.towers.length) drawTowers(ctx, g.towers, g.color, g.alpha, g.fort, wallStyle(map));
   }
   ctx.restore();
 }
@@ -589,9 +765,9 @@ function drawBorderFront(ctx, map, i, j) {
   if (!list.length && !segs.length && !towers.length && !gates.length) return;
   ctx.save();
   if (list.length) drawPosts(ctx, list, look.color, look.alpha, DISTRICT_SIZES.border[look.size].post, look.accent);
-  if (segs.length) drawWalls(ctx, segs, look.color, look.alpha, look.fort);
-  if (gates.length) drawGates(ctx, gates, look.color, look.alpha, look.fort);
-  if (towers.length) drawTowers(ctx, towers, look.color, look.alpha, look.fort);
+  if (segs.length) drawWalls(ctx, segs, look.color, look.alpha, look.fort, wallStyle(map));
+  if (gates.length) drawGates(ctx, gates, look.color, look.alpha, look.fort, wallStyle(map));
+  if (towers.length) drawTowers(ctx, towers, look.color, look.alpha, look.fort, wallStyle(map));
   ctx.restore();
 }
 
