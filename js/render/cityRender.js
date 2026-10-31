@@ -1,5 +1,6 @@
 // رسم المدينة بطابعها (القسم 3.9): لون الأرض ومحتوى كل مربع (مبنى، أطلال، زينة، حطام)
 // الشكل فقط: مكان المباني والشوارع والأحياء يقرره مولّد الخريطة كما هو.
+import { beginDetail, endDetail, detailGround } from './detail.js';
 import { CAPTURE, CITY_UNTINTED, CITIES, CITY_FEATURES } from '../config.js';
 import { mix, tint } from './colors.js';
 import { tintAmount } from '../game/capture.js';
@@ -117,6 +118,7 @@ export function drawCityTile(state, i, j, x, y) {
     else {
       if (T.draw.ground) T.draw.ground(x, y, i, j, T);      // زينة الأرض الفارغة بطابع المدينة (تموجات الرمل)
       if (hsh(i, j, 210) < 0.4) streetDebris(x, y, i, j + 99, T);
+      else if (map.districtAt && map.districtAt[k] >= 0) detailGround(x, y, i, j, map.city, state.weather === 'snow');   // أشياء الحي بطابع منطقته (12ج)
     }
     return true;
   }
@@ -129,14 +131,16 @@ export function drawCityTile(state, i, j, x, y) {
     useTone(state, map.districtOf(i, j), !CITY_UNTINTED.includes(kind));
     // المدن المزدحمة: المبنى أصغر قليلاً حول قاعدته فتظهر الأرض بينه وبين جيرانه
     const open = CITIES.open[map.city];
+    beginDetail(map.city, i, j);                // تفاصيل المبنى العادي (12ج، detail.js)
     if (open && open.scale !== 1) {
       const ctx = getCtx();
       ctx.save();
       ctx.translate(x, y);
       ctx.scale(open.scale, open.scale);
       T.draw[kind](0, 0, i, j, T);
+      endDetail();                                // يرسم ما بقي من التفاصيل بالمقياس نفسه قبل الرجوع
       ctx.restore();
-    } else T.draw[kind](x, y, i, j, T);
+    } else { T.draw[kind](x, y, i, j, T); endDetail(); }
     return true;
   }
   return false;

@@ -1634,6 +1634,19 @@ const SAMURAI = { hp: 300, armor: 0.2, damage: 18, attackTime: 0.9, speed: 2.4, 
 // --- مزايا المدن (القسم 3.11، بطلب المستخدم): ميزة واحدة لكل مدينة أمة، في كل مباراة على الاقتصاد ---
 // cities: المدينة ← ميزتها، والمدن التي لا تُذكر بلا ميزة. ground: أرض حي الميزة قبل الاستيلاء عليه تميل لهذا اللون
 // botValue: قيمة حي الميزة عند البوتات (الحي العادي 1، والحي المميز القديم ai.specialValue)
+// --- تفاصيل المباني العادية وأرض الأحياء (12ج، بطلب المستخدم: "تحسين شامل وإضافة تفاصيل أكثر للمباني والأحياء") ---
+// طبقة واحدة فوق رسم كل مدينة (js/render/detail.js) بطابع منطقتها (REGIONS)، رسم فقط وحتمية من موضع المربع:
+// minBox أصغر جسم مبنى تُرسم عليه (نصف العرض والارتفاع)، وao ظل قاعدته، وtopLight ضوء أعلى وجهه المضاء، وedge حافته الأمامية.
+// roof فرصة أشياء السطح المسطح، وflowers/ac/shutters/frames فرص زينة النوافذ (أحواض زهور أوروبا، ومكيفات المدن الحديثة
+// والعربية، ومصاريع الأمريكتين الملونة، وإطارات أفريقيا الملونة)، وpot فرصة أصيص عند الباب، وground فرصة أشياء أرض الحي الفارغة.
+// modern: مدن حديثة (مكيفات وهوائيات)
+export const CITY_DETAIL = {
+  enabled: true,                 // للإيقاف كله (الأجهزة الضعيفة جداً): false
+  minBox: { w: 7, h: 8 }, ao: 0.11, topLight: 0.1, edge: 0.32,
+  roof: 0.6, flowers: 0.28, ac: 0.22, shutters: 0.4, frames: 0.3, pot: 0.5, ground: 0.55, stains: 0.3, tufts: 4,   // stains: أثر المطر تحت النافذة، tufts: حصى أو عشب الأرض الفارغة
+  modern: ['hk', 'chicago', 'birmingham']
+};
+
 export const CITY_FEATURES = {
   cities: { diriyah: 'storm', shibam: 'villages', cairo: 'pyramid',
             japan: 'dojo', gyeongju: 'bandits', kano: 'bandits', kaifeng: 'clinic', gondar: 'fortress', meroe: 'khartoum',
