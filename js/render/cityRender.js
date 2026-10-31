@@ -6,6 +6,7 @@ import { tintAmount } from '../game/capture.js';
 import { THEMES, setThemeContext, setTone, getCtx, streetDebris, ruinTile, hsh, mixc } from './cityThemes.js';
 import { PALETTES } from './colors.js';
 import { drawLandmark } from './landmarks.js';
+import { evolveOf } from './empireBuildings.js';
 import { drawFeaturePlaza } from './featureArt.js';
 import {
   openOf, isLane, cleanRoad, drawSidewalks, drawCrosswalk, drawLaneDecor, roundaboutAnchor, drawRoundaboutIsland,
@@ -181,7 +182,7 @@ export function drawTileStatic(state, i, j, x, y, lights, lamps) {
   const ownerColor = district && district.owner !== null ? state.players[district.owner].color : null;
   const flagColor = (PALETTES[map.region[k]] || PALETTES.neutral).flag;
   useTone(state, district, true);
-  const lamp = drawLandmark(map, special, x, y, i, j, ownerColor, flagColor, lights, !!state.economy);
+  const lamp = drawLandmark(map, special, x, y, i, j, ownerColor, flagColor, lights, !!state.economy, evolveOf(state, district));
   if (lamp && lamps) lamps.push(lamp);
 }
 

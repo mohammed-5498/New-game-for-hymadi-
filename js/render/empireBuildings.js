@@ -5,8 +5,8 @@
 //   الهلال الأحمر في المدن العربية والمسلمة والصليب الأحمر في غيرها (MEDIC في config.js)
 // - وكل مبنى بحجم حيه (القسم 3.12: "يتأقلم مع حدوده"): الصغير أقصر وأبسط، والكبير أعلى بطابق أو شرفة وراية
 // كلها على مربع واحد داخل معينه، فيبقى ترتيب الرسم كما هو. واليمامة بصورها (EMPIRE.art) لا تمر من هنا.
-import { poly, circ, ln, box, qL, qR, wL, wR, arch, ridgeRoof, dome, cyl, cone, asRoof, mixc, hsh, bellGable, getCtx } from './cityThemes.js';
-import { MEDIC } from '../config.js';
+import { poly, circ, ln, box, qL, qR, wL, wR, arch, ridgeRoof, dome, cyl, cone, asRoof, mixc, hsh, bellGable, getCtx, glow, el } from './cityThemes.js';
+import { MEDIC, EMPIRE } from '../config.js';
 
 const lt = (c, t = 0.22) => mixc(c, '#ffffff', t), dk = (c, t = 0.18) => mixc(c, '#000000', t);
 const DARK = '#2a2420';
@@ -79,6 +79,7 @@ const TOWERS = {
       teeth(x, y - h - 6, 4.5, lt(R, 0.3), 3, 2.4);
       pennant(x, y - h - 8, '#2f7a4a');
     }
+    return { w: (w0 + w1) / 2, h };
   },
   // يمني (شبام): برج طيني عالٍ بأعلاه أبيض ونوافذ مزخرفة بإطار جص
   yemen(x, y, i, j, T, s) {
@@ -92,6 +93,7 @@ const TOWERS = {
     }
     teeth(x, y - h, 9, '#f6f1e8', 4, 2.6);
     if (s.big) { box(x - 3, y - h - 1, 3, 1.5, 5, '#e6dfd2', '#f2ede4', '#ffffff'); pennant(x + 4, y - h, '#c0392b'); }
+    return { w: 9, h };
   },
   // ياباني (إيدو وغيونغجو بألوانها): قاعدة حجرية مائلة، وجسم جصي أبيض بإطار خشبي، وسقف منحنٍ بطرفين مرفوعين
   yagura(x, y, i, j, T, s) {
@@ -118,6 +120,7 @@ const TOWERS = {
       box(x, y - hb - hu - 4, 5, 2.5, 6, dk(st.wall, 0.08), st.wall, null);
       ridgeRoof(x, y - hb - hu - 4, 5, 2.5, 6, 5, { ...roof, ov: 2, sag: 1.4, flare: 1.6 });
     }
+    return { w: 10, h: hb + hu };
   },
   // صيني (الصينية وكايفنغ): منصة حجرية، وأعمدة حمراء وحاجز، وسقف أخضر رمادي منحنٍ وذهب على السنام
   pavilion(x, y, i, j, T, s) {
@@ -133,6 +136,7 @@ const TOWERS = {
                    ridge: '#d9b44a', ridgeW: 1.4, tile: dk(roofC, 0.35) };
     ridgeRoof(x, y, 10, 5, h0 + h1, 7, roof);
     if (s.big) ridgeRoof(x, y - 6, 6, 3, h0 + h1, 6, { ...roof, ov: 2.4, sag: 1.6, flare: 1.8 });
+    return { w: 10, h: h0 + h1 };
   },
   // برج مراقبة حديث (هونغ كونغ): هيكل خرساني بشريط نيون ولافتة
   neon(x, y, i, j, T, s) {
@@ -145,6 +149,7 @@ const TOWERS = {
     box(x, y - h, 10, 5, 3, '#4a4c52', '#5a5c62', '#6a6c72');
     wR(x, y - h, 10, 5, 0, 0.5, 1, 1.4, '#3fe0ff'); wL(x, y - h, 10, 5, 0, 0.5, 1, 1.4, '#ff4fa3');
     if (s.big) { ln(x, y - h - 3, x, y - h - 14, '#9aa3ad', 0.9); circ(x, y - h - 14, 1.2, '#ff4fa3'); }
+    return { w: 8, h };
   },
   // راجبوتي (جايبور): برج وردي من الحجر الرملي، وشرفة جهاروكا، وقبة كشك (شاتري) في أعلاه
   rajput(x, y, i, j, T, s) {
@@ -159,6 +164,7 @@ const TOWERS = {
     box(x, top - 6, 5.5, 2.75, 1.2, sh, c, lt(c, 0.2));
     dome(x, top - 7.2, 4.6, lt(c, 0.25), sh, '#d9b44a');
     if (s.big) { dome(x - 6.5, top + 1, 2.2, lt(c, 0.25), sh, '#d9b44a'); dome(x + 6.5, top + 1, 2.2, lt(c, 0.25), sh, '#d9b44a'); }
+    return { w: 9, h };
   },
   // برج أوروبي مستدير (الأوروبية وباريس وروتنبورغ بألوانها): حجر بشقوق رماية، وسقف مخروطي، وشرفة بشُرَف للكبير
   round(x, y, i, j, T, s) {
@@ -177,6 +183,7 @@ const TOWERS = {
     } else {
       cone(x, y - h, r + 1.2, 14 * s.h, roofC, dk(roofC, 0.25));
     }
+    return { w: r, h, round: true };
   },
   // قوطي من الحجر الجيري (شيكاغو وبرمنغهام بلون طوبها): برج مربع بأبراج أركان صغيرة وشُرَف ونافذة طويلة
   gothic(x, y, i, j, T, s) {
@@ -189,6 +196,7 @@ const TOWERS = {
     }
     merlons(x, y - h, 8.5, L, R, lt(R, 0.2), () => {}, 3, 1.2, 2);
     if (s.big) { box(x, y - h, 3.6, 1.8, 6, L, R, lt(R, 0.15)); poly([[x - 3.6, y - h - 6], [x, y - h - 16], [x + 3.6, y - h - 6]], dk(L, 0.2)); }
+    return { w: 8.5, h };
   },
   // خشبي (النرويجية): ألواح حمراء داكنة، وطوابق تضيق، وسقف حاد بطبقات وتنينين على الأطراف
   stave(x, y, i, j, T, s) {
@@ -202,6 +210,7 @@ const TOWERS = {
     box(x, y - h - 6, 4, 2, 6, L, R, null);
     ridgeRoof(x, y - h - 6, 4, 2, 6, 7, { ...roof, ov: 1.6 });
     if (s.big) pennant(x, y - h - 19, '#c0392b');
+    return { w: 9, h };
   },
   // ساحلي أفريقي (كانو): برج طيني بأعمدة قمم على الأركان وأوتاد خشبية بارزة (طورون)
   sahel(x, y, i, j, T, s) {
@@ -220,6 +229,7 @@ const TOWERS = {
       circ(px, py - 6, 0.7, '#e8dcc4');
     }
     if (s.big) { poly([[x - 2.4, y - h - 2], [x, y - h - 10], [x + 2.4, y - h - 2]], lt(R, 0.08)); circ(x, y - h - 10, 0.9, '#f2c14e'); }
+    return { w: (w0 + w1) / 2, h };
   },
   // نوبي (مروي): برج طيني أبيض بقبة نوبية وزخارف مثلثة ملونة
   nubian(x, y, i, j, T, s) {
@@ -231,6 +241,7 @@ const TOWERS = {
     }
     dome(x, y - h, 7, lt(R, 0.1), dk(L, 0.08), null);
     if (s.big) { dome(x, y - h - 8, 3, lt(R, 0.15), dk(L, 0.08), '#d9b44a'); }
+    return { w: 9, h };
   },
   // حبشي (غوندر): برج حجري مستدير بقبة وحزام حجر أحمر
   abyssinian(x, y, i, j, T, s) {
@@ -241,6 +252,7 @@ const TOWERS = {
     cyl(x, y - h, r + 1, 2.5, dk(L, 0.2), R, lt(R, 0.12));
     dome(x, y - h - 2.5, 7, lt(R, 0.12), dk(L, 0.05), s.big ? '#d9b44a' : null);
     if (s.big) { for (const dx of [-7, 7]) { cyl(x + dx, y - h * 0.4, 2.4, h * 0.6, dk(L, 0.1), R, null); dome(x + dx, y - h, 2.4, lt(R, 0.1), dk(L, 0.05), null); } }
+    return { w: r, h, round: true };
   },
   // استعماري (المكسيكية وريو بألوانها): برج جصي ملون بزوايا حجرية، وجملون جرس منحنٍ وجرس
   colonial(x, y, i, j, T, s) {
@@ -254,6 +266,7 @@ const TOWERS = {
     const bell = qR(x, y - h - 1.4, 8.5, 4.25)(0.5, 3.4);
     circ(bell[0], bell[1], 1.4, '#c49a3a');
     if (s.big) pennant(x - 6, y - h - 2, '#2f7a4a');
+    return { w: 8.5, h };
   },
   // أزتيكي مدرّج (تينوتشتيتلان): مصاطب حجرية تضيق، ودرج أمامي، ومعبد صغير بسقف ملون
   aztec(x, y, i, j, T, s) {
@@ -265,6 +278,7 @@ const TOWERS = {
     box(x, top, 5, 2.5, 6, '#c9c0aa', '#ddd4be', null);
     poly([[x - 5, top - 6], [x, top - 8.5], [x + 5, top - 6], [x, top - 3.5]], s.big ? '#2f8a7a' : '#c0533a');
     poly([[x - 5, top - 6], [x, top - 3.5], [x + 5, top - 6], [x + 5, top - 8], [x, top - 5.5], [x - 5, top - 8]], s.big ? '#3aa08c' : '#d8643f');
+    return { w: w + 1.5, h: levels * step };
   },
   // صفيح ملون (لا بوكا): برج مراقبة من صناديق صفيح بألوان مختلفة ودرج خارجي ونافذة شرفة
   tin(x, y, i, j, T, s) {
@@ -281,6 +295,7 @@ const TOWERS = {
     const top = y - n * h, w = 9 - n * 0.8;
     poly([[x - w - 1, top], [x, top - w / 2 - 3], [x + w + 1, top], [x, top + w / 2 - 1]], '#8a8f94');
     for (let k = 0; k < n; k++) { const a = qL(x, y - k * h, 9 - k * 0.8, (9 - k * 0.8) / 2)(0.15, 0), b = qL(x, y - k * h, 9 - k * 0.8, (9 - k * 0.8) / 2)(0.75, h); ln(a[0], a[1], b[0], b[1], '#3a3530', 0.8); }
+    return { w: 9 - (n - 1) * 0.8, h: n * h };
   }
 };
 
@@ -295,9 +310,10 @@ const CITY_TOWER = {
   mexico: ['colonial'], rio: ['colonial', { colonial: '#f2efe6', colonialTrim: '#3a6ea8' }], tenoch: ['aztec'], laboca: ['tin']
 };
 
+// يعيد جذع البرج { w نصف عرضه، h ارتفاعه، round مستدير } لرسم ترقياته فوقه (towerUpgrades)
 export function drawCityTower(x, y, i, j, T, city, size) {
   const [kind, extra] = CITY_TOWER[city] || CITY_TOWER.arab;
-  TOWERS[kind](x, y, i, j, extra ? { ...T, ...extra } : T, sizeStyle(size));
+  return TOWERS[kind](x, y, i, j, extra ? { ...T, ...extra } : T, sizeStyle(size));
 }
 
 // ================= المستشفيات =================
@@ -379,6 +395,7 @@ export function drawCityHospital(x, y, i, j, T, city, size, plain) {
                                   ridge: dk(roofC, 0.4), tile: dk(roofC, 0.3) });
   }
   if (s.big && (st.roof === 'hip' || st.roof === 'gable')) pennant(x + 7, top - 2, MEDIC.white);
+  return { w, h, top: h + (st.roof === 'hip' ? 7 : st.roof === 'gable' ? 8 : 1.2) };
 }
 
 // لوحة العلامة على السطح المسطح (تُرى من بعيد)، ومهبط مروحية للمستشفى الحديث الكبير
@@ -393,3 +410,149 @@ function roofPlate(ctx, x, top, r, kind, heli) {
   medicSign(ctx, 0, 0, r, kind);
   ctx.restore();
 }
+
+// ================= تطور المباني مع ترقياتها (بطلب المستخدم بعد 11هـ) =================
+// كل ترقية تُرى على مبناها: البرج بضرره وسرعته، والمستشفى بمداه وسرعة علاجه، والقاعدة بمستواها (hqTier).
+// تُرسم فوق المبنى بلا صبغ المالك (plain في landmarks.js)، وa جذع المبنى الذي أعاده رسمه { w, h, top }
+const WOOD = '#7a5a3a', WOOD_D = '#5a4028', IRON = '#3a3a40', STEEL = '#c8ccd2';
+
+// مستوى القاعدة: سرعة إنتاجها وترقيات جنود مالكها معاً (EMPIRE.evolve)، فتتطور بأي منهما
+export function hqTier(state, d) {
+  if (!d || d.owner === null || !state.modeState.levels) return 0;
+  const V = EMPIRE.evolve, lv = state.modeState.levels[d.owner] || {};
+  const score = ((d.blv && d.blv.production) || 0) + V.gangWeight * ((lv.hp || 0) + (lv.damage || 0) + (lv.armor || 0) + (lv.speed || 0));
+  return V.hqTiers.filter(t => score >= t).length;
+}
+
+// ما يتطور في كل مبنى، أو null: مفتاحه يعيد رسم قطع الحي حين يتغير (chunkCache.js)
+export function evolveOf(state, d) {
+  if (!d || !state.economy) return null;
+  const b = d.blv || {};
+  if (d.building === 'tower') return { damage: b.damage || 0, rate: b.rate || 0 };
+  if (d.building === 'hospital') return { radius: b.radius || 0, rate: b.rate || 0 };
+  if (d.building === 'hq') return { tier: hqTier(state, d) };
+  return null;
+}
+export const evolveKey = (t) => t ? '|e' + Object.values(t).join('') : '';
+
+// --- البرج ---
+// السرعة: شرفة رماة خشبية حول جذعه (ورامٍ عليها وجعبة سهام عند قاعدته في المستوى 2)
+// والضرر: قوس منجنيق ثقيل على وجهه الأيمن (وآخر على الأيسر ومجمرتان مشتعلتان عند قاعدته في المستوى 2)
+export function towerUpgrades(x, y, a, tech) {
+  if (!a || !tech) return;
+  if (tech.rate) gallery(x, y, a, tech.rate);
+  if (tech.damage) {
+    ballista(x, y, a, 1);
+    if (tech.damage > 1) { ballista(x, y, a, -1); brazier(x - 13.5, y + 1.6); brazier(x + 13.5, y + 1.6); }
+  }
+}
+
+function gallery(x, y, a, level) {
+  const gh = a.h * 0.62, bh = 3.4, w = a.w + 1.8, d = w / 2;
+  if (a.round) cyl(x, y - gh, w, bh, WOOD_D, WOOD, null);
+  else {
+    poly([[x - w, y - gh], [x, y + d - gh], [x, y + d - gh - bh], [x - w, y - gh - bh]], WOOD_D);
+    poly([[x, y + d - gh], [x + w, y - gh], [x + w, y - gh - bh], [x, y + d - gh - bh]], WOOD);
+  }
+  for (const u of [0.2, 0.45, 0.7]) {                      // شقوق الرمي في الشرفة
+    for (const sx of [-1, 1]) {
+      const px = x + sx * w * (1 - u), py = y - gh + d * u - bh * 0.35;
+      poly([[px - 0.5, py], [px + 0.5, py], [px + 0.5, py - 1.6], [px - 0.5, py - 1.6]], '#2a1e14');
+    }
+  }
+  for (const sx of [-1, 1]) ln(x + sx * w * 0.8, y - gh + d * 0.2, x + sx * a.w * 0.9, y - gh + 5, WOOD_D, 0.8);   // دعامتان
+  if (level < 2) return;
+  const ax = x + 3, ay = y + d - gh - bh - 0.6;             // رامٍ على الشرفة بقوسه
+  ln(ax, ay, ax, ay - 4.2, '#3a2e24', 1.3);
+  circ(ax, ay - 5.2, 1.1, '#e0b896');
+  ctx().beginPath(); ctx().arc(ax + 1.4, ay - 3.2, 2.4, -1.2, 1.2); ctx().strokeStyle = '#6b4a2e'; ctx().lineWidth = 0.7; ctx().stroke();
+  const qx = x - 11, qy = y + 2.4;                          // جعبة سهام عند القاعدة
+  box(qx, qy, 1.6, 0.8, 3, WOOD_D, WOOD, null);
+  for (let k = 0; k < 4; k++) ln(qx - 1 + k * 0.7, qy - 3, qx - 1.2 + k * 0.7, qy - 6, '#d8c8a8', 0.5);
+}
+
+// قوس منجنيق: ساق خشبية بارزة من الوجه (side 1 الأيمن، −1 الأيسر) وقوس حديدي ووتر ورأس سهم
+function ballista(x, y, a, side) {
+  const ch = a.h * 0.86, bx = x + side * a.w * 0.5, by = y + a.w * 0.25 - ch;
+  const dx = side * 10, dy = 4.8, tx = bx + dx, ty = by + dy;
+  ln(bx, by + 3, bx + dx * 0.32, by + dy * 0.32, IRON, 1.3);                     // دعامة
+  ln(bx, by, tx, ty, WOOD, 2.4);                                                // الساق
+  const mx = bx + dx * 0.72, my = by + dy * 0.72, n = Math.hypot(dx, dy), px = -dy / n, py = dx / n;   // عمودي على الساق
+  const c = ctx();
+  c.beginPath(); c.moveTo(mx - px * 4.6, my - py * 4.6); c.quadraticCurveTo(mx + dx * 0.1, my + dy * 0.1, mx + px * 4.6, my + py * 4.6);
+  c.strokeStyle = IRON; c.lineWidth = 1.6; c.stroke();
+  c.beginPath(); c.moveTo(mx - px * 4.6, my - py * 4.6); c.lineTo(bx + dx * 0.4, by + dy * 0.4); c.lineTo(mx + px * 4.6, my + py * 4.6);
+  c.strokeStyle = '#e8e2d4'; c.lineWidth = 0.6; c.stroke();
+  poly([[tx + dx * 0.14, ty + dy * 0.14], [tx - px * 1.3, ty - py * 1.3], [tx + px * 1.3, ty + py * 1.3]], STEEL);
+}
+
+// مجمرة مشتعلة على قائم: وعاء حديدي ولهب بطبقتين ووهج
+function brazier(px, py) {
+  ln(px, py, px, py - 5, IRON, 1);
+  ln(px - 1.4, py, px + 1.4, py, IRON, 0.9);
+  glow(px, py - 7, 8, 'rgba(255,150,60,0.35)');
+  el(px, py - 5, 2.2, 1, '#2a2a2e');
+  poly([[px - 1.8, py - 5], [px - 0.6, py - 9.5], [px + 0.4, py - 7], [px + 1, py - 10], [px + 1.8, py - 5]], '#e8762a');
+  poly([[px - 1, py - 5], [px - 0.2, py - 7.8], [px + 1, py - 5]], '#f8d04a');
+}
+
+// --- المستشفى ---
+// المدى: خيمة إسعاف عند ركنه (وثانية عند الركن الآخر في المستوى 2)، وحلقة علاج خضراء حوله (empireArt.js)
+// والسرعة: سيارة إسعاف عند مدخله (ومنارة وامضة على سطحه في المستوى 2)
+export function hospitalUpgrades(x, y, a, tech, city) {
+  if (!a || !tech) return;
+  if (tech.radius) { tent(x - 13.6, y + 1.6, city); if (tech.radius > 1) tent(x + 13.6, y + 1.6, city); }
+  if (tech.rate) { ambulance(x + 6.2, y + 6.4, city); if (tech.rate > 1) beacon(x - 3, y - a.top); }
+}
+
+function tent(px, py, city) {
+  poly([[px - 4.4, py], [px, py + 2.2], [px, py - 6.6]], '#f4f1e8');
+  poly([[px, py + 2.2], [px + 4.4, py], [px, py - 6.6]], '#d8d3c6');
+  poly([[px + 1, py + 1.7], [px + 3, py + 0.7], [px + 1.4, py - 2.8]], '#3a3530');
+  medicSign(ctx(), px - 1.9, py - 1.6, 1.4, medicOf(city));
+}
+
+function ambulance(px, py, city) {
+  el(px - 2, py + 1.4, 0.9, 0.5, '#1e1e20'); el(px + 2.2, py + 0.4, 0.9, 0.5, '#1e1e20');
+  box(px, py, 4, 2, 3.6, '#e2e0da', '#f6f4ee', '#ffffff');
+  wR(px, py, 4, 2, 0.62, 1.8, 0.3, 1.4, '#5a7a9a');                  // زجاج المقدمة
+  wL(px, py, 4, 2, 0, 1.2, 1, 0.6, MEDIC.red); wR(px, py, 4, 2, 0, 1.2, 0.6, 0.6, MEDIC.red);   // الشريط
+  circ(px - 0.6, py - 3.9, 0.5, '#e84a3a'); circ(px + 0.6, py - 4.3, 0.5, '#3a7ae8');   // أضواء السقف
+  medicSign(ctx(), px - 2.2, py - 1.9, 0.9, medicOf(city));
+}
+
+function beacon(px, py) {
+  ln(px, py, px, py - 3, IRON, 0.9);
+  glow(px, py - 4, 6, 'rgba(255,80,60,0.45)');
+  circ(px, py - 4, 1.2, '#ff5a3a');
+  circ(px - 0.3, py - 4.3, 0.4, '#ffe0d0');
+}
+
+// --- القاعدة الرئيسية: ساحة علم حيها تصير ساحة تدريب بمستواها ---
+// 1 حاملا رماح على ركنيها الجانبيين، 2 ودميتا تدريب على الأمامي والخلفي، 3 ومجمرتان ذهبيتان حول العلم
+export function hqYard(x, y, tier) {
+  if (tier >= 2) { dummy(x, y - 5.2); }
+  for (const sx of [-1, 1]) rack(x + sx * 11, y);
+  if (tier >= 2) dummy(x, y + 5.4);
+  if (tier >= 3) { brazier(x - 5, y + 2); brazier(x + 5, y + 2); }
+}
+
+function rack(px, py) {
+  ln(px - 2.6, py + 1.3, px - 2.6, py - 5.2, WOOD_D, 1.1); ln(px + 2.6, py - 1.3, px + 2.6, py - 7.8, WOOD_D, 1.1);
+  ln(px - 3.1, py - 3.9, px + 3.1, py - 6.5, WOOD, 1.3);
+  for (let k = 0; k < 3; k++) {
+    const sx = px - 1.8 + k * 1.8;
+    ln(sx, py + 0.8 - k * 0.8, sx + 1, py - 10.4 - k * 0.8, '#8a6a48', 0.9);
+    poly([[sx + 1, py - 10.4 - k * 0.8], [sx + 0.5, py - 8.8 - k * 0.8], [sx + 1.7, py - 9 - k * 0.8]], STEEL);
+  }
+}
+
+function dummy(px, py) {
+  ln(px, py + 1.3, px, py - 9, WOOD_D, 1.3);
+  ln(px - 3.4, py - 6.5, px + 3.4, py - 6.5, WOOD_D, 1.1);
+  el(px, py - 5.2, 2.2, 3.4, '#c9a85a');
+  circ(px, py - 9.9, 1.7, '#d8bc72');
+  ln(px - 1.6, py - 4.2, px + 1.6, py - 5.7, '#8a6a30', 0.8);
+}
+
+const ctx = () => getCtx();
