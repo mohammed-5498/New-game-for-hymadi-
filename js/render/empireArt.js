@@ -10,27 +10,38 @@ import { unitWorldPos } from './units.js';
 import { roofTop, empireKind } from './landmarks.js';
 import { featureBadgeOf } from './featureArt.js';
 import { featureCenter, featureTowerStats, clinicStats } from '../game/features.js';
-import { medicSign, medicOf } from './empireBuildings.js';
+import { medicSign, medicOf, hqTier } from './empireBuildings.js';
 
 const worldOf = (i, j) => ({ x: (i - j) * TILE_HALF_W, y: (i + j) * TILE_HALF_H });
 
 // --- الهالة الذهبية حول القواعد الرئيسية: قبل الوحدات فيمشي الجنود فوقها ---
+// وتقوى بمستوى تطور القاعدة (hqTier)، وحول المستشفى المرقّى مداه حلقة علاج خضراء بمداه نفسه
 export function drawEmpireHalos(ctx, state, visible) {
   if (!state.economy) return;
-  const H = E.baseHalo, map = state.map;
+  const H = E.baseHalo, V = E.evolve, A = V.aura, map = state.map;
   const pulse = 1 - H.pulse + H.pulse * (0.5 + 0.5 * Math.sin(state.time * H.speed));
   const rx = H.radius * TILE_HALF_W * Math.SQRT2, ry = H.radius * TILE_HALF_H * Math.SQRT2;
   for (const d of map.districts) {
-    if (d.building !== 'hq' || d.buildTile === undefined) continue;
+    if (d.buildTile === undefined) continue;
     const at = tileOf(map, d.buildTile), { x, y } = worldOf(at.i, at.j);
-    if (!visible(x, y)) continue;
+    if (d.building === 'hospital' && d.blv && d.blv.radius) {
+      const r = hospitalStats(d).radius, beat = 1 - A.pulse + A.pulse * (0.5 + 0.5 * Math.sin(state.time * A.speed));
+      ctx.beginPath();
+      ctx.ellipse(x, y, r * TILE_HALF_W * Math.SQRT2, r * TILE_HALF_H * Math.SQRT2, 0, 0, 6.2832);
+      ctx.strokeStyle = 'rgba(' + A.color + ',' + (A.alpha * d.blv.radius * beat).toFixed(3) + ')';
+      ctx.lineWidth = A.width;
+      ctx.stroke();
+      continue;
+    }
+    if (d.building !== 'hq' || !visible(x, y)) continue;
+    const grow = 1 + V.haloGrow * hqTier(state, d);
     ctx.beginPath();
     ctx.ellipse(x, y, rx, ry, 0, 0, 6.2832);
-    ctx.strokeStyle = 'rgba(255,200,70,' + (H.glowAlpha * pulse).toFixed(3) + ')';
-    ctx.lineWidth = H.glow;
+    ctx.strokeStyle = 'rgba(255,200,70,' + Math.min(1, H.glowAlpha * pulse * grow).toFixed(3) + ')';
+    ctx.lineWidth = H.glow * grow;
     ctx.stroke();
-    ctx.strokeStyle = 'rgba(255,218,105,' + (H.alpha * pulse).toFixed(3) + ')';
-    ctx.lineWidth = H.width;
+    ctx.strokeStyle = 'rgba(255,218,105,' + Math.min(1, H.alpha * pulse * grow).toFixed(3) + ')';
+    ctx.lineWidth = H.width * grow;
     ctx.stroke();
   }
 }

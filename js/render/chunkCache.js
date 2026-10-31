@@ -6,6 +6,7 @@
 // - المصابيح الوامضة وإضاءة الليل طبقة خفيفة تُرسم كل إطار
 import { TILE_HALF_W, TILE_HALF_H, CITY_CACHE as CC, CAPTURE, EMPIRE, DISTRICT_SIZES, CITY_FEATURES } from '../config.js';
 import { sizeOf } from '../map/sizes.js';
+import { evolveOf, evolveKey } from './empireBuildings.js';
 import { tintAmount } from '../game/capture.js';
 import { beginCity, groundColor, drawRoadSurface, drawTileStatic, debrisLight, specialType, cityOf, cityReady } from './cityRender.js';
 import { isLane, drawLanePaving, roundaboutAnchor, drawRoundaboutRing, laneLight, roundaboutLights } from './openCity.js';
@@ -60,7 +61,7 @@ function setup(state) {
   cache = {
     gen: (cache ? cache.gen : 0) + 1,
     map, weather: state.weather, mode: state.mode, x0, y0, cols, rows, chunks, districtChunks,
-    keys: map.districts.map(d => tintKey(d)),
+    keys: map.districts.map(d => tintKey(d, state)),
     lights: [], lamps: [], frame: 0, pixels: 0, base: null,
     tileMs: cache ? cache.tileMs : 0.3          // الزمن الحقيقي لرسم مربع واحد (يُقاس ويُحدَّث)
   };
@@ -70,8 +71,9 @@ function setup(state) {
 
 // مفتاح لون الحي: المالك ومرحلة انتقال اللون (3 مراحل لا 10، حتى لا تُعاد القطع كثيراً)،
 // ومبناه في طور الإمبراطورية: بناؤه يعيد رسم قطع الحي
-function tintKey(d) {
-  const building = (d.building ? '|' + d.building : '') + (d.fort ? '|f' + d.fort : '');   // والتحصين (القسم 3.12)
+function tintKey(d, state) {
+  // والتحصين (القسم 3.12)، وتطور المبنى مع ترقياته (evolveOf: البرج والمستشفى والقاعدة بمستواها)
+  const building = (d.building ? '|' + d.building + evolveKey(evolveOf(state, d)) : '') + (d.fort ? '|f' + d.fort : '');
   if (!d.tintColor) return building;
   return d.tintColor + '|' + Math.round(d.tintMix * CC.tintSteps) + building;
 }
@@ -673,7 +675,7 @@ export function drawCityLayer(ctx, state, view, budgetMs = CC.frameBudgetMs, max
 function markDirty(state) {
   const districts = state.map.districts;
   for (let d = 0; d < districts.length; d++) {
-    const key = tintKey(districts[d]);
+    const key = tintKey(districts[d], state);
     if (key === cache.keys[d]) continue;
     cache.keys[d] = key;
     // رسم جارٍ بالألوان القديمة يُلغى ويبدأ من جديد

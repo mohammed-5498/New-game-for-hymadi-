@@ -8,7 +8,7 @@
 import { CITY_SPECIALS, CAPTURE, EMPIRE } from '../config.js';
 import { THEMES, getCtx, setThemeContext, setTone, getTone, getToneInfo, poly, circ, ln, box, el } from './cityThemes.js';
 import { drawFeatureBuilding } from './featureArt.js';
-import { drawCityTower, drawCityHospital, medicSign, medicOf } from './empireBuildings.js';
+import { drawCityTower, drawCityHospital, medicSign, medicOf, towerUpgrades, hospitalUpgrades, hqYard } from './empireBuildings.js';
 import { sizeOf } from '../map/sizes.js';
 
 const cityOf = (map) => THEMES[map.city] || THEMES.arab;
@@ -64,10 +64,11 @@ export function roofTop(map, kind, i, j) {
   return top;
 }
 
+// يعيد جذع المبنى { w, h, top } لبرج المنطقة ومستشفاها (لرسم ترقياتهما فوقه)، وundefined لغيرهما
 function drawKind(map, kind, x, y, i, j) {
   const T = cityOf(map);
-  if (kind.startsWith(TOWER)) { drawCityTower(x, y, i, j, T, map.city, kind.slice(TOWER.length)); return; }
-  if (kind.startsWith(HOSPITAL)) { drawCityHospital(x, y, i, j, T, map.city, kind.slice(HOSPITAL.length), plain); return; }
+  if (kind.startsWith(TOWER)) return drawCityTower(x, y, i, j, T, map.city, kind.slice(TOWER.length));
+  if (kind.startsWith(HOSPITAL)) return drawCityHospital(x, y, i, j, T, map.city, kind.slice(HOSPITAL.length), plain);
   const fn = T.draw[kind];
   if (typeof fn === 'function') fn(x, y, i, j, T);
 }
@@ -91,9 +92,9 @@ function plazaPlanters(x, y, big) {
 }
 
 // رايتا القاعدة على ساريتين عند ركنيها الجانبيين (لا في الحي الصغير)
-function hqBanners(x, y, size, color) {
-  if (size === 'small') return;
-  const big = size === 'large', h = big ? 26 : 22, bw = big ? 4.2 : 3.4, bh = big ? 10 : 8;
+function hqBanners(x, y, size, color, tier = 0) {
+  if (size === 'small' && !tier) return;
+  const big = size === 'large' || tier >= 2, h = big ? 26 : 22, bw = big ? 4.2 : 3.4, bh = big ? 10 : 8;
   for (const sx of [-1, 1]) {
     const px = x + sx * 14.5, py = y + 1.5;
     ln(px, py, px, py - h, '#3a322a', 1);
@@ -108,7 +109,8 @@ function hqBanners(x, y, size, color) {
 // وفي طور الإمبراطورية: Q القاعدة الرئيسية (المقر نفسه)، T برج الرماية، M المستشفى (كمستشفى الأطوار الأخرى)
 // يعيد نقطة السطح { x, y } لما يُرسم فوقه كل إطار (المصباح الوامض)
 // badges: طور الإمبراطورية، شارة المبنى تُرسم فوقه كل إطار (empireArt.js) بدل العلم ولوحة الصليب القائمة
-export function drawLandmark(map, type, x, y, i, j, ownerColor, flagColor, lights, badges = false) {
+// tech: ما يتطور في المبنى مع ترقياته (evolveOf في empireBuildings.js)، وnull بلا اقتصاد
+export function drawLandmark(map, type, x, y, i, j, ownerColor, flagColor, lights, badges = false, tech = null) {
   const S = specialsOf(map);
   const T = cityOf(map);
 
@@ -116,10 +118,15 @@ export function drawLandmark(map, type, x, y, i, j, ownerColor, flagColor, light
     // برج الرماية بطراز المدينة (empireKind) وعلم مالكه فوقه كالقاعدة الرئيسية
     const district = districtOfTile(map, i, j);
     const kind = type === 'T' ? empireKind(map, 'T', district) : S.hq;
-    drawKind(map, kind, x, y, i, j);
+    const body = drawKind(map, kind, x, y, i, j);
     const top = y - roofTop(map, kind, i, j);
+    // البرج يتطور بترقياته: شرفة رماة، وقوس منجنيق، ومجمرتان (صور اليمامة: جذع تقديري من ارتفاعها المقيس)
+    if (type === 'T' && tech) plain(() => towerUpgrades(x, y, body || { w: 6.5, h: y - top - 4 }, tech));
     // القاعدة الرئيسية في طور الإمبراطورية: رايتان بلون مالكها عند مدخلها، وأكبر بقمم ذهبية في الحي الكبير (11هـ)
-    if (type === 'Q' && badges && ownerColor && district) plain(() => hqBanners(x, y, sizeOf(district), ownerColor));
+    // أو حين تبلغ المستوى 2 من تطورها
+    if (type === 'Q' && badges && ownerColor && district) {
+      plain(() => hqBanners(x, y, sizeOf(district), ownerColor, tech ? tech.tier : 0));
+    }
     if (!badges) {
       plain(() => {
         ln(x, top + 1, x, top - 20, '#2b2825', 1.3);
@@ -151,7 +158,9 @@ export function drawLandmark(map, type, x, y, i, j, ownerColor, flagColor, light
     // مستشفى طور الإمبراطورية بطراز المدينة (empireKind): في اليمامة قاعتها بسقفها المقوّس،
     // واللوحة في وسط السطح لا عند حافته الخلفية (hospitalRoof)
     const kind = type === 'M' ? empireKind(map, 'M', districtOfTile(map, i, j)) : S.base;
-    drawKind(map, kind, x, y, i, j);
+    const body = drawKind(map, kind, x, y, i, j);
+    // المستشفى يتطور بترقياته: خيام إسعاف، وسيارة إسعاف، ومنارة (قاعة اليمامة: سطح تقديري من ارتفاعها المقيس)
+    if (type === 'M' && tech) plain(() => hospitalUpgrades(x, y, body || { w: 10, h: roofTop(map, kind, i, j), top: roofTop(map, kind, i, j) }, tech, map.city));
     if (kind.startsWith(HOSPITAL)) return null;          // مستشفى المنطقة يرسم علامته بنفسه
     const top = y - roofTop(map, kind, i, j) + (type === 'M' ? hospitalRoof(map) : 0);
     if (type === 'M') {                                  // قاعة اليمامة: لوحة العلامة مسطحة في وسط سطحها
@@ -229,7 +238,9 @@ export function drawLandmark(map, type, x, y, i, j, ownerColor, flagColor, light
       c.strokeStyle = 'rgba(70,55,35,0.16)';
       c.lineWidth = 0.5;
       c.stroke();
-      if (size !== 'small') plazaPlanters(x, y, size === 'large');
+      // ساحة حي القاعدة تصير ساحة تدريب بمستوى تطورها، وإلا أحواض النبات
+      if (tech && tech.tier) hqYard(x, y, tech.tier);
+      else if (size !== 'small') plazaPlanters(x, y, size === 'large');
       c.beginPath();
       c.ellipse(x, y, 15, 7.5, 0, 0, 6.2832);
       c.strokeStyle = 'rgba(255,255,255,.55)';
