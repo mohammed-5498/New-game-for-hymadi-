@@ -230,10 +230,19 @@ export const DISTRICT_SIZES = {
   // فاتحة عرض coping، وأعمدة أكبر على أركانه بغطاء cap
   border: {
     neutral: '#e6dbbd', neutralAlpha: 0.42, capColor: 'rgba(255,247,228,0.6)',
+    // ألوان أغطية الأعمدة وحافة السور في حي فيه مبنى (المرحلة 11هـ: الحد يتأقلم مع مبناه)، وحي ميزة المدينة بلون هالتها
+    accents: { hq: '#f2c14e', tower: '#c08a4a', hospital: '#e04a3a' },
     small:  { width: 1.5, under: 2.6 },
     medium: { width: 1.4, under: 2.6, mids: true, rail: 0.9, railLift: 2.3, post: { w: 1.5, h: 3.4, cap: 0.35 } },
     large:  { width: 2.4, under: 4.6, wall: 2.4, shade: 'rgba(0,0,0,0.28)', coping: 0.8, post: { w: 2.6, h: 5.6, cap: 0.55 } }
   }
+};
+
+// --- علامة المستشفى (القسم 3.12، المرحلة 11هـ): الهلال الأحمر في مدن البلاد العربية والمسلمة، والصليب الأحمر في غيرها ---
+// على شارة المستشفى ولوحته وسطحه (empireBuildings.js وempireArt.js)
+export const MEDIC = {
+  crescent: ['arab', 'yamamah', 'diriyah', 'shibam', 'cairo', 'kano', 'meroe'],
+  red: '#d0322a', white: '#fbf8f1'
 };
 
 // --- الوحدة الأساسية المرجعية (القسم 6.1 من الوصف) ---
@@ -1512,8 +1521,8 @@ export const EMPIRE = {
                             rate:   { name: 'سرعة العلاج', costs: [40, 70], per: 0.5 } } } // +50% علاج
   },
   // مباني الطور بطراز كل مدينة (landmarks.js): القاعدة مبنى مقر المدينة (CITY_SPECIALS.hq) في كل المدن.
-  // وفي كل مدينة: البرج برج رماية مرسوم بألوانها (empireTower في cityThemes.js)، والمستشفى مبناها الأساسي
-  // (CITY_SPECIALS.base) بالصليب الأحمر كالمستشفى في الأطوار الأخرى. إلا المدن المذكورة هنا فلها صورها:
+  // والبرج والمستشفى بطراز منطقة كل مدينة وحجم حيها (empireBuildings.js، القسم 3.12)، والمستشفى بعلامة MEDIC.
+  // إلا المدن المذكورة هنا فلها صورها:
   // tower وhospital نوعا مبنى من طابعها، hospitalRoof من أعلى سطح المستشفى إلى وسطه (لوحة الصليب)،
   // وfort: القاعدة قلعة بسور وأبراج من صورها (fortify في empire.js)
   art: { yamamah: { tower: 'watchtower', hospital: 'hall', hospitalRoof: 3, fort: true } },

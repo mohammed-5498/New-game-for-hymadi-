@@ -10,6 +10,7 @@ import { unitWorldPos } from './units.js';
 import { roofTop, empireKind } from './landmarks.js';
 import { featureBadgeOf } from './featureArt.js';
 import { featureCenter, featureTowerStats, clinicStats } from '../game/features.js';
+import { medicSign, medicOf } from './empireBuildings.js';
 
 const worldOf = (i, j) => ({ x: (i - j) * TILE_HALF_W, y: (i + j) * TILE_HALF_H });
 
@@ -40,7 +41,7 @@ export function drawEmpireHalos(ctx, state, visible) {
 export function badgeOf(state, d) {
   const B = E.badge, map = state.map;
   const at = tileOf(map, d.buildTile), { x, y } = worldOf(at.i, at.j);
-  const top = y - roofTop(map, empireKind(map, BUILDING_TILE[d.building]), at.i, at.j);
+  const top = y - roofTop(map, empireKind(map, BUILDING_TILE[d.building], d), at.i, at.j);
   const r = Math.max(B.radius, B.minScreen / state.camera.z);
   return { x, y, top, r, cy: top - B.pole - r };
 }
@@ -98,15 +99,14 @@ const ICONS = {
     ctx.fillStyle = '#f3ece0';
     ctx.fill();
   },
-  // صليب أحمر على أبيض
-  hospital(ctx, x, y, s) {
+  // علامة المستشفى (القسم 3.12): الهلال الأحمر أو الصليب الأحمر حسب المدينة (MEDIC)، على قرص أبيض بحافة حمراء ولمعة
+  hospital(ctx, x, y, s, city) {
+    medicSign(ctx, x, y, s * 1.2, medicOf(city));
     ctx.beginPath();
-    ctx.arc(x, y, s * 1.15, 0, 6.2832);
-    ctx.fillStyle = '#f7f3ea';
-    ctx.fill();
-    ctx.fillStyle = '#d0322a';
-    ctx.fillRect(x - s * 0.24, y - s * 0.78, s * 0.48, s * 1.56);
-    ctx.fillRect(x - s * 0.78, y - s * 0.24, s * 1.56, s * 0.48);
+    ctx.arc(x, y, s * 0.98, 3.6, 4.9);
+    ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+    ctx.lineWidth = s * 0.14;
+    ctx.stroke();
   }
 };
 
@@ -131,7 +131,7 @@ export function drawEmpireBadges(ctx, state, visible) {
     ctx.lineWidth = b.r * 0.24;
     ctx.strokeStyle = d.owner !== null ? state.players[d.owner].color : B.neutral;
     ctx.stroke();
-    ICONS[d.building](ctx, b.x, b.cy, b.r * 0.6);
+    ICONS[d.building](ctx, b.x, b.cy, b.r * 0.6, state.map.city);
   }
 }
 

@@ -117,18 +117,6 @@ function streetDebris(x,y,i,j,T){const r=hsh(i,j,20);
   else if(r<0.3){const dc=T.debris||'#8a8074';poly([[x-4,y+2],[x,y-1],[x+5,y+2],[x,y+4]],dc);circ(x+3,y,0.9,'#5a524a');}
   else if(r<0.33){for(let k=0;k<3;k++)el(x-5+k*3.6,y+1-k*1.8,2.2,1.3,'#9c8a62');for(let k=0;k<2;k++)el(x-3.2+k*3.6,y-1.6-k*1.8,2.2,1.3,'#b09c72');}}
 
-/* برج رماية طور الإمبراطورية بألوان المدينة (القسم 9.5.6، landmarks.js): بدن حجري بشقوق رماية وشرفة أعرض بشُرَف،
-   من لوني جدران أطلالها (wallL/wallR) فيشبه حجرها. لكل المدن إلا التي لها صورة برجها (EMPIRE.art) */
-function empireTower(x,y,i,j,T){const L=T.wallL||'#8a8074',R=T.wallR||'#a39888',top=mixc(R,'#ffffff',0.2),L2=mixc(L,'#000000',0.12),R2=mixc(R,'#000000',0.12),dark='#2a2420';
-  const merlon=(px,py)=>box(px,py,1.5,0.75,2.6,L,R,top);
-  box(x,y+1,10,5,2,L2,R2,top);box(x,y,8,4,26,L,R);
-  [9,18].forEach(v=>{wL(x,y,8,4,0.42,v,0.12,5,dark);wR(x,y,8,4,0.46,v,0.12,5,dark);});
-  arch(qR(x,y,8,4),0.3,0.4,7,'#3a2e26');damage(x,y,8,4,26,i,j,T);
-  // الشرفة: الشُّرَف الخلفية قبلها والأمامية بعدها
-  for(let k=0;k<4;k++){const u=0.12+k*0.25;merlon(x-10+u*10,y-29-u*5);merlon(x+u*10,y-34+u*5);}
-  box(x,y-26,10,5,3,L2,R2,top);
-  for(let k=0;k<4;k++){const u=0.12+k*0.25;merlon(x-10+u*10,y-29+u*5);merlon(x+u*10,y-24-u*5);}}
-
 /* ================= الطوابع ================= */
 const THEMES={};
 /* ---------- عربي ---------- */
@@ -494,4 +482,4 @@ THEMES.rio=rio;THEMES.laboca=laboca;THEMES.tenoch=tenoch;
 installLocal(THEMES,LOCAL_ARAB);installLocal(THEMES,LOCAL_ASIA);installLocal(THEMES,LOCAL_EUROPE);installLocal(THEMES,LOCAL_AFRICA);installLocal(THEMES,LOCAL_AMERICAS);
 
 export { THEMES, TAU, poly, circ, ln, rc, el, box, qL, qR, wL, wR, arch, ridgeRoof, hipRoof, dome, flag, glow,
-  damage, ruinTile, streetDebris, hsh, mixc, snowCap, stepGable, bellGable, neonSign, hexRgb, paint, cyl, cone, asRoof, empireTower };
+  damage, ruinTile, streetDebris, hsh, mixc, snowCap, stepGable, bellGable, neonSign, hexRgb, paint, cyl, cone, asRoof };

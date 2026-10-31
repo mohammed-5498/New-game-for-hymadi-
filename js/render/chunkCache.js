@@ -4,7 +4,7 @@
 // - تُعاد قطعة فقط حين يتغير مالك حي فيها (وعلى 3 مراحل أثناء انتقال اللون)
 // - رسم القطع على دفعات محدودة بوقت في كل إطار؛ وحتى تجهز يظهر مكانها نسختها الأقدم أو خريطة أرض منخفضة الدقة
 // - المصابيح الوامضة وإضاءة الليل طبقة خفيفة تُرسم كل إطار
-import { TILE_HALF_W, TILE_HALF_H, CITY_CACHE as CC, CAPTURE, EMPIRE, DISTRICT_SIZES } from '../config.js';
+import { TILE_HALF_W, TILE_HALF_H, CITY_CACHE as CC, CAPTURE, EMPIRE, DISTRICT_SIZES, CITY_FEATURES } from '../config.js';
 import { sizeOf } from '../map/sizes.js';
 import { tintAmount } from '../game/capture.js';
 import { beginCity, groundColor, drawRoadSurface, drawTileStatic, debrisLight, specialType, cityOf, cityReady } from './cityRender.js';
@@ -276,13 +276,16 @@ function borderOf(map, i, j) {
   const B = DISTRICT_SIZES.border, amount = tintAmount(district, 1);
   // الحي المحصن (القسم 3.12): سور على أضلاع مبانيه المطلة، والساحة والأرض والممرات مداخل بحدها العادي
   const fort = district.fort || 0, walls = fort && !map.isWalkable(i, j) ? mask : 0;
+  // الحد يتأقلم مع مبنى الحي (11هـ): أغطية أعمدته وحافة سوره بلون مبناه، أو بلون هالة ميزة المدينة
+  const glow = district.feature && CITY_FEATURES.colors[district.feature];
+  const accent = (district.building && B.accents[district.building]) || (glow ? 'rgb(' + glow + ')' : null);
   return amount > 0
-    ? { mask, walls, fort, size: sizeOf(district), color: district.tintColor, alpha: amount, owned: true }
-    : { mask, walls, fort, size: sizeOf(district), color: B.neutral, alpha: B.neutralAlpha, owned: false };
+    ? { mask, walls, fort, accent, size: sizeOf(district), color: district.tintColor, alpha: amount, owned: true }
+    : { mask, walls, fort, accent, size: sizeOf(district), color: B.neutral, alpha: B.neutralAlpha, owned: false };
 }
 
 // أعمدة السياج والسور: مستطيل بلون الحد وحافته الداكنة، وغطاء فاتح فوقه
-function drawPosts(ctx, list, color, alpha, P) {
+function drawPosts(ctx, list, color, alpha, P, cap = null) {
   ctx.beginPath();
   for (let n = 0; n < list.length; n += 2) ctx.rect(list[n] - P.w / 2, list[n + 1] - P.h, P.w, P.h);
   ctx.globalAlpha = alpha;
@@ -295,7 +298,7 @@ function drawPosts(ctx, list, color, alpha, P) {
   for (let n = 0; n < list.length; n += 2) {
     ctx.rect(list[n] - P.w / 2 - P.cap, list[n + 1] - P.h - P.cap * 1.6, P.w + 2 * P.cap, P.cap * 2.4);
   }
-  ctx.fillStyle = DISTRICT_SIZES.border.capColor;
+  ctx.fillStyle = cap || DISTRICT_SIZES.border.capColor;
   ctx.fill();
 }
 
@@ -432,7 +435,7 @@ function drawBorders(ctx, map, tiles, halo) {
     const look = borderOf(map, i, j);
     if (!look) continue;
     const x = tileX(i, j), y = tileY(i, j);
-    const key = look.color + '|' + look.alpha + '|' + look.size + '|' + look.fort;
+    const key = look.color + '|' + look.alpha + '|' + look.size + '|' + look.fort + '|' + look.accent;
     let g = groups.get(key);
     if (!g) groups.set(key, g = { ...look, lines: [], front: [], posts: [], halo: [], walls: [], towers: [] });
     for (let e = 0; e < 4; e++) {
@@ -483,7 +486,7 @@ function drawBorders(ctx, map, tiles, halo) {
       path(g.lines, S.wall);
       ctx.lineWidth = S.width;
       ctx.stroke();
-      ctx.strokeStyle = DISTRICT_SIZES.border.capColor;
+      ctx.strokeStyle = g.accent || DISTRICT_SIZES.border.capColor;
       ctx.lineWidth = S.coping;
       ctx.stroke();
     } else {
@@ -495,7 +498,7 @@ function drawBorders(ctx, map, tiles, halo) {
         ctx.stroke();
       }
     }
-    if (g.posts.length) drawPosts(ctx, g.posts, g.color, g.alpha, S.post);
+    if (g.posts.length) drawPosts(ctx, g.posts, g.color, g.alpha, S.post, g.accent);
     if (g.walls.length) drawWalls(ctx, g.walls, g.color, g.alpha, g.fort);
     if (g.towers.length) drawTowers(ctx, g.towers, g.color, g.alpha, g.fort);
   }
@@ -511,7 +514,7 @@ function drawBorderFront(ctx, map, i, j) {
   wallsOf(look, x, y, false, segs, towers);
   if (!list.length && !segs.length && !towers.length) return;
   ctx.save();
-  if (list.length) drawPosts(ctx, list, look.color, look.alpha, DISTRICT_SIZES.border[look.size].post);
+  if (list.length) drawPosts(ctx, list, look.color, look.alpha, DISTRICT_SIZES.border[look.size].post, look.accent);
   if (segs.length) drawWalls(ctx, segs, look.color, look.alpha, look.fort);
   if (towers.length) drawTowers(ctx, towers, look.color, look.alpha, look.fort);
   ctx.restore();

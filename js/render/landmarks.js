@@ -6,24 +6,27 @@
 // - برج الساعة والتلة: معلم المدينة (landmark) + ساعة، أو تاج ذهبي فوق علم التلة
 // العلامات لا تُصبغ بلون المالك حتى تبقى واضحة دائماً.
 import { CITY_SPECIALS, CAPTURE, EMPIRE } from '../config.js';
-import { THEMES, getCtx, setThemeContext, setTone, getTone, getToneInfo, poly, circ, ln, box, el, empireTower } from './cityThemes.js';
+import { THEMES, getCtx, setThemeContext, setTone, getTone, getToneInfo, poly, circ, ln, box, el } from './cityThemes.js';
 import { drawFeatureBuilding } from './featureArt.js';
+import { drawCityTower, drawCityHospital, medicSign, medicOf } from './empireBuildings.js';
+import { sizeOf } from '../map/sizes.js';
 
 const cityOf = (map) => THEMES[map.city] || THEMES.arab;
 const specialsOf = (map) => CITY_SPECIALS[map.city] || CITY_SPECIALS.arab;
 
-// مباني طور الإمبراطورية بطراز كل مدينة (EMPIRE.art): القاعدة مبنى مقرها، والبرج برج رماية مرسوم بألوانها،
-// والمستشفى مبناها الأساسي بالصليب. والمدينة التي لها صور مبانيها (اليمامة) ترسمها بها
-const TOWER = 'empireTower';
+// مباني طور الإمبراطورية بطراز كل مدينة (EMPIRE.art): القاعدة مبنى مقرها، والبرج والمستشفى بطراز منطقتها وحجم
+// حيها (empireBuildings.js، القسم 3.12). والمدينة التي لها صور مبانيها (اليمامة) ترسمها بها
+const TOWER = 'cityTower:', HOSPITAL = 'cityHospital:';
 const empireArtOf = (map) => EMPIRE.art[map.city] || null;
 const hospitalRoof = (map) => (empireArtOf(map) || {}).hospitalRoof || 0;
+const districtOfTile = (map, i, j) => { const d = map.districtAt ? map.districtAt[map.idx(i, j)] : -1; return d >= 0 ? map.districts[d] : null; };
 
-// نوع مبنى طور الإمبراطورية بحرفه (Q قاعدة، T برج، M مستشفى): لرسمه، ولقياس ارتفاعه خارج هذا الملف
-export function empireKind(map, type) {
-  const S = specialsOf(map), A = empireArtOf(map);
+// نوع مبنى طور الإمبراطورية بحرفه (Q قاعدة، T برج، M مستشفى) وحجم حيه: لرسمه، ولقياس ارتفاعه خارج هذا الملف
+export function empireKind(map, type, district = null) {
+  const S = specialsOf(map), A = empireArtOf(map), size = district ? sizeOf(district) : 'medium';
   if (type === 'Q') return S.hq;
-  if (type === 'T') return A ? A.tower : TOWER;
-  return A ? A.hospital : S.base;
+  if (type === 'T') return A ? A.tower : TOWER + size;
+  return A ? A.hospital : HOSPITAL + size;
 }
 
 // --- ارتفاع سطح المبنى الحقيقي: يُقاس مرة واحدة لكل مربع برسمه في لوحة صغيرة مخفية ---
@@ -63,7 +66,9 @@ export function roofTop(map, kind, i, j) {
 
 function drawKind(map, kind, x, y, i, j) {
   const T = cityOf(map);
-  const fn = kind === TOWER ? empireTower : T.draw[kind];
+  if (kind.startsWith(TOWER)) { drawCityTower(x, y, i, j, T, map.city, kind.slice(TOWER.length)); return; }
+  if (kind.startsWith(HOSPITAL)) { drawCityHospital(x, y, i, j, T, map.city, kind.slice(HOSPITAL.length), plain); return; }
+  const fn = T.draw[kind];
   if (typeof fn === 'function') fn(x, y, i, j, T);
 }
 
@@ -73,6 +78,29 @@ function plain(draw) {
   setTone(null);
   draw();
   setTone(saved, savedInfo);
+}
+
+// أحواض نبات حجرية على ركني الساحة الجانبيين (المتوسط)، وعلى الأربعة في الحي الكبير
+function plazaPlanters(x, y, big) {
+  const spots = big ? [[-11, 0], [0, -5.5], [11, 0], [0, 5.5]] : [[-11, 0], [11, 0]];
+  for (const [dx, dy] of spots) {
+    box(x + dx, y + dy, 1.9, 0.95, 1.6, '#8f8776', '#a8a08e', '#6b5a40');
+    el(x + dx, y + dy - 2.6, 1.9, 1.3, '#5f8f4a');
+    el(x + dx - 0.5, y + dy - 3.2, 1.1, 0.8, '#7aa85c');
+  }
+}
+
+// رايتا القاعدة على ساريتين عند ركنيها الجانبيين (لا في الحي الصغير)
+function hqBanners(x, y, size, color) {
+  if (size === 'small') return;
+  const big = size === 'large', h = big ? 26 : 22, bw = big ? 4.2 : 3.4, bh = big ? 10 : 8;
+  for (const sx of [-1, 1]) {
+    const px = x + sx * 14.5, py = y + 1.5;
+    ln(px, py, px, py - h, '#3a322a', 1);
+    poly([[px - bw / 2, py - h + 2], [px + bw / 2, py - h + 2], [px + bw / 2, py - h + 2 + bh], [px, py - h + bh + 4], [px - bw / 2, py - h + 2 + bh]], color);
+    ln(px - bw / 2, py - h + 2, px + bw / 2, py - h + 2, '#d9b44a', 0.9);
+    if (big) circ(px, py - h - 1, 1.1, '#f2c14e');
+  }
 }
 
 // --- كل مبنى حاسم ---
@@ -86,9 +114,12 @@ export function drawLandmark(map, type, x, y, i, j, ownerColor, flagColor, light
 
   if (type === 'Q' || type === 'T') {
     // برج الرماية بطراز المدينة (empireKind) وعلم مالكه فوقه كالقاعدة الرئيسية
-    const kind = type === 'T' ? empireKind(map, 'T') : S.hq;
+    const district = districtOfTile(map, i, j);
+    const kind = type === 'T' ? empireKind(map, 'T', district) : S.hq;
     drawKind(map, kind, x, y, i, j);
     const top = y - roofTop(map, kind, i, j);
+    // القاعدة الرئيسية في طور الإمبراطورية: رايتان بلون مالكها عند مدخلها، وأكبر بقمم ذهبية في الحي الكبير (11هـ)
+    if (type === 'Q' && badges && ownerColor && district) plain(() => hqBanners(x, y, sizeOf(district), ownerColor));
     if (!badges) {
       plain(() => {
         ln(x, top + 1, x, top - 20, '#2b2825', 1.3);
@@ -119,9 +150,17 @@ export function drawLandmark(map, type, x, y, i, j, ownerColor, flagColor, light
   if (type === 'S' || type === 'M') {
     // مستشفى طور الإمبراطورية بطراز المدينة (empireKind): في اليمامة قاعتها بسقفها المقوّس،
     // واللوحة في وسط السطح لا عند حافته الخلفية (hospitalRoof)
-    const kind = type === 'M' ? empireKind(map, 'M') : S.base;
+    const kind = type === 'M' ? empireKind(map, 'M', districtOfTile(map, i, j)) : S.base;
     drawKind(map, kind, x, y, i, j);
+    if (kind.startsWith(HOSPITAL)) return null;          // مستشفى المنطقة يرسم علامته بنفسه
     const top = y - roofTop(map, kind, i, j) + (type === 'M' ? hospitalRoof(map) : 0);
+    if (type === 'M') {                                  // قاعة اليمامة: لوحة العلامة مسطحة في وسط سطحها
+      plain(() => {
+        const ctx = getCtx();
+        ctx.save(); ctx.translate(x, top - 2); ctx.scale(1, 0.5); medicSign(ctx, 0, 0, 5.2, medicOf(map.city)); ctx.restore();
+      });
+      return null;
+    }
     plain(() => {
       // صليب أحمر على لوحة بيضاء فوق السطح، كبير يُرى من بعيد
       poly([[x - 8, top - 2], [x, top - 6], [x + 8, top - 2], [x, top + 2]], '#f4f1ea');
@@ -176,10 +215,21 @@ export function drawLandmark(map, type, x, y, i, j, ownerColor, flagColor, light
   }
 
   if (type === 'P') {
-    // ساحة العلم (نقطة الاستيلاء): دائرة متقطعة وعلم بلون المالك
+    // ساحة العلم (نقطة الاستيلاء): بلاط وقاعدة حجرية للسارية، وأحواض نبات على أركانها بحجم الحي (11هـ)،
+    // ودائرة متقطعة وعلم بلون المالك
+    const district = districtOfTile(map, i, j), size = district ? sizeOf(district) : 'small';
     plain(() => {
       poly([[x - 12, y], [x, y - 6], [x + 12, y], [x, y + 6]], 'rgba(255,255,255,0.16)');
       const c = getCtx();
+      c.beginPath();                                       // البلاط: شبكة معينات داخل الساحة
+      for (let k = -2; k <= 2; k++) {
+        c.moveTo(x - 6 + k * 3, y - 3 + k * 1.5 - 0); c.lineTo(x + 6 + k * 3, y + 3 + k * 1.5 - 0);
+        c.moveTo(x + 6 + k * 3, y - 3 - k * 1.5 + 0); c.lineTo(x - 6 + k * 3, y + 3 - k * 1.5 + 0);
+      }
+      c.strokeStyle = 'rgba(70,55,35,0.16)';
+      c.lineWidth = 0.5;
+      c.stroke();
+      if (size !== 'small') plazaPlanters(x, y, size === 'large');
       c.beginPath();
       c.ellipse(x, y, 15, 7.5, 0, 0, 6.2832);
       c.strokeStyle = 'rgba(255,255,255,.55)';
@@ -193,7 +243,8 @@ export function drawLandmark(map, type, x, y, i, j, ownerColor, flagColor, light
       c.ellipse(x, y, R.rx, R.ry, 0, 0, 6.2832);
       c.strokeStyle = 'rgba(' + M.glow + ',' + R.glowAlpha + ')'; c.lineWidth = R.glowWidth; c.stroke();
       c.strokeStyle = M.color; c.lineWidth = R.width; c.stroke();
-      ln(x, y, x, y - 22, '#2b2825', 1.2);
+      box(x, y + 0.6, 2.2, 1.1, 1.4, '#8a8274', '#a39b8a', '#c2b9a6');   // قاعدة السارية
+      ln(x, y - 1.2, x, y - 22, '#2b2825', 1.2);
       poly([[x, y - 22], [x + 10, y - 19], [x, y - 16]], ownerColor || '#e8e2d6');
     });
     // ليلاً: ضوء ذهبي عند العلم
