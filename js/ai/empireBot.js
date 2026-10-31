@@ -5,7 +5,7 @@ import { EMPIRE as E, CITY_FEATURES, DISTRICT_SIZES as DS } from '../config.js';
 import { sizeOf } from '../map/sizes.js';
 import {
   canQueue, queueUnit, unitPrice, nextUpgrade, buyUpgrade, buildDistrict,
-  nextBuildingUpgrade, upgradeBuilding, buildSpot
+  nextBuildingUpgrade, upgradeBuilding, buildSpot, nextFort, fortifyDistrict
 } from '../game/empire.js';
 import { isEnemyId } from '../game/combat.js';
 import { recruitsAt, canCallTriads, callTriads, triadTarget, canRingBells, ringBells } from '../game/features.js';
@@ -131,6 +131,14 @@ function bestTech(state, pid, owned, hqs, plain, enemyDist) {
       break;
     }
   }
+  // التحصين (القسم 3.12): القاعدة والبرج الأقرب للأعداء أولاً
+  const wall = (list, max, rank) => {
+    const d = [...list].sort((a, b) => enemyDist(a) - enemyDist(b)).find(d => (d.fort || 0) < max);
+    const next = d && nextFort(d);
+    if (next) add(rank + 2 * next.level, next.cost, () => fortifyDistrict(state, pid, d.id));
+  };
+  wall(hqs, B.fort.hq, B.fort.rank);
+  wall(towers, B.fort.tower, B.fort.rank + 1);
   if (!items.length) return null;
   return items.reduce((a, b) => (b.rank < a.rank ? b : a));
 }

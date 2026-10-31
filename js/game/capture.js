@@ -7,7 +7,7 @@ import { raiseAlert } from './alerts.js';
 import { hypot } from './hypot.js';
 import { captureBonus } from './nations.js';
 import { featureCaptureMul } from './features.js';
-import { DISTRICT_SIZES as DS } from '../config.js';
+import { DISTRICT_SIZES as DS, EMPIRE } from '../config.js';
 import { sizeOf } from '../map/sizes.js';
 
 // منطقة الاستيلاء: دائرة نصف قطرها 1.5 مربع حول نقطة الاستيلاء
@@ -95,6 +95,10 @@ export function updateCapture(state) {
 function advanceProgress(state, district, playerId, power) {
   // وبرج الخرطوم (القسم 3.11) احتلاله أبطأ بكثير، من الحياد ومن مالكه، والحي الكبير أبطأ والصغير أسرع (القسم 3.12)
   let step = CAPTURE.pointsPerSecond * power * TICK_SEC * featureCaptureMul(district) * DS.capture[sizeOf(district)];
+  // تحصين الحي (القسم 3.12): أسواره تبطئ كل من لا يملكه، وتبقى قائمة وهو محايد في منتصف احتلاله
+  if (district.fort && (district.owner === null || !allied(state, playerId, district.owner))) {
+    step /= 1 + EMPIRE.fortify.capture[district.fort - 1];
+  }
   // سمة الأمة (القسم 3.10): الاستيلاء على حي مجاور لحيك أسرع. لا على حيك ولا حي حليفك
   if (district.owner === null || !allied(state, playerId, district.owner)) {
     const bonus = captureBonus(state, district, playerId);

@@ -437,14 +437,40 @@ export function upgradeBuilding(state, playerId, districtId, key) {
   return OK;
 }
 
+// --- تحصين الأحياء (القسم 3.12): ثلاثة مستويات، والتحصين ملك الحي فيبقى لمن يحتله (district.fort) ---
+export function nextFort(district) {
+  const level = (district && district.fort) || 0, C = E.fortify.costs;
+  return level < C.length ? { level: level + 1, cost: C[level] } : null;
+}
+
+export function canFortify(state, playerId, district) {
+  if (!owns(state, playerId, district)) return fail('ليس حيك');
+  const next = nextFort(district);
+  if (!next) return fail('أعلى مستوى');
+  if (pointsOf(state, playerId) < next.cost) return fail('النقاط لا تكفي');
+  return OK;
+}
+
+export function fortifyDistrict(state, playerId, districtId) {
+  const district = state.map.districts[districtId];
+  const check = canFortify(state, playerId, district);
+  if (!check.ok) return check;
+  const next = nextFort(district);
+  spend(state, playerId, next.cost);
+  district.fort = next.level;                     // السور في الطبقة الثابتة (الحي يُعاد رسمه)
+  soundAt(state, 'capture_done', district.capture.i, district.capture.j);
+  return OK;
+}
+
 // أمر واحد باسمه (القائمة، واللعب المحلي حيث يصل من جهاز آخر فتُفحص قيمه قبل تنفيذه):
-// a: queue (x نوع الجندي) | upgrade (x ترقية العصابة) | build (x نوع المبنى) | improve (x ترقية المبنى)، d رقم الحي
+// a: queue (x نوع الجندي) | upgrade (x ترقية العصابة) | build (x نوع المبنى) | improve (x ترقية المبنى) | fortify، d رقم الحي
 export function empireCommand(state, playerId, a, d, x) {
   const district = state.map.districts[d];
   if (a === 'queue' && (E.units.order.includes(x) || Object.hasOwn(CITY_FEATURES.recruits, x))) return queueUnit(state, playerId, d, x);
   if (a === 'upgrade' && E.upgrades.order.includes(x)) return buyUpgrade(state, playerId, x);
   if (a === 'triads') return callTriads(state, playerId, d, x);          // مقر الترياد: x رقم حي العدو (القسم 3.11)
   if (a === 'bells') return ringBells(state, playerId, d);              // أجراس الكاتدرائية
+  if (a === 'fortify') return fortifyDistrict(state, playerId, d);      // تحصين الحي (القسم 3.12)
   if (a === 'build' && E.buildings.order.includes(x)) return buildDistrict(state, playerId, d, x);
   if (a === 'improve' && district && district.building && E.buildings[district.building].upgrades.order.includes(x)) {
     return upgradeBuilding(state, playerId, d, x);

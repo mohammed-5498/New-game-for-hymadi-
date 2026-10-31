@@ -8,7 +8,7 @@ import { EMPIRE as E, TILE_HALF_W, TILE_HALF_H, CITY_FEATURES as F, DISTRICT_SIZ
 import { sizeOf } from '../map/sizes.js';
 import {
   canQueue, unitPrice, heroFor, productionTime, nextUpgrade, canUpgrade, canBuild, nextBuildingUpgrade, canUpgradeBuilding,
-  empireCommand, towerStats, hospitalStats, incomeOf, tileOf
+  empireCommand, towerStats, hospitalStats, incomeOf, tileOf, nextFort, canFortify
 } from '../game/empire.js';
 import { lanCommand } from '../net/session.js';
 import { recruitsAt, featureTowerStats, featureCostMul, canCallTriads, canRingBells, clinicStats } from '../game/features.js';
@@ -62,7 +62,19 @@ export function updateEmpireMenu(state, now) {
 const artOf = (player, kind) => kind === 'common' ? 'common' : kind === 'leader' ? 'champion' : heroFor(player, kind);
 
 // --- الخانات: كل خانة { name, cost(), check(), cmd, level(), max, art, desc }، وcmd أمرها { a, d, x } (empireCommand) ---
+// وفي كل حي تملكه: تحصينه بثلاثة مستويات (القسم 3.12)
 function sectionsFor(state, district) {
+  const F = E.fortify, pct = (v) => Math.round(v * 100) + '%';
+  return [...districtSections(state, district), { title: 'التحصين', note: 'أسوار تبقى للحي', slots: [{
+    name: 'سور', desc: 'احتلاله أصعب ' + F.capture.map(pct).join(' ثم '), max: F.costs.length,
+    level: () => district.fort || 0,
+    cost: () => (nextFort(district) || {}).cost,
+    check: () => canFortify(state, state.humanId, district),
+    cmd: { a: 'fortify', d: district.id }
+  }] }];
+}
+
+function districtSections(state, district) {
   const pid = state.humanId, player = state.players[pid];
   const side = player.nation || player.gang;
   const levels = state.modeState.levels[pid];
@@ -215,16 +227,18 @@ function statsLine(state, district) {
   return 'يعالج ' + fmt(s.perSecond) + ' دم/ث لكل جندي • المدى ' + fmt(s.radius) + ' مربع';
 }
 
-// سطر حجم الحي (القسم 3.12): فئته وما تغيّره عن الحي المتوسط (وسرعة الإنتاج لما يُنتج فيه)
+// سطر حجم الحي (القسم 3.12): فئته وما تغيّره عن الحي المتوسط (وسرعة الإنتاج لما يُنتج فيه)، وتحصينه
 function sizeLine(district) {
   const size = sizeOf(district);
-  if (size === 'medium') return 'حي متوسط: دخله واحتلاله ومبانيه بالقيم العادية';
   const pct = (v) => Math.round(Math.abs(v) * 100) + '%', more = DS.power[size] > 1;
+  const fort = district.fort ? ' • محصن ' + district.fort + '/' + E.fortify.costs.length + ': احتلاله أصعب ' +
+    pct(E.fortify.capture[district.fort - 1]) : '';
+  if (size === 'medium') return 'حي متوسط: دخله واحتلاله ومبانيه بالقيم العادية' + fort;
   const makes = district.building === 'hq' || recruitsAt(district);
   return 'حي ' + DS.names[size] + ': دخل ' + (more ? '+' : '−') + pct(DS.income[size] - 1) +
     ' • احتلاله ' + (more ? 'أبطأ ' : 'أسرع ') + pct(1 / DS.capture[size] - 1) +
     ' • مبانيه ' + (more ? 'أقوى ' : 'أضعف ') + pct(DS.power[size] - 1) + ' ومداها ' + (more ? '+' : '−') + pct(DS.reach[size] - 1) +
-    (makes ? ' • إنتاجه ' + (more ? 'أسرع ' : 'أبطأ ') + pct(1 - DS.production[size]) : '');
+    (makes ? ' • إنتاجه ' + (more ? 'أسرع ' : 'أبطأ ') + pct(1 - DS.production[size]) : '') + fort;
 }
 
 function node(tag, className, text) {
@@ -244,7 +258,7 @@ function build(state, district) {
   open.stats = null;
   open.queue = null;
   el('emTitle').textContent = TITLES[district.building] || (district.featureTile !== undefined && F.names[district.feature]) || 'حي بلا مبنى';
-  body.appendChild(node('div', 'em-size', sizeLine(district)));
+  open.size = body.appendChild(node('div', 'em-size', sizeLine(district)));
   const arts = [];
   for (const section of sectionsFor(state, district)) {
     const head = body.appendChild(node('div', 'em-title', section.title));
@@ -350,6 +364,8 @@ function refresh(state) {
   }
 
   if (open.stats) open.stats.textContent = statsLine(state, district);
+  const size = sizeLine(district);                                    // يتغير بالتحصين
+  if (open.size && open.size.textContent !== size) open.size.textContent = size;
   if (open.queue) {
     const queue = ms.queues[district.id] || [];
     const item = queue[0];

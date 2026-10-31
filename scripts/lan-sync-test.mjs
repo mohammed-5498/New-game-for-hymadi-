@@ -44,7 +44,7 @@ const C = LS.createLockstep('client', (to, msg) => sendLater(toHost, msg), 1, { 
 
 const pick = (list) => list[Math.floor(rnd() * list.length)];
 
-// الاقتصاد: إنتاج في قاعدة، أو ترقية، أو بناء في حي، أو ترقية مبنى، أو تجنيد في مبنى مميز، أو قطار بين محطتين (القسم 3.11)
+// الاقتصاد: إنتاج في قاعدة، أو ترقية، أو بناء في حي، أو ترقية مبنى، أو تجنيد في مبنى مميز، أو أجراس الكاتدرائية (القسم 3.11)، أو تحصين حي (3.12)
 // (وما لا تكفيه النقاط يُرفض عند الجميع)
 function empireCommand(state, L) {
   const own = state.map.districts.filter(d => d.owner === L.slot && d.capture);
@@ -57,6 +57,10 @@ function empireCommand(state, L) {
   if (recruit.length && rnd() < 0.3) {
     const d = pick(recruit);
     LS.localCommand(L, { k: 'emp', a: 'queue', d: d.id, x: pick(CITY_FEATURES[d.feature].recruits) });
+    return;
+  }
+  if (own.length && rnd() < 0.15) {                  // تحصين حي (القسم 3.12)
+    LS.localCommand(L, { k: 'emp', a: 'fortify', d: pick(own).id });
     return;
   }
   const r = rnd();
