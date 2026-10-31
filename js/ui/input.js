@@ -9,7 +9,10 @@ import { sound } from '../audio/sound.js';
 import { setInputMode } from './hud.js';
 import { unitWorldPos } from '../render/units.js';
 import { badgeOf } from '../render/empireArt.js';
-import { openEmpireMenu, closeEmpireMenu, isEmpireMenuOpen } from './empireMenu.js';
+import { featureBadgeOf } from '../render/featureArt.js';
+import { openEmpireMenu, closeEmpireMenu, isEmpireMenuOpen, sendEmpire, takePick } from './empireMenu.js';
+import { canPick } from '../game/features.js';
+import { lanCommand } from '../net/session.js';
 
 export function setupInput(canvas, state) {
   const pointers = new Map();
@@ -116,8 +119,8 @@ export function setupInput(canvas, state) {
       longPressTimer = null;
       if (moved || pointers.size !== 1) return;
 
-      // طور الإمبراطورية (بطلب المستخدم): ضغطة مطوّلة على مبناك أو أي حي لك تفتح قائمته، ولو كان معك جنود محددون
-      if (state.mode === 'empire') {
+      // الاقتصاد (بطلب المستخدم): ضغطة مطوّلة على مبناك أو أي حي لك تفتح قائمته، ولو كان معك جنود محددون
+      if (state.economy) {
         const target = ownBuildingAt(p.x, p.y) || ownAreaAt(p.x, p.y);
         if (target) {
           longPressFired = true;
@@ -135,8 +138,24 @@ export function setupInput(canvas, state) {
 
       const world = screenToWorld(p.x, p.y, state.camera, state.view);
       const tile = worldToTile(world.x, world.y);
-      if (commandAttackMove(state, tile.i, tile.j, group)) { longPressFired = true; sound('command'); }
+      if (order('amove', group, tile)) { longPressFired = true; sound('command'); }
     }, INPUT.longPressMs);
+  }
+
+  // أوامر الحركة والهجوم. في اللعب المحلي (القسم 16) تُرسل أمراً ينفذه كل جهاز في نفس التحديث،
+  // وحلقة مكان الأمر تظهر هنا فوراً
+  function order(kind, group, tile, target) {
+    if (!state.lanRole) {
+      if (kind === 'attack') { commandAttack(state, group, target); return true; }
+      return kind === 'move' ? commandMove(state, tile.i, tile.j, group) : commandAttackMove(state, tile.i, tile.j, group);
+    }
+    const u = group.map(unit => unit.id);
+    if (kind === 'attack') { lanCommand({ k: 'attack', u, t: target.id }); return true; }
+    const n = state.map.n;
+    const i = Math.max(0, Math.min(n - 1, Math.round(tile.i))), j = Math.max(0, Math.min(n - 1, Math.round(tile.j)));
+    lanCommand({ k: kind, u, i, j });
+    state.moveMarker = { i, j, t: 0, attack: kind === 'amove' };
+    return true;
   }
 
   function cancelLongPress() {
@@ -157,13 +176,16 @@ export function setupInput(canvas, state) {
   function handleTap(sx, sy) {
     // سهم التنبيه أولاً: لمسته تنقل الكاميرا إلى مكان الاشتباك (القسم 12.3)
     if (tapAlertArrow(sx, sy)) return;
+    // بعد خانة هجوم الترياد أو القطار (القسم 3.11): هذه اللمسة تختار الحي
+    const pick = takePick();
+    if (pick) { pickDistrict(pick, sx, sy); return; }
 
     const group = selectedUnits(state);
     const hit = findUnitAt(sx, sy);
 
-    // طور الإمبراطورية: اللمسة الثانية السريعة على مبناك تفتح قائمته وتلغي تحديد الجنود (بقرار المستخدم)،
-    // واللمسة على الخريطة تغلق المفتوحة. وأوامر الحركة فورية كما في الأطوار الأخرى
-    if (state.mode === 'empire') {
+    // الاقتصاد: اللمسة الثانية السريعة على مبناك تفتح قائمته وتلغي تحديد الجنود (بقرار المستخدم)،
+    // واللمسة على الخريطة تغلق المفتوحة. وأوامر الحركة فورية
+    if (state.economy) {
       const target = hit && hit.playerId === state.humanId ? null : menuDistrictAt(sx, sy);
       const now = performance.now();
       if (target && lastDistrictTap && lastDistrictTap.id === target.id && now - lastDistrictTap.time <= INPUT.doubleTapMs) {
@@ -205,17 +227,18 @@ export function setupInput(canvas, state) {
     if (!group.length) return;
 
     if (hit && isEnemy(state, group[0], hit)) {
-      commandAttack(state, group, hit);
+      order('attack', group, null, hit);
       sound('command');
       return;
     }
 
     const world = screenToWorld(sx, sy, state.camera, state.view);
     const tile = worldToTile(world.x, world.y);
-    if (commandMove(state, tile.i, tile.j, group)) sound('command');
+    if (order('move', group, tile)) sound('command');
   }
 
   // ما تفتح لمستاه قائمة (طور الإمبراطورية): مبنى تملكه، أو حي تملكه بلا مبنى. أرض حي فيه مبنى للحركة فقط
+  // (وحي ميزة المدينة بلا مبنى يفتح قائمة ميزته: empireMenu.js)
   function menuDistrictAt(sx, sy) {
     const building = ownBuildingAt(sx, sy);
     if (building) return building;
@@ -223,28 +246,45 @@ export function setupInput(canvas, state) {
     return area && !area.building ? area : null;
   }
 
-  // مبنى تملكه تحت الإصبع: صورته كلها مع شارتها فوقها (فهي أعلى من مربعها)، والقاعدة بقلعتها كلها
+  // مبنى تملكه تحت الإصبع: صورته كلها مع شارتها فوقها (فهي أعلى من مربعها)، والقاعدة بقلعتها كلها،
+  // ومبنى ميزة المدينة (القسم 3.11)
   function ownBuildingAt(sx, sy) {
     const z = state.camera.z;
-    for (const d of state.map.districts) {
-      if (d.owner !== state.humanId || !d.building || d.buildTile === undefined) continue;
-      const b = badgeOf(state, d), wide = d.building === 'hq' ? EMPIRE.menu.hqTapBox : 1;
+    const under = (b, wide) => {
       const base = worldToScreen(b.x, b.y, state.camera, state.view);
       const top = base.y - (b.y - b.cy + b.r) * z;
-      if (Math.abs(sx - base.x) <= TILE_HALF_W * wide * z && sy >= top && sy <= base.y + TILE_HALF_H * wide * z) return d;
+      return Math.abs(sx - base.x) <= TILE_HALF_W * wide * z && sy >= top && sy <= base.y + TILE_HALF_H * wide * z;
+    };
+    for (const d of state.map.districts) {
+      if (d.owner !== state.humanId) continue;
+      if (d.building && d.buildTile !== undefined && under(badgeOf(state, d), d.building === 'hq' ? EMPIRE.menu.hqTapBox : 1)) return d;
+      if (d.featureTile !== undefined && under(featureBadgeOf(state, d), 1)) return d;
     }
     return null;
   }
 
-  // حي تملكه تحت الإصبع: مربعاته والشوارع الأقرب إليه (map.areaAt)
-  function ownAreaAt(sx, sy) {
+  // حي تحت الإصبع: مربعاته والشوارع الأقرب إليه (map.areaAt)، وما تملكه منها
+  function areaAt(sx, sy) {
     const map = state.map;
     const world = screenToWorld(sx, sy, state.camera, state.view);
     const tile = worldToTile(world.x, world.y);
     const i = Math.round(tile.i), j = Math.round(tile.j);
     if (i < 0 || j < 0 || i >= map.n || j >= map.n || !map.areaAt) return null;
-    const d = map.districts[map.areaAt[j * map.n + i]];
+    return map.districts[map.areaAt[j * map.n + i]] || null;
+  }
+  function ownAreaAt(sx, sy) {
+    const d = areaAt(sx, sy);
     return d && d.owner === state.humanId ? d : null;
+  }
+
+  // هجوم الترياد أو رحلة القطار إلى الحي الملموس، أو سبب الرفض في الإشعار
+  function pickDistrict(pick, sx, sy) {
+    const target = areaAt(sx, sy);
+    const result = target
+      ? sendEmpire(state, { ...pick, x: target.id }, () => canPick(state, state.humanId, pick, target))
+      : canPick(state, state.humanId, pick, null);
+    state.notice = result.ok ? null : { text: result.reason, mine: true, t: 2.5 };
+    sound(result.ok ? 'command' : 'ui_tap');
   }
 
   // لمسة على سهم الحافة: تنقل الكاميرا إلى مكان الحدث ويختفي السهم

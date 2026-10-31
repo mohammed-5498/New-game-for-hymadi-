@@ -1,11 +1,10 @@
 // القوائم (القسم 12): الرئيسية، الإعداد، المتجر، الإعدادات، الإحصائيات، سؤال الخروج، وتبديل الشاشات
 import {
   MAP_SIZES, PLAYER_COLORS, GANGS, GANG_IDS, BOT, BOT_LEVELS, COMBAT_REALISM,
-  WEATHER, WEATHER_KEYS, UNITS, MATCH_DEFAULTS, AUDIO, UI, CITIES, gameModes as GM, nations as NATIONS
+  WEATHER, WEATHER_KEYS, UNITS, MATCH_DEFAULTS, AUDIO, UI, CITIES, NET, gameModes as GM, nations as NATIONS, CITY_FEATURES
 } from '../config.js';
-import { OPEN_CITIES } from '../map/generator.js';
 import { SIDE_CHOICES, resolveSide, nationOf } from '../game/nations.js';
-import { sound, audioSettings, setAudioSettings, startMusic } from '../audio/sound.js';
+import { sound, audioSettings, setAudioSettings, startMusic, menuMusic } from '../audio/sound.js';
 import { isNativeApp, exitApp } from '../platform.js';
 import { getPref, setPref } from '../prefs.js';
 import { loadStats, favoriteGang } from '../stats.js';
@@ -15,20 +14,18 @@ import { showMenuScene, hideMenuScene } from './menuScene.js';
 import { setupBattleScreen } from './battleScreen.js';
 import { updateCityThumb, drawCardThumb, shownCity, stopCard } from './cityThumb.js';
 import { setupPicker, openPicker, isPickerOpen, refreshPicker } from './picker.js';
-import { CITY_GROUPS, PLAY_CITY_GROUPS, SIDE_GROUPS, regionOf } from './regions.js';
+import { CITY_GROUPS, SIDE_GROUPS, regionOf } from './regions.js';
 import { drawModeIcon, drawSizeIcon, drawUnitsIcon, drawWeatherIcon } from './icons.js';
 import { showStore } from './storeScreen.js';
+import { lan, lanPeers, broadcastLobby } from '../net/session.js';
 
 const el = (id) => document.getElementById(id);
 
 const MAP_SIZE_KEYS = ['small', 'medium', 'large'];
 const MAX_UNIT_CHOICES = [30, 50, 100, 150, 200, 250];
 const WEATHER_CHOICES = [...WEATHER_KEYS, 'random'];
-// خيار المدينة: مدن الأطوار العادية، ثم "مدينة المضيف" (مدينة أمة اللاعب الأول، القسم 3.10)، ثم عشوائي.
-// مدينة طور واحد (CITIES.modeOnly، اليمامة للإمبراطورية) لا تُختار: طورها يفرضها
-const CITY_CHOICES = [...OPEN_CITIES, 'host', 'random'];
-// المدينة التي يفرضها الطور المختار، أو null
-const forcedCity = () => Object.keys(CITIES.modeOnly).find(city => CITIES.modeOnly[city] === setup.mode) || null;
+// خيار المدينة: المدن، ثم "مدينة المضيف" (مدينة أمة اللاعب الأول، القسم 3.10)، ثم عشوائي
+const CITY_CHOICES = [...CITIES.order, 'host', 'random'];
 const TEAM_CHOICES = [0, 1, 2, 3, 4];
 const SLOT_TYPES = { human: 'أنت', bot: 'بوت', closed: 'مغلقة' };
 const MAX_SLOTS = 8;
@@ -64,6 +61,8 @@ function defaultSlots() {
 let onStartMatch = null;
 let onOpenGame = null;
 let onContinueMatch = null;
+let onStartLan = null;
+let onLeaveLanSetup = null;
 
 // زر مع صوت النقرة (القسم 12.0: صوت ui_tap لكل زر)
 function onTap(id, action) {
@@ -74,6 +73,8 @@ export function setupMenus(handlers) {
   onStartMatch = handlers.startMatch;
   onOpenGame = handlers.openGame;
   onContinueMatch = handlers.continueMatch;
+  onStartLan = handlers.startLan;
+  onLeaveLanSetup = handlers.leaveLanSetup;
   setup.slots = defaultSlots();
   loadSetup();                         // آخر إعداد لعب به اللاعب
 
@@ -86,8 +87,8 @@ export function setupMenus(handlers) {
   onTap('btnStore', () => showScreen('store'));
   onTap('btnSettings', () => showScreen('settings'));
   onTap('btnStats', () => showScreen('stats'));
-  onTap('btnBackToMain', () => showScreen('main'));
-  onTap('btnSettingsBack', () => showScreen('main'));
+  onTap('btnBackToMain', () => { if (lanSetup) onLeaveLanSetup(); else showScreen('main'); });
+  onTap('btnSettingsBack', () => { if (!closeGameSettings()) showScreen('main'); });
   onTap('btnStatsBack', () => showScreen('main'));
   onTap('btnStoreBack', () => showScreen('main'));
   el('btnStart').addEventListener('click', startPressed);
@@ -116,7 +117,7 @@ export function setupMenus(handlers) {
 // --- تبديل الشاشات بتلاشٍ قصير (القسم 12.0) ---
 const SCREENS = {
   main: 'screenMain', setup: 'screenSetup', store: 'screenStore', settings: 'screenSettings',
-  stats: 'screenStats', game: 'screenGame', battle: 'screenBattle'
+  stats: 'screenStats', game: 'screenGame', battle: 'screenBattle', lan: 'screenLan'
 };
 
 let screen = 'main';
@@ -124,15 +125,17 @@ export const currentScreen = () => screen;
 
 export function showScreen(name) {
   screen = name;
+  gameSettings = null;                // الإعدادات من قائمة الإيقاف تُغلق مع أي انتقال
   closeExitDialog();
   if (name === 'main') refreshContinue();
-  if (name === 'setup') { el('setupSaveHint').hidden = !savedMatchInfo(); showCity(); }
+  if (name === 'setup') { el('setupSaveHint').hidden = lanSetup || !savedMatchInfo(); showCity(); }
   if (name === 'settings') refreshSettings();
   if (name === 'stats') renderStats();
   for (const [key, id] of Object.entries(SCREENS)) {
     if (key === name) fadeIn(el(id));
     else fadeOut(el(id));
   }
+  menuMusic(name !== 'game');                  // لحن القوائم (بطلب المستخدم)، ويصمت في المباراة
   if (name === 'setup') drawSetupIcons();      // بعد الظهور: الأيقونات بمقاسها الحقيقي
   if (name === 'store') showStore();           // وصور المتجر بمقاس خاناتها
   // الخلفية الحية لكل القوائم، وتتوقف تماماً أثناء المباراة
@@ -147,35 +150,33 @@ export function showScreen(name) {
 // الصورة المصغرة للمدينة المختارة (حية: في "عشوائي" تتبدل المدن ما دامت القائمة ظاهرة)
 // "مدينة المضيف": مدينة أمة اللاعب الأول، أو عشوائي إن كان عصابة كلاسيكية أو عشوائياً
 function showCity() {
-  const city = forcedCity() || (setup.city === 'host' ? hostCity(setup.slots[0].side) : setup.city);
+  const city = setup.city === 'host' ? hostCity(setup.slots[0].side) : setup.city;
   updateCityThumb(el('cityThumb'), el('cityName'), city, () => screen === 'setup' && !isPickerOpen());
 }
 
 // لوحة المدن: تبويب لكل منطقة، وفي كل خانة صورة صغيرة لمدينتها، وبجانب الخانة صورة المختارة الحية،
 // وفي الأسفل عشوائي ومدينة المضيف
 function openCityPicker() {
-  if (forcedCity()) {                  // الطور يفرض مدينته: الزر مقفل، ويومض سببه
-    const note = el('cityName');
-    note.classList.remove('flash');
-    void note.offsetWidth;
-    note.classList.add('flash');
-    return;
-  }
+  const groups = CITY_GROUPS;
   openPicker({
     title: 'اختر المدينة',
-    groups: PLAY_CITY_GROUPS,
+    groups,
     art: drawCardThumb,
     extras: [{ value: 'random', text: 'عشوائي' }, { value: 'host', text: 'مدينة المضيف' }],
     current: () => setup.city,
     pick: (city) => { setup.city = city; refresh(); },
-    tabFor: (choice) => PLAY_CITY_GROUPS.indexOf(regionOf(PLAY_CITY_GROUPS, choice === 'host' ? hostCity(setup.slots[0].side) : choice)),
+    tabFor: (choice) => groups.indexOf(regionOf(groups, choice === 'host' ? hostCity(setup.slots[0].side) : choice)),
     aside: (node, choice) => {
       if (node.dataset.kind !== 'city') {
         node.dataset.kind = 'city';
-        node.innerHTML = '<canvas id="pickerThumb"></canvas><span id="pickerThumbName" class="hint"></span>';
+        node.innerHTML = '<canvas id="pickerThumb"></canvas><span id="pickerThumbName" class="hint"></span>' +
+                         '<small id="pickerFeature" class="hint"></small>';
       }
       const city = choice === 'host' ? hostCity(setup.slots[0].side) : choice;
       updateCityThumb(el('pickerThumb'), el('pickerThumbName'), city, isPickerOpen);
+      const feature = CITY_FEATURES.desc[CITY_FEATURES.cities[city]];    // ميزة المدينة (القسم 3.11)
+      el('pickerFeature').textContent = feature ? 'ميزتها: ' + feature : '';
+      el('pickerFeature').hidden = !feature;
     },
     close: showCity
   });
@@ -184,25 +185,30 @@ function openCityPicker() {
 // لوحة الأمم لخانة: تبويب لكل منطقة بعصاباتها ثم الكلاسيكية، وبجانب الخانة وصف المختارة
 function openSidePicker(index) {
   const slot = setup.slots[index];
+  pickSide('اختر الأمة — الخانة ' + (index + 1) + (index === 0 ? ' (أنت)' : ''), () => slot.side, (side) => {
+    slot.side = side;
+    descSlot = index;
+    refresh();
+    if (index === 0 && setup.city === 'host') showCity();
+  }, showCity);                          // صورة المدينة "عشوائي" تعود للتبدل بعد الإغلاق
+}
+
+// لوحة الأمم نفسها لغير الخانات (المنضم في اللعب المحلي يختار أمته في غرفة الانتظار)
+export function pickSide(title, current, pick, close) {
   openPicker({
-    title: 'اختر الأمة — الخانة ' + (index + 1) + (index === 0 ? ' (أنت)' : ''),
+    title,
     groups: SIDE_GROUPS,
     extras: [{ value: 'random', text: 'عشوائي' }],
-    current: () => slot.side,
-    pick: (side) => {
-      slot.side = side;
-      descSlot = index;
-      refresh();
-      if (index === 0 && setup.city === 'host') showCity();
-    },
+    current,
+    pick,
     aside: (node, side) => { node.dataset.kind = 'side'; node.textContent = sideDesc(side); },
-    close: showCity                      // صورة المدينة "عشوائي" تعود للتبدل بعد الإغلاق
+    close
   });
 }
 
 function hostCity(side) {
   const nation = nationOf(side);
-  return nation && OPEN_CITIES.includes(nation.city) ? nation.city : 'random';
+  return nation && CITIES.order.includes(nation.city) ? nation.city : 'random';
 }
 
 // --- لوحات خيارات المباراة (بطلب المستخدم): بنفس لوحة المدن، خانة واحدة بعناصر بأيقوناتها أو صورها،
@@ -279,7 +285,8 @@ function modeNote() {
 function openModePicker() {
   openPicker({
     title: 'اختر طور اللعب',
-    groups: single(GM.order.map(key => ({ value: key, text: GM[key].name, note: GM[key].short }))),
+    groups: single(GM.order.filter(key => !lanSetup || NET.modes.includes(key))   // اللعب المحلي: أطواره فقط (القسم 16)
+      .map(key => ({ value: key, text: GM[key].name, note: GM[key].short }))),
     icon: drawModeIcon,
     columns: 3,
     current: () => setup.mode,
@@ -359,7 +366,7 @@ function weatherShort(key) {
 
 // مدينة صور الطقس: المختارة، أو الظاهرة الآن في صورة "عشوائي"
 function previewCity() {
-  const city = forcedCity() || (setup.city === 'host' ? hostCity(setup.slots[0].side) : setup.city);
+  const city = setup.city === 'host' ? hostCity(setup.slots[0].side) : setup.city;
   if (CITIES.order.includes(city)) return city;
   return CITIES.order.includes(shownCity()) ? shownCity() : CITIES.order[0];
 }
@@ -469,6 +476,24 @@ function refreshSettings() {
   }
   setSwitch('tglMute', audio.muted);
   setSwitch('tglPops', !!getPref('pops'));
+}
+
+// الإعدادات من قائمة الإيقاف (بطلب المستخدم): نفس الشاشة فوق المباراة، و"رجوع" يعيد إلى الإيقاف (onClose) لا إلى
+// القائمة الرئيسية
+let gameSettings = null;
+export function openGameSettings(onClose) {
+  gameSettings = onClose;
+  refreshSettings();
+  fadeIn(el('screenSettings'));
+}
+
+export function closeGameSettings() {
+  if (!gameSettings) return false;
+  const back = gameSettings;
+  gameSettings = null;
+  fadeOut(el('screenSettings'));
+  back();
+  return true;
 }
 
 function setSwitch(id, on) {
@@ -591,7 +616,7 @@ function buildSlots() {
 
     // نوع الخانة: الخانة الأولى دائماً أنت
     const type = cell('type', '', () => {
-      if (index === 0) return;
+      if (index === 0 || slot.type === 'net') return;      // خانة صديق (اللعب المحلي): تبقى له ما دام متصلاً
       slot.type = slot.type === 'bot' ? 'closed' : 'bot';
       refresh();
     });
@@ -609,6 +634,7 @@ function buildSlots() {
     row.appendChild(cell('gang', '', () => {
       descSlot = index;
       if (openIfClosed()) return;
+      if (slot.type === 'net') { refresh(); return; }   // الصديق يختار أمته بنفسه: اللمس يعرض وصفها فقط
       openSidePicker(index);
     }));
 
@@ -650,7 +676,7 @@ const next = (list, current) => list[(list.indexOf(current) + 1) % list.length];
 let descSlot = 0;
 
 // اسم الخيار في الخانة، وسطر صغير تحته: اسم عصابة الأمة، أو "كلاسيكية"
-function sideLabel(side) {
+export function sideLabel(side) {
   const nation = nationOf(side);
   if (nation) return { text: nation.name, note: nation.gangName };
   if (GANGS[side]) return { text: GANGS[side].name, note: NATIONS.classicNote };
@@ -658,7 +684,7 @@ function sideLabel(side) {
 }
 
 // وصف الخيار: النمط القتالي، والسمة وضربة البطل للأمة
-function sideDesc(side) {
+export function sideDesc(side) {
   const nation = nationOf(side);
   if (nation) {
     const style = NATIONS.styles[nation.style];
@@ -694,12 +720,9 @@ function refresh() {
   el('modeChoice').textContent = GM[setup.mode].name;
   el('modeNote').textContent = modeNote();
   // زر المدينة: الخيار ومنطقته (الاسم الكامل تحته من الصورة المصغرة)
-  const forced = forcedCity();
-  const cityGroup = regionOf(CITY_GROUPS, forced || setup.city);
-  el('cityChoice').textContent = forced ? CITIES.short[forced] + ' • خريطة الطور'
-    : setup.city === 'random' ? 'عشوائي' : setup.city === 'host' ? 'مدينة المضيف'
+  const cityGroup = regionOf(CITY_GROUPS, setup.city);
+  el('cityChoice').textContent = setup.city === 'random' ? 'عشوائي' : setup.city === 'host' ? 'مدينة المضيف'
     : CITIES.short[setup.city] + (cityGroup ? ' • ' + cityGroup.name : '');
-  el('btnCity').classList.toggle('locked', !!forced);
   const size = MAP_SIZES[setup.mapSize];
   el('sizeChoice').textContent = size.name;
   el('sizeNote').textContent = 'حتى ' + playersText(size.maxPlayers);
@@ -715,14 +738,24 @@ function refresh() {
   const limit = MAP_SIZES[setup.mapSize].maxPlayers;
   el('slotsHint').textContent = survival
     ? 'اختر أمتك ولونك • الحلفاء من الخانات التالية'
+    : lanSetup ? 'الخانة الأولى أنت • كل صديق ينضم يأخذ خانة بوت • الحد ' + limit + ' لاعبين'
     : 'الخانة الأولى أنت • الحد على هذه الخريطة ' + limit + ' لاعبين';
+  el('lanHostInfo').hidden = !lanSetup;
+  el('arenaRow').hidden = lanSetup;
+  if (lanSetup) {
+    const friends = setup.slots.filter(s => s.type === 'net').length;
+    el('lanHostInfo').textContent = 'مباراة محلية باسم «' + lan.name + '»' +
+      (lan.ips.length ? ' • عنوانك: ' + lan.ips.join(' أو ') : '') +
+      (friends ? ' • انضم ' + playersText(friends) : ' • بانتظار الأصدقاء…');
+  }
 
   for (const row of el('slots').children) {
     const index = Number(row.dataset.index);
     const slot = setup.slots[index];
     row.classList.toggle('closed', slot.type === 'closed');
+    row.classList.toggle('net', slot.type === 'net');
 
-    row.querySelector('.type').textContent = SLOT_TYPES[slot.type];
+    row.querySelector('.type').textContent = slot.type === 'net' ? slot.name : SLOT_TYPES[slot.type];
     const label = sideLabel(slot.side), sideCell = row.querySelector('.gang');
     sideCell.textContent = label.text;
     if (label.note) {
@@ -752,6 +785,7 @@ function refresh() {
   const described = setup.slots[descSlot] && setup.slots[descSlot].type !== 'closed' ? descSlot : 0;
   el('sideDesc').textContent = (described ? 'الخانة ' + (described + 1) + ': ' : '') + sideDesc(setup.slots[described].side);
   el('setupError').hidden = true;
+  if (lanSetup) broadcastLobby(lobbyView());
 }
 
 // --- التحقق قبل بدء المباراة ---
@@ -771,6 +805,7 @@ function validate() {
 
   const active = setup.slots.filter(s => s.type !== 'closed');
 
+  if (lanSetup && !active.some(s => s.type === 'net')) return 'انتظر حتى ينضم صديق واحد على الأقل.';
   if (active.length < 2) return 'تحتاج لاعبَين على الأقل: افتح خانة بوت واحدة على الأقل.';
   if (active.length > limit) {
     return 'عدد اللاعبين ' + active.length + ' أكبر من حد الخريطة ' +
@@ -797,8 +832,13 @@ function startPressed() {
     return;
   }
   errorNode.hidden = true;
-  saveSetup();
-  onStartMatch(buildMatchSettings());
+  if (lanSetup) {
+    // اللعب المحلي: أصحاب الخانات بترتيب لاعبي المباراة (رقم اتصال كل صديق، أو null للمضيف والبوتات)
+    onStartLan(buildMatchSettings(), setup.slots.filter(s => s.type !== 'closed').map(s => s.type === 'net' ? s.peer : null));
+  } else {
+    saveSetup();
+    onStartMatch(buildMatchSettings());
+  }
   startMusic();                       // الموسيقى تبدأ مع المباراة لا في القوائم
 }
 
@@ -825,12 +865,12 @@ export function buildMatchSettings() {
   const survival = setup.mode === 'survival';
   const slots = survival ? survivalSlots() : setup.slots.filter(s => s.type !== 'closed');
   const players = slots.map((slot, index) => ({
-    name: index === 0 ? 'أنت' : 'بوت ' + index,
+    name: index === 0 ? (lanSetup ? lan.name : 'أنت') : slot.type === 'net' ? slot.name : 'بوت ' + index,
     ...resolveSide(slot.side),                   // {gang: النمط، nation: الأمة أو null}
     color: slot.color,
-    isHuman: index === 0,
+    isHuman: index === 0 || slot.type === 'net', // اللعب المحلي: كل صديق لاعب حقيقي على جهازه (القسم 16)
     team: survival ? 1 : slot.team,              // الصمود: الجميع فريق واحد
-    difficulty: slot.difficulty
+    difficulty: slot.type === 'net' ? 'medium' : slot.difficulty   // الصديق إن غادر يقوده بوت متوسط
   }));
 
   return {
@@ -843,11 +883,73 @@ export function buildMatchSettings() {
     },
     mapSize: setup.mapSize,
     // مدينة المضيف: مدينة أمة اللاعب الأول بعد حسم العشوائي، أو عشوائي للعصابة الكلاسيكية
-    city: forcedCity() || (setup.city === 'host' ? hostCity(players[0].nation) : setup.city),
+    city: setup.city === 'host' ? hostCity(players[0].nation) : setup.city,
     maxUnits: setup.maxUnits,
     weather: setup.weather === 'random'
       ? WEATHER_KEYS[Math.floor(Math.random() * WEATHER_KEYS.length)]
       : setup.weather,
     players
+  };
+}
+
+// --- اللعب المحلي (القسم 16): المضيف يعدّ المباراة في هذه القائمة نفسها، وكل صديق ينضم يأخذ خانة ---
+let lanSetup = false;
+export const isLanSetup = () => lanSetup;
+
+export function openLanSetup() {
+  lanSetup = true;
+  if (!NET.modes.includes(setup.mode)) setup.mode = NET.modes[0];
+  syncLanSlots();
+  showScreen('setup');
+}
+
+// خانة صديق غادر تعود كما كانت قبله (بوت أو مغلقة)
+function freeNetSlot(slot) {
+  slot.type = slot.was || 'closed';
+  slot.peer = null;
+}
+
+// خروج المضيف من قائمة الإعداد: خانات الأصدقاء تعود كما كانت
+export function closeLanSetup() {
+  lanSetup = false;
+  for (const slot of setup.slots) if (slot.type === 'net') freeNetSlot(slot);
+  refresh();
+}
+
+// المنضمون ← الخانات: الجديد يأخذ أول خانة بوت ثم أول مغلقة، ومن غادر تعود خانته، والأمة اختيار صاحبها
+export function syncLanSlots() {
+  if (!lanSetup) return;
+  const peers = lanPeers();
+  const ids = new Set(peers.map(p => p.id));
+  for (const slot of setup.slots) {
+    if (slot.type === 'net' && !ids.has(slot.peer)) freeNetSlot(slot);
+  }
+  for (const peer of peers) {
+    let slot = setup.slots.find(s => s.type === 'net' && s.peer === peer.id);
+    if (!slot) {
+      slot = setup.slots.find((s, k) => k > 0 && s.type === 'bot') || setup.slots.find((s, k) => k > 0 && s.type === 'closed');
+      if (!slot) continue;
+      slot.was = slot.type;
+      slot.type = 'net';
+      slot.peer = peer.id;
+    }
+    slot.name = peer.name;
+    if (SIDE_CHOICES.includes(peer.side)) slot.side = peer.side;
+  }
+  refresh();
+}
+
+// هل بقيت خانة لصديق جديد؟
+export const lanHasSeat = () => setup.slots.some((s, k) => k > 0 && s.type !== 'net');
+
+// وصف الغرفة الذي يراه المنضمون في غرفة الانتظار
+function lobbyView() {
+  return {
+    mode: setup.mode, city: setup.city, mapSize: setup.mapSize,
+    weather: setup.weather, maxUnits: setup.maxUnits,
+    players: setup.slots.filter(s => s.type !== 'closed').map((s, k) => ({
+      kind: k === 0 ? 'host' : s.type, name: k === 0 ? lan.name : s.type === 'net' ? s.name : 'بوت ' + BOT[s.difficulty].name,
+      side: s.side, color: s.color, team: s.team, peer: s.type === 'net' ? s.peer : null
+    }))
   };
 }

@@ -2,7 +2,6 @@
 // تستعملها لوحتا المدينة والأمة في قائمة الإعداد (picker.js) والمتجر (store.js)
 import { CITIES, REGIONS, GANGS, GANG_IDS, nations as NATIONS } from '../config.js';
 import { THEMES } from '../render/cityThemes.js';
-import { OPEN_CITIES } from '../map/generator.js';
 
 // تحت اسم المدينة بلدها (الجزء بعد "—" من اسمها الكامل)، أو اسمها الكامل إن لم يكن لها بلد
 export const cityNote = (city) => {
@@ -23,9 +22,8 @@ function regionGroups(key, all, title, item) {
 
 const cityItem = city => ({ value: city, text: CITIES.short[city], note: cityNote(city) });
 
-// كل المدن (المتجر)، ومدن الأطوار العادية في قائمة الإعداد (بلا مدن طور واحد، CITIES.modeOnly)
+// كل المدن: للمتجر ولوحة المدن في قائمة الإعداد
 export const CITY_GROUPS = regionGroups('cities', CITIES.order, 'cityTitle', cityItem);
-export const PLAY_CITY_GROUPS = regionGroups('cities', OPEN_CITIES, 'cityTitle', cityItem);
 
 export const SIDE_GROUPS = [
   ...regionGroups('nations', NATIONS.order, 'nationTitle',

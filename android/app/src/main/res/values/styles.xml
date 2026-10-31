@@ -16,9 +16,10 @@
     </style>
 
 
-    <!-- شاشة البداية والتطبيق: ملء الشاشة بلا شريط حالة (القسم 2.1) -->
+    <!-- شاشة البداية والتطبيق: ملء الشاشة بلا شريط حالة (القسم 2.1)، سوداء حتى تظهر مقدمة اللعبة (بطلب المستخدم) -->
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
-        <item name="android:background">@drawable/splash</item>
+        <item name="android:background">@android:color/black</item>
+        <item name="windowSplashScreenBackground">@android:color/black</item>
         <item name="android:windowFullscreen">true</item>
         <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
     </style>

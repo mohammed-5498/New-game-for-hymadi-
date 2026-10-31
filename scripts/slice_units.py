@@ -21,7 +21,7 @@ import os
 import sys
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw
 from scipy import ndimage
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -325,7 +325,8 @@ def I(name, use, comp=None, region=None, circle=None, kind='pole', tip='up', gri
 #   legs='touch' ساقان متلاصقتان ظاهرتان (لا فراغ بينهما فوق القدمين)، legs='pants' الساق من الحوض ولو انغلقت الفجوة
 #   تحت معطف، legx=(x0, x1) عرض الساقين،
 #   yv/fy0 بداية الساق الظاهرة وأعلى القدم، headx مناطق تتبع الرأس، torsox مناطق تتبع الجذع (بلا لون الجسد)، drop مناطق تُحذف (إلا الأحمر)، fill ثقوب تُملأ
-#   من الجهة المقابلة، pair السلاح في اليدين، twoH باليدين، arrows عدد سهام القوس، fire سهام مشتعلة
+#   من الجهة المقابلة، pair السلاح في اليدين، twoH باليدين، arrows عدد سهام القوس، fire سهام مشتعلة،
+#   legimg الرجل من الصورة نفسها بدرعها وحذائها لا كبسولة (build_leg_img)
 NATIONS = {
     'yemen': ('yemen', 2, {
         'champion': ('01_Queen_of_Saba', [I('scepter', 'hand', 0, grip=0.2, length=8)], {}),
@@ -361,6 +362,14 @@ NATIONS = {
         'dual': ('06_Japan_02_Dual_Swordsman_مبارز السيفين', [I('sword', 'hand', 0, tip='down', grip=0.14, length=7.6)], {'pair': True}),
         'spear': ('07_Japan_03_Flail_Bearer_حامل الفليون', [I('pipe', 'hand', 0, grip=0.2, length=15)], {'twoH': True}),
         'common': ('08_Japan_04_Kabukimono_كابوكيمونو', [I('sword', 'hand', 0, tip='down', grip=0.14, length=8)], {}),
+        # ساموراي دوجو إيدو (القسم 3.11، بطلب المستخدم): شكل حراس الدوجو (unit.lookKind)، بالكاتانا
+        # رجلاه من الصورة (واقي الركبة ودرع الساق والحذاء): الأمامية كاملة، وحذاؤها يغطي عقب الخلفية فلا تُؤخذ هي.
+        # والكاتانا باليدين معاً كوقفة الساموراي، وبضعف طولها (بطلب المستخدم)
+        'samurai': ('09_Japan_Samurai_ساموراي', [I('katana', 'hand', 0, tip='down', grip=0.14, length=19)],
+                    {'yv': 585, 'legx': (185, 450), 'twoH': True,
+                     'legimg': dict(x=(185, 345), hem=585, knee=655, ref=598, axis=258, r=40,
+                                    poly=[(185, 585), (302, 585), (302, 742), (318, 750), (330, 758), (336, 770),
+                                          (338, 795), (336, 820), (185, 820)])}),
     }),
     'korea': ('china_japan_korea/Korea', 142, {
         'champion': ('09_Korea_01_Hwarang_Leader_قائد الهوارانغ',
@@ -714,6 +723,41 @@ def build_leg_n(rgba, body, m):
     return (thigh, (r, r), (r, r + th)), (sh, (xf - fx0, r), (xf - fx0, r + sn))
 
 
+def build_leg_img(rgba, m, L):
+    """رجل الصورة نفسها (لا كبسولة): ما داخل poly من حافة الثوب hem إلى النعل، وفوق الحافة صف السروال ref مكرراً
+    حتى الحوض. وصفوفها تُمد خطياً فتقع ركبة الصورة knee على ركبة الهيكل، وطرفا الفخذ والساق مدوّران حول المفصل"""
+    k = m['k']
+    hip, sole = m['hip'], m['sole']
+    knee = hip + THIGH / k
+    x0, x1 = L['x']
+    im = Image.new('L', (rgba.shape[1], rgba.shape[0]), 0)
+    ImageDraw.Draw(im).polygon(L['poly'], fill=1)
+    leg = np.where(np.array(im, bool)[..., None], rgba, 0).astype(np.uint8)[:, x0:x1]
+    ref = leg[L['ref']].copy()
+    ax, r = L['axis'] - x0, L['r']
+
+    def rows(ya, yb):
+        ys = np.arange(int(math.floor(ya)), int(math.ceil(yb)) + 1)
+        src = np.where(ys <= knee, hip + (ys - hip) * (L['knee'] - hip) / (knee - hip),
+                       L['knee'] + (ys - knee) * (sole - L['knee']) / (sole - knee))
+        out = leg[np.clip(np.round(src).astype(int), 0, leg.shape[0] - 1)].copy()
+        out[src < L['hem']] = ref
+        return ys, out
+
+    def cap(part, ys, cy, above):
+        d = ys[:, None] - cy
+        far = (d < 0) if above else (d > 0)
+        part[far & ((np.arange(part.shape[1]) - ax)[None, :] ** 2 + d ** 2 > r * r)] = 0
+
+    ys, thigh = rows(hip - r, knee + r)
+    cap(thigh, ys, hip, True)
+    cap(thigh, ys, knee, False)
+    ys2, shin = rows(knee - r, sole + 3)
+    cap(shin, ys2, knee, True)
+    return ((thigh, (ax, hip - ys[0]), (ax, knee - ys[0])),
+            (shin, (ax, knee - ys2[0]), (ax, knee + SHIN / k - ys2[0])))
+
+
 def item_part(img, spec, k):
     """مقبض القطعة وطرفها ومقياسها (بنفس قواعد weapon_parts)"""
     ys, xs = np.where(img[..., 3] > 40)
@@ -822,7 +866,7 @@ def nation_units(nation):
         add('skirt', img, (m['cx'] - x0, m['hip'] - y0), (m['cx'] - x0, m['hip'] + drop - y0),
             extra=(1.0, round(drop * m['k'], 2), 0.0))
         upper, lower = build_arm_n(rgba, m)
-        thigh, shin = build_leg_n(rgba, body, m)
+        thigh, shin = build_leg_img(rgba, m, o['legimg']) if 'legimg' in o else build_leg_n(rgba, body, m)
         for nm, (im, a, b) in (('ua', upper), ('la', lower), ('th', thigh), ('sn', shin)):
             add(nm, im, a, b)
             add(nm + 'D', im, a, b, dark=True)

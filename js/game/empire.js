@@ -1,4 +1,4 @@
-// طور الإمبراطورية (بطلب المستخدم، طور تجريبي مستقل في صحراء اليمامة وحدها):
+// اقتصاد الإمبراطورية (بطلب المستخدم): بنية اللعبة نفسها في كل الأطوار والمدن (والطور يحدد شرط الفوز وحده):
 // - النقاط: كل حي مملوك 0.5 في الثانية، والقاعدة الرئيسية 2 بدل ذلك، ومن يُسقط زعيم عصابة يأخذ 50
 // - الجنود من القاعدة الرئيسية بالنقاط وبطابور (لا ظهور تلقائي)، والزعيم (البطل) واحد فقط لكل عصابة
 // - ترقيات العصابة بثلاثة مستويات: الدم والضرر والدفاع وسرعة المشي (تبقى للعصابة مهما سقطت قواعدها)
@@ -7,7 +7,8 @@
 //   مبناه بترقياته كما هي، ولا تعود نقاط لأحد (وطلبات الجنود في طابور القاعدة الساقطة تضيع)
 // الحالة كلها بيانات بسيطة في state.modeState وحقول الأحياء (building وbuildTile وblv)، فتُحفظ مع المباراة.
 // الأرقام كلها في EMPIRE داخل config.js
-import { TICK_SEC, EMPIRE as E, SPAWN, GANGS, ai } from '../config.js';
+import { TICK_SEC, EMPIRE as E, SPAWN, GANGS, ai, CITY_FEATURES, STYLE_PERKS, DISTRICT_SIZES as DS } from '../config.js';
+import { sizeOf } from '../map/sizes.js';
 import { createUnit } from './units.js';
 import { spawnChampion, championOf, countUnits } from './spawn.js';
 import { applyDamage, isEnemyId } from './combat.js';
@@ -15,6 +16,9 @@ import { forEachNearby } from './spatialHash.js';
 import { findFreeTiles } from '../map/pathfinding.js';
 import { soundAt } from '../audio/sound.js';
 import { hypot } from './hypot.js';
+import { random } from './random.js';   // عشوائية المنطق: مشتركة بين الأجهزة في اللعب المحلي
+import { featureIncome, stormRangeMul, stormMiss, recruitsAt, spawnRecruit, featureCostMul, featureIncomeMul, featureProductionMul,
+         payTax, callTriads, ringBells } from './features.js';
 
 const isAlive = (unit) => unit && unit.state !== 'dead' && unit.hp > 0;
 
@@ -26,8 +30,10 @@ const FIXED_KINDS = ['wallI', 'wallJ', 'gateI', 'gateJ', 'archI', 'archJ', 'wall
                      'fortI', 'fortJ', 'fortTower'];
 
 // القلعة (بطلب المستخدم): برج القاعدة في وسطها، وما حوله من مباني الحي نفسه سور على الجوانب وأبراج على
-// الزوايا (صور اليمامة، yamamah.js). على مربعات المباني وحدها: لا يتغير ما يُمشى عليه، والساحة والشوارع مداخلها
+// الزوايا (صور اليمامة، yamamah.js). على مربعات المباني وحدها: لا يتغير ما يُمشى عليه، والساحة والشوارع مداخلها.
+// في المدن التي لها صور قلعة فقط (EMPIRE.art[city].fort)، وفي غيرها القاعدة مبنى مقر المدينة بهالته
 function fortify(map, district) {
+  if (!(E.art[map.city] && E.art[map.city].fort)) return;
   const at = tileOf(map, district.buildTile);
   for (let dj = -1; dj <= 1; dj++) {
     for (let di = -1; di <= 1; di++) {
@@ -47,7 +53,7 @@ export function initEmpire(state, modeState) {
   const players = state.players;
   modeState.points = players.map(() => E.startPoints);
   modeState.earned = players.map(() => 0);          // كل ما جمعه (لشاشة النهاية)
-  modeState.leaderKills = players.map(() => 0);
+  modeState.bounties = players.map(() => 0);        // زعماء أسقطهم كل لاعب
   modeState.levels = players.map(() => ({ hp: 0, damage: 0, armor: 0, speed: 0 }));
   modeState.queues = {};                             // رقم حي القاعدة -> [{ kind, t, payer }]
   modeState.shots = [];                              // سهام الأبراج في الهواء
@@ -66,9 +72,10 @@ export function initEmpire(state, modeState) {
 // --- كل تحديث ---
 export function updateEmpire(state) {
   const ms = state.modeState;
-  // تلميح مرة واحدة في البداية (بعد إشعار سمة الأمة إن وُجد): كيف تُفتح قائمة الحي
-  if (!ms.hinted && !state.notice) {
-    ms.hinted = true;
+  // تلميح مرة واحدة في البداية (بعد إشعار سمة الأمة إن وُجد): كيف تُفتح قائمة الحي.
+  // يخص هذا الجهاز كالإشعار نفسه (اللعب المحلي: لا يدخل حالة المباراة المشتركة)
+  if (!state.empireHinted && !state.notice) {
+    state.empireHinted = true;
     state.notice = { text: 'المس مبنى قاعدتك مرتين بسرعة لقائمته، وأي حي لك بلا مبنى لتبني فيه', mine: true, t: E.hintSeconds, keep: true };
   }
   collectIncome(state, ms);
@@ -79,10 +86,12 @@ export function updateEmpire(state) {
   updateHospitals(state);
 }
 
+// ms.incomeMul: مضاعف الدخل من الطور (الدقيقة الأخيرة في الوقت بالنقاط، والصمود)، والبوت المجنون أكثر (مزيته)، ومالك برج الساعة (القسم 3.11)
 function collectIncome(state, ms) {
+  const mul = (ms.incomeMul || 1) * TICK_SEC;
   for (const d of state.map.districts) {
     if (d.owner === null || !d.capture || state.players[d.owner].neutral) continue;
-    const gain = (d.building === 'hq' ? E.income.hq : E.income.district) * TICK_SEC;
+    const gain = districtIncome(d) * mul * botIncome(state.players[d.owner]) * featureIncomeMul(state, d.owner);
     ms.points[d.owner] += gain;
     ms.earned[d.owner] += gain;
   }
@@ -97,12 +106,17 @@ function rewardLeaderKills(state, ms) {
     if (killer < 0 || killer === unit.playerId || !state.players[killer] || state.players[killer].neutral) continue;
     ms.points[killer] += E.leaderKill;
     ms.earned[killer] += E.leaderKill;
-    ms.leaderKills[killer]++;
+    ms.bounties[killer]++;
     if (killer === state.humanId) {
       state.notice = { text: 'أسقطت زعيم ' + state.players[unit.playerId].gangName + ': +' + E.leaderKill + ' نقطة', mine: true, t: 3 };
     }
   }
 }
+
+// دخل الحي في الثانية: القاعدة الرئيسية، أو مبنى ميزة المدينة (الهرم، القسم 3.11)، أو الحي العادي.
+// والقاعدة والحي العادي بحجم الحي (القسم 3.12)، ودخل المزايا كما صُمم
+const districtIncome = (d) => d.building === 'hq' ? E.income.hq * DS.income[sizeOf(d)]
+  : featureIncome(d) ?? E.income.district * DS.income[sizeOf(d)];
 
 // --- الإنتاج: طابور لكل قاعدة رئيسية، وأول طلب فيه يتقدم ---
 // البوت المجنون ينتج أسرع 25% (مزيته المعلنة في الظهور، ai.levels.insane.spawnFactor)
@@ -110,13 +124,28 @@ function botFactor(player) {
   const lvl = !player.isHuman && !player.neutral && ai.levels[player.difficulty];
   return (lvl && lvl.spawnFactor) || 1;
 }
+function botIncome(player) {
+  const lvl = !player.isHuman && !player.neutral && ai.levels[player.difficulty];
+  return (lvl && lvl.incomeFactor) || 1;
+}
 
-// سرعة الإنتاج ترقية القاعدة نفسها (district.blv.production)
+// سرعة الإنتاج ترقية القاعدة نفسها (district.blv.production)، ومالك برج الساعة أسرع (القسم 3.11)،
+// وجنود الحشد في القاعدة أسرع (القسم 3.12)
 export function productionTime(state, district, kind) {
   const level = (district.blv && district.blv.production) || 0;
   const owner = state.players[district.owner];
-  return E.units[kind].seconds * E.buildings.hq.upgrades.production.times[level] * (owner ? botFactor(owner) : 1);
+  const horde = owner && owner.gang === 'scorpions' && E.units[kind] ? 1 + STYLE_PERKS.horde.production : 1;
+  return unitCost(kind).seconds * E.buildings.hq.upgrades.production.times[level] * DS.production[sizeOf(district)] *
+    (owner ? botFactor(owner) * featureProductionMul(state, owner.id) : 1) / horde;
 }
+
+// كلفة الطلب وزمنه: جنود القاعدة، أو المجنَّدون في المباني المميزة (CITY_FEATURES.recruits، القسم 3.11)
+const unitCost = (kind) => E.units[kind] || CITY_FEATURES.recruits[kind];
+// سعره لهذا اللاعب: أحياء عصابة المجمع التي يملكها تخفضه (تينوتشتيتلان)
+export const unitPrice = (state, playerId, kind) => Math.round(unitCost(kind).cost * featureCostMul(state, playerId));
+
+// هل يُنتج هذا الطلب في هذا الحي؟ جنود القاعدة في القاعدة الرئيسية، والمجنَّدون في مبناهم المميز
+const producesAt = (district, kind) => E.units[kind] ? district.building === 'hq' : (recruitsAt(district) || []).includes(kind);
 
 function updateQueues(state, ms) {
   for (const id of Object.keys(ms.queues)) {
@@ -125,7 +154,7 @@ function updateQueues(state, ms) {
     const district = state.map.districts[id];
     // القاعدة سقطت (صارت محايدة أو بيد غيره): طلبات من دفع تضيع بلا إرجاع نقاط (بقرار المستخدم)
     for (let k = queue.length - 1; k >= 0; k--) {
-      if (district.building !== 'hq' || district.owner !== queue[k].payer) queue.splice(k, 1);
+      if (!producesAt(district, queue[k].kind) || district.owner !== queue[k].payer) queue.splice(k, 1);
     }
     if (!queue.length) continue;
     const item = queue[0], owner = district.owner;
@@ -146,6 +175,7 @@ export function heroFor(player, kind) {
 }
 
 function produce(state, player, district, kind) {
+  if (!E.units[kind]) return spawnRecruit(state, player, district, kind);   // مجنَّد مبنى مميز (features.js)
   if (kind === 'leader') {
     const leader = spawnChampion(state, player, district);
     if (leader) applyUpgrades(state, leader);
@@ -153,7 +183,7 @@ function produce(state, player, district, kind) {
   }
   const spots = findFreeTiles(state.map, district.capture.i, district.capture.j, SPAWN.spotSearchTiles);
   if (!spots.length) return false;
-  const [i, j] = spots[Math.floor(Math.random() * spots.length)];
+  const [i, j] = spots[Math.floor(random() * spots.length)];
   const unit = createUnit(state, player, i, j, heroFor(player, kind));
   state.units.push(unit);
   applyUpgrades(state, unit);
@@ -162,7 +192,8 @@ function produce(state, player, district, kind) {
 }
 
 // --- ترقيات العصابة على الوحدة: الدم هنا، والضرر والدفاع في abilities.js، وسرعة المشي في weather.js ---
-function applyUpgrades(state, unit) {
+// (ومن ينضم من أهل القرى لعصابة يأخذ ترقية دمها: features.js)
+export function applyUpgrades(state, unit) {
   const factor = 1 + state.modeState.levels[unit.playerId].hp * E.upgrades.hp.per;
   unit.maxHp = unit.stats.hp * factor;
   unit.hp = unit.maxHp;
@@ -182,11 +213,12 @@ export function empireSpeedMul(state, playerId) {
 // --- أبراج الرماية: سهم على أقرب عدو في المدى كل attackTime ثانية ---
 export const tileOf = (map, k) => ({ i: k % map.n, j: Math.floor(k / map.n) });
 
-const towerStats = (district) => {
-  const T = E.buildings.tower, lv = district.blv || {};
+// والعاصفة الرملية تقصّر مداه (القسم 3.11)، وحجم حيه يطيله ويقوّي سهامه (القسم 3.12)
+const towerStats = (district, state = null) => {
+  const T = E.buildings.tower, lv = district.blv || {}, size = sizeOf(district);
   return {
-    range: T.range,
-    damage: T.damage * (1 + (lv.damage || 0) * T.upgrades.damage.per),
+    range: T.range * DS.reach[size] * (state ? stormRangeMul(state) : 1),
+    damage: T.damage * DS.power[size] * (1 + (lv.damage || 0) * T.upgrades.damage.per),
     attackTime: T.attackTime * (1 - (lv.rate || 0) * T.upgrades.rate.per)
   };
 };
@@ -195,7 +227,7 @@ function updateTowers(state, ms) {
   for (const d of state.map.districts) {
     if (d.building !== 'tower' || d.owner === null || state.players[d.owner].neutral) continue;
     if (d.cool > 0) { d.cool -= TICK_SEC; continue; }
-    const at = tileOf(state.map, d.buildTile), stats = towerStats(d);
+    const at = tileOf(state.map, d.buildTile), stats = towerStats(d, state);
     const target = nearestEnemy(state, d.owner, at, stats.range);
     if (!target) continue;                              // جاهز ينتظر عدواً
     d.cool = stats.attackTime;
@@ -222,7 +254,8 @@ function updateShots(state, ms) {
     shot.prevT = shot.t;
     shot.t += TICK_SEC;
     if (shot.t < shot.duration) { left.push(shot); continue; }
-    if (isAlive(shot.target)) applyDamage(state, { playerId: shot.owner }, shot.target, shot.damage);
+    // في العاصفة الرملية يخطئ السهم أحياناً (القسم 3.11)
+    if (isAlive(shot.target) && !stormMiss(state)) applyDamage(state, { playerId: shot.owner }, shot.target, shot.damage, true);
   }
   ms.shots = left;
 }
@@ -234,11 +267,12 @@ export const healPoint = (map, district) =>
   district.building === 'hospital' ? tileOf(map, district.buildTile) : district.capture;
 
 // --- المستشفيات: علاج جنود صاحبها حولها ---
+// وحجم حيه يوسّع مداه ويقوّي علاجه (القسم 3.12)
 const hospitalStats = (district) => {
-  const H = E.buildings.hospital, lv = district.blv || {};
+  const H = E.buildings.hospital, lv = district.blv || {}, size = sizeOf(district);
   return {
-    radius: H.radius + (lv.radius || 0) * H.upgrades.radius.per,
-    perSecond: H.perSecond * (1 + (lv.rate || 0) * H.upgrades.rate.per)
+    radius: (H.radius + (lv.radius || 0) * H.upgrades.radius.per) * DS.reach[size],
+    perSecond: H.perSecond * DS.power[size] * (1 + (lv.rate || 0) * H.upgrades.rate.per)
   };
 };
 
@@ -269,12 +303,28 @@ function leaderTaken(state, playerId) {
   return Object.values(state.modeState.queues).some(q => q.some(item => item.payer === playerId && item.kind === 'leader'));
 }
 
+// الصرف من نقاط اللاعب، ولمالك السوق الكبير ضريبته مما يصرفه غيره (القسم 3.11)
+export function spend(state, playerId, amount) {
+  state.modeState.points[playerId] -= amount;
+  payTax(state, playerId, amount);
+}
+
+// مجنَّدو اللاعب من نوع واحد: الأحياء منهم وما في الطوابير (حد التجنيد، الفيل الحربي)
+function recruitCount(state, playerId, kind) {
+  let n = 0;
+  for (const u of state.units) if (u.playerId === playerId && u.recruitKind === kind && u.state !== 'dead') n++;
+  for (const q of Object.values(state.modeState.queues)) for (const item of q) if (item.payer === playerId && item.kind === kind) n++;
+  return n;
+}
+
 export function canQueue(state, playerId, district, kind) {
-  if (!owns(state, playerId, district) || district.building !== 'hq') return fail('ليست قاعدتك');
+  if (!owns(state, playerId, district) || !producesAt(district, kind)) return fail(E.units[kind] ? 'ليست قاعدتك' : 'ليس مبناك');
   const queue = state.modeState.queues[district.id] || [];
   if (kind === 'leader' && leaderTaken(state, playerId)) return fail('لعصابتك زعيم');
   if (queue.length >= E.queueMax) return fail('الطابور ممتلئ');
-  if (pointsOf(state, playerId) < E.units[kind].cost) return fail('النقاط لا تكفي');
+  const R = CITY_FEATURES.recruits[kind];
+  if (R && R.limit && recruitCount(state, playerId, kind) >= R.limit) return fail(R.limitText);
+  if (pointsOf(state, playerId) < unitPrice(state, playerId, kind)) return fail('النقاط لا تكفي');
   return OK;
 }
 
@@ -283,7 +333,7 @@ export function queueUnit(state, playerId, districtId, kind) {
   const check = canQueue(state, playerId, district, kind);
   if (!check.ok) return check;
   const queues = state.modeState.queues;
-  state.modeState.points[playerId] -= E.units[kind].cost;
+  spend(state, playerId, unitPrice(state, playerId, kind));
   if (!queues[districtId]) queues[districtId] = [];
   queues[districtId].push({ kind, t: 0, payer: playerId });
   return OK;
@@ -307,7 +357,7 @@ export function buyUpgrade(state, playerId, key) {
   const check = canUpgrade(state, playerId, key);
   if (!check.ok) return check;
   const next = nextUpgrade(state, playerId, key);
-  state.modeState.points[playerId] -= next.cost;
+  spend(state, playerId, next.cost);
   state.modeState.levels[playerId][key] = next.level;
   // الدم: جنود اللاعب الحاليون أيضاً، بنفس نسبة دمهم
   if (key === 'hp') {
@@ -338,6 +388,8 @@ export function canBuild(state, playerId, district, type) {
   if (!owns(state, playerId, district)) return fail('ليس حيك');
   if (district.building) return fail('في الحي مبنى');
   if (district.police) return fail('مركز شرطة');
+  if (district.hill) return fail('التلة لا يُبنى فيها');         // ملك الحي: يبقى معلمها وتاجها
+  if (district.featureTile !== undefined) return fail('معلم المدينة');   // مبنى ميزة المدينة (القسم 3.11)
   if (buildSpot(state.map, district) < 0) return fail('لا مكان للبناء');
   if (pointsOf(state, playerId) < E.buildings[type].cost) return fail('النقاط لا تكفي');
   return OK;
@@ -348,7 +400,7 @@ export function buildDistrict(state, playerId, districtId, type) {
   const check = canBuild(state, playerId, district, type);
   if (!check.ok) return check;
   const k = buildSpot(state.map, district);
-  state.modeState.points[playerId] -= E.buildings[type].cost;
+  spend(state, playerId, E.buildings[type].cost);
   district.building = type;
   district.buildTile = k;
   district.blv = {};
@@ -380,19 +432,60 @@ export function upgradeBuilding(state, playerId, districtId, key) {
   const check = canUpgradeBuilding(state, playerId, district, key);
   if (!check.ok) return check;
   const next = nextBuildingUpgrade(district, key);
-  state.modeState.points[playerId] -= next.cost;
+  spend(state, playerId, next.cost);
   district.blv = { ...district.blv, [key]: next.level };
   return OK;
 }
 
-// --- للواجهة: دخل اللاعب في الثانية الآن ---
+// --- تحصين الأحياء (القسم 3.12): ثلاثة مستويات، والتحصين ملك الحي فيبقى لمن يحتله (district.fort) ---
+export function nextFort(district) {
+  const level = (district && district.fort) || 0, C = E.fortify.costs;
+  return level < C.length ? { level: level + 1, cost: C[level] } : null;
+}
+
+export function canFortify(state, playerId, district) {
+  if (!owns(state, playerId, district)) return fail('ليس حيك');
+  const next = nextFort(district);
+  if (!next) return fail('أعلى مستوى');
+  if (pointsOf(state, playerId) < next.cost) return fail('النقاط لا تكفي');
+  return OK;
+}
+
+export function fortifyDistrict(state, playerId, districtId) {
+  const district = state.map.districts[districtId];
+  const check = canFortify(state, playerId, district);
+  if (!check.ok) return check;
+  const next = nextFort(district);
+  spend(state, playerId, next.cost);
+  district.fort = next.level;                     // السور في الطبقة الثابتة (الحي يُعاد رسمه)
+  soundAt(state, 'capture_done', district.capture.i, district.capture.j);
+  return OK;
+}
+
+// أمر واحد باسمه (القائمة، واللعب المحلي حيث يصل من جهاز آخر فتُفحص قيمه قبل تنفيذه):
+// a: queue (x نوع الجندي) | upgrade (x ترقية العصابة) | build (x نوع المبنى) | improve (x ترقية المبنى) | fortify، d رقم الحي
+export function empireCommand(state, playerId, a, d, x) {
+  const district = state.map.districts[d];
+  if (a === 'queue' && (E.units.order.includes(x) || Object.hasOwn(CITY_FEATURES.recruits, x))) return queueUnit(state, playerId, d, x);
+  if (a === 'upgrade' && E.upgrades.order.includes(x)) return buyUpgrade(state, playerId, x);
+  if (a === 'triads') return callTriads(state, playerId, d, x);          // مقر الترياد: x رقم حي العدو (القسم 3.11)
+  if (a === 'bells') return ringBells(state, playerId, d);              // أجراس الكاتدرائية
+  if (a === 'fortify') return fortifyDistrict(state, playerId, d);      // تحصين الحي (القسم 3.12)
+  if (a === 'build' && E.buildings.order.includes(x)) return buildDistrict(state, playerId, d, x);
+  if (a === 'improve' && district && district.building && E.buildings[district.building].upgrades.order.includes(x)) {
+    return upgradeBuilding(state, playerId, d, x);
+  }
+  return fail('');
+}
+
+// --- للواجهة: دخل اللاعب في الثانية الآن (بمضاعف الطور: الدقيقة الأخيرة، والصمود) ---
 export function incomeOf(state, playerId) {
   let total = 0;
   for (const d of state.map.districts) {
     if (d.owner !== playerId || !d.capture) continue;
-    total += d.building === 'hq' ? E.income.hq : E.income.district;
+    total += districtIncome(d);
   }
-  return total;
+  return total * (state.modeState.incomeMul || 1) * featureIncomeMul(state, playerId);
 }
 
 export { towerStats, hospitalStats };

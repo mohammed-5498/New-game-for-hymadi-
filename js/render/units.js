@@ -1,10 +1,11 @@
 // رسم الوحدات: نظام الوضعيات v2 (anim.js + bodies.js + combatArt.js) مربوطاً بحالة الوحدة
-import { TILE_HALF_W, TILE_HALF_H, COMBAT, COMBAT_REALISM, PERFORMANCE, UNIT_ART, ULT, nations } from '../config.js';
+import { TILE_HALF_W, TILE_HALF_H, TICK_SEC, COMBAT, COMBAT_REALISM, PERFORMANCE, UNIT_ART, ULT, nations, CITY_FEATURES } from '../config.js';
 import { UI_LIGHT } from './colors.js';
 import { drawOne, stateLabel, drawSpeedLines } from './combatArt.js';
 import { flameLayers } from './anim.js';
 import { shadedCount } from '../pacing.js';
 import { nationArtKey, shotLook } from './nationArt.js';
+import { drawCreature, CREATURE_WIDTH } from './creatureArt.js';
 import { spriteShotLook } from './unitSprites.js';
 import './nationsArab.js';                 // مظاهر الدفعة العربية تُسجَّل في سجل الأمم (القسم 3.10)
 import './nationsAsia.js';                 // والدفعة الآسيوية
@@ -30,7 +31,8 @@ export const ART_KEYS = {
 // مفتاح غير معروف (عصابة لا تملك هذه الشخصية) يرجع لرسم الفرد العادي بدل ألا يُرسم شيء
 // وحدة الأمة (القسم 3.10) بمظهر أمتها: الكامل للوحدة المظللة (المرحلة 9ج)، والمبسّط لغيرها
 const artKey = (unit, time, shaded) => {
-  const kind = unit.champion ? 'champion' : (unit.hero || 'common');
+  // lookKind: شكل بدل شخصيتها (ضابط مركز الشرطة الرئيسي بشكل حامل الرمح الألماني، القسم 3.11)
+  const kind = unit.champion ? 'champion' : (unit.lookKind || unit.hero || 'common');
   const own = unit.nation ? nationArtKey(unit, kind, time, shaded) : null;
   if (own) return own;
   const gang = ART_KEYS[unit.gang] || ART_KEYS.crows;
@@ -42,8 +44,8 @@ const artScale = (unit) => UNIT_ART.scale *
   (unit.traits ? unit.traits.size : 1) *     // تنويع حجم بسيط بين الأفراد (القسم 5.4)
   (unit.artScale || 1);                      // قائد الشرطة في الصمود أكبر ×1.3
 
-// حجم رسم الوحدة نسبة إلى الفرد العادي (لصندوقها عند إخفائها خلف المباني)
-export const unitSizeFactor = (unit) => artScale(unit) / UNIT_ART.scale;
+// حجم رسم الوحدة نسبة إلى الفرد العادي (لصندوقها عند إخفائها خلف المباني)، والمخلوق بعرضه
+export const unitSizeFactor = (unit) => artScale(unit) / UNIT_ART.scale * (unit.creature ? CREATURE_WIDTH[unit.creature] : 1);
 
 // الشرطة تُرسم بلونها الثابت مهما كان اللاعب
 // (ووحدة التدخل في الصمود بلونها الأغمق الخاص)
@@ -65,14 +67,23 @@ export function drawUnit(ctx, unit, alpha, zoom = 99, time = 0, debug = false, c
   if (!dead && zoom < PERFORMANCE.unitDetailZoom) {
     // بلون اللاعب دائماً: عند الإبعاد المهم معرفة جيش من أين لا من ضُرب
     ctx.fillStyle = artColor(unit);
-    const size = unit.champion ? 6 : unit.hero ? 5 : 4;
+    const size = unit.creature ? 9 : unit.champion ? 6 : unit.hero ? 5 : 4;
     ctx.fillRect(x - size / 2, y - size, size, size);
+    return;
+  }
+
+  // المخلوقات (الفيل الحربي وترول الجبل، القسم 3.11) بشكلها، وشريط دمها فوقها
+  if (unit.creature) {
+    drawCreature(ctx, unit, x, y, artScale(unit), artColor(unit), time, isWalking(unit));
+    if (!dead && (unit.hp < unit.maxHp || unit.selected)) drawHealthBar(ctx, unit, x, y);
     return;
   }
 
   // نظام الوضعيات v2 لكل الوحدات (القسم 5.4.6). المستوى المبسّط بلا أثر السلاح وبلا شبحي التفادي
   const key = artKey(unit, time, shaded), scale = artScale(unit), color = artColor(unit), walking = isWalking(unit);
   const full = unit.lod === 'full';
+  // ما مضى من التحديث الجاري: الوضعيات تتحرك بسلاسة إطار الشاشة لا بخطوات التحديث (القسم 5.4.8)
+  const sub = alpha * TICK_SEC;
   // خطوط السرعة خلف المندفع والمقذوف والمتفادي (القسم 5.4.7)
   if (!dead) {
     const vi = unit.cState === 'dodge' ? unit.dvx : unit.vx, vj = unit.cState === 'dodge' ? unit.dvy : unit.vy;
@@ -85,13 +96,14 @@ export function drawUnit(ctx, unit, alpha, zoom = 99, time = 0, debug = false, c
     for (let g = 1; g <= 2; g++) {
       const di = unit.dvx * 0.035 * g, dj = unit.dvy * 0.035 * g;
       drawOne(ctx, unit, key, x - (di - dj) * TILE_HALF_W, y - (di + dj) * TILE_HALF_H,
-              scale, color, time, walking, 0, 0.18);
+              scale, color, time, walking, 0, 0.18, false, sub);
     }
   }
   const ghosts = full ? (crowded ? COMBAT_REALISM.trailGhostsCrowded : COMBAT_REALISM.trailGhosts) : 0;
   // صيحة الحارة والراية المغروسة (القسم 3.10): حلقة ذهبية تحت قدمي من يصمد بلا ترنّح ولا سقوط،
-  // والشرطي المرتشي (رشوة الشرطي) بحلقة خضراء ما دامت الهدنة
-  const ring = dead ? null : unit.steadyUntil > time ? nations.fx.steadyRing : unit.bribedUntil > time ? nations.fx.bribeRing : null;
+  // والشرطي المرتشي (رشوة الشرطي) بحلقة خضراء ما دامت الهدنة، ومن دقت له أجراس الكاتدرائية بحلقة ذهبية (القسم 3.11)
+  const ring = dead ? null : unit.steadyUntil > time ? nations.fx.steadyRing : unit.bribedUntil > time ? nations.fx.bribeRing
+    : unit.rallyUntil > time ? CITY_FEATURES.cathedral.ring : null;
   if (ring) {
     ctx.beginPath();
     ctx.ellipse(x, y + 0.6, 6.2 * scale, 2.5 * scale, 0, 0, 6.2832);
@@ -99,8 +111,9 @@ export function drawUnit(ctx, unit, alpha, zoom = 99, time = 0, debug = false, c
     ctx.lineWidth = 0.9;
     ctx.stroke();
   }
-  drawOne(ctx, unit, key, x, y, scale, color, time, walking, ghosts, 1, shaded);
+  drawOne(ctx, unit, key, x, y, scale, color, time, walking, ghosts, 1, shaded, sub);
   if (dead) return;
+  if (unit.cargo) drawCargo(ctx, x, y, scale / UNIT_ART.scale);
 
   // وضع التفاصيل (ثلاث لمسات على شريط المعلومات): اسم الحالة فوق الوحدة
   if (debug) {
@@ -123,14 +136,36 @@ export function drawUnit(ctx, unit, alpha, zoom = 99, time = 0, debug = false, c
   if (ultReady(unit)) drawReadyStar(ctx, x, y, time);
 }
 
+// حمولة تاجر القافلة (القسم 3.11): صرة قماش مربوطة فوق رأسه وفيها لمعة ذهب، فيُعرف من يستحق النهب
+function drawCargo(ctx, x, y, k) {
+  const cy = y - 15.2 * k;
+  ctx.beginPath();
+  ctx.ellipse(x, cy, 3 * k, 1.9 * k, 0, 0, 6.2832);
+  ctx.fillStyle = '#8a5a2b';
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(x - 0.6 * k, cy - 0.7 * k, 1.8 * k, 0.8 * k, 0, 0, 6.2832);
+  ctx.fillStyle = '#a8743c';
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(x - 2.6 * k, cy + 0.4 * k); ctx.lineTo(x + 2.6 * k, cy - 0.4 * k);
+  ctx.strokeStyle = '#4a2e16';
+  ctx.lineWidth = 0.5 * k;
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(x + 1.4 * k, cy - 1.2 * k, 0.75 * k, 0, 6.2832);
+  ctx.fillStyle = '#ffd25a';
+  ctx.fill();
+}
+
 const isWalking = (unit) =>
   unit.state === 'moving' || unit.state === 'attackMove' ||
   (unit.state === 'attacking' && unit.path.length > 0);
 
 function drawHealthBar(ctx, unit, x, y) {
-  const w = unit.champion ? 8 : unit.hero ? 6.5 : 5, h = 1.1;
-  const top = y + (unit.champion ? UNIT_ART.championHealthBarY
-                 : unit.hero ? UNIT_ART.heroHealthBarY : UNIT_ART.healthBarY);
+  const w = unit.creature ? 14 : unit.champion ? 8 : unit.hero ? 6.5 : 5, h = unit.creature ? 1.6 : 1.1;
+  const top = y + (unit.barY || (unit.champion ? UNIT_ART.championHealthBarY
+                 : unit.hero ? UNIT_ART.heroHealthBarY : UNIT_ART.healthBarY));
   const ratio = Math.max(0, unit.hp / unit.maxHp);
 
   ctx.fillStyle = 'rgba(20,18,16,.75)';
@@ -178,8 +213,9 @@ function drawReadyStar(ctx, x, y, time) {
 // دائرة التحديد عند القدمين (تُرسم فوق طبقة الليل حتى تبقى واضحة)
 export function drawSelectionRing(ctx, unit, alpha) {
   const { x, y } = unitWorldPos(unit, alpha);
+  const k = unit.creature ? unitSizeFactor(unit) * 0.6 : 1;        // حلقة المخلوق بحجمه
   ctx.beginPath();
-  ctx.ellipse(x, y, 5.5, 2.8, 0, 0, 6.2832);
+  ctx.ellipse(x, y, 5.5 * k, 2.8 * k, 0, 0, 6.2832);
   ctx.strokeStyle = UI_LIGHT;
   ctx.lineWidth = 1;
   ctx.stroke();

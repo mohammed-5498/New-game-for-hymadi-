@@ -201,7 +201,7 @@ export function drawStreetTree(map, i, j, x, y) {
 }
 
 // نخلة صغيرة على رصيف مدن النخيل (شبام): كنخيل المدينة نفسه بثلثي حجمه
-function streetPalm(px, py, i, j) {
+export function streetPalm(px, py, i, j) {
   const o = ((i * 3 + j) % 3) - 1, c = getCtx();
   el(px, py + 0.6, 3.6, 1.5, 'rgba(0,0,0,0.22)');
   c.beginPath(); c.moveTo(px, py); c.quadraticCurveTo(px + o * 2, py - 8, px + o * 1.3, py - 14.5);

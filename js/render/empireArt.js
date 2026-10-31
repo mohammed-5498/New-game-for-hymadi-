@@ -4,16 +4,19 @@
 // - شارة كل مبنى على سارية فوق سطحه: تاج للقاعدة، وقوس وسهم للبرج، وصليب للمستشفى، بحلقة بلون صاحبه
 // - شريط الإنتاج فوق شارة قواعدك التي في طابورها طلبات، ونقطة لكل طلب
 // - دائرة مدى البرج أو المستشفى المفتوحة قائمته الآن
-import { TILE_HALF_W, TILE_HALF_H, EMPIRE as E } from '../config.js';
+import { TILE_HALF_W, TILE_HALF_H, EMPIRE as E, CITY_FEATURES as F } from '../config.js';
 import { tileOf, productionTime, towerStats, hospitalStats, BUILDING_TILE } from '../game/empire.js';
 import { unitWorldPos } from './units.js';
 import { roofTop, empireKind } from './landmarks.js';
+import { featureBadgeOf } from './featureArt.js';
+import { featureCenter, featureTowerStats, clinicStats } from '../game/features.js';
+import { medicSign, medicOf } from './empireBuildings.js';
 
 const worldOf = (i, j) => ({ x: (i - j) * TILE_HALF_W, y: (i + j) * TILE_HALF_H });
 
 // --- الهالة الذهبية حول القواعد الرئيسية: قبل الوحدات فيمشي الجنود فوقها ---
 export function drawEmpireHalos(ctx, state, visible) {
-  if (state.mode !== 'empire') return;
+  if (!state.economy) return;
   const H = E.baseHalo, map = state.map;
   const pulse = 1 - H.pulse + H.pulse * (0.5 + 0.5 * Math.sin(state.time * H.speed));
   const rx = H.radius * TILE_HALF_W * Math.SQRT2, ry = H.radius * TILE_HALF_H * Math.SQRT2;
@@ -38,7 +41,7 @@ export function drawEmpireHalos(ctx, state, visible) {
 export function badgeOf(state, d) {
   const B = E.badge, map = state.map;
   const at = tileOf(map, d.buildTile), { x, y } = worldOf(at.i, at.j);
-  const top = y - roofTop(map, empireKind(map, BUILDING_TILE[d.building]), at.i, at.j);
+  const top = y - roofTop(map, empireKind(map, BUILDING_TILE[d.building], d), at.i, at.j);
   const r = Math.max(B.radius, B.minScreen / state.camera.z);
   return { x, y, top, r, cy: top - B.pole - r };
 }
@@ -96,21 +99,20 @@ const ICONS = {
     ctx.fillStyle = '#f3ece0';
     ctx.fill();
   },
-  // صليب أحمر على أبيض
-  hospital(ctx, x, y, s) {
+  // علامة المستشفى (القسم 3.12): الهلال الأحمر أو الصليب الأحمر حسب المدينة (MEDIC)، على قرص أبيض بحافة حمراء ولمعة
+  hospital(ctx, x, y, s, city) {
+    medicSign(ctx, x, y, s * 1.2, medicOf(city));
     ctx.beginPath();
-    ctx.arc(x, y, s * 1.15, 0, 6.2832);
-    ctx.fillStyle = '#f7f3ea';
-    ctx.fill();
-    ctx.fillStyle = '#d0322a';
-    ctx.fillRect(x - s * 0.24, y - s * 0.78, s * 0.48, s * 1.56);
-    ctx.fillRect(x - s * 0.78, y - s * 0.24, s * 1.56, s * 0.48);
+    ctx.arc(x, y, s * 0.98, 3.6, 4.9);
+    ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+    ctx.lineWidth = s * 0.14;
+    ctx.stroke();
   }
 };
 
 // الشارات فوق طبقة الليل لتُقرأ دائماً، ولكل مبنى ظاهر في كل الأحياء (لك ولخصومك)
 export function drawEmpireBadges(ctx, state, visible) {
-  if (state.mode !== 'empire') return;
+  if (!state.economy) return;
   const B = E.badge, z = state.camera.z;
   for (const d of state.map.districts) {
     if (!d.building || d.buildTile === undefined) continue;
@@ -129,18 +131,18 @@ export function drawEmpireBadges(ctx, state, visible) {
     ctx.lineWidth = b.r * 0.24;
     ctx.strokeStyle = d.owner !== null ? state.players[d.owner].color : B.neutral;
     ctx.stroke();
-    ICONS[d.building](ctx, b.x, b.cy, b.r * 0.6);
+    ICONS[d.building](ctx, b.x, b.cy, b.r * 0.6, state.map.city);
   }
 }
 
 // السهام قبل طبقة الليل (كمقذوفات الوحدات)
 export function drawEmpireShots(ctx, state, alpha) {
-  if (state.mode !== 'empire' || !state.modeState.shots.length) return;
+  if (!state.economy || !state.modeState.shots.length) return;
   ctx.lineCap = 'round';
   for (const shot of state.modeState.shots) {
     const t = Math.min(1, (shot.prevT + (shot.t - shot.prevT) * alpha) / shot.duration);
     const from = worldOf(shot.i, shot.j);
-    from.y -= E.arrow.top;
+    from.y -= shot.top || E.arrow.top;               // سهام المباني المميزة من أعلاها (القسم 3.11)
     const to = unitWorldPos(shot.target, alpha);
     to.y -= 8;                                       // جسم الهدف لا قدماه
     const arc = Math.sin(t * Math.PI) * 6;
@@ -160,12 +162,13 @@ export function drawEmpireShots(ctx, state, alpha) {
 
 // شريط الإنتاج ونقاط الطابور فوق قواعدك، ودائرة المدى للمبنى المفتوحة قائمته (فوق طبقة الليل لتُقرأ)
 export function drawEmpireMarks(ctx, state, visible, openDistrict) {
-  if (state.mode !== 'empire') return;
+  if (!state.economy) return;
   const map = state.map, ms = state.modeState, z = state.camera.z;
   for (const id of Object.keys(ms.queues)) {
     const queue = ms.queues[id], district = map.districts[id];
     if (!queue.length || district.owner !== state.humanId) continue;
-    const b = badgeOf(state, district), x = b.x;
+    // والتجنيد في المباني المميزة فوق شارتها (القسم 3.11)
+    const b = district.featureTile !== undefined ? featureBadgeOf(state, district) : badgeOf(state, district), x = b.x;
     if (!visible(x, b.y)) continue;
     const h = Math.max(2.2, 3 / z), top = b.cy - b.r - 4 - h;    // فوق الشارة
     const w = 22;
@@ -184,17 +187,31 @@ export function drawEmpireMarks(ctx, state, visible, openDistrict) {
       ctx.fill();
     }
   }
-  // مدى البرج أو المستشفى المفتوحة قائمته
+  // مدى البرج أو المستشفى المفتوحة قائمته، أو مدى المبنى المميز (سهام الحصن وبرج الخرطوم، وعلاج دار العلاج، وحماية الهرم)
   const open = openDistrict !== null && openDistrict !== undefined ? map.districts[openDistrict] : null;
-  if (open && (open.building === 'tower' || open.building === 'hospital')) {
-    const at = tileOf(map, open.buildTile), { x, y } = worldOf(at.i, at.j);
-    const r = open.building === 'tower' ? towerStats(open).range : hospitalStats(open).radius;
+  const ranged = open && rangeOf(map, open);
+  if (ranged) {
+    const { x, y } = worldOf(ranged.i, ranged.j), r = ranged.r;
     ctx.beginPath();
     ctx.ellipse(x, y, r * TILE_HALF_W * Math.SQRT2, r * TILE_HALF_H * Math.SQRT2, 0, 0, 6.2832);
-    ctx.strokeStyle = open.building === 'tower' ? 'rgba(232,196,90,0.85)' : 'rgba(120,220,140,0.85)';
+    ctx.strokeStyle = ranged.shoots ? 'rgba(232,196,90,0.85)' : 'rgba(120,220,140,0.85)';
     ctx.lineWidth = 1.4 / z * 1.6;
     ctx.setLineDash([4, 3]);
     ctx.stroke();
     ctx.setLineDash([]);
   }
+}
+
+// دائرة المدى للمبنى المفتوحة قائمته: { i, j, r, shoots }، أو null لما لا مدى له
+function rangeOf(map, d) {
+  if (d.building === 'tower' || d.building === 'hospital') {
+    const at = tileOf(map, d.buildTile), tower = d.building === 'tower';
+    return { i: at.i, j: at.j, r: tower ? towerStats(d).range : hospitalStats(d).radius, shoots: tower };
+  }
+  if (d.featureTile === undefined) return null;
+  const c = featureCenter(map, d);
+  if (d.feature === 'fortress' || d.feature === 'khartoum') return { ...c, r: featureTowerStats(d).range, shoots: true };
+  if (d.feature === 'clinic') return { ...c, r: clinicStats(d).radius, shoots: false };
+  if (d.feature === 'pyramid') return { ...c, r: F.pyramid.radius, shoots: false };
+  return null;
 }

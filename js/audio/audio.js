@@ -1,5 +1,7 @@
 /* منسوخ كما هو من docs/audio.js (المرجع الإلزامي للقسم 13.5).
-   لا تُعدّل مؤثراته هنا؛ عدّل المرجع ثم أعد النسخ. السطر الأخير وحده مختلف: تصدير ES. */
+   لا تُعدّل مؤثراته هنا؛ عدّل المرجع ثم أعد النسخ. المختلف: تصدير ES في السطر الأخير، وopt.gain في play
+   (ارتفاع الحدث من قرب الكاميرا، js/audio/sound.js). والمؤثرات التي لها ملفات (assets/audio/) تُسمع منها،
+   وهذه للأحداث الباقية. */
 /* ====== صوت اللعبة: كل المؤثرات مولَّدة بالكود (Web Audio) بلا أي ملفات ======
    الاستعمال:
      GameAudio.init();                       // مرة واحدة عند بدء اللعبة
@@ -32,9 +34,11 @@ const GameAudio = (function(){
   function setMuted(v){ muted=!!v; if(master)master.gain.value=muted?0:1; }
 
   /* ---- لبنات التوليد ---- */
-  function out(pan){
-    if(pan==null||!ctx.createStereoPanner)return sfxGain;
-    const p=ctx.createStereoPanner(); p.pan.value=Math.max(-1,Math.min(1,pan)); p.connect(sfxGain); return p;
+  function out(pan,gain){
+    let dest=sfxGain;
+    if(gain!=null&&gain!==1){ const g=ctx.createGain(); g.gain.value=gain; g.connect(dest); dest=g; }
+    if(pan==null||!ctx.createStereoPanner)return dest;
+    const p=ctx.createStereoPanner(); p.pan.value=Math.max(-1,Math.min(1,pan)); p.connect(dest); return p;
   }
   function env(node,t0,a,d,peak){
     const g=ctx.createGain();
@@ -114,7 +118,7 @@ const GameAudio = (function(){
     if(lastPlay[key]&&now-lastPlay[key]<gap)return;     // يمنع تكرار نفس الصوت عشرات المرات
     if(voices>VOICE_CAP)return;
     lastPlay[key]=now;
-    try{ SFX[name](now+0.001, out(opt.pan)); }catch(e){}
+    try{ SFX[name](now+0.001, out(opt.pan,opt.gain)); }catch(e){}
   }
   /* pan حسب موقع الحدث على الشاشة: 0 = يسار الشاشة، 1 = يمينها */
   function playAt(name,screenX,screenWidth,opt){

@@ -6,6 +6,7 @@ import { moveSpeed } from './weather.js';
 import { initRealism, faceAngleTo } from './realism.js';
 import { hypot } from './hypot.js';
 import { nationStats, nationUnitName } from './nations.js';
+import { random } from './random.js';   // عشوائية المنطق: مشتركة بين الأجهزة في اللعب المحلي
 
 // إحصائيات الوحدة: الأساس + ميزة العصابة، أو الأساس + قيم الشخصية المميزة أو البطل
 // والشرطة المحايدة لها جدولها الخاص (القسم 3.8)
@@ -97,10 +98,26 @@ export function createUnit(state, player, i, j, heroId = null, champion = false)
     bribedUntil: 0,         // شرطي مرتشٍ: لا يهاجم وحدات اللاعب bribedBy ولا تهاجمه حتى هذا الزمن (بريطانيا)
     bribedBy: -1,
     hasteUntil: 0,          // اندفاع: سرعة أكبر بنسبة hasteFactor حتى هذا الزمن (هجوم عدوة)
+    rallyUntil: 0,          // أجراس الكاتدرائية: أسرع وأقوى حتى هذا الزمن (القسم 3.11)
     hasteFactor: 0,
 
     // الشرطة المحايدة (القسم 3.8)
     stationId: -1,          // رقم حي المركز الذي تتبعه
+    villageId: -1,          // أهل القرى (القسم 3.11): رقم حي قريتهم حتى ينضموا لمن يستولي عليها
+    garrisonOf: -1,         // ساموراي الدوجو وحراس الحصن (القسم 3.11): رقم حي مبناهم
+    recruitKind: null,      // المجنَّد في مبنى مميز (القسم 3.11): نوعه في CITY_FEATURES.recruits
+    raidFrom: -1,           // المتمردون (القسم 3.11): رقم الحي الذي تمردوا فيه
+    leash: 0,               // أقصى ابتعاد عن homePost إن لم يكن حد الشرطة (عصابة المجمع، القسم 3.11)
+    lookKind: null,         // شكل الرسم بدل شخصية الوحدة (ضابط المركز الرئيسي بشكل حامل الرمح، القسم 3.11)
+    auraSpeed: 0,           // سرعة ضرب إضافية من هالة مبنى (تمثال ريو، القسم 3.11)
+    harmless: false,        // تاجر القافلة (القسم 3.11): لا يبحث عن هدف ولا يهاجم، ويُضرب كغيره
+    cargo: false,           // تاجر القافلة يحمل البضائع حتى يُنهب (تُرسم فوق رأسه)
+    caravanExit: null,      // مخرج القافلة: { i, j, until }
+    creature: null,         // مخلوق يُرسم بشكله (القسم 3.11): 'elephant' الفيل الحربي أو 'troll' ترول الجبل
+    barY: 0,                // ارتفاع شريط دم المخلوق فوق قدميه (0: ارتفاع الوحدة العادية)
+    expireAt: -1,           // مقاتل الترياد (القسم 3.11): يختفي عند هذا الزمن
+    trampleAt: 0,           // الفيل الحربي: موعد دهسته التالية
+    lair: null,             // ترول الجبل: مكان نزوله وموعد عودته { i, j, until }
     homePost: null,         // مركزها: لا تبتعد عنه أكثر من 6 مربعات
     vanishAt: -1,           // بعد الاستيلاء على مركزها تختفي عند هذا الزمن
 
@@ -397,8 +414,8 @@ function applySeparation(state) {
           if (distSq >= radiusSq) continue;
           const dist = Math.sqrt(distSq);
           if (dist < 0.0001) {   // متطابقتان تماماً: دفعة عشوائية صغيرة
-            ox += (Math.random() - 0.5) * push;
-            oy += (Math.random() - 0.5) * push;
+            ox += (random() - 0.5) * push;
+            oy += (random() - 0.5) * push;
             continue;
           }
           const force = ((radius - dist) / radius) * push;

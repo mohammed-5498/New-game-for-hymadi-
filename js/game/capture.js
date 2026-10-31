@@ -6,6 +6,9 @@ import { sound, soundAt } from '../audio/sound.js';
 import { raiseAlert } from './alerts.js';
 import { hypot } from './hypot.js';
 import { captureBonus } from './nations.js';
+import { featureCaptureMul } from './features.js';
+import { DISTRICT_SIZES as DS, EMPIRE } from '../config.js';
+import { sizeOf } from '../map/sizes.js';
 
 // منطقة الاستيلاء: دائرة نصف قطرها 1.5 مربع حول نقطة الاستيلاء
 // (تشمل مربعات الشارع المجاورة، وقد تتداخل منطقتان فيُحسب المربع للاثنتين)
@@ -51,13 +54,16 @@ export function updateCapture(state) {
   for (const unit of state.units) {
     if (unit.state === 'dead') continue;
     // الشرطة لا تستولي على أي حي ولا تُحسب جانباً يجمّد التقدم (القسم 3.8)،
-    // إلا في الصمود ضد الشرطة: موجاتها تستولي على الأحياء (القسم 9.5.5)
-    if (state.players[unit.playerId].neutral && !survival) continue;
+    // إلا في الصمود ضد الشرطة: موجاتها تستولي على الأحياء (القسم 9.5.5). وقطاع الطرق يستولون (captures)،
+    // وأهل القرى لا في أي طور (القسم 3.11)
+    const owner = state.players[unit.playerId];
+    if (owner.passive || (owner.neutral && !survival && !owner.captures)) continue;
     const key = map.idx(Math.round(unit.x), Math.round(unit.y));
     const districtIds = map.zoneAt.get(key);
     if (!districtIds) continue;
 
     for (const id of districtIds) {
+      if (owner.ownOnly && !map.districts[id].feature) continue;
       if (!zones.has(id)) zones.set(id, new Map());
       const sides = zones.get(id);
       const side = sideKey(state, unit.playerId);
@@ -87,7 +93,12 @@ export function updateCapture(state) {
 }
 
 function advanceProgress(state, district, playerId, power) {
-  let step = CAPTURE.pointsPerSecond * power * TICK_SEC;
+  // وبرج الخرطوم (القسم 3.11) احتلاله أبطأ بكثير، من الحياد ومن مالكه، والحي الكبير أبطأ والصغير أسرع (القسم 3.12)
+  let step = CAPTURE.pointsPerSecond * power * TICK_SEC * featureCaptureMul(district) * DS.capture[sizeOf(district)];
+  // تحصين الحي (القسم 3.12): أسواره تبطئ كل من لا يملكه، وتبقى قائمة وهو محايد في منتصف احتلاله
+  if (district.fort && (district.owner === null || !allied(state, playerId, district.owner))) {
+    step /= 1 + EMPIRE.fortify.capture[district.fort - 1];
+  }
   // سمة الأمة (القسم 3.10): الاستيلاء على حي مجاور لحيك أسرع. لا على حيك ولا حي حليفك
   if (district.owner === null || !allied(state, playerId, district.owner)) {
     const bonus = captureBonus(state, district, playerId);
@@ -151,12 +162,13 @@ function decayProgress(state, district) {
 function announceCapture(state, district) {
   const player = state.players[district.owner];
   const mine = district.owner === state.humanId;
-  if (mine) sound('capture_done');
+  if (mine) sound(district.feature || district.building ? 'capture_special' : 'capture_done');   // مبنى مميز: صوته
   if (!mine && state.notice && state.notice.keep) return;   // سمة أمتك في بداية المباراة تبقى ظاهرة
   const name = district.special ? specialName(district.special) : 'حي';
   state.notice = {
     text: mine ? 'استوليت على ' + name
-        : player.neutral ? 'الشرطة استولت على ' + name
+        : player.gang === 'police' ? 'الشرطة استولت على ' + name
+        : player.neutral ? player.name + ' استولوا على ' + name
         : player.name + ' استولى على ' + name,
     mine,
     t: CAPTURE.noticeSeconds

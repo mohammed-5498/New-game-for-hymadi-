@@ -1,11 +1,12 @@
 // رسم المدينة بطابعها (القسم 3.9): لون الأرض ومحتوى كل مربع (مبنى، أطلال، زينة، حطام)
 // الشكل فقط: مكان المباني والشوارع والأحياء يقرره مولّد الخريطة كما هو.
-import { CAPTURE, CITY_UNTINTED, CITIES } from '../config.js';
+import { CAPTURE, CITY_UNTINTED, CITIES, CITY_FEATURES } from '../config.js';
 import { mix, tint } from './colors.js';
 import { tintAmount } from '../game/capture.js';
 import { THEMES, setThemeContext, setTone, getCtx, streetDebris, ruinTile, hsh, mixc } from './cityThemes.js';
 import { PALETTES } from './colors.js';
 import { drawLandmark } from './landmarks.js';
+import { drawFeaturePlaza } from './featureArt.js';
 import {
   openOf, isLane, cleanRoad, drawSidewalks, drawCrosswalk, drawLaneDecor, roundaboutAnchor, drawRoundaboutIsland,
   drawStreetTree
@@ -22,8 +23,8 @@ export function beginCity(ctx, map) {
   setTone(null);
 }
 
-// أرض الحي المميز وحي الشرطة تميل قليلاً لألوانهما القديمة حتى تُعرف من بعيد
-const REGION_HINT = { police: ['#6f7b8a', 0.35], special: ['#bba565', 0.22] };
+// أرض الحي المميز وحي الشرطة تميل قليلاً لألوانهما القديمة حتى تُعرف من بعيد، وحي ميزة المدينة للذهبي (القسم 3.11)
+const REGION_HINT = { police: ['#6f7b8a', 0.35], special: ['#bba565', 0.22], feature: CITY_FEATURES.ground };
 
 // لون أرضية المربع: طابع المدينة، ثم الطقس، ثم صبغ المالك فوقهما (الثلج لا يخفي لون المالك)
 export function groundColor(state, i, j) {
@@ -41,6 +42,7 @@ export function groundColor(state, i, j) {
   else {
     color = T.ground;
     if (isLane(map, k)) color = mix(T.ground, T.plaza, 0.8);   // ممر مرصوف بين صفوف المباني
+    else if (map.kind[k] === 'fplaza') color = mix(T.plaza, '#d9c79c', 0.35);   // ساحة المبنى المميز (القسم 3.11)
     else if (T.groundAt) color = T.groundAt(i, j, color);
     else if (hsh(i, j, 200) < 0.3) color = mixc(color, '#5a5040', 0.12);
     const hint = REGION_HINT[map.region[k]];
@@ -109,7 +111,8 @@ export function drawCityTile(state, i, j, x, y) {
   }
   const type = map.type[k];
   if (type === '.') {
-    if (isLane(map, k)) drawLaneDecor(map, i, j, x, y);
+    if (map.kind[k] === 'fplaza') drawFeaturePlaza(map, i, j, x, y);     // أركان ساحة المبنى المميز (القسم 3.11)
+    else if (isLane(map, k)) drawLaneDecor(map, i, j, x, y);
     else {
       if (T.draw.ground) T.draw.ground(x, y, i, j, T);      // زينة الأرض الفارغة بطابع المدينة (تموجات الرمل)
       if (hsh(i, j, 210) < 0.4) streetDebris(x, y, i, j + 99, T);
@@ -156,7 +159,7 @@ export function debrisLight(map, i, j) {
 
 // --- الطبقة الثابتة لمربع واحد: كل ما لا يتحرك (يُرسم مرة واحدة في القطع المخزنة) ---
 // lights: مصادر الإضاءة الثابتة ليلاً، lamps: نقاط المصابيح الوامضة (تُرسم كل إطار)
-const SPECIAL_TYPES = 'QNSGCOPTM';   // TM: برج الرماية والمستشفى في طور الإمبراطورية (empire.js)
+const SPECIAL_TYPES = 'QNSGCOPTMF';  // TM: برج الرماية والمستشفى في طور الإمبراطورية (empire.js)، F مبنى ميزة المدينة (القسم 3.11)
 
 export function specialType(state, k) {
   if (state.mode === 'king' && hillLandmarkTile(state) === k) return 'L';
@@ -178,7 +181,7 @@ export function drawTileStatic(state, i, j, x, y, lights, lamps) {
   const ownerColor = district && district.owner !== null ? state.players[district.owner].color : null;
   const flagColor = (PALETTES[map.region[k]] || PALETTES.neutral).flag;
   useTone(state, district, true);
-  const lamp = drawLandmark(map, special, x, y, i, j, ownerColor, flagColor, lights, state.mode === 'empire');
+  const lamp = drawLandmark(map, special, x, y, i, j, ownerColor, flagColor, lights, !!state.economy);
   if (lamp && lamps) lamps.push(lamp);
 }
 

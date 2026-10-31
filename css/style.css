@@ -103,10 +103,19 @@ button:active { transform: scale(.96); filter: brightness(.8); }
 
 .btn.on { background: var(--gold); border-color: var(--gold); color: var(--gold-dark); }
 
-#info {
+/* أعلى اليسار: شريط المعلومات في الزاوية، ونقاطك بجانبه */
+#topLeft {
   position: absolute;
   top: 10px;
   left: 10px;
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  direction: ltr;
+}
+#topLeft > * { direction: rtl; }
+
+#info, #points {
   background: rgba(27, 22, 18, .8);
   color: var(--text-dim);
   border: 1px solid rgba(224, 176, 74, .25);
@@ -117,6 +126,7 @@ button:active { transform: scale(.96); filter: brightness(.8); }
   gap: 5px;
   align-items: center;
 }
+#points { color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 /* زر الإيقاف في الوسط */
 #btnPause { min-height: 36px; padding: 0 10px; font-size: 13px; }
@@ -131,6 +141,7 @@ button:active { transform: scale(.96); filter: brightness(.8); }
     gap: 2px 8px;
     font-size: 11px;
   }
+  #points { font-size: 11px; }
   #info .sep { display: none; }
 }
 
@@ -152,6 +163,18 @@ button:active { transform: scale(.96); filter: brightness(.8); }
 }
 
 #notice.mine { background: rgba(27, 79, 156, .92); }
+
+/* الشاشة السوداء (js/ui/blackout.js): فوق كل شيء وتمنع اللمس، تظهر بتسارع وتختفي بتباطؤ سريعين */
+#blackout {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: #000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 250ms ease-out;
+}
+#blackout.on { opacity: 1; pointer-events: auto; transition-timing-function: ease-in; }
 
 /* --- شريط الطور (القسم 9.5): تحت زر الإيقاف في أعلى الوسط --- */
 #modeBar {
@@ -343,6 +366,9 @@ button.wide.ghost { background: transparent; color: var(--text-dim); }
   .main-menu { max-width: 780px; flex-direction: row; align-items: center; gap: 28px; }
   .brand, .main-buttons { flex: 1 1 0; min-width: 0; }
   .title { font-size: clamp(30px, 5.6vw, 50px); }
+  /* الأزرار في عمودين: السبعة كلها (مع متابعة المباراة وخروج) ظاهرة بلا تمرير */
+  .main-buttons { display: grid; grid-template-columns: 1fr 1fr; }
+  #btnContinue, #mainNotice { grid-column: 1 / -1; }
 }
 /* شاشة قصيرة جداً: الأزرار الستة (مع متابعة المباراة وخروج) بلا تمرير */
 @media (orientation: landscape) and (max-height: 400px) {
@@ -396,11 +422,6 @@ button.wide.ghost { background: transparent; color: var(--text-dim); }
 .pick-text b { font-size: 18px; color: var(--gold); }
 .pick-text .hint { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pick-arrow { flex: 0 0 auto; font-size: 18px; color: var(--text-dim); }
-/* زر المدينة في طور يفرض مدينته (الإمبراطورية): بلا سهم، ولمسه يومض اسم المدينة */
-.pick-btn.locked .pick-arrow { visibility: hidden; }
-.pick-btn.locked .pick-text b { color: var(--text); }
-#cityName.flash { animation: city-flash .6s ease-out; }
-@keyframes city-flash { 0%, 50% { color: var(--gold); } }
 
 .pick-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-bottom: 12px; }
 .pick-tile {
@@ -528,6 +549,7 @@ button.wide.ghost { background: transparent; color: var(--text-dim); }
 .aside-lines p { margin: 2px 0; }
 #pickerThumb { width: 236px; height: 118px; max-width: 100%; border-radius: 10px; border: 1px solid var(--line); background: #2a2622; }
 #pickerThumbName { text-align: center; }
+#pickerFeature { max-width: 236px; text-align: center; color: var(--gold); line-height: 1.45; }   /* ميزة المدينة (القسم 3.11) */
 .picker-footer { display: flex; align-items: center; gap: 6px; margin-top: 10px; }
 .picker-extras { display: flex; flex: 1 1 auto; gap: 6px; }
 .picker-extras .opt { flex: 0 1 150px; }
@@ -957,7 +979,8 @@ input[type=range].muted { opacity: .4; }
   color: var(--text);
 }
 
-#powerRows { overflow-y: auto; -webkit-overflow-scrolling: touch; }
+/* عمود مرن: الأسطر ترتَّب بخاصية order (power.js) */
+#powerRows { overflow-y: auto; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column; }
 #power.folded #powerRows { display: none; }
 
 .power-row {
@@ -968,25 +991,33 @@ input[type=range].muted { opacity: .4; }
   padding: 0 6px;
   border-top: 1px solid rgba(243, 236, 224, .07);
   white-space: nowrap;
+  flex: none;
 }
-.power-row:first-child { border-top: 0; }
 
 .power-dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
-.power-name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; }
-.power-team { color: var(--text-dim); font-size: 10px; }
+.power-name { flex: 1 1 auto; overflow: hidden; }
+.power-name > span { display: inline-block; }
+/* الاسم الأطول من مكانه يُمرَّر من أوله إلى آخره ثم يعود (--shift و--dur من power.js) */
+.power-name.scroll > span { animation: power-scroll var(--dur, 4s) ease-in-out infinite alternate; }
+@keyframes power-scroll {
+  0%, 15% { transform: none; }
+  85%, 100% { transform: translateX(var(--shift, 0)); }
+}
 .power-num { font-variant-numeric: tabular-nums; }
 .power-num.districts { font-weight: 700; }
-.power-num.units { color: var(--text-dim); }
+.power-num.units { color: var(--text-dim); min-width: 2ch; text-align: left; }
 .power-bar { flex: 0 0 28px; height: 4px; border-radius: 2px; background: rgba(243, 236, 224, .15); overflow: hidden; }
 .power-bar > span { display: block; height: 100%; }
 
 /* سطر اللاعب نفسه مميز بإطار خفيف */
 .power-row.me { border: 1px solid var(--gold); border-radius: 5px; }
-/* حلفاؤه تحتهم خط سفلي خفيف */
-.power-row.ally .power-name { border-bottom: 1px solid rgba(224, 176, 74, .55); }
+/* الفريق: سطر باسمه وقيمته (متوسط نقاط أفراده)، وأفراده تحته بخط ذهبي على اليمين وأرقامهم أخف */
+.power-row.team-head { height: 14px; font-size: 10px; color: var(--gold); font-weight: 700; background: rgba(224, 176, 74, .08); }
+.power-row.member { border-right: 2px solid rgba(224, 176, 74, .55); }
+.power-row.member .power-num.districts { font-weight: 400; }
 /* المهزوم: اسمه مشطوب ووضوحه منخفض */
 .power-row.out { opacity: .4; }
-.power-row.out .power-name { text-decoration: line-through; }
+.power-row.out .power-name > span { text-decoration: line-through; }
 
 /* --- طور الإمبراطورية: قائمة الحي (js/ui/empireMenu.js) — صغيرة أسفل الوسط، واللعب مستمر خلفها --- */
 #empireMenu {
@@ -1037,31 +1068,38 @@ input[type=range].muted { opacity: .4; }
   font-size: 16px;
   line-height: 1;
 }
-.em-title { margin: 5px 2px 3px; font-size: 12px; font-weight: 700; color: var(--text-dim); }
-.em-note { font-weight: 400; }
+.em-title { margin: 3px 2px 2px; font-size: 11.5px; font-weight: 700; color: var(--text-dim); }
 .em-stats { margin: 0 2px 4px; font-size: 12px; color: var(--text); }
+/* حجم الحي وما يغيّره (القسم 3.12) */
+.em-size { margin: 2px 2px 0; font-size: 11.5px; color: var(--text-dim); }
 .em-slots { display: flex; flex-wrap: wrap; justify-content: center; gap: 5px; }
 .em-slot {
-  flex: 0 0 92px;
-  min-height: 54px;
+  flex: 0 0 74px;
+  min-height: 44px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 1px;
-  padding: 4px 3px;
+  padding: 3px 2px;
   background: var(--btn);
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: 9px;
   color: var(--text);
   font: inherit;
   line-height: 1.25;
 }
 .em-slot b, .em-slot small { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.em-slot b { font-size: 13px; }
-.em-art { width: 40px; height: 30px; }
-.em-desc { font-size: 10px; color: var(--text-dim); }
-.em-cost { font-size: 13px; font-weight: 700; color: var(--gold); }
+.em-slot b { font-size: 11.5px; }
+.em-art { width: 32px; height: 24px; }
+.em-cost { font-size: 12px; font-weight: 700; color: var(--gold); }
+/* رموز المزايا بأرقامها بدل الوصف (بطلب المستخدم): في الخانات، وسطر حجم الحي، وقدرة المبنى */
+.em-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 2px 6px; }
+.em-size.em-chips, .em-stats.em-chips { justify-content: flex-start; }
+.em-chip { display: inline-flex; align-items: center; gap: 2px; font-size: 10.5px; line-height: 1.2; color: var(--text-dim); direction: ltr; white-space: nowrap; }
+.em-chip svg { width: 11px; height: 11px; flex: 0 0 auto; }
+.em-size .em-chip, .em-stats .em-chip { font-size: 11.5px; color: var(--text); }
+.em-size .em-chip svg, .em-stats .em-chip svg { width: 12px; height: 12px; color: var(--gold); }
 .em-why { font-size: 10px; color: var(--danger); }
 .em-why:empty { display: none; }
 /* معطلة: باهتة وتبقى قابلة للمس (اللمس يومض سببها) */
@@ -1073,9 +1111,77 @@ input[type=range].muted { opacity: .4; }
 @keyframes em-deny { 0%, 60% { color: #fff; text-shadow: 0 0 6px var(--danger); } }
 /* المستويات: دائرة لكل مستوى، والمكتمل ممتلئ */
 .em-pips { display: flex; gap: 3px; margin: 1px 0; }
-.em-pips i { width: 7px; height: 7px; border-radius: 50%; border: 1px solid var(--gold); box-sizing: border-box; }
+.em-pips i { width: 6px; height: 6px; border-radius: 50%; border: 1px solid var(--gold); box-sizing: border-box; }
 .em-pips i.on { background: var(--gold); }
 /* طابور القاعدة: تقدم أول طلب */
 .em-queue { display: flex; align-items: center; gap: 6px; margin: 5px 2px 0; font-size: 11px; color: var(--text-dim); white-space: nowrap; }
 .em-bar { flex: 1 1 auto; min-width: 40px; height: 5px; border-radius: 3px; background: rgba(243, 236, 224, .12); overflow: hidden; }
 .em-bar i { display: block; height: 100%; width: 0; background: var(--gold); }
+
+/* --- اللعب المحلي (القسم 16): شاشة الاستضافة والانضمام وغرفة الانتظار --- */
+.menu.lan { max-width: 460px; text-align: right; }
+.menu.lan .label { margin-top: 10px; }
+.text-input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 52px;
+  padding: 0 14px;
+  background: #2a221c;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  font: inherit;
+  font-size: 18px;
+  -webkit-user-select: text;
+  user-select: text;
+}
+.text-input:focus { outline: none; border-color: var(--gold); }
+.lan-list { display: flex; flex-direction: column; gap: 6px; }
+.lan-list button.wide { margin: 0; }
+.lan-list button.wide small { font-weight: 400; }
+.lan-ip-row { display: flex; gap: 6px; margin-top: 6px; }
+.lan-name-row { display: flex; align-items: center; gap: 10px; margin: 6px 0 4px; }
+.lan-name-row label { flex: 0 0 auto; font-weight: 700; color: var(--text-dim); }
+.lan-name-row .text-input { flex: 1 1 auto; min-height: 44px; }
+#lanFound button.wide { background: linear-gradient(#3f5f3a, #2f4a2b); border-color: #6f9a62; }
+#btnLanHost { margin-top: 12px; }
+.lan-link { display: block; margin: 12px auto 0; background: none; border: 0; color: var(--gold); font: inherit; font-size: 15px; text-decoration: underline; }
+.lan-ip-row .text-input { flex: 1 1 auto; text-align: left; }
+.lan-ip-row .opt { flex: 0 0 96px; }
+.lan-player {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 4px 10px;
+  background: var(--btn);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-size: 15px;
+}
+.lan-player.me { border-color: var(--gold); }
+.lan-player .dot { flex: 0 0 auto; width: 16px; height: 16px; border-radius: 50%; border: 2px solid rgba(243, 236, 224, .35); }
+.lan-player small { margin-inline-start: auto; color: var(--text-dim); }
+#lanLobby .pick-btn { margin-top: 10px; }
+.lan-status { text-align: center; margin: 10px 0 0; }
+.lan-status.error { color: var(--danger); }
+/* قائمة إعداد المضيف: اسم المباراة وعنوانه، وخانات الأصدقاء بلون ذهبي */
+.lan-info { text-align: center; margin: -6px 0 8px; color: var(--gold); }
+.slot.net .cell.type { color: var(--gold); font-weight: 700; }
+/* أثناء المباراة: "بانتظار المضيف…" أو "أوقف المضيف المباراة" */
+#lanBanner {
+  position: absolute;
+  top: 38%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(27, 22, 18, .9);
+  border: 1px solid var(--gold);
+  color: var(--gold);
+  border-radius: 12px;
+  padding: 10px 18px;
+  font-size: 17px;
+  font-weight: 700;
+  white-space: nowrap;
+  pointer-events: none;
+}

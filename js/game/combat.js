@@ -1,19 +1,21 @@
 // الهجوم التلقائي، أمر الهجوم، المقذوفات، الضرر والموت
-import { TICK_SEC, COMBAT, COMBAT_REALISM as CR, UNITS, UNIT_ART, POLICE, AUDIO } from '../config.js';
+import { TICK_SEC, COMBAT, COMBAT_REALISM as CR, UNITS, UNIT_ART, POLICE, AUDIO, CITY_FEATURES, STYLE_PERKS } from '../config.js';
 import { findPath } from '../map/pathfinding.js';
 import { facingFromAngle } from './units.js';
 import {
   updateRealism, updateBumps, updateLod, registerSight, chooseMove, moveTiming,
   zoneOf, zoneDamage, knockback, stagger, blockedBy, corpseKnock, turnToward,
   approachPoint, busyBonus, crowdCount, attackPause, statDamageFactor, wrapAngle, releaseRagdoll,
-  addPop, updatePops, flinch, tryClash, knockDown, addBurst
+  addPop, updatePops, flinch, tryClash, knockDown, addBurst, fightNode, fightStyle, fightBig, hitstopOf
 } from './realism.js';
 import { createFire } from './abilities.js';
 import { chargeOverTime, chargeOnHit, chargeOnDamageTaken, tryCastUlt, resolveUlt, updateFlurry } from './ults.js';
 import { visionRange, rangedShotHits, moveSpeed } from './weather.js';
 import { forEachNearby } from './spatialHash.js';
-import { soundAt, soundAlert } from '../audio/sound.js';
+import { soundAt, soundAlert, onScreen } from '../audio/sound.js';
 import { raiseAlert } from './alerts.js';
+import { random } from './random.js';   // عشوائية المنطق: مشتركة بين الأجهزة في اللعب المحلي
+import { stormMiss, stormRangeMul } from './features.js';
 
 // اختيار الهدف للبوتات (القسم 11.2): يُسجَّل من ai/bot.js، ولا يغيّر قواعد القتال
 // يُستدعى فقط حين تحتاج الوحدة هدفاً جديداً، ويعيد undefined ليبقى الاختيار العادي
@@ -37,10 +39,15 @@ export function isEnemy(state, a, b) {
 }
 
 // نفس السؤال بأرقام اللاعبين مباشرة: بلا كائنات مؤقتة في الحلقات الساخنة (المرحلة 8)
+// وأهل القرى (القسم 3.11) مسالمون: ليسوا أعداء لأحد ولا أحد عدو لهم
 export function isEnemyId(state, a, b) {
   if (a === b) return false;
-  const teamA = state.players[a].team;
-  const teamB = state.players[b].team;
+  const pa = state.players[a], pb = state.players[b];
+  if (pa.passive || pb.passive) return false;
+  // الشرطة صديقة لصاحب مركزها الرئيسي (روتنبورغ، القسم 3.11)
+  if (pa.friendOf === b || pb.friendOf === a) return false;
+  const teamA = pa.team;
+  const teamB = pb.team;
   if (teamA && teamB && teamA === teamB) return false;
   return true;
 }
@@ -102,6 +109,7 @@ export function updateCombat(state) {
         const finished = unit.cMove;
         unit.cMove = null;
         unit.cPhases = null;
+        unit.chainAt = state.time;          // نافذة التتابع تبدأ من هنا (رسم فقط، القسم 5.4.8)
         // التتابع (القسم 5.4.7): بعد لكمة أو ركلة أمامية، غالباً يُتبعها بضربة سلاح فوراً
         if (CR.moves[finished].unarmed && finished !== 'kick_high' && unit.rng() < CR.comboChance) {
           unit.combo = true;
@@ -136,8 +144,8 @@ export function updateCombat(state) {
       else finishFight(state, unit);
     }
 
-    // الانتظار والهجوم المتحرك كلاهما يرصد الأعداء
-    if (unit.state === 'idle' || unit.state === 'attackMove') {
+    // الانتظار والهجوم المتحرك كلاهما يرصد الأعداء (إلا تاجر القافلة: لا يهاجم أحداً، القسم 3.11)
+    if ((unit.state === 'idle' || unit.state === 'attackMove') && !unit.harmless) {
       // بحث موزع على التحديثات: كل وحدة تبحث كل 0.25 ثانية
       if ((tick + unit.id) % scanTicks === 0) {
         const target = chooseTarget(state, unit);
@@ -159,9 +167,13 @@ export function updateCombat(state) {
 function resolveHit(state, unit) {
   const hit = unit.pendingHit;
   unit.pendingHit = null;
+  unit.hitDoneAt = state.time;          // متى عُرفت نتيجة الضربة (رسم فقط: يكمل الضارب حركته بعدها، القسم 5.4.8)
   if (!isAlive(unit)) return;
 
   if (hit.ranged) { if (isAlive(hit.target)) spawnVolley(state, unit, hit.target, hit.damage); return; }
+
+  // العاصفة الرملية (القسم 3.11): الضربة القريبة تمر في الهواء أحياناً
+  if (stormMiss(state)) { addPop(state, unit, CITY_FEATURES.storm.pop, 'miss'); return; }
 
   // القتال الواقعي: الحركة تحدد من تصيب، والزاوية تحدد الضرر (القسم 5.4)
   if (hit.move) { resolveMove(state, unit, hit); return; }
@@ -200,6 +212,7 @@ function resolveMove(state, unit, hit) {
 
   let landed = false;
   for (const target of targets) {
+    const echo = landed;                                       // الإصابة الثانية فما بعد من نفس الضربة الدائرية
     if (target.cState === 'dodge') continue;                 // تفادى: الضربة في الهواء
     const zone = zoneOf(target, unit.x, unit.y);
 
@@ -215,8 +228,14 @@ function resolveMove(state, unit, hit) {
     if (zone === 'back') { state.combatEvents.back++; addPop(state, target, 'من الخلف!', 'back'); }
     else if (zone === 'side') state.combatEvents.side++;
     if (m.unarmed) state.combatEvents[hit.move === 'punch' ? 'punch' : 'kick']++;
-    addBurst(state, unit, target, hit.move);
+    addBurst(state, unit, target, hit.move, echo);
     state.combatEvents.hits++;
+    // التجمّد عند الارتطام ورد الفعل حسب سلاح الضارب (رسم فقط، القسم 5.4.8)
+    unit.landAt = state.time;
+    target.hitAt = state.time;
+    target.hitStyle = fightStyle(unit);
+    target.hitNode = unit.cNode || '';
+    target.hitStop = hitstopOf(target.hitStyle, target.hitNode, fightBig(unit));
 
     // الضربة المساحية للمحطِّم تبقى كما هي (القسم 6) على ضربات السلاح المفردة؛ الدائرية واللكمة والركلة لا
     const died = (hit.move === 'spin' || m.unarmed)
@@ -226,6 +245,9 @@ function resolveMove(state, unit, hit) {
 
     if (died) corpseKnock(state, target, unit, hit.move);
     else if (!isAlive(target) || target.invulnUntil > state.time) { /* تصلّب: لا ترنّح ولا دفع */ }
+    else if (unit.stats.slam && target.cState !== 'down') {
+      knockDown(state, target, unit.x, unit.y, unit.stats.slam);    // ضربة ترول الجبل تُسقط وتقذف (القسم 3.11)
+    }
     else if (m.down && target.cState !== 'down' && unit.rng() < m.down) {
       knockDown(state, target, unit.x, unit.y, (m.knock || 1) * 1.3);   // الركلة العالية والقوية قد تُسقطه
     } else if (m.stagger) {
@@ -310,8 +332,8 @@ function startAttack(unit, target, state) {
   if (!unit.homePost) unit.chaseOrigin = { x: unit.x, y: unit.y };
   unit.repathTimer = 0;
 
-  // صافرة الشرطة عند بدء مطاردتها، متباعدة حتى لا تتحول إلى ضجيج
-  if (state && unit.homePost && state.time - unit.whistleAt > AUDIO.whistleSeconds) {
+  // صافرة الشرطة عند بدء مطاردتها، متباعدة حتى لا تتحول إلى ضجيج (لا حراس مزايا المدن)
+  if (state && unit.homePost && unit.gang === 'police' && state.time - unit.whistleAt > AUDIO.whistleSeconds) {
     unit.whistleAt = state.time;
     soundAt(state, 'whistle', unit.x, unit.y);
   }
@@ -378,7 +400,7 @@ function fightTarget(state, unit, budget) {
   // حد المطاردة (لا ينطبق على أمر الهجوم من اللاعب)
   // الشرطة تقيسه من مركزها: لا تبتعد عنه أكثر من 6 مربعات (القسم 3.8)
   if (unit.homePost) {
-    if (distance(unit, unit.homePost) > POLICE.chaseTiles) { returnToOrigin(state, unit); return; }
+    if (distance(unit, unit.homePost) > (unit.leash || POLICE.chaseTiles)) { returnToOrigin(state, unit); return; }
   } else if (!unit.commandedTarget) {
     const visionLimit = visionRange(state, unit) * COMBAT.chaseVisionFactor;
     const fromOrigin = distance(unit, unit.chaseOrigin);
@@ -390,11 +412,12 @@ function fightTarget(state, unit, budget) {
 
   // الرماة يتحولون للقتال القريب إذا اقترب العدو
   const melee = unit.stats.meleeRange !== undefined && dist <= unit.stats.meleeRange;
-  const range = melee ? unit.stats.meleeRange : unit.stats.attackRange;
-  const damage = melee ? unit.stats.meleeDamage : unit.stats.damage;
-  let attackTime = melee ? unit.stats.meleeAttackTime : unit.stats.attackTime;
   // الرمي البعيد وحده يُعتبر "بعيداً": حركات الرماة للقتال القريب فقط (القسم 5.4)
   const ranged = !melee && !!unit.stats.projectile;
+  // والعاصفة الرملية تقصّر مداه (القسم 3.11)
+  const range = melee ? unit.stats.meleeRange : unit.stats.attackRange * (ranged ? stormRangeMul(state) : 1);
+  const damage = melee ? unit.stats.meleeDamage : unit.stats.damage;
+  let attackTime = melee ? unit.stats.meleeAttackTime : unit.stats.attackTime;
 
   // المدى الفعلي للحركة القريبة يمتد بامتداد الحركة (الطعنة أطول)
   // المستويان المبسّط والإحصائي يضربان الضربة السريعة وحدها (القسم 5.4.5)،
@@ -408,6 +431,9 @@ function fightTarget(state, unit, budget) {
       if (unit.buffUntil > state.time && unit.buffAttackSpeed) {
         attackTime /= 1 + unit.buffAttackSpeed;
       }
+      if (unit.auraSpeed) attackTime /= 1 + unit.auraSpeed;      // هالة تمثال ريو (القسم 3.11)
+      if (ranged && unit.gang === 'vipers') attackTime /= 1 + STYLE_PERKS.fireRate;   // الرامي يرمي أسرع (القسم 3.12)
+      if (unit.gang === 'crows' && !unit.creature) attackTime /= 1 + STYLE_PERKS.swiftRate;   // والخاطف يضرب أسرع
 
       // الرمي البعيد يبقى ضربة واحدة كما هي؛ والقتال القريب يستعمل الحركات الأربع
       if (ranged) rangedSwing(state, unit, target, damage, attackTime);
@@ -415,6 +441,10 @@ function fightTarget(state, unit, budget) {
     }
     return;
   }
+
+  // تتقدم نحو هدفها: يقرؤه الرسم وحده (ضربة الاندفاع D، القسم 5.4.8)
+  if (state.time - unit.approachAt > TICK_SEC * 1.5) unit.approachSince = state.time;
+  unit.approachAt = state.time;
 
   // خارج المدى: تتقدم نحو نقطة الالتفاف لا نحو مركز الهدف (القسم 5.4.4ب)
   const goal = ranged ? target : approachPoint(unit, target, range);
@@ -464,7 +494,7 @@ function rangedSwing(state, unit, target, damage, attackTime) {
   unit.attackStart = state.time;
   unit.attackRate = attackTime;
   unit.ultStart = null;
-  soundAt(state, 'swing', unit.x, unit.y);
+  soundAt(state, 'swing', unit.x, unit.y, { style: fightStyle(unit) });
   unit.pendingHit = {
     target,
     damage: damage * unit.damageMultiplier * showoff(state, unit),
@@ -522,12 +552,13 @@ function meleeSwing(state, unit, target, dist, range, damage, attackTime, aimOff
   unit.cMove = key;
   unit.cMoveT = 0;
   unit.cPhases = phases;
+  unit.cNode = fightNode(state, unit, key, target);   // شكل الحركة في شجرة تتابع أسلوبها (رسم فقط)
   // لا فاصل الآن: يُضبط عند اكتمال الحركة، فمن تفادى وألغى ضربته لا يُعاقَب بزمنها كاملاً
   unit.attackCooldown = 0;
   unit.attackStart = state.time;
   unit.attackRate = phases.total;
   unit.ultStart = null;
-  soundAt(state, 'swing', unit.x, unit.y);
+  soundAt(state, 'swing', unit.x, unit.y, { style: fightStyle(unit) });
 
   unit.pendingHit = {
     target, move: key, range,
@@ -574,11 +605,13 @@ function retaliateIfCloser(state, attacker, target) {
   target.path = [];
 }
 
-// صوت الارتطام حسب قوة الضربة ودرع المُصاب (القسم 13.5)
-function hitSound(state, target, amount) {
+// صوت الارتطام حسب قوة الضربة ودرع المُصاب (القسم 13.5)، ونسخه حسب سلاح الضارب (طعنة السكين، لكمة القبضة...).
+// ما ليس وحدة (نار الأرض، سهام الأبراج) بلا صوت ارتطام: لها صوتها حين تشتعل أو تنطلق
+function hitSound(state, attacker, target, amount) {
   const name = target.stats.armor >= AUDIO.shieldArmor ? 'hit_shield'
              : amount >= AUDIO.heavyDamage ? 'hit_heavy' : 'hit_melee';
-  const heard = soundAt(state, name, target.x, target.y);
+  const heard = attacker.stats ? soundAt(state, name, target.x, target.y, { style: fightStyle(attacker) })
+                               : onScreen(state, target.x, target.y);
 
   // تنبيه: وحدة للاعب تتعرض للهجوم خارج الشاشة (سهم أحمر + صوت يُسمع دائماً)
   if (heard || target.playerId !== state.humanId) return;
@@ -587,11 +620,11 @@ function hitSound(state, target, amount) {
   }
 }
 
-// ضربة مباشرة: قد تكون دائرية (المحطِّم) فتصيب كل الأعداء حول الهدف
+// ضربة مباشرة: قد تكون دائرية (المحطِّم) فتصيب كل الأعداء حول الهدف. shot: من مقذوف
 // تعيد true إذا مات الهدف الأساسي (ليُدفع جسده)
-function strike(state, attacker, target, amount) {
+function strike(state, attacker, target, amount, shot = false) {
   const splash = attacker.stats.splashRadius;
-  if (!splash) return applyDamage(state, attacker, target, amount);
+  if (!splash) return applyDamage(state, attacker, target, amount, shot);
 
   let died = false;
   const splashSq = splash * splash;
@@ -599,21 +632,26 @@ function strike(state, attacker, target, amount) {
     if (other.state === 'dead' || other.hp <= 0) return;
     if (distanceSq(other, target) > splashSq) return;
     if (!isEnemy(state, attacker, other)) return;
-    const killed = applyDamage(state, attacker, other, amount);
+    const killed = applyDamage(state, attacker, other, amount, shot);
     if (other === target) died = killed;
   });
   return died;
 }
 
-// تعيد true إذا مات الهدف بهذه الضربة
-export function applyDamage(state, attacker, target, amount) {
+// تعيد true إذا مات الهدف بهذه الضربة. shot: الضرر من مقذوف (سهم، حجر، زجاجة، سهم برج)
+export function applyDamage(state, attacker, target, amount, shot = false) {
   if (!isAlive(target)) return false;
   if (target.invulnUntil > state.time) return false;     // تصلّب: لا يتلقى ضرراً ولا يترنّح ولا يُدفع
   retaliateIfCloser(state, attacker, target);
-  hitSound(state, target, amount);
+  // الأنماط الأربعة (القسم 3.12): الغالب أقوى على من يغلبه، والخاطف يتجاوز بعض درع الصامد، والصامد أقل تأثراً بالمقذوفات
+  const P = STYLE_PERKS, beats = !attacker.creature && !target.creature && P.beats[attacker.gang] === target.gang;
+  if (beats) amount *= 1 + P.counter[attacker.gang];
+  hitSound(state, attacker, target, amount);
   // درع الوحدة + مكافأة مراكز الشرطة المملوكة (القسم 3.8)
-  const armor = Math.min(COMBAT.maxArmor, target.stats.armor + target.armorBonus);
-  const taken = amount * (1 - armor) * target.takenMul;   // takenMul: سمة الأمة داخل أحيائها (القسم 3.10)
+  let armor = Math.min(COMBAT.maxArmor, target.stats.armor + target.armorBonus);
+  if (beats && attacker.gang === 'crows') armor *= 1 - P.pierce;
+  let taken = amount * (1 - armor) * target.takenMul;     // takenMul: سمة الأمة داخل أحيائها (القسم 3.10)
+  if (shot && target.gang === 'hammers' && !target.creature) taken *= 1 - P.shotGuard;
   target.hp -= taken;
   target.lastHitBy = attacker.playerId;            // من أسقط الزعيم (حماية الزعيم، القسم 9.5.3)
   chargeOnDamageTaken(state, target, taken);       // شحن عن كل 50 ضرراً
@@ -630,6 +668,8 @@ export function applyDamage(state, attacker, target, amount) {
     target.pendingUlt = null;
     target.flurry = null;
     target.deathTimer = COMBAT.deathTime;
+    // من الخلف تسقط على وجهها، وإلا على ظهرها (رسم فقط؛ نار الأرض ليست وحدة)
+    target.deathFront = !!attacker.stats && zoneOf(target, attacker.x, attacker.y) === 'back';
     target.path = [];
     target.target = null;
     target.selected = false;
@@ -649,14 +689,16 @@ export function spawnProjectile(state, unit, target, damage, offset = 0, fire = 
   const dist = distance(unit, target);
   const maxRange = Math.max(unit.stats.attackRange, 0.1);
   const ratio = Math.min(1, dist / maxRange);
-  const duration = COMBAT.projectileMinTime + (COMBAT.projectileMaxTime - COMBAT.projectileMinTime) * ratio;
+  // ومقذوفات الرامي أسرع (القسم 3.12)
+  const duration = (COMBAT.projectileMinTime + (COMBAT.projectileMaxTime - COMBAT.projectileMinTime) * ratio) /
+    (unit.gang === 'vipers' ? 1 + STYLE_PERKS.shotSpeed : 1);
 
-  // في المطر تخطئ بعض الرميات فتسقط قرب الهدف بلا ضرر
-  const hits = rangedShotHits(state, unit);
-  const angle = Math.random() * 6.2832;
-  const spread = COMBAT.missSpread * (0.6 + Math.random() * 0.4);
+  // في المطر تخطئ بعض الرميات فتسقط قرب الهدف بلا ضرر، وفي العاصفة الرملية أيضاً (القسم 3.11)
+  const hits = rangedShotHits(state, unit) && !stormMiss(state);
+  const angle = random() * 6.2832;
+  const spread = COMBAT.missSpread * (0.6 + random() * 0.4);
 
-  soundAt(state, unit.stats.projectile === 'stone' ? 'stone' : 'arrow', unit.x, unit.y);
+  soundAt(state, unit.stats.projectile === 'arrow' ? 'arrow' : 'stone', unit.x, unit.y);   // الحجارة والزجاجات: صوت الرمي
 
   state.projectiles.push({
     kind: unit.stats.projectile,
@@ -695,12 +737,12 @@ export function spawnFalcon(state, unit, target, damage, duration) {
 export function spawnRain(state, unit, cx, cy, ult, damage) {
   soundAt(state, 'arrow', unit.x, unit.y);
   for (let k = 0; k < ult.arrows; k++) {
-    const angle = Math.random() * 6.2832, r = Math.sqrt(Math.random()) * ult.area;
+    const angle = random() * 6.2832, r = Math.sqrt(random()) * ult.area;
     state.projectiles.push({
       kind: 'arrow', attacker: unit, target: null, damage, dodgeable: false, fire: null, hits: false,
       missX: cx + Math.cos(angle) * r, missY: cy + Math.sin(angle) * r,
       startX: unit.x, startY: unit.y, x: unit.x, y: unit.y, prevX: unit.x, prevY: unit.y,
-      t: 0, prevT: 0, duration: ult.flight + Math.random() * ult.spreadSeconds,
+      t: 0, prevT: 0, duration: ult.flight + random() * ult.spreadSeconds,
       returns: false, back: false, area: ult.hitRadius
     });
   }
@@ -713,7 +755,7 @@ function rainLanding(state, shot) {
     const dx = other.x - shot.x, dy = other.y - shot.y;
     if (dx * dx + dy * dy > areaSq) return;
     if (!isAlive(other) || !isEnemy(state, shot.attacker, other)) return;
-    applyDamage(state, shot.attacker, other, shot.damage);
+    applyDamage(state, shot.attacker, other, shot.damage, true);
   });
 }
 
@@ -749,7 +791,7 @@ function updateProjectiles(state) {
       const dodged = shot.dodgeable && isAlive(shot.target) && shot.target.cState === 'dodge';
       if (shot.damage > 0 && shot.hits && !dodged && isAlive(shot.target)) {
         const target = shot.target;
-        strike(state, shot.attacker, target, shot.damage);
+        strike(state, shot.attacker, target, shot.damage, true);
         if (isAlive(target) && !target.cState) {
           flinch(target, shot.startX, shot.startY, zoneOf(target, shot.startX, shot.startY) === 'back', false);
         }

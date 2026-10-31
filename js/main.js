@@ -14,13 +14,16 @@ import {
 import { setupPower, updatePower } from './ui/power.js';
 import { setupGroups, updateGroups, hudRects } from './ui/groups.js';
 import {
-  setupMenus, showScreen, currentScreen,
-  openExitDialog, closeExitDialog, isExitDialogOpen
+  setupMenus, showScreen, currentScreen, isLanSetup,
+  openExitDialog, closeExitDialog, isExitDialogOpen, closeGameSettings
 } from './ui/menus.js';
+import { setupLanScreen, lanBack } from './ui/lanScreen.js';
+import { lanActive, lanFrame, startLanHost } from './net/session.js';
 import { setupMenuScene, menuSceneFrame } from './ui/menuScene.js';
 import { isPickerOpen, closePicker } from './ui/picker.js';
 import { setupEmpireMenu, updateEmpireMenu, isEmpireMenuOpen, closeEmpireMenu } from './ui/empireMenu.js';
-import { initSound, startMusic } from './audio/sound.js';
+import { initSound, startMusic, setMusicCity } from './audio/sound.js';
+import { matchBlackout, introBlackout, blackoutHolds } from './ui/blackout.js';
 import { saveMatch, loadMatch, clearSavedMatch, canSaveMatch } from './matchSave.js';
 import { onBackButton, keepScreenAwake } from './platform.js';
 
@@ -32,6 +35,7 @@ initSound();
 
 // مباراة مبدئية حتى تكون هناك حالة صالحة قبل اختيار الإعدادات
 const state = createMatch(MATCH_DEFAULTS);
+setMusicCity(() => state.map.city);     // لحن الخريطة في المباراة (AUDIO.cityMusic)
 
 setupInput(canvas, state);
 setupHud(state);
@@ -42,19 +46,35 @@ setupEmpireMenu(state);
 setupMenuScene(document.getElementById('menuBg'), document.getElementById('menuBack'));
 setupMenus({
   // "ابدأ" من قائمة الإعداد
+  // (كل بداية خلف الشاشة السوداء: js/ui/blackout.js)
   startMatch(settings) {
     // مباراة جديدة تحل محل المحفوظة؛ أما ساحة التجربة فلا تُحفظ ولا تمس المحفوظة
-    if (!settings.arena) clearSavedMatch();
-    resetMatch(state, settings);
-    state.running = true;
-    showScreen('game');
+    matchBlackout(() => {
+      if (!settings.arena) clearSavedMatch();
+      resetMatch(state, settings);
+      state.running = true;
+      showScreen('game');
+    });
   },
+  // اللعب المحلي (القسم 16): المضيف يبدأ، فتُرسل المباراة لكل صديق ويدخلها الجميع معاً
+  // (لا تمس المباراة المحفوظة: المحلية لا تُحفظ)
+  startLan(settings, peerOfPlayer) {
+    matchBlackout(() => {
+      resetMatch(state, settings);
+      startLanHost(state, peerOfPlayer);
+      state.running = true;
+      showScreen('game');
+    });
+  },
+  leaveLanSetup: lanBack,
   // "متابعة المباراة": تعود من حيث توقفت (false إن كان الحفظ تالفاً)
   continueMatch() {
     if (!loadMatch(state)) return false;
-    state.running = true;
-    showScreen('game');
-    startMusic();
+    matchBlackout(() => {
+      state.running = true;
+      showScreen('game');
+      startMusic();
+    });
     return true;
   },
   // تُستدعى عند ظهور شاشة المباراة: اللوحة تأخذ مقاسها الآن
@@ -67,7 +87,10 @@ setupMenus({
   }
 });
 
+setupLanScreen(state);
+
 showScreen('main');
+introBlackout();          // تشغيل اللعبة: شاشة سوداء قصيرة (مكان مقدمة التطبيق لاحقاً)
 
 // تصغير التطبيق أو إغلاقه أو مغادرة الصفحة: تُحفظ المباراة الجارية للعودة إليها
 function saveOnLeave() {
@@ -79,10 +102,12 @@ window.addEventListener('pagehide', () => { if (canSaveMatch(state)) saveMatch(s
 // زر الرجوع في أندرويد: أثناء المباراة يفتح الإيقاف، وفي القوائم يرجع خطوة،
 // وفي القائمة الرئيسية يسأل "هل تريد الخروج؟" (القسم 2.1). في المتصفح لا يفعل شيئاً.
 onBackButton(() => {
+  if (blackoutHolds(performance.now())) return;          // الشاشة السوداء: المباراة لم تبدأ بعد
   if (isExitDialogOpen()) { closeExitDialog(); return; }
   if (isPickerOpen()) { closePicker(); return; }         // لوحة المدن أو الأمم في الإعداد: تُغلق وحدها
 
   if (currentScreen() === 'game') {
+    if (closeGameSettings()) return;                    // الإعدادات من قائمة الإيقاف: رجوع إليها
     if (isEndOpen()) { leaveToMain(state); return; }    // شاشة النهاية: رجوع للقائمة الرئيسية
     if (isPauseOpen()) { closePause(state); return; }   // الإيقاف مفتوح: رجوع خطوة
     if (isEmpireMenuOpen()) { closeEmpireMenu(state); return; }   // قائمة الحي (طور الإمبراطورية)
@@ -90,6 +115,8 @@ onBackButton(() => {
     return;
   }
 
+  // اللعب المحلي: شاشته وقائمة إعداد المضيف ترجعان خطوة (وتوقفان الاستضافة أو الانضمام)
+  if (currentScreen() === 'lan' || (currentScreen() === 'setup' && isLanSetup())) { lanBack(); return; }
   if (currentScreen() !== 'main') { showScreen('main'); return; }   // الإعداد والإعدادات والإحصائيات
   openExitDialog();                                     // القائمة الرئيسية
 });
@@ -136,35 +163,38 @@ function loop(now) {
   if (now - hudMeasuredAt > 500) { state.hudAvoid = hudRects(); hudMeasuredAt = now; }
 
   // خريطة جديدة (بداية أو إعادة أو متابعة): المدينة الظاهرة تُجهَّز على دفعات في الإطارات الأولى
-  // والمباراة لا تتقدم حتى تكتمل (أو حتى الحد الأقصى)، ولا يُعوَّض وقت التجهيز لعباً
+  // والمباراة لا تتقدم حتى تكتمل (أو حتى الحد الأقصى) وحتى ترتفع الشاشة السوداء، ولا يُعوَّض الانتظار لعباً
   if (state.map !== warmedMap && state.view.w) {
     warmedMap = state.map;
     warmUntil = now + CITY_CACHE.warmMaxMs;
   }
-  if (warmUntil) {
-    const ready = warmCity(ctx, state, CITY_CACHE.warmBudgetMs);
+  if (warmUntil || blackoutHolds(now)) {
+    if (warmUntil && (warmCity(ctx, state, CITY_CACHE.warmBudgetMs) || performance.now() > warmUntil)) warmUntil = 0;
     render(ctx, state, 0, 0);
     updateHud(state);
-    if (ready || performance.now() > warmUntil) {
-      warmUntil = 0;
-      lastTime = performance.now();
-      accumulator = 0;
-    }
+    lastTime = performance.now();
+    accumulator = 0;
     requestAnimationFrame(loop);
     return;
   }
 
-  accumulator += frameMs;
-  let steps = 0;
-  while (accumulator >= TICK_MS && steps < 5) {   // حد أقصى للتحديثات المتراكمة
-    update();
-    accumulator -= TICK_MS;
-    steps++;
+  let alpha;
+  if (lanActive()) {
+    alpha = lanFrame(state, frameMs, now);       // اللعب المحلي: التحديثات حسب أدوار المضيف (القسم 16)
+  } else {
+    accumulator += frameMs;
+    let steps = 0;
+    while (accumulator >= TICK_MS && steps < 5) {   // حد أقصى للتحديثات المتراكمة
+      update();
+      accumulator -= TICK_MS;
+      steps++;
+    }
+    if (accumulator > TICK_MS * 5) accumulator = 0;
+    alpha = accumulator / TICK_MS;
   }
-  if (accumulator > TICK_MS * 5) accumulator = 0;
 
   updateParticles(state.weather, state.view, frameMs / 1000);
-  render(ctx, state, accumulator / TICK_MS);
+  render(ctx, state, alpha);
   updateHud(state);
   updatePower(state);          // شريط القوة يتحدث كل ثانية لا كل إطار
   updateGroups(state, frameMs); // أعداد المجموعات وانتقال الكاميرا إليها

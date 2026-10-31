@@ -21,14 +21,14 @@
   <div id="screenGame" hidden>
     <canvas id="game"></canvas>
 
-    <div id="info">
-      <span id="infoSel">محدد: 0</span>
-      <span class="sep">|</span>
-      <span id="infoUnits">0/100</span>
-      <span class="sep">|</span>
-      <span id="infoDistricts">أحياء: 0</span>
-      <span class="sep">|</span>
-      <span id="infoWeather">نهار</span>
+    <!-- أعلى اليسار: شريط المعلومات، وبجانبه نقاطك ودخلك في الثانية (الاقتصاد) -->
+    <div id="topLeft">
+      <div id="info">
+        <span id="infoUnits">0/100</span>
+        <span class="sep">|</span>
+        <span id="infoDistricts">أحياء: 0</span>
+      </div>
+      <div id="points" hidden></div>
     </div>
 
     <button id="btnMode" class="btn" style="top:10px;right:10px">تحريك الخريطة</button>
@@ -55,6 +55,8 @@
     </div>
 
     <div id="notice" hidden></div>
+    <!-- اللعب المحلي (القسم 16): "بانتظار المضيف…" أو "أوقف المضيف المباراة" -->
+    <div id="lanBanner" hidden></div>
     <div id="fps" hidden></div>
 
     <!-- طور الإمبراطورية: قائمة الحي (لمستان على حيك)، صغيرة أسفل الوسط واللعب مستمر (js/ui/empireMenu.js) -->
@@ -70,8 +72,10 @@
     <!-- قائمة الإيقاف (القسم 12.4) -->
     <div id="pauseMenu" class="overlay" hidden>
       <div class="panel">
-        <h1>إيقاف مؤقت</h1>
+        <h1 id="pauseTitle">إيقاف مؤقت</h1>
         <button id="btnResume" class="wide gold">متابعة</button>
+        <!-- الإعدادات فوق المباراة نفسها (بطلب المستخدم): الصوت والكلمات الطائرة، و"رجوع" يعيد هنا -->
+        <button id="btnPauseSettings" class="wide">الإعدادات</button>
         <button id="btnRestartMatch" class="wide">إعادة المباراة</button>
         <button id="btnQuitToMain" class="wide ghost">القائمة الرئيسية</button>
       </div>
@@ -103,6 +107,8 @@
           <span id="continueInfo" class="hint"></span>
         </button>
         <button id="btnPlay" class="wide gold">لعب</button>
+        <!-- مع الأصحاب على نفس الشبكة (القسم 16): في تطبيق أندرويد -->
+        <button id="btnLan" class="wide">لعب محلي</button>
         <button id="btnStore" class="wide">المتجر</button>
         <button id="btnSettings" class="wide">الإعدادات</button>
         <button id="btnStats" class="wide">الإحصائيات</button>
@@ -117,6 +123,8 @@
   <div id="screenSetup" class="screen" hidden>
     <div class="menu setup">
       <h2>إعداد المباراة</h2>
+      <!-- اللعب المحلي: اسم المباراة وعنوان المضيف وعدد المنضمين (القسم 16) -->
+      <p id="lanHostInfo" class="hint lan-info" hidden></p>
 
       <div class="setup-cols">
         <div class="setup-options">
@@ -165,7 +173,7 @@
             </button>
           </div>
 
-          <div class="row">
+          <div id="arenaRow" class="row">
             <span class="label">تجربة القتال</span>
             <div class="options"><button id="btnArena" class="opt">ساحة: 7 غربان ضد 4 مطارق</button></div>
           </div>
@@ -200,6 +208,49 @@
           <button id="btnBackToMain" class="wide ghost">رجوع</button>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- اللعب المحلي (القسم 16): مع الأصحاب على نفس الواي فاي أو نقطة اتصال جوال (js/ui/lanScreen.js) -->
+  <div id="screenLan" class="screen" hidden>
+    <div class="menu lan">
+      <h2>لعب محلي</h2>
+
+      <!-- الشاشة الأولى (بطلب المستخدم: أسهل وأبسط): المباريات القريبة تظهر وحدها ولمسة تنضم إليها، وزر الاستضافة -->
+      <div id="lanHome">
+        <p class="hint">على نفس الواي فاي أو نقطة اتصال أحد الجوالات. الكل بنفس ملف اللعبة.</p>
+        <div class="lan-name-row">
+          <label for="lanName">اسمك</label>
+          <input id="lanName" class="text-input" type="text" maxlength="14" autocomplete="off">
+        </div>
+        <span class="label">مباريات قريبة</span>
+        <div id="lanFound" class="lan-list"></div>
+        <button id="btnLanHost" class="wide gold">استضافة مباراة جديدة</button>
+        <!-- إن لم تظهر المباراة: عنوان المضيف (يظهر عنده في أعلى قائمة الإعداد) -->
+        <button id="btnLanManual" class="lan-link" type="button">لا تظهر المباراة؟ اكتب عنوان المضيف</button>
+        <div id="lanManual" class="lan-ip-row" hidden>
+          <input id="lanIp" class="text-input" type="text" inputmode="decimal" dir="ltr" placeholder="192.168.1.5" autocomplete="off">
+          <button id="btnLanConnect" class="opt">اتصال</button>
+        </div>
+      </div>
+
+      <!-- غرفة الانتظار (المنضم): ما يعدّه المضيف، واللاعبون، وأمتك -->
+      <div id="lanLobby" hidden>
+        <p id="lanLobbyInfo" class="hint"></p>
+        <div id="lanPlayers" class="lan-list"></div>
+        <button id="btnLanSide" class="pick-btn">
+          <span class="pick-text">
+            <span class="pick-label">أمتك</span>
+            <b id="lanSideChoice"></b>
+            <span id="lanSideNote" class="hint"></span>
+          </span>
+          <span class="pick-arrow">◂</span>
+        </button>
+        <p class="hint">المضيف يختار الطور والمدينة ولونك وفريقك، ويبدأ المباراة.</p>
+      </div>
+
+      <p id="lanStatus" class="hint lan-status" hidden></p>
+      <button id="btnLanBack" class="wide ghost">رجوع</button>
     </div>
   </div>
 
@@ -330,6 +381,8 @@
   </div>
 
 </div>
+<!-- الشاشة السوداء (js/ui/blackout.js): ظاهرة من أول رسم عند تشغيل اللعبة، ثم 4 ث عند بدء كل مباراة -->
+<div id="blackout" class="on"></div>
 <script type="module" src="js/main.js"></script>
 </body>
 </html>

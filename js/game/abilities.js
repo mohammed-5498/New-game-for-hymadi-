@@ -1,6 +1,6 @@
 // قدرات الشخصيات المميزة ومكافآت الأحياء المميزة
 // (هالة الزعيم، علاج الطبيب، المستشفى، مخزن السلاح، نار الزجاجات)
-import { TICK_SEC, SPECIAL_BONUS, MAP_GEN } from '../config.js';
+import { TICK_SEC, SPECIAL_BONUS, MAP_GEN, STYLE_PERKS } from '../config.js';
 import { isEnemy, applyDamage, isEnemyId } from './combat.js';
 import { ownsSpecial } from './spawn.js';
 import { policeArmorBonus } from './police.js';
@@ -8,6 +8,8 @@ import { forEachNearby } from './spatialHash.js';
 import { soundAt } from '../audio/sound.js';
 import { homeMods, inOwnArea, brotherMods, phalanxMods, outnumberedMods, duelMods } from './nations.js';
 import { empireDamageBonus, empireArmorBonus } from './empire.js';
+import { pyramidZones, pyramidTaken, stormDamageMul, featureDamageBonus, statueZones, inZone } from './features.js';
+import { CITY_FEATURES } from '../config.js';
 
 const isAlive = (unit) => unit.state !== 'dead' && unit.hp > 0;
 const allied = (state, a, b) => a.playerId === b.playerId || !isEnemy(state, a, b);
@@ -25,9 +27,10 @@ function applyDamageBonuses(state) {
   const armoryBonus = state.players.map(p =>
     ownsSpecial(state, p.id, 'armory') ? SPECIAL_BONUS.armory.damageBonus : 0);
   // +10% درع لكل مركز شرطة مملوك، بحد أقصى +20% (القسم 3.8)، وترقيتا الدفاع والضرر في طور الإمبراطورية
-  const empire = state.mode === 'empire';
+  const empire = state.economy;
   const armorBonus = state.players.map(p => policeArmorBonus(state, p.id) + (empire ? empireArmorBonus(state, p.id) : 0));
-  const upDamage = state.players.map(p => (empire ? empireDamageBonus(state, p.id) : 0));
+  // ومالك دوجو الساموراي: كل جنوده أقوى (القسم 3.11)
+  const upDamage = state.players.map(p => (empire ? empireDamageBonus(state, p.id) + featureDamageBonus(state, p.id) : 0));
   // سمات الأمم "داخل أحيائك" (القسم 3.10): null لكل لاعب بلا سمة من هذا النوع
   const home = state.players.map(homeMods);
   // «الـ108» (الصين) و«الكتيبة» (ألمانيا): null لكل لاعب بلا هذه السمة
@@ -35,6 +38,9 @@ function applyDamageBonuses(state) {
   const phalanx = state.players.map(phalanxMods);
   const outnumbered = state.players.map(outnumberedMods);
   const duel = state.players.map(duelMods);
+  // الهرم (القسم 3.11): جنود مالكه حوله يتلقون ضرراً أقل، وتمثال ريو: أقوى وأسرع ضرباً (null بلا مبنى مملوك)
+  const pyramids = pyramidZones(state);
+  const statues = statueZones(state);
 
   // نبدأ من الصفر (المضاعف النهائي يُحسب في الحلقة الأخيرة بنفس ترتيب الجمع)
   // كتابة العدد العشري في خاصية الوحدة تحجز ذاكرة: لا نكتب إلا ما تغيّر فعلاً
@@ -73,12 +79,12 @@ function applyDamageBonuses(state) {
     // تحفيز الزعيم أو بطل العقارب: مكافأة مؤقتة تُجمع فوق الباقي
     if (unit.buffUntil > state.time) multiplier += unit.buffDamage;
     // سمة الأمة داخل أحيائها: ضرر أكبر، أو ضرر متلقى أقل
+    let taken = 1;
     const mods = home[unit.playerId];
     if (mods) {
       const inside = inOwnArea(state.map, unit);
       if (inside && mods.homeDamage) multiplier += mods.homeDamage;
-      const taken = inside && mods.homeDamageTaken ? 1 - mods.homeDamageTaken : 1;
-      if (unit.takenMul !== taken) unit.takenMul = taken;
+      if (inside && mods.homeDamageTaken) taken = 1 - mods.homeDamageTaken;
     }
     if (unit.brothers) {
       const b = brothers[unit.playerId];
@@ -92,12 +98,34 @@ function applyDamageBonuses(state) {
     if (du && oneOnOne(state, unit, du.radius)) multiplier += du.bonus;
     // «الكتيبة»: ضرر متلقى أقل للوحدة داخل مجموعة كبيرة من وحدات لاعبها
     const ph = phalanx[unit.playerId];
-    if (ph) {
-      const taken = inGroup(state, unit, ph) ? 1 - ph.reduce : 1;
-      if (unit.takenMul !== taken) unit.takenMul = taken;
+    if (ph && inGroup(state, unit, ph)) taken = 1 - ph.reduce;
+    if (pyramids) taken *= pyramidTaken(pyramids, unit);
+    if (unit.takenMul !== taken) unit.takenMul = taken;
+    let speed = 0;
+    if (statues && inZone(statues, unit)) {
+      multiplier += CITY_FEATURES.statue.damage;
+      speed = CITY_FEATURES.statue.attackSpeed;
     }
+    if (unit.auraSpeed !== speed) unit.auraSpeed = speed;
+    if (unit.rallyUntil > state.time) multiplier += CITY_FEATURES.cathedral.damage;   // أجراس الكاتدرائية (القسم 3.11)
+    // الحشد (القسم 3.12): أقوى كلما اجتمع، وكل الجنود أضعف ضرراً إلا المخلوقات
+    if (unit.gang === 'scorpions' && !unit.creature) multiplier += hordeBonus(state, unit);
+    if (!unit.creature) multiplier *= STYLE_PERKS.soldierDamage;
     if (unit.damageMultiplier !== multiplier) unit.damageMultiplier = multiplier;
   }
+}
+
+// مكافأة اجتماع الحشد: أفراده من لاعبه حوله (ومعهم هو نفسه) حسب درجات STYLE_PERKS.horde.tiers
+function hordeBonus(state, unit) {
+  const H = STYLE_PERKS.horde, radiusSq = H.radius * H.radius;
+  let count = 0;
+  forEachNearby(state, unit.x, unit.y, H.radius, (other) => {
+    if (other.playerId !== unit.playerId || other.gang !== 'scorpions' || other.creature || !isAlive(other)) return;
+    const dx = other.x - unit.x, dy = other.y - unit.y;
+    if (dx * dx + dy * dy <= radiusSq) count++;
+  });
+  for (const [n, bonus] of H.tiers) if (count >= n) return bonus;
+  return 0;
 }
 
 function spreadAura(state, boss, aura) {
@@ -236,7 +264,7 @@ function medicHeal(state, medic) {
 }
 
 function heal(unit, amount) {
-  unit.hp = Math.min(unit.maxHp, unit.hp + amount);
+  unit.hp = Math.min(unit.maxHp, unit.hp + amount * STYLE_PERKS.soldierHeal);
 }
 
 // --- النار على الأرض: زجاجة رامي النار أو سهم بطل الأفاعي المشتعل ---
@@ -255,6 +283,7 @@ export function createFire(state, playerId, i, j, fire) {
 function updateFires(state) {
   if (!state.fires.length) return;
   const remaining = [];
+  const weak = stormDamageMul(state);     // العاصفة الرملية تضعف النار (القسم 3.11)
 
   for (const fire of state.fires) {
     fire.life -= TICK_SEC;
@@ -266,7 +295,7 @@ function updateFires(state) {
       if (!isAlive(unit)) return;
       if (!isEnemyId(state, fire.playerId, unit.playerId)) return;   // العدو فقط
       // درع المطارق "ضد كل أنواع الضرر"، فيسري على النار أيضاً
-      applyDamage(state, { playerId: fire.playerId }, unit, fire.damagePerSecond * TICK_SEC);
+      applyDamage(state, { playerId: fire.playerId }, unit, fire.damagePerSecond * TICK_SEC * weak);
     });
 
     if (fire.life > 0) remaining.push(fire);

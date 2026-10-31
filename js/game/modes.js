@@ -1,5 +1,5 @@
-// أطوار اللعب (القسم 9.5): ما يخص كل طور من عدّاد ونقاط وشروط فوز وواجهة
-// السيطرة الكاملة (الافتراضي) لا تمر بشيء هنا: قواعدها كما كانت في victory.js.
+// أطوار اللعب (القسم 9.5): ما يخص كل طور من عدّاد ونقاط وشروط فوز وواجهة. كلها على اقتصاد الإمبراطورية
+// (empire.js، بطلب المستخدم: بنية اللعبة نفسها)، والطور يضيف شرط فوزه. السيطرة الكاملة: آخر من يبقى (victory.js)
 import { TICK_SEC, ALERTS, COMBAT, BOT, gameModes as GM } from '../config.js';
 import { isPlayerAlive, finish } from './victory.js';
 import { isEnemy, isEnemyId } from './combat.js';
@@ -12,6 +12,8 @@ import { setSummonHook } from './ults.js';
 import { sound } from '../audio/sound.js';
 import { hypot } from './hypot.js';
 import { initEmpire, updateEmpire, incomeOf } from './empire.js';
+import { featureBar } from './features.js';
+import { random } from './random.js';   // عشوائية المنطق: مشتركة بين الأجهزة في اللعب المحلي
 
 export const modeOf = (state) => (state.mode && GM[state.mode]) ? state.mode : 'conquest';
 
@@ -20,16 +22,20 @@ export const sideKey = (player) => player.team ? 'team' + player.team : 'player'
 
 const gangPlayers = (state) => state.players.filter(p => !p.neutral);
 
+// الاقتصاد (النقاط والإنتاج والترقيات والمباني) في كل مباراة لها طور. وبلا طور مذكور (ساحة التجربة
+// وخلفية القوائم): ظهور تلقائي كما كان، بلا اقتصاد
+export const economyOf = (settings) => !!GM[settings.mode] && !settings.arena;
+
 // --- البداية ---
 export function initMode(state) {
-  state.mode = GM[state.settings.mode] ? state.settings.mode : GM.defaultMode;
+  state.mode = GM[state.settings.mode] ? state.settings.mode : 'conquest';
+  state.economy = economyOf(state.settings);
   const options = state.settings.modeOptions || {};
   const modeState = {};
 
   if (state.mode === 'points') {
     const minutes = GM.points.minutes.includes(options.minutes) ? options.minutes : GM.points.defaultMinutes;
     modeState.duration = minutes * 60;
-    modeState.scores = state.players.map(() => 0);
     modeState.finalAnnounced = false;
   }
 
@@ -57,9 +63,10 @@ export function initMode(state) {
     modeState.nextWaveAt = S.firstWaveSeconds;
     modeState.retargetAt = 0;
     modeState.record = null;                  // يُملأ عند النهاية: { best, newRecord }
+    modeState.incomeMul = S.incomeMul[modeState.level];   // دخل النقاط أقل في هذا الطور (collectIncome في empire.js)
   }
 
-  if (state.mode === 'empire') initEmpire(state, modeState);   // النقاط والقواعد الرئيسية (empire.js)
+  if (state.economy) initEmpire(state, modeState);   // النقاط والقواعد الرئيسية (empire.js)
   state.modeState = modeState;
 }
 
@@ -83,7 +90,7 @@ export function updateMode(state) {
   else if (state.mode === 'king') updateKing(state);
   else if (state.mode === 'regicide') updateRegicide(state);
   else if (state.mode === 'survival') updateSurvival(state);
-  else if (state.mode === 'empire') updateEmpire(state);
+  if (state.economy && !state.matchResult) updateEmpire(state);
 }
 
 // ================= 9.5.2 الوقت بالنقاط =================
@@ -91,18 +98,11 @@ export const pointsRemaining = (state) => Math.max(0, state.modeState.duration -
 export const isFinalMinute = (state) =>
   state.mode === 'points' && pointsRemaining(state) <= GM.points.finalSeconds;
 
+// النتيجة كل ما جمعه اللاعب من نقاط الاقتصاد (ms.earned، والصرف لا ينقصها)، ودخلها مضاعف في الدقيقة الأخيرة
 function updatePoints(state) {
   const ms = state.modeState;
   const final = isFinalMinute(state);
-  const multiplier = final ? GM.points.finalMultiplier : 1;
-
-  // النقاط تتراكم: كل حي نقطة في الثانية، والمميز نقطتان
-  for (const district of state.map.districts) {
-    if (district.owner === null || !district.capture) continue;
-    if (state.players[district.owner].neutral) continue;
-    const perSecond = district.special ? GM.points.pointPerSpecial : GM.points.pointPerDistrict;
-    ms.scores[district.owner] += perSecond * multiplier * TICK_SEC;
-  }
+  ms.incomeMul = final ? GM.points.finalMultiplier : 1;          // يضربه collectIncome في empire.js
 
   if (final && !ms.finalAnnounced) {
     ms.finalAnnounced = true;
@@ -124,7 +124,8 @@ function armyWeight(state, playerId) {
   return total;
 }
 
-// نتيجة كل جانب: مجموع نقاط أعضائه وجيوشهم وأحيائهم (من أُقصي كل أعضائه لا يفوز)
+// نتيجة كل جانب: متوسط نقاط أعضائه (بطلب المستخدم: مجموعها ÷ عددهم، كشريط القوة)، ومجموع جيوشهم وأحيائهم
+// لحسم التعادل (من أُقصي كل أعضائه لا يفوز)
 export function sideTotals(state) {
   const sides = new Map();
   for (const player of gangPlayers(state)) {
@@ -132,11 +133,12 @@ export function sideTotals(state) {
     if (!sides.has(key)) sides.set(key, { key, players: [], points: 0, army: 0, districts: 0, alive: false });
     const side = sides.get(key);
     side.players.push(player);
-    side.points += state.modeState.scores ? state.modeState.scores[player.id] : 0;
+    side.points += state.modeState.earned ? state.modeState.earned[player.id] : 0;
     side.army += armyWeight(state, player.id);
     side.districts += state.map.districts.filter(d => d.owner === player.id).length;
     if (isPlayerAlive(state, player.id)) side.alive = true;
   }
+  for (const side of sides.values()) side.points /= side.players.length;
   return [...sides.values()];
 }
 
@@ -170,7 +172,8 @@ export function pickHill(map) {
   const center = (map.n - 1) / 2;
   let best = null, bestDist = Infinity;
   for (const d of map.districts) {
-    if (!d.capture || d.isHome || d.police || d.tiles.length < GM.king.hillMinTiles) continue;
+    // ولا حي ميزة مدينة (القسم 3.11): الهرم والقرى تبقى لما هي له
+    if (!d.capture || d.isHome || d.police || d.feature || d.tiles.length < GM.king.hillMinTiles) continue;
     const dist = hypot(d.cx - center, d.cy - center);
     if (dist < bestDist) { bestDist = dist; best = d; }
   }
@@ -296,7 +299,7 @@ function fallLeader(state, player) {
 
   for (const unit of state.units) {
     if (unit.playerId !== player.id || unit.state === 'dead') continue;
-    unit.fadeAt = state.time + Math.random() * R.fadeSeconds;
+    unit.fadeAt = state.time + random() * R.fadeSeconds;
   }
   for (const district of state.map.districts) {
     if (district.owner !== player.id) continue;
@@ -496,7 +499,7 @@ function waveSources(state, fronts) {
     if (spot) all.push({ i: spot[0], j: spot[1] });
   }
   if (!all.length) return [];
-  const chosen = [all[Math.floor(Math.random() * all.length)]];
+  const chosen = [all[Math.floor(random() * all.length)]];
   while (chosen.length < fronts && chosen.length < all.length) {
     let best = null, bestD = -1;
     for (const c of all) {
@@ -591,7 +594,7 @@ function saveSurvivalBest(level, record) {
   try { localStorage.setItem(recordKey(level), JSON.stringify(record)); } catch { /* لا تخزين */ }
 }
 
-const policeAlive = (state) => state.units.filter(u => u.state !== 'dead' && state.players[u.playerId].neutral).length;
+const policeAlive = (state) => state.units.filter(u => u.state !== 'dead' && state.players[u.playerId].gang === 'police').length;
 
 // ================= الواجهة =================
 const clock = (seconds) => {
@@ -599,8 +602,23 @@ const clock = (seconds) => {
   return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
 };
 
-// شريط أعلى وسط الشاشة: { text, alarm } أو null حين لا يلزم (السيطرة الكاملة)
+// نقاطك ودخلك في الثانية (الاقتصاد): مؤشر صغير أعلى اليسار بجانب شريط المعلومات، أو null بلا اقتصاد
+export function pointsBar(state) {
+  if (!state.economy) return null;
+  return 'النقاط: ' + Math.floor(state.modeState.points[state.humanId] || 0) +
+    ' • +' + incomeOf(state, state.humanId).toFixed(1) + '/ث';
+}
+
+// شريط أعلى وسط الشاشة: { text, alarm } أو null حين لا يلزم. ما يخص الطور، ثم ميزة المدينة
+// حين تعني شيئاً الآن (العاصفة الرملية الجارية أو القريبة، القسم 3.11)
 export function modeBar(state) {
+  const bar = modeOnlyBar(state);
+  const feature = state.economy ? featureBar(state) : null;
+  if (!feature) return bar;
+  return bar ? { ...bar, text: bar.text + ' • ' + feature.text, alarm: bar.alarm || feature.alarm } : feature;
+}
+
+function modeOnlyBar(state) {
   if (state.mode === 'points') {
     return { text: clock(pointsRemaining(state)), alarm: isFinalMinute(state) };
   }
@@ -616,11 +634,6 @@ export function modeBar(state) {
       bars: sides.map(s => ({ color: s.color, ratio: s.held / ms.target, me: isHumanSide(state, s) }))
     };
   }
-  if (state.mode === 'empire') {
-    // نقاطك ودخلك في الثانية (الدخل من أحيائك وقواعدك الآن)
-    const points = Math.floor(state.modeState.points[state.humanId] || 0);
-    return { text: 'النقاط: ' + points + ' • +' + incomeOf(state, state.humanId).toFixed(1) + ' في الثانية' };
-  }
   if (state.mode === 'survival') {
     const ms = state.modeState;
     const left = nextWaveIn(state);
@@ -633,22 +646,17 @@ export function modeBar(state) {
   return null;
 }
 
-// عمود شريط القوة: قيمة كل لاعب حسب الطور، وعنوان الطي
+// عمود شريط القوة: قيمة كل لاعب حسب الطور (sortValue رقماً وshow نصاً)، وعنوان الطي.
+// وقيمة الفريق مجموع أفراده كما يحسبه الطور، إلا النقاط: متوسطهم (teamAverage، بطلب المستخدم)
 export function powerColumn(state) {
-  if (state.mode === 'empire') {
-    const points = state.modeState.points;
+  // الوقت بالنقاط: ما جمعه كل لاعب (نتيجته). والسيطرة الكاملة: نقاطه الآن
+  if (state.economy && (state.mode === 'points' || state.mode === 'conquest')) {
+    const points = state.mode === 'points' ? state.modeState.earned : state.modeState.points;
     return {
-      value: (playerId) => Math.floor(points[playerId]),
       sortValue: (playerId) => points[playerId],
+      show: Math.floor,
+      teamAverage: true,
       folded: 'نقاطي: ' + Math.floor(points[state.humanId] || 0)
-    };
-  }
-  if (state.mode === 'points') {
-    const scores = state.modeState.scores;
-    return {
-      value: (playerId) => Math.floor(scores[playerId]),
-      sortValue: (playerId) => scores[playerId],
-      folded: 'نقاطي: ' + Math.floor(scores[state.humanId] || 0)
     };
   }
   if (state.mode === 'regicide') {
@@ -661,8 +669,8 @@ export function powerColumn(state) {
     };
     const mine = championOf(state, state.humanId);
     return {
-      value: (playerId) => counts[playerId],
       sortValue: (playerId) => counts[playerId],
+      show: (v) => v,
       bar: ratio,
       folded: 'زعيمي: ' + (mine ? Math.round(100 * mine.hp / mine.maxHp) + '%' : 'سقط')
     };
@@ -670,8 +678,8 @@ export function powerColumn(state) {
   if (state.mode === 'king') {
     const held = state.modeState.held;
     return {
-      value: (playerId) => clock(held[playerId]),
       sortValue: (playerId) => held[playerId],
+      show: clock,
       folded: 'التلة: ' + clock(held[state.humanId] || 0)
     };
   }
@@ -686,8 +694,17 @@ export function powerColumn(state) {
   return null;
 }
 
-// بطاقات إضافية في شاشة النهاية
+// بطاقات إضافية في شاشة النهاية: ما يخص الطور، ثم ما جمعته من نقاط والزعماء الذين أسقطتهم (بلا تكرار)
 export function modeExtras(state) {
+  const extras = modeOnlyExtras(state);
+  if (!state.economy) return extras;
+  const ms = state.modeState, me = state.humanId;
+  if (state.mode !== 'points') extras.push(['نقاط جمعتها', Math.floor(ms.earned[me] || 0)]);
+  if (state.mode !== 'regicide') extras.push(['زعماء أسقطتهم', ms.bounties[me] || 0]);
+  return extras;
+}
+
+function modeOnlyExtras(state) {
   if (state.mode === 'points') {
     const human = state.players[state.humanId];
     const mine = human ? sideTotals(state).find(s => s.key === sideKey(human)) : null;
@@ -699,10 +716,6 @@ export function modeExtras(state) {
   }
   if (state.mode === 'regicide') {
     return [['زعماء أسقطتهم', state.modeState.leaderKills]];
-  }
-  if (state.mode === 'empire') {
-    const ms = state.modeState;
-    return [['نقاط جمعتها', Math.floor(ms.earned[state.humanId] || 0)], ['زعماء أسقطتهم', ms.leaderKills[state.humanId] || 0]];
   }
   if (state.mode === 'survival') {
     const ms = state.modeState;
