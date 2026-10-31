@@ -433,6 +433,7 @@ function fightTarget(state, unit, budget) {
       }
       if (unit.auraSpeed) attackTime /= 1 + unit.auraSpeed;      // هالة تمثال ريو (القسم 3.11)
       if (ranged && unit.gang === 'vipers') attackTime /= 1 + STYLE_PERKS.fireRate;   // الرامي يرمي أسرع (القسم 3.12)
+      if (unit.gang === 'crows' && !unit.creature) attackTime /= 1 + STYLE_PERKS.swiftRate;   // والخاطف يضرب أسرع
 
       // الرمي البعيد يبقى ضربة واحدة كما هي؛ والقتال القريب يستعمل الحركات الأربع
       if (ranged) rangedSwing(state, unit, target, damage, attackTime);
@@ -644,7 +645,7 @@ export function applyDamage(state, attacker, target, amount, shot = false) {
   retaliateIfCloser(state, attacker, target);
   // الأنماط الأربعة (القسم 3.12): الغالب أقوى على من يغلبه، والخاطف يتجاوز بعض درع الصامد، والصامد أقل تأثراً بالمقذوفات
   const P = STYLE_PERKS, beats = !attacker.creature && !target.creature && P.beats[attacker.gang] === target.gang;
-  if (beats) amount *= 1 + P.counter;
+  if (beats) amount *= 1 + P.counter[attacker.gang];
   hitSound(state, attacker, target, amount);
   // درع الوحدة + مكافأة مراكز الشرطة المملوكة (القسم 3.8)
   let armor = Math.min(COMBAT.maxArmor, target.stats.armor + target.armorBonus);

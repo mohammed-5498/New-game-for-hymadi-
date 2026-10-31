@@ -1068,33 +1068,38 @@ input[type=range].muted { opacity: .4; }
   font-size: 16px;
   line-height: 1;
 }
-.em-title { margin: 5px 2px 3px; font-size: 12px; font-weight: 700; color: var(--text-dim); }
-.em-note { font-weight: 400; }
+.em-title { margin: 3px 2px 2px; font-size: 11.5px; font-weight: 700; color: var(--text-dim); }
 .em-stats { margin: 0 2px 4px; font-size: 12px; color: var(--text); }
 /* حجم الحي وما يغيّره (القسم 3.12) */
 .em-size { margin: 2px 2px 0; font-size: 11.5px; color: var(--text-dim); }
 .em-slots { display: flex; flex-wrap: wrap; justify-content: center; gap: 5px; }
 .em-slot {
-  flex: 0 0 92px;
-  min-height: 54px;
+  flex: 0 0 74px;
+  min-height: 44px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 1px;
-  padding: 4px 3px;
+  padding: 3px 2px;
   background: var(--btn);
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: 9px;
   color: var(--text);
   font: inherit;
   line-height: 1.25;
 }
 .em-slot b, .em-slot small { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.em-slot b { font-size: 13px; }
-.em-art { width: 40px; height: 30px; }
-.em-desc { font-size: 10px; color: var(--text-dim); }
-.em-cost { font-size: 13px; font-weight: 700; color: var(--gold); }
+.em-slot b { font-size: 11.5px; }
+.em-art { width: 32px; height: 24px; }
+.em-cost { font-size: 12px; font-weight: 700; color: var(--gold); }
+/* رموز المزايا بأرقامها بدل الوصف (بطلب المستخدم): في الخانات، وسطر حجم الحي، وقدرة المبنى */
+.em-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 2px 6px; }
+.em-size.em-chips, .em-stats.em-chips { justify-content: flex-start; }
+.em-chip { display: inline-flex; align-items: center; gap: 2px; font-size: 10.5px; line-height: 1.2; color: var(--text-dim); direction: ltr; white-space: nowrap; }
+.em-chip svg { width: 11px; height: 11px; flex: 0 0 auto; }
+.em-size .em-chip, .em-stats .em-chip { font-size: 11.5px; color: var(--text); }
+.em-size .em-chip svg, .em-stats .em-chip svg { width: 12px; height: 12px; color: var(--gold); }
 .em-why { font-size: 10px; color: var(--danger); }
 .em-why:empty { display: none; }
 /* معطلة: باهتة وتبقى قابلة للمس (اللمس يومض سببها) */
@@ -1106,7 +1111,7 @@ input[type=range].muted { opacity: .4; }
 @keyframes em-deny { 0%, 60% { color: #fff; text-shadow: 0 0 6px var(--danger); } }
 /* المستويات: دائرة لكل مستوى، والمكتمل ممتلئ */
 .em-pips { display: flex; gap: 3px; margin: 1px 0; }
-.em-pips i { width: 7px; height: 7px; border-radius: 50%; border: 1px solid var(--gold); box-sizing: border-box; }
+.em-pips i { width: 6px; height: 6px; border-radius: 50%; border: 1px solid var(--gold); box-sizing: border-box; }
 .em-pips i.on { background: var(--gold); }
 /* طابور القاعدة: تقدم أول طلب */
 .em-queue { display: flex; align-items: center; gap: 6px; margin: 5px 2px 0; font-size: 11px; color: var(--text-dim); white-space: nowrap; }

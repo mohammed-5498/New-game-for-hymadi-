@@ -124,7 +124,8 @@ function armyWeight(state, playerId) {
   return total;
 }
 
-// نتيجة كل جانب: مجموع نقاط أعضائه وجيوشهم وأحيائهم (من أُقصي كل أعضائه لا يفوز)
+// نتيجة كل جانب: متوسط نقاط أعضائه (بطلب المستخدم: مجموعها ÷ عددهم، كشريط القوة)، ومجموع جيوشهم وأحيائهم
+// لحسم التعادل (من أُقصي كل أعضائه لا يفوز)
 export function sideTotals(state) {
   const sides = new Map();
   for (const player of gangPlayers(state)) {
@@ -137,6 +138,7 @@ export function sideTotals(state) {
     side.districts += state.map.districts.filter(d => d.owner === player.id).length;
     if (isPlayerAlive(state, player.id)) side.alive = true;
   }
+  for (const side of sides.values()) side.points /= side.players.length;
   return [...sides.values()];
 }
 

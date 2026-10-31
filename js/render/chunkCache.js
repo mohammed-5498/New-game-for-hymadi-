@@ -275,13 +275,15 @@ function borderOf(map, i, j) {
   if (!mask) return null;
   const B = DISTRICT_SIZES.border, amount = tintAmount(district, 1);
   // الحي المحصن (القسم 3.12): سور على أضلاع مبانيه المطلة، والساحة والأرض والممرات مداخل بحدها العادي
-  const fort = district.fort || 0, walls = fort && !map.isWalkable(i, j) ? mask : 0;
+  // والمربع الذي يُمشى عليه (ساحة، أرض، ممر) مدخل: بوابة بقوس مفتوح مكان السور، فيحيط السور بالحي كله
+  const fort = district.fort || 0, open = map.isWalkable(i, j);
+  const walls = fort && !open ? mask : 0, gates = fort && open ? mask : 0;
   // الحد يتأقلم مع مبنى الحي (11هـ): أغطية أعمدته وحافة سوره بلون مبناه، أو بلون هالة ميزة المدينة
   const glow = district.feature && CITY_FEATURES.colors[district.feature];
   const accent = (district.building && B.accents[district.building]) || (glow ? 'rgb(' + glow + ')' : null);
   return amount > 0
-    ? { mask, walls, fort, accent, size: sizeOf(district), color: district.tintColor, alpha: amount, owned: true }
-    : { mask, walls, fort, accent, size: sizeOf(district), color: B.neutral, alpha: B.neutralAlpha, owned: false };
+    ? { mask, walls, gates, fort, accent, d, i, j, size: sizeOf(district), color: district.tintColor, alpha: amount, owned: true }
+    : { mask, walls, gates, fort, accent, d, i, j, size: sizeOf(district), color: B.neutral, alpha: B.neutralAlpha, owned: false };
 }
 
 // أعمدة السياج والسور: مستطيل بلون الحد وحافته الداكنة، وغطاء فاتح فوقه
@@ -304,7 +306,7 @@ function drawPosts(ctx, list, color, alpha, P, cap = null) {
 
 // أعمدة المربع في جهة (back: خلف مبناه مع الأرض، وإلا أمامه بعد رسمه): منتصفات الأضلاع (السياج) والأركان
 function postsOf(look, x, y, back, out) {
-  const S = DISTRICT_SIZES.border[look.size], mask = look.mask & ~look.walls;   // أضلاع السور بلا أعمدة
+  const S = DISTRICT_SIZES.border[look.size], mask = look.mask & ~(look.walls | look.gates);   // أضلاع السور والبوابات بلا أعمدة
   if (!S.post) return;
   if (S.mids) {
     for (let e = 0; e < 4; e++) {
@@ -319,12 +321,35 @@ function postsOf(look, x, y, back, out) {
 // --- أسوار التحصين (القسم 3.12، EMPIRE.fortify) ---
 // أضلاع السور في جهة (back: خلف مبنى المربع مع الأرض، وإلا أمامه بعده): [ax, ay, bx, by, مائل يميناً؟]،
 // وأبراج أركانه حيث يلتقي ضلعا سور (من المستوى 2)
-function wallsOf(look, x, y, back, segs, towers) {
-  if (!look.walls) return;
+// أطراف ضلع السور مضبوطة على ركن الحي حتى لا تبقى فجوة: في إحداثيات المربعات الأضلاع أفقية وعمودية، والسور مزاح
+// للداخل INSET مربع (مقابل inset بوحدات الشاشة). لكل طرف: m اتجاهه من منتصف الضلع، وn اتجاه الضلع للخارج:
+// ركن بارز (لا جار للمربع في اتجاه m) يدخل نحو مركز المربع، وضلع مستقيم يبقى، وركن داخل (الجار وقطريّه من الحي)
+// يمتد نحو m فيلتقي بضلع المربع المجاور
+const INSET = CAPTURE.border.inset * Math.hypot(TILE_HALF_W, TILE_HALF_H) / (2 * TILE_HALF_W * TILE_HALF_H);
+const EDGE_TILES = [
+  { n: [-1, 0], a: [-0.5, 0.5], b: [-0.5, -0.5] },     // غربي: الركن الأيسر ← الأعلى
+  { n: [1, 0], a: [0.5, -0.5], b: [0.5, 0.5] },        // شرقي: الأيمن ← الأسفل
+  { n: [0, -1], a: [-0.5, -0.5], b: [0.5, -0.5] },     // شمالي: الأعلى ← الأيمن
+  { n: [0, 1], a: [0.5, 0.5], b: [-0.5, 0.5] }         // جنوبي: الأسفل ← الأيسر
+];
+function wallEnds(map, look, e, x, y) {
+  const E = EDGE_TILES[e], i = look.i, j = look.j;
+  const inD = (a, b) => map.inBounds(a, b) && map.districtAt[map.idx(a, b)] === look.d;
+  const end = (P) => {
+    const mu = Math.sign(P[0] - (E.a[0] + E.b[0]) / 2), mv = Math.sign(P[1] - (E.a[1] + E.b[1]) / 2);
+    const k = !inD(i + mu, j + mv) ? -1 : inD(i + mu + E.n[0], j + mv + E.n[1]) ? 1 : 0;
+    const u = P[0] + INSET * (-E.n[0] + k * mu), v = P[1] + INSET * (-E.n[1] + k * mv);
+    return [x + (u - v) * TILE_HALF_W, y + (u + v) * TILE_HALF_H];
+  };
+  const A = end(E.a), B = end(E.b);
+  return [A[0], A[1], B[0], B[1], e < 2 ? 1 : 0];
+}
+
+function wallsOf(map, look, x, y, back, segs, towers, gates) {
+  if (!look.walls && !look.gates) return;
   for (let e = 0; e < 4; e++) {
-    if (!(look.walls & (1 << e)) || !!(BACK_EDGES & (1 << e)) !== back) continue;
-    const [, , ax, ay, bx, by] = EDGES[e];
-    segs.push(x + ax, y + ay, x + bx, y + by, e < 2 ? 1 : 0);
+    if (!((look.walls | look.gates) & (1 << e)) || !!(BACK_EDGES & (1 << e)) !== back) continue;
+    (look.gates & (1 << e) ? gates : segs).push(...wallEnds(map, look, e, x, y));
   }
   if (!EMPIRE.fortify.levels[look.fort - 1].tower) return;
   for (const c of CORNERS) if (c.back === back && (look.walls & c.need) === c.need) towers.push(x + c.x, y + c.y);
@@ -376,20 +401,13 @@ function drawWalls(ctx, segs, color, alpha, fort) {
   ctx.stroke();
 }
 
-// أبراج الأركان: جسم حجري بجانبين (الأيمن أغمق)، وسقف بلون المالك، وراية على سارية في المستوى 3
-function drawTowers(ctx, list, color, alpha, fort) {
-  const F = EMPIRE.fortify, L = F.levels[fort - 1], T = L.tower;
-  const body = (half) => {
-    ctx.beginPath();
-    for (let n = 0; n < list.length; n += 2) {
-      const x = list[n], y = list[n + 1];
-      if (half === 0) ctx.rect(x - T.w / 2, y - T.h, T.w / 2, T.h);
-      else ctx.rect(x, y - T.h, T.w / 2, T.h);
-    }
-  };
+// عمود حجري بجانبين (الأيمن أغمق) عرضه w وارتفاعه h، وسقف معين بلون المالك: أبراج الأركان وأعمدة البوابات
+function pillars(ctx, list, color, alpha, w, h) {
+  const F = EMPIRE.fortify;
   ctx.globalAlpha = Math.max(alpha, 0.85);
   for (const half of [0, 1]) {
-    body(half);
+    ctx.beginPath();
+    for (let n = 0; n < list.length; n += 2) ctx.rect(half ? list[n] : list[n] - w / 2, list[n + 1] - h, w / 2, h);
     ctx.fillStyle = F.stone;
     ctx.fill();
     ctx.fillStyle = F.shade[half];
@@ -398,16 +416,69 @@ function drawTowers(ctx, list, color, alpha, fort) {
     ctx.strokeStyle = F.edge;
     ctx.stroke();
   }
-  ctx.beginPath();                                   // السقف: معين بلون المالك
+  ctx.beginPath();
   for (let n = 0; n < list.length; n += 2) {
-    const x = list[n], y = list[n + 1] - T.h;
-    ctx.moveTo(x - T.w / 2 - 0.6, y); ctx.lineTo(x, y - T.w * 0.35); ctx.lineTo(x + T.w / 2 + 0.6, y); ctx.lineTo(x, y + T.w * 0.35); ctx.closePath();
+    const x = list[n], y = list[n + 1] - h;
+    ctx.moveTo(x - w / 2 - 0.6, y); ctx.lineTo(x, y - w * 0.35); ctx.lineTo(x + w / 2 + 0.6, y); ctx.lineTo(x, y + w * 0.35); ctx.closePath();
   }
   ctx.globalAlpha = alpha;
   ctx.fillStyle = color;
   ctx.fill();
   ctx.strokeStyle = F.edge;
   ctx.stroke();
+}
+
+// البوابات: عتبة حجرية فوق قوس مفتوح يُمشى من تحته (أعلى من السور)، وأعلاها بلون المالك، وعمودان على طرفيها،
+// وراية معلقة في وسطها في المستوى 3
+function drawGates(ctx, segs, color, alpha, fort) {
+  const F = EMPIRE.fortify, L = F.levels[fort - 1], G = F.gate, h = L.wall + G.extra;
+  const spring = h * G.spring, apex = h * G.apex;
+  const lintel = (slant) => {
+    ctx.beginPath();
+    for (let n = 0; n < segs.length; n += 5) {
+      if (slant !== null && segs[n + 4] !== slant) continue;
+      const ax = segs[n], ay = segs[n + 1], bx = segs[n + 2], by = segs[n + 3];
+      ctx.moveTo(ax, ay - h); ctx.lineTo(bx, by - h);
+      for (let k = 0; k <= 12; k++) {
+        const t = 1 - k / 12, lift = spring + Math.sin(Math.PI * t) * (apex - spring);
+        ctx.lineTo(ax + (bx - ax) * t, ay + (by - ay) * t - lift);
+      }
+      ctx.closePath();
+    }
+  };
+  ctx.globalAlpha = Math.max(alpha, 0.85);
+  lintel(null);
+  ctx.fillStyle = F.stone;
+  ctx.fill();
+  ctx.lineWidth = 0.5;
+  ctx.strokeStyle = F.edge;
+  ctx.stroke();
+  for (const slant of [0, 1]) { lintel(slant); ctx.fillStyle = F.shade[slant]; ctx.fill(); }
+  ctx.beginPath();                                   // أعلى البوابة بلون المالك
+  for (let n = 0; n < segs.length; n += 5) { ctx.moveTo(segs[n], segs[n + 1] - h); ctx.lineTo(segs[n + 2], segs[n + 3] - h); }
+  ctx.globalAlpha = alpha;
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = color;
+  ctx.lineWidth = L.band;
+  ctx.stroke();
+  if (L.banners) {                                   // راية معلقة في وسط العتبة
+    ctx.beginPath();
+    for (let n = 0; n < segs.length; n += 5) {
+      const cx = (segs[n] + segs[n + 2]) / 2, cy = (segs[n + 1] + segs[n + 3]) / 2 - h + 0.8;
+      ctx.rect(cx - 1.3, cy, 2.6, apex - spring + 0.4);
+    }
+    ctx.fillStyle = color;
+    ctx.fill();
+  }
+  const ends = [];
+  for (let n = 0; n < segs.length; n += 5) ends.push(segs[n], segs[n + 1], segs[n + 2], segs[n + 3]);
+  pillars(ctx, ends, color, alpha, G.pillar.w, h + G.pillar.extra);
+}
+
+// أبراج الأركان: الأعمدة نفسها أكبر، وراية على سارية في المستوى 3
+function drawTowers(ctx, list, color, alpha, fort) {
+  const F = EMPIRE.fortify, L = F.levels[fort - 1], T = L.tower;
+  pillars(ctx, list, color, alpha, T.w, T.h);
   if (!L.banners) return;
   const B = F.banner;
   ctx.beginPath();                                   // السارية
@@ -437,17 +508,17 @@ function drawBorders(ctx, map, tiles, halo) {
     const x = tileX(i, j), y = tileY(i, j);
     const key = look.color + '|' + look.alpha + '|' + look.size + '|' + look.fort + '|' + look.accent;
     let g = groups.get(key);
-    if (!g) groups.set(key, g = { ...look, lines: [], front: [], posts: [], halo: [], walls: [], towers: [] });
+    if (!g) groups.set(key, g = { ...look, lines: [], front: [], posts: [], halo: [], walls: [], towers: [], gates: [] });
     for (let e = 0; e < 4; e++) {
       if (!(look.mask & (1 << e))) continue;
       const [, , ax, ay, bx, by] = EDGES[e];
       g.halo.push(x + ax, y + ay, x + bx, y + by);
-      if (look.walls & (1 << e)) continue;            // ضلع السور: السور مكان الحد
+      if ((look.walls | look.gates) & (1 << e)) continue;   // ضلع السور أو البوابة: هي مكان الحد
       g.lines.push(x + ax, y + ay, x + bx, y + by);
       if (!(BACK_EDGES & (1 << e))) g.front.push(x + ax, y + ay, x + bx, y + by);
     }
     postsOf(look, x, y, true, g.posts);
-    wallsOf(look, x, y, true, g.walls, g.towers);
+    wallsOf(map, look, x, y, true, g.walls, g.towers, g.gates);
   }
   if (!groups.size) return;
   ctx.save();
@@ -500,6 +571,7 @@ function drawBorders(ctx, map, tiles, halo) {
     }
     if (g.posts.length) drawPosts(ctx, g.posts, g.color, g.alpha, S.post, g.accent);
     if (g.walls.length) drawWalls(ctx, g.walls, g.color, g.alpha, g.fort);
+    if (g.gates.length) drawGates(ctx, g.gates, g.color, g.alpha, g.fort);
     if (g.towers.length) drawTowers(ctx, g.towers, g.color, g.alpha, g.fort);
   }
   ctx.restore();
@@ -509,13 +581,14 @@ function drawBorders(ctx, map, tiles, halo) {
 function drawBorderFront(ctx, map, i, j) {
   const look = borderOf(map, i, j);
   if (!look) return;
-  const list = [], segs = [], towers = [], x = tileX(i, j), y = tileY(i, j);
+  const list = [], segs = [], towers = [], gates = [], x = tileX(i, j), y = tileY(i, j);
   postsOf(look, x, y, false, list);
-  wallsOf(look, x, y, false, segs, towers);
-  if (!list.length && !segs.length && !towers.length) return;
+  wallsOf(map, look, x, y, false, segs, towers, gates);
+  if (!list.length && !segs.length && !towers.length && !gates.length) return;
   ctx.save();
   if (list.length) drawPosts(ctx, list, look.color, look.alpha, DISTRICT_SIZES.border[look.size].post, look.accent);
   if (segs.length) drawWalls(ctx, segs, look.color, look.alpha, look.fort);
+  if (gates.length) drawGates(ctx, gates, look.color, look.alpha, look.fort);
   if (towers.length) drawTowers(ctx, towers, look.color, look.alpha, look.fort);
   ctx.restore();
 }
