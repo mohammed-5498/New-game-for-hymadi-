@@ -9,7 +9,7 @@ import { tileOf, productionTime, towerStats, hospitalStats, BUILDING_TILE } from
 import { unitWorldPos } from './units.js';
 import { roofTop, empireKind } from './landmarks.js';
 import { featureBadgeOf } from './featureArt.js';
-import { featureCenter, featureTowerStats } from '../game/features.js';
+import { featureCenter, featureTowerStats, clinicStats } from '../game/features.js';
 
 const worldOf = (i, j) => ({ x: (i - j) * TILE_HALF_W, y: (i + j) * TILE_HALF_H });
 
@@ -211,7 +211,7 @@ function rangeOf(map, d) {
   if (d.featureTile === undefined) return null;
   const c = featureCenter(map, d);
   if (d.feature === 'fortress' || d.feature === 'khartoum') return { ...c, r: featureTowerStats(d).range, shoots: true };
-  if (d.feature === 'clinic') return { ...c, r: F.clinic.radius, shoots: false };
+  if (d.feature === 'clinic') return { ...c, r: clinicStats(d).radius, shoots: false };
   if (d.feature === 'pyramid') return { ...c, r: F.pyramid.radius, shoots: false };
   return null;
 }

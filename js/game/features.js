@@ -26,7 +26,8 @@
 // - البنك (شيكاغو): خزنة تمتلئ (d.vault) يسرقها كلها من يحتل البنك
 // الحي يحمل ميزته (district.feature، من مولّد الخريطة)، والمباراة ميزة مدينتها (state.feature).
 // الأرقام كلها في CITY_FEATURES داخل config.js
-import { TICK_SEC, CITY_FEATURES as F, EMPIRE as E, COMBAT, SPAWN, nations } from '../config.js';
+import { TICK_SEC, CITY_FEATURES as F, EMPIRE as E, COMBAT, SPAWN, nations, DISTRICT_SIZES as DS } from '../config.js';
+import { sizeOf } from '../map/sizes.js';
 import { createUnit, commandMove, commandAttackMove } from './units.js';
 import { applyUpgrades, heroFor, tileOf, spend } from './empire.js';
 import { isEnemyId, applyDamage } from './combat.js';
@@ -357,15 +358,16 @@ export function featureDamageBonus(state, playerId) {
 }
 
 // ================= أبراج المزايا: الحصن (غوندر) وبرج الخرطوم (مروي) =================
-// سهم على أقرب عدو للرامي داخل المدى كل attackTime، بسهام أبراج الاقتصاد نفسها (empire.js) من أعلى المبنى
+// سهم على أقرب عدو للرامي داخل المدى كل attackTime، بسهام أبراج الاقتصاد نفسها (empire.js) من أعلى المبنى.
+// وحجم الحي يطيل المدى ويقوّي السهام (القسم 3.12)
 export function featureTowerStats(d, state = null) {
-  const range = state ? stormRangeMul(state) : 1;
+  const size = sizeOf(d), range = DS.reach[size] * (state ? stormRangeMul(state) : 1), power = DS.power[size];
   if (d.feature === 'fortress') {
     const T = F.fortress.tower;
-    return { range: T.range * range, damage: T.damage, attackTime: T.attackTime };
+    return { range: T.range * range, damage: T.damage * power, attackTime: T.attackTime };
   }
   const T = E.buildings.tower, K = F.khartoum;
-  return { range: K.range * range, damage: T.damage * K.damageMul, attackTime: T.attackTime / K.rateMul };
+  return { range: K.range * range, damage: T.damage * K.damageMul * power, attackTime: T.attackTime / K.rateMul };
 }
 
 function shoot(state, d, shooter, top) {
@@ -410,11 +412,13 @@ function updateKhartoum(state) {
 export const featureCaptureMul = (d) => (d.feature && F[d.feature] && F[d.feature].captureMul) || 1;
 
 // ================= دار العلاج (كايفنغ) =================
+// مداها وعلاجها بحجم حيها (القسم 3.12)
+export const clinicStats = (d) => ({ radius: F.clinic.radius * DS.reach[sizeOf(d)], perSecond: F.clinic.perSecond * DS.power[sizeOf(d)] });
+
 function updateClinics(state) {
-  const C = F.clinic, amount = C.perSecond * TICK_SEC, r2 = C.radius * C.radius;
   for (const d of state.map.districts) {
     if (d.feature !== 'clinic' || d.owner === null || d.featureTile === undefined || state.players[d.owner].neutral) continue;
-    const c = featureCenter(state.map, d);
+    const c = featureCenter(state.map, d), C = clinicStats(d), amount = C.perSecond * TICK_SEC, r2 = C.radius * C.radius;
     forEachNearby(state, c.i, c.j, C.radius, (unit) => {
       if (unit.playerId !== d.owner || !isAlive(unit) || unit.hp >= unit.maxHp) return;
       const dx = unit.x - c.i, dy = unit.y - c.j;

@@ -1071,6 +1071,8 @@ input[type=range].muted { opacity: .4; }
 .em-title { margin: 5px 2px 3px; font-size: 12px; font-weight: 700; color: var(--text-dim); }
 .em-note { font-weight: 400; }
 .em-stats { margin: 0 2px 4px; font-size: 12px; color: var(--text); }
+/* حجم الحي وما يغيّره (القسم 3.12) */
+.em-size { margin: 2px 2px 0; font-size: 11.5px; color: var(--text-dim); }
 .em-slots { display: flex; flex-wrap: wrap; justify-content: center; gap: 5px; }
 .em-slot {
   flex: 0 0 92px;

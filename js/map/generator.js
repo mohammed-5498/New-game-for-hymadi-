@@ -1,8 +1,9 @@
 // توليد الخريطة العشوائية: شوارع، أحياء، نقاط استيلاء، مباني
-import { MAP_SIZES, MAP_GEN, POLICE, CITIES, CITY_UNTINTED, CITY_FEATURES } from '../config.js';
+import { MAP_SIZES, MAP_GEN, POLICE, CITIES, CITY_UNTINTED, CITY_FEATURES, DISTRICT_SIZES } from '../config.js';
 import { THEMES as CITY_THEMES } from '../render/cityThemes.js';
 import { D4, D8 } from './pathfinding.js';
 import { hypot } from '../game/hypot.js';
+import { sizeOf } from './sizes.js';
 
 const rnd = () => Math.random();
 const ri = (n) => Math.floor(Math.random() * n);
@@ -314,7 +315,9 @@ function assignHomeDistricts(map, districts, players) {
   const n = map.n;
   const center = (n - 1) / 2;
   const radius = n * MAP_GEN.homeRingRadiusPct;
-  const big = districts.filter(d => d.tiles.length >= MAP_GEN.minHomeDistrictTiles);
+  // كلها من فئة حجم واحدة (القسم 3.12): الحجم يغيّر الدخل والإنتاج، فلا يبدأ لاعب بحي أكبر من غيره
+  const sized = districts.filter(d => d.tiles.length >= MAP_GEN.minHomeDistrictTiles && sizeOf(d) === DISTRICT_SIZES.home);
+  const big = sized.length >= players.length ? sized : districts.filter(d => d.tiles.length >= MAP_GEN.minHomeDistrictTiles);
   if (big.length < players.length) return false;
 
   // اللاعبون في نفس الفريق يأخذون نقاطاً متجاورة على الدائرة

@@ -7,7 +7,8 @@
 //   مبناه بترقياته كما هي، ولا تعود نقاط لأحد (وطلبات الجنود في طابور القاعدة الساقطة تضيع)
 // الحالة كلها بيانات بسيطة في state.modeState وحقول الأحياء (building وbuildTile وblv)، فتُحفظ مع المباراة.
 // الأرقام كلها في EMPIRE داخل config.js
-import { TICK_SEC, EMPIRE as E, SPAWN, GANGS, ai, CITY_FEATURES, STYLE_PERKS } from '../config.js';
+import { TICK_SEC, EMPIRE as E, SPAWN, GANGS, ai, CITY_FEATURES, STYLE_PERKS, DISTRICT_SIZES as DS } from '../config.js';
+import { sizeOf } from '../map/sizes.js';
 import { createUnit } from './units.js';
 import { spawnChampion, championOf, countUnits } from './spawn.js';
 import { applyDamage, isEnemyId } from './combat.js';
@@ -112,8 +113,10 @@ function rewardLeaderKills(state, ms) {
   }
 }
 
-// دخل الحي في الثانية: القاعدة الرئيسية، أو مبنى ميزة المدينة (الهرم، القسم 3.11)، أو الحي العادي
-const districtIncome = (d) => d.building === 'hq' ? E.income.hq : featureIncome(d) ?? E.income.district;
+// دخل الحي في الثانية: القاعدة الرئيسية، أو مبنى ميزة المدينة (الهرم، القسم 3.11)، أو الحي العادي.
+// والقاعدة والحي العادي بحجم الحي (القسم 3.12)، ودخل المزايا كما صُمم
+const districtIncome = (d) => d.building === 'hq' ? E.income.hq * DS.income[sizeOf(d)]
+  : featureIncome(d) ?? E.income.district * DS.income[sizeOf(d)];
 
 // --- الإنتاج: طابور لكل قاعدة رئيسية، وأول طلب فيه يتقدم ---
 // البوت المجنون ينتج أسرع 25% (مزيته المعلنة في الظهور، ai.levels.insane.spawnFactor)
@@ -132,7 +135,7 @@ export function productionTime(state, district, kind) {
   const level = (district.blv && district.blv.production) || 0;
   const owner = state.players[district.owner];
   const horde = owner && owner.gang === 'scorpions' && E.units[kind] ? 1 + STYLE_PERKS.horde.production : 1;
-  return unitCost(kind).seconds * E.buildings.hq.upgrades.production.times[level] *
+  return unitCost(kind).seconds * E.buildings.hq.upgrades.production.times[level] * DS.production[sizeOf(district)] *
     (owner ? botFactor(owner) * featureProductionMul(state, owner.id) : 1) / horde;
 }
 
@@ -210,12 +213,12 @@ export function empireSpeedMul(state, playerId) {
 // --- أبراج الرماية: سهم على أقرب عدو في المدى كل attackTime ثانية ---
 export const tileOf = (map, k) => ({ i: k % map.n, j: Math.floor(k / map.n) });
 
-// والعاصفة الرملية تقصّر مداه (القسم 3.11)
+// والعاصفة الرملية تقصّر مداه (القسم 3.11)، وحجم حيه يطيله ويقوّي سهامه (القسم 3.12)
 const towerStats = (district, state = null) => {
-  const T = E.buildings.tower, lv = district.blv || {};
+  const T = E.buildings.tower, lv = district.blv || {}, size = sizeOf(district);
   return {
-    range: T.range * (state ? stormRangeMul(state) : 1),
-    damage: T.damage * (1 + (lv.damage || 0) * T.upgrades.damage.per),
+    range: T.range * DS.reach[size] * (state ? stormRangeMul(state) : 1),
+    damage: T.damage * DS.power[size] * (1 + (lv.damage || 0) * T.upgrades.damage.per),
     attackTime: T.attackTime * (1 - (lv.rate || 0) * T.upgrades.rate.per)
   };
 };
@@ -264,11 +267,12 @@ export const healPoint = (map, district) =>
   district.building === 'hospital' ? tileOf(map, district.buildTile) : district.capture;
 
 // --- المستشفيات: علاج جنود صاحبها حولها ---
+// وحجم حيه يوسّع مداه ويقوّي علاجه (القسم 3.12)
 const hospitalStats = (district) => {
-  const H = E.buildings.hospital, lv = district.blv || {};
+  const H = E.buildings.hospital, lv = district.blv || {}, size = sizeOf(district);
   return {
-    radius: H.radius + (lv.radius || 0) * H.upgrades.radius.per,
-    perSecond: H.perSecond * (1 + (lv.rate || 0) * H.upgrades.rate.per)
+    radius: (H.radius + (lv.radius || 0) * H.upgrades.radius.per) * DS.reach[size],
+    perSecond: H.perSecond * DS.power[size] * (1 + (lv.rate || 0) * H.upgrades.rate.per)
   };
 };
 

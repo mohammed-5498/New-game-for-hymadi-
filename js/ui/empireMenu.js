@@ -4,13 +4,14 @@
 // - البرج والمستشفى: خانتا ترقيتهما
 // كل خيار خانة باسمه وكلفته (ومستواه)، والمعطلة تكتب سببها. تُغلق بزرها أو بلمسة على الخريطة
 // أو بزر الرجوع في أندرويد، ووحدها إن سقط الحي أو انتهت المباراة.
-import { EMPIRE as E, TILE_HALF_W, TILE_HALF_H, CITY_FEATURES as F } from '../config.js';
+import { EMPIRE as E, TILE_HALF_W, TILE_HALF_H, CITY_FEATURES as F, DISTRICT_SIZES as DS } from '../config.js';
+import { sizeOf } from '../map/sizes.js';
 import {
   canQueue, unitPrice, heroFor, productionTime, nextUpgrade, canUpgrade, canBuild, nextBuildingUpgrade, canUpgradeBuilding,
   empireCommand, towerStats, hospitalStats, incomeOf, tileOf
 } from '../game/empire.js';
 import { lanCommand } from '../net/session.js';
-import { recruitsAt, featureTowerStats, featureCostMul, canCallTriads, canRingBells } from '../game/features.js';
+import { recruitsAt, featureTowerStats, featureCostMul, canCallTriads, canRingBells, clinicStats } from '../game/features.js';
 import { drawCreatureIcon } from '../render/creatureArt.js';
 import { worldToScreen } from '../map/coords.js';
 import { drawCharacters } from './charThumb.js';
@@ -162,7 +163,10 @@ function statsLine(state, district) {
     return '+' + P.income + ' نقاط في الثانية • جنودك داخل ' + P.radius + ' مربعات منه يتلقون ضرراً أقل ' + pct(P.damageTaken);
   }
   if (district.feature === 'dojo') return 'كل جنودك +' + pct(F.dojo.damageBonus) + ' ضرر ما دمت تملكه';
-  if (district.feature === 'clinic') return 'يعالج ' + F.clinic.perSecond + ' دم/ث لكل جندي • المدى ' + F.clinic.radius + ' مربع';
+  if (district.feature === 'clinic') {
+    const s = clinicStats(district);
+    return 'يعالج ' + fmt(s.perSecond) + ' دم/ث لكل جندي • المدى ' + fmt(s.radius) + ' مربع';
+  }
   if (district.feature === 'policeHQ') return 'الشرطة صديقة لك ما دمت تملكه • شرطة كل مركز تحتله تنضم إليك';
   if (district.feature === 'clock') {
     return '+' + pct(F.clock.incomeMul - 1) + ' نقاط و+' + pct(F.clock.productionMul - 1) + ' سرعة إنتاج الجنود • احتلاله أبطأ';
@@ -211,6 +215,18 @@ function statsLine(state, district) {
   return 'يعالج ' + fmt(s.perSecond) + ' دم/ث لكل جندي • المدى ' + fmt(s.radius) + ' مربع';
 }
 
+// سطر حجم الحي (القسم 3.12): فئته وما تغيّره عن الحي المتوسط (وسرعة الإنتاج لما يُنتج فيه)
+function sizeLine(district) {
+  const size = sizeOf(district);
+  if (size === 'medium') return 'حي متوسط: دخله واحتلاله ومبانيه بالقيم العادية';
+  const pct = (v) => Math.round(Math.abs(v) * 100) + '%', more = DS.power[size] > 1;
+  const makes = district.building === 'hq' || recruitsAt(district);
+  return 'حي ' + DS.names[size] + ': دخل ' + (more ? '+' : '−') + pct(DS.income[size] - 1) +
+    ' • احتلاله ' + (more ? 'أبطأ ' : 'أسرع ') + pct(1 / DS.capture[size] - 1) +
+    ' • مبانيه ' + (more ? 'أقوى ' : 'أضعف ') + pct(DS.power[size] - 1) + ' ومداها ' + (more ? '+' : '−') + pct(DS.reach[size] - 1) +
+    (makes ? ' • إنتاجه ' + (more ? 'أسرع ' : 'أبطأ ') + pct(1 - DS.production[size]) : '');
+}
+
 function node(tag, className, text) {
   const n = document.createElement(tag);
   if (className) n.className = className;
@@ -228,6 +244,7 @@ function build(state, district) {
   open.stats = null;
   open.queue = null;
   el('emTitle').textContent = TITLES[district.building] || (district.featureTile !== undefined && F.names[district.feature]) || 'حي بلا مبنى';
+  body.appendChild(node('div', 'em-size', sizeLine(district)));
   const arts = [];
   for (const section of sectionsFor(state, district)) {
     const head = body.appendChild(node('div', 'em-title', section.title));

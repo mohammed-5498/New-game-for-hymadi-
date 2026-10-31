@@ -5,7 +5,8 @@
 // - الهدف بالنقاط: قيمة الحي ÷ المسافة، بشرط قوة ≥ 1.3 × المدافعين
 // - الدفاع بلا إفراط، والانسحاب، والجبهتان، والإغارة على الأحياء الخالية (صعب فما فوق)
 // حالة كل بوت بيانات بسيطة في state.botBrains (أرقام الوحدات لا مراجعها) فتُحفظ مع المباراة.
-import { ai } from '../config.js';
+import { ai, DISTRICT_SIZES } from '../config.js';
+import { sizeOf } from '../map/sizes.js';
 import { commandMove, commandAttackMove } from '../game/units.js';
 import { isEnemy, isEnemyId } from '../game/combat.js';
 import { forEachNearby, hashCells, cellBox } from '../game/spatialHash.js';
@@ -546,7 +547,7 @@ function targetList(state, player, lvl, armySize, helpers) {
     const near = sidePowers(state, player, d).enemy;
     const reach = lvl.responseRadius ?? ai.responseRadius;
     const enemy = reach ? Math.max(near, enemyPowerAround(state, player, d.capture, reach)) : near;
-    let value = 1;
+    let value = DISTRICT_SIZES.botValue[sizeOf(d)];               // الحي الكبير أثمن (القسم 3.12)
     if (d.special) value *= param(lvl, 'specialValue');
     const feature = featureValue(d);                               // ميزة المدينة (القسم 3.11)
     if (feature) value *= feature;

@@ -206,6 +206,36 @@ export const MAP_GEN = {
   devChecks: true             // وضع التطوير: يطبع تحذيراً إن بقي مربع معزول
 };
 
+// --- أحجام الأحياء (القسم 3.12، بطلب المستخدم: كلما كبر الحي قويت مزاياه، والشوارع كما هي) ---
+// الفئة من عدد مربعات الحي: صغير حتى maxTiles.small، ومتوسط حتى maxTiles.medium، وكبير ما فوقه (map/sizes.js).
+// كل رقم مضاعف، والمتوسط 1 (كما كانت الأحياء كلها قبلها):
+// income دخل الحي وقاعدته • capture سرعة الاستيلاء عليه (أقل = احتلاله أصعب) • reach مدى البرج والمستشفى
+// ودار العلاج والحصن وبرج الخرطوم • power ضرر سهامها وقوة علاجها • production زمن إنتاج الجنود والمجنَّدين فيه
+// • botValue قيمته عند البوتات وتفضيلها له في البناء. والأحياء المنزلية كلها من فئة home (عدل بين اللاعبين)
+export const DISTRICT_SIZES = {
+  order: ['small', 'medium', 'large'],
+  maxTiles: { small: 9, medium: 16 },
+  names: { small: 'صغير', medium: 'متوسط', large: 'كبير' },
+  income:     { small: 0.8,  medium: 1, large: 1.3 },
+  capture:    { small: 1.15, medium: 1, large: 0.8 },
+  reach:      { small: 0.85, medium: 1, large: 1.2 },
+  power:      { small: 0.85, medium: 1, large: 1.3 },
+  production: { small: 1.15, medium: 1, large: 0.85 },
+  botValue:   { small: 0.85, medium: 1, large: 1.25 },
+  home: 'medium',
+  // نوع حدود الحي بفئته (chunkCache.js، بطلب المستخدم: أنواع حدود متناسقة لكل حجم): للمملوك بلون مالكه، وللمحايد
+  // بلون الحجر neutral بشفافية neutralAlpha فيُعرف حجمه قبل احتلاله. width وunder عرضا الخط الملون والداكن تحته.
+  // الصغير خط. والمتوسط سياج: أعمدة post (عرض w وارتفاع h) على منتصف كل ضلع (mids) وعلى أركانه، وحاجز rail
+  // بينها مرفوع railLift. والكبير سور منخفض بارتفاع wall: وجهه الأمامي مظلل (shade)، وأعلاه بلونه عرض width وحافة
+  // فاتحة عرض coping، وأعمدة أكبر على أركانه بغطاء cap
+  border: {
+    neutral: '#e6dbbd', neutralAlpha: 0.42, capColor: 'rgba(255,247,228,0.6)',
+    small:  { width: 1.5, under: 2.6 },
+    medium: { width: 1.4, under: 2.6, mids: true, rail: 0.9, railLift: 2.3, post: { w: 1.5, h: 3.4, cap: 0.35 } },
+    large:  { width: 2.4, under: 4.6, wall: 2.4, shade: 'rgba(0,0,0,0.28)', coping: 0.8, post: { w: 2.6, h: 5.6, cap: 0.55 } }
+  }
+};
+
 // --- الوحدة الأساسية المرجعية (القسم 6.1 من الوصف) ---
 export const UNIT_BASE = {
   hp: 100,
