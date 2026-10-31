@@ -459,66 +459,186 @@ function complex(x, y, i, j) {
   nopal(x + 25, y + 0.5);
 }
 
-// --- تمثال ريو: تل من الغرانيت تكسو الغابة سفحه وتعلوه صخرة عارية، وعلى قمته منصة وقاعدة بطراز آرت ديكو،
-// والتمثال بذراعين مفتوحتين من الحجر الفاتح ---
+// --- معبد ريو (بطلب المستخدم بدل التمثال، بمزاياه نفسها): أطلال كنيسة إرسالية من الحجر الرملي الأحمر على مرج،
+// كصور سان ميغيل التي أرسلها: واجهة بطابقين بأعمدة ملتصقة وثلاثة أبواب وجبهة مثلثة بأوانٍ حجرية، وحلزونان داكنان
+// على جانبي الطابق الأعلى، وبرج أجراس على يسارها بفتحات مقوسة وقمة مكسورة، ورواق أعمدة أمامها، وصحن بلا سقف
+// بجدران مكسورة ونوافذ مقوسة، وأساسات منخفضة وحجارة متناثرة وشجرتان خلفها.
+// a وb بالمربعات على محوري i وj من وسط الكتلة، وh الارتفاع بالبكسل فوق المرج؛ الضوء من اليمين كبقية المباني ---
+const CH = { shade: '#a45537', lit: '#c46d45', top: '#d6936a', pil: '#b86745', dark: '#2b1a12', inner: '#5a2f1f',
+             edge: 'rgba(255,214,170,0.55)', ledge: ['#b8694a', '#d07f56', '#e0a077'], stone: ['#9a5a3c', '#b8714d', '#c98a64'] };
 function statue(x, y, i, j) {
-  el(x, y + 7, 38, 17, 'rgba(25,30,20,0.24)');
-  const P = [x + 1, y - 30];
-  // نقطة على سطح التل: u من −1 (يسار) إلى 1 (يمين) على قوس القاعدة، وt من القاعدة (0) إلى القمة (1)، بانتفاخ يجعله قبة
-  const S = (u, t) => {
-    const bx = x + 34 * u, by = y + 1 + 16 * Math.sqrt(Math.max(0, 1 - u * u)), s = Math.sin(Math.PI * t);
-    return [bx + (P[0] - bx) * t + 7 * u * s, by + (P[1] - by) * t - 6 * s];
+  const G = 1.4, c = getCtx();
+  const W = (a, b, h = 0) => [x + (a - b) * TILE_HALF_W, y + (a + b) * TILE_HALF_H - h - G];
+  const onJ = (b, a0, a1) => (u, h) => W(a0 + (a1 - a0) * u, b, h);       // وجه يواجه +j: في الظل
+  const onI = (a, b1, b0) => (u, h) => W(a, b1 + (b0 - b1) * u, h);       // وجه يواجه +i: مضاء، u من الأمام للخلف
+  const up = (q, v) => (u, h) => q(u, h + v);
+  const quad = (q, u0, u1, h0, h1, col) => poly([q(u0, h0), q(u1, h0), q(u1, h1), q(u0, h1)], col);
+  const prism = (a0, a1, b0, b1, h0, h1, cl, cr, ct) => {
+    poly([W(a0, b1, h0), W(a1, b1, h0), W(a1, b1, h1), W(a0, b1, h1)], cl);
+    poly([W(a1, b1, h0), W(a1, b0, h0), W(a1, b0, h1), W(a1, b1, h1)], cr);
+    poly([W(a0, b0, h1), W(a1, b0, h1), W(a1, b1, h1), W(a0, b1, h1)], ct);
   };
-  // ما بين u0 وu1 من الحد السفلي tb(u) حتى القمة
-  const side = (u0, u1, tb, color) => {
-    const pts = [];
-    for (let k = 0; k <= 12; k++) { const u = u0 + (u1 - u0) * k / 12; pts.push(S(u, tb(u))); }
-    for (let k = 1; k <= 10; k++) pts.push(S(u1, tb(u1) + (1 - tb(u1)) * k / 10));
-    for (let k = 9; k > 0; k--) pts.push(S(u0, tb(u0) + (1 - tb(u0)) * k / 10));
-    poly(pts, color);
+  const ledge = (a0, a1, b0, b1, h0, h1, o = 0.03) => prism(a0 - o, a1 + o, b0 - o, b1 + o, h0, h1, ...CH.ledge);
+  // حجارة الوجه: مداميك أفقية وكتل أفتح وأغمق، مواضعها ثابتة لكل خريطة
+  const masonry = (q, u0, u1, h0, h1, seed, n) => {
+    c.beginPath();
+    for (let h = h0 + 2.6; h < h1 - 0.5; h += 2.6) { const p = q(u0, h), r = q(u1, h); c.moveTo(p[0], p[1]); c.lineTo(r[0], r[1]); }
+    c.strokeStyle = 'rgba(70,30,15,0.22)';
+    c.lineWidth = 0.45;
+    c.stroke();
+    for (let k = 0; k < n; k++) {
+      const u = u0 + (u1 - u0 - 0.08) * hsh(i, j, seed + k), h = h0 + (h1 - h0 - 2.6) * hsh(i, j, seed + 40 + k);
+      quad(q, u, u + 0.04 + 0.05 * hsh(i, j, seed + 80 + k), h, h + 2.4, k % 3 ? 'rgba(255,200,160,0.14)' : 'rgba(40,20,10,0.2)');
+    }
   };
-  const ground = () => 0, rock = (u) => 0.42 + 0.07 * Math.sin(u * 7 + 1.3);
-  side(-1, 0, ground, '#3f6a3a');                                                   // الغابة
-  side(0, 1, ground, '#55874a');
-  side(-1, 0, rock, '#76746c');                                                     // الصخرة العارية
-  side(0, 1, rock, '#9a978d');
-  const edge = [];                                                                   // حد الغابة المتعرج
-  for (let k = 0; k <= 20; k++) { const u = -1 + k / 10; edge.push(S(u, rock(u) - 0.02)); }
-  edge.forEach(([px, py], k) => circ(px, py, 2.3, k < 10 ? '#3a6334' : '#4f8044'));
-  for (let k = 0; k < 44; k++) {                                                     // تيجان الأشجار، مواضعها ثابتة لكل خريطة
-    const u = -0.95 + 1.9 * hsh(i, j, 900 + k), t = 0.04 + (rock(u) - 0.12) * hsh(i, j, 940 + k);
-    const [px, py] = S(u, t), r = 1.8 + hsh(i, j, 980 + k) * 1.3;
-    circ(px + 0.5, py + 0.6, r, u < 0 ? '#2c4e28' : '#3d6c36');                          // ظل التاج
-    circ(px, py, r, u < 0 ? (k % 2 ? '#3b6635' : '#4a7a42') : (k % 2 ? '#6aa055' : '#579048'));
+  // جدار مكسور على الوجه q: حافته العليا درجات حجرية بارتفاع top(u) ± jag/2، وخط فاتح عليها؛ يعيد الارتفاعات
+  const ruin = (q, n, top, jag, seed, col) => {
+    const hs = [];
+    for (let k = 0; k < n; k++) hs.push(Math.max(1, top((k + 0.5) / n) + (hsh(i, j, seed + k) - 0.5) * jag));
+    const pts = [q(0, 0), q(1, 0)];
+    for (let k = n - 1; k >= 0; k--) pts.push(q((k + 1) / n, hs[k]), q(k / n, hs[k]));
+    poly(pts, col);
+    c.beginPath();
+    pts.slice(2).forEach(([px, py], k) => (k ? c.lineTo(px, py) : c.moveTo(px, py)));
+    c.strokeStyle = CH.edge;
+    c.lineWidth = 0.7;
+    c.stroke();
+    return hs;
+  };
+  // سمك الجدار المكسور من فوق: شريط بين وجهه الخارجي qo والداخلي qi على كل درجة
+  const ruinTop = (qo, qi, hs) => hs.forEach((h, k) => {
+    const u0 = k / hs.length, u1 = (k + 1) / hs.length;
+    poly([qo(u0, h), qo(u1, h), qi(u1, h), qi(u0, h)], CH.top);
+  });
+  const tree = (a, b, s) => {
+    const [px, py] = W(a, b);
+    el(px + 2, py + 1, 6 * s, 2.6 * s, 'rgba(20,35,15,0.25)');
+    ln(px, py, px, py - 9 * s, '#5a4128', 1.6 * s);
+    for (const [dx, dy, r, col] of [[-3, -10, 4.2, '#3d6a32'], [3, -11, 4, '#4d7d3c'], [0, -14, 4.6, '#5b8d45'], [1.5, -12.5, 2.4, '#7aa95a']])
+      circ(px + dx * s, py + dy * s, r * s, col);
+  };
+
+  // المرج بحافة حجرية، وبقع العشب، والأساسات المنخفضة والحجارة المتناثرة، وشجرتان خلف الكنيسة
+  el(x, y + 8, 40, 18, 'rgba(30,40,20,0.2)');
+  prism(-0.97, 0.97, -0.97, 0.97, -G, 0, '#7a5b3c', '#94714b', '#6d9846');
+  for (let k = 0; k < 30; k++) {
+    const [px, py] = W(-0.9 + 1.8 * hsh(i, j, 1200 + k), -0.9 + 1.8 * hsh(i, j, 1240 + k));
+    el(px, py, 2 + 1.4 * hsh(i, j, 1280 + k), 0.9, k % 2 ? 'rgba(45,85,25,0.28)' : 'rgba(180,215,120,0.24)');
   }
-  for (const u of [-0.45, -0.2, 0.25, 0.55]) {                                       // شقوق الصخرة
-    const a = S(u, rock(u) + 0.06), b = S(u + 0.08, 0.9);
-    ln(a[0], a[1], b[0], b[1], 'rgba(255,255,255,0.22)', 0.6);
+  // الحجارة: ما خلف الكنيسة يُرسم قبلها، وما أمامها (يمين الصحن وأمام البرج) بعدها مع الأساسات
+  const stones = [];
+  for (let k = 0; k < 48 && stones.length < 12; k++) {
+    const a = -0.92 + 1.84 * hsh(i, j, 1320 + k), b = -0.92 + 1.84 * hsh(i, j, 1370 + k);
+    if ((a > -0.42 && a < 0.8) || (a > -0.9 && b > 0.02 && b < 0.68)) continue;   // لا حجارة تحت الكنيسة وبرجها
+    stones.push([a, b, 0.035 + 0.03 * hsh(i, j, 1420 + k), 1 + 1.2 * hsh(i, j, 1470 + k)]);
   }
-  // المنصة والقاعدة
-  el(P[0], P[1] + 1.2, 9, 3.8, '#8f8b80');
-  el(P[0], P[1], 8.4, 3.4, '#bdb7a8');
-  const pedestal = P[1] - 0.5;
-  box(P[0], pedestal, 3.4, 1.7, 9, '#cbc4b4', '#e4ded0', '#dcd6c8');
-  box(P[0], pedestal - 9, 2.5, 1.25, 2, '#cbc4b4', '#e4ded0', '#dcd6c8');
-  // التمثال: حد داكن حوله ليُقرأ على الأرض الفاتحة، ثم الثوب والذراعان المفتوحتان والرأس
-  const fx = P[0], fy = pedestal - 11, sh = fy - 20, c = getCtx();
-  c.beginPath();
-  [[fx - 15.5, sh], [fx + 15.5, sh], [fx + 15.5, sh + 2.6], [fx + 2.6, sh + 6], [fx + 3, fy], [fx - 3, fy],
-   [fx - 2.6, sh + 6], [fx - 15.5, sh + 2.6]].forEach(([px, py], k) => (k ? c.lineTo(px, py) : c.moveTo(px, py)));
-  c.closePath();
-  c.moveTo(fx + 2.4, sh - 3);
-  c.arc(fx, sh - 3, 2.4, 0, TAU);
-  c.strokeStyle = 'rgba(55,55,50,0.55)';
-  c.lineWidth = 1.4;
-  c.stroke();
-  poly([[fx - 3, fy], [fx, fy + 0.7], [fx, sh], [fx - 2.5, sh]], '#cdc7b9');
-  poly([[fx, fy + 0.7], [fx + 3, fy], [fx + 2.5, sh], [fx, sh]], '#f1ede4');
-  poly([[fx - 15.5, sh], [fx, sh - 0.5], [fx, sh + 4], [fx - 2.6, sh + 6], [fx - 15.5, sh + 2.6]], '#cdc7b9');
-  poly([[fx, sh - 0.5], [fx + 15.5, sh], [fx + 15.5, sh + 2.6], [fx + 2.6, sh + 6], [fx, sh + 4]], '#f1ede4');
-  ln(fx, sh + 6, fx, fy, 'rgba(0,0,0,0.12)', 0.5);                                   // ثنية الثوب
-  circ(fx, sh - 3, 2.4, '#f1ede4');
-  el(fx - 0.9, sh - 3, 1.2, 2.1, 'rgba(0,0,0,0.12)');
+  const stone = ([a, b, s, h]) => prism(a, a + s * 1.4, b, b + s, 0, h, ...CH.stone);
+  const ahead = ([a, b]) => a >= 0.8 || b > 0.68;
+  stones.filter((st) => !ahead(st)).forEach(stone);
+  tree(-0.85, -0.85, 1.2);
+
+  const aW = -0.45, aE = 0.78, bF = 0.55, bB = -0.95, T = 0.07;
+  // برج الأجراس: ثلاثة طوابق بأفاريز، وفتحات مقوسة، وقمة مكسورة بعمودين، بارتفاع الجبهة تقريباً كما في الصور
+  const t0 = -0.95, t1 = aW, tb0 = 0.08, tb1 = 0.62;
+  prism(t0, t1, tb0, tb1, 0, 24, '#9c4f33', '#c06b44', CH.top);
+  masonry(onJ(tb1, t0, t1), 0, 1, 0, 24, 1600, 8);
+  masonry(onI(t1, tb1, tb0), 0, 1, 0, 24, 1650, 8);
+  ledge(t0, t1, tb0, tb1, 24, 26.5);
+  prism(t0, t1, tb0, tb1, 26.5, 36, '#9c4f33', '#c06b44', CH.top);
+  arch(up(onJ(tb1, t0, t1), 28), 0.3, 0.4, 7, CH.dark);
+  arch(up(onI(t1, tb1, tb0), 28), 0.3, 0.4, 7, '#3a2216');
+  ledge(t0, t1, tb0, tb1, 36, 38);
+  const s0 = t0 + 0.06, s1 = t1 - 0.06, sb0 = tb0 + 0.06, sb1 = tb1 - 0.06;
+  prism(s0, s1, sb0, sb1, 38, 45, '#9c4f33', '#c06b44', CH.top);
+  arch(up(onJ(sb1, s0, s1), 39.3), 0.32, 0.36, 5, CH.dark);
+  arch(up(onI(s1, sb1, sb0), 39.3), 0.32, 0.36, 5, '#3a2216');
+  ledge(s0, s1, sb0, sb1, 45, 46.5, 0.02);
+  prism(s1 - 0.1, s1, sb0, sb0 + 0.1, 46.5, 49, ...CH.ledge);               // بقايا القمة
+  prism(s0, s0 + 0.1, sb1 - 0.1, sb1, 46.5, 50, ...CH.ledge);
+
+  // داخل الصحن بلا سقف: الجدار الخلفي والجدار الأيسر من الداخل، وركام على أرضه
+  ruin(onJ(bB + T, aW + T, aE - T), 8, (u) => 23 - 3 * u, 4, 1500, '#8c482e');
+  const west = onI(aW + T, bF - T, bB + T);
+  ruin(west, 10, (u) => 18 + 5 * u, 5, 1520, '#b8643f');
+  for (const u of [0.22, 0.47, 0.72]) arch(up(west, 7), u, 0.08, 9, CH.inner);
+  for (let k = 0; k < 7; k++) {
+    const a = aW + 0.12 + (aE - aW - 0.3) * hsh(i, j, 1700 + k), b = bB + 0.15 + (bF - bB - 0.3) * hsh(i, j, 1720 + k);
+    prism(a, a + 0.06, b, b + 0.045, 0, 1.2 + hsh(i, j, 1740 + k), ...CH.stone);
+  }
+
+  // الجدار الأيمن من الخارج: مكسور في وسطه، بأعمدة ملتصقة ونوافذ مقوسة، وسمكه ظاهر من فوق
+  const east = onI(aE, bF, bB), eastIn = onI(aE - T, bF, bB);
+  const eh = ruin(east, 12, (u) => 21 + 3 * u - 8 * Math.exp(-(((u - 0.5) / 0.17) ** 2)), 4, 1540, CH.lit);
+  ruinTop(east, eastIn, eh);
+  masonry(east, 0, 1, 0, 12, 1560, 14);
+  for (const u of [0.04, 0.24, 0.66, 0.86]) {
+    const k = Math.min(eh.length - 1, Math.floor(u * eh.length)), h = eh[k] - 0.5;
+    quad(east, u, u + 0.035, 0, h, '#d27d52');
+    ln(...east(u + 0.035, 0), ...east(u + 0.035, h), 'rgba(80,35,18,0.35)', 0.5);
+  }
+  for (const u of [0.12, 0.74]) arch(up(east, 6), u, 0.07, 11, CH.inner);
+  arch(up(east, 5), 0.45, 0.07, 6, CH.inner);
+
+  // الواجهة: الطابق الأسفل بأعمدته الملتصقة وأبوابه الثلاثة، ثم الإفريز
+  const F0 = onJ(bF, aW, aE);
+  quad(F0, 0, 1, 0, 24, CH.shade);
+  masonry(F0, 0, 1, 0, 24, 1800, 18);
+  for (const u of [0.05, 0.19, 0.33, 0.67, 0.81, 0.95]) {
+    quad(F0, u - 0.022, u + 0.022, 0, 24, CH.pil);
+    quad(F0, u - 0.03, u + 0.03, 0, 2.4, '#8f4529');
+    ln(...F0(u + 0.022, 2.4), ...F0(u + 0.022, 24), 'rgba(60,25,12,0.35)', 0.5);
+  }
+  quad(F0, 0.43, 0.57, 0, 14, CH.dark);
+  quad(F0, 0.41, 0.59, 14, 15.6, '#c07a55');
+  for (const u of [0.11, 0.83]) { quad(F0, u, u + 0.06, 0, 10, CH.dark); quad(F0, u - 0.01, u + 0.07, 10, 11.2, '#c07a55'); }
+  for (const u of [0.245, 0.715]) arch(up(F0, 9), u, 0.04, 6, '#5a3020');
+  ledge(aW, aE, bF - 0.02, bF, 24, 26.5);
+  // الحلزونان الداكنان على جانبي الطابق الأعلى
+  for (const side of [-1, 1]) {
+    const u0 = side < 0 ? 0.25 : 0.75, pts = [F0(u0, 26.5), F0(u0, 36.5)];
+    for (let k = 1; k <= 8; k++) { const t = k / 8; pts.push(F0(u0 + side * 0.17 * t, 26.5 + 10 * (1 - t) ** 2)); }
+    poly(pts, '#6a3a27');
+    circ(...F0(u0 + side * 0.16, 28), 1.1, '#4e2a1b');
+  }
+  // الطابق الأعلى بنافذته ومحرابيه، وجانبه الأيمن، ثم الإفريز والجبهة المثلثة بأوانيها الحجرية
+  quad(F0, 0.25, 0.75, 26.5, 37, CH.shade);
+  masonry(F0, 0.25, 0.75, 26.5, 37, 1860, 8);
+  for (const u of [0.28, 0.4, 0.6, 0.72]) quad(F0, u - 0.018, u + 0.018, 26.5, 37, CH.pil);
+  quad(F0, 0.45, 0.55, 29.5, 35, '#3d2418');
+  quad(F0, 0.44, 0.56, 28.9, 29.6, '#c98a62');
+  for (const u of [0.32, 0.65]) arch(up(F0, 29.5), u, 0.035, 5, '#5a3020');
+  const aU = aW + (aE - aW) * 0.75;
+  quad(onI(aU, bF, bF - T), 0, 1, 26.5, 37, CH.lit);
+  ledge(aW + (aE - aW) * 0.24, aU + 0.01, bF - 0.02, bF, 37, 39, 0.02);
+  const pL = F0(0.24, 39), pR = F0(0.76, 39), pA = F0(0.5, 47.5);
+  poly([pL, pR, pA], '#ad5a3b');
+  poly([F0(0.3, 39.8), F0(0.7, 39.8), F0(0.5, 45.6)], '#93462d');
+  ln(...pL, ...pA, '#d6946a', 1);
+  ln(...pA, ...pR, '#d6946a', 1);
+  for (const [u, h] of [[0.5, 47.5], [0.25, 39], [0.75, 39]]) {
+    const [px, py] = F0(u, h);
+    ln(px, py, px, py - 2.2, '#7b8466', 1);
+    circ(px, py - 2.8, 1.2, '#9aa384');
+  }
+  for (const u of [0.15, 0.37, 0.58, 0.9]) {                                       // سواد المطر على الحجر
+    const [px, py] = F0(u, 23.5);
+    ln(px, py, px, py + 7 + 6 * hsh(i, j, 1900 + u * 100), 'rgba(35,25,18,0.2)', 1.4);
+  }
+
+  // أمام الواجهة: أرضية الرواق القديم من البلاط، وبقايا أعمدته قصيرة مكسورة كما في الصور
+  poly([W(aW, bF, 0.3), W(aE, bF, 0.3), W(aE, 0.93, 0.3), W(aW, 0.93, 0.3)], '#c9a27c');
+  [5, 3.5, 6, 4.2, 5.4].forEach((h, k) => {
+    const a = aW + 0.06 + (aE - aW - 0.12) * k / 4;
+    prism(a - 0.035, a + 0.035, 0.86, 0.93, 0, 1.2, ...CH.stone);
+    prism(a - 0.025, a + 0.025, 0.875, 0.915, 1.2, h, '#b86c48', '#d0835a', CH.ledge[2]);
+  });
+  const low = (a0, a1, b0, b1) => prism(a0, a1, b0, b1, 0, 2.2, ...CH.stone);
+  low(0.9, 0.96, -0.8, 0.3);                              // أساسات المدرسة يمين الصحن
+  low(0.8, 0.96, -0.3, -0.25);
+  low(0.8, 0.96, 0.25, 0.3);
+  low(-0.95, -0.9, 0.62, 0.9);                            // وأمام البرج
+  low(-0.95, -0.42, 0.86, 0.9);
+  stones.filter(ahead).forEach(stone);
 }
 
 // ألواح صفيح مموجة: خطوط رأسية خفيفة على الوجهين، بمسار واحد لكل وجه
@@ -1150,14 +1270,15 @@ const ICONS = {
     ctx.fillStyle = '#a63a2a';
     ctx.fillRect(x - s * 0.22, y + s * 0.35, s * 0.44, s * 0.55);
   },
-  // تمثال بذراعين مفتوحتين
+  // واجهة المعبد: برج على يسارها وجبهة مثلثة وباب وفتحة البرج
   statue(ctx, x, y, s) {
-    ctx.fillStyle = '#f2efe6';
-    ctx.fillRect(x - s * 0.95, y - s * 0.5, s * 1.9, s * 0.28);
-    tri(ctx, [[x - s * 0.28, y - s * 0.5], [x + s * 0.28, y - s * 0.5], [x + s * 0.4, y + s * 0.95], [x - s * 0.4, y + s * 0.95]], '#f2efe6');
-    ctx.beginPath();
-    ctx.arc(x, y - s * 0.78, s * 0.22, 0, TAU);
-    ctx.fill();
+    ctx.fillStyle = '#d77d4e';
+    ctx.fillRect(x - s * 0.95, y - s * 0.95, s * 0.5, s * 1.9);
+    ctx.fillRect(x - s * 0.45, y - s * 0.1, s * 1.4, s * 1.05);
+    tri(ctx, [[x - s * 0.25, y - s * 0.1], [x + s * 0.75, y - s * 0.1], [x + s * 0.25, y - s * 0.62]], '#d77d4e');
+    ctx.fillStyle = '#3a2216';
+    ctx.fillRect(x + s * 0.1, y + s * 0.4, s * 0.32, s * 0.55);
+    ctx.fillRect(x - s * 0.82, y - s * 0.62, s * 0.24, s * 0.36);
   },
   // فانوس أحمر بشرابة ذهبية
   triads(ctx, x, y, s) {
