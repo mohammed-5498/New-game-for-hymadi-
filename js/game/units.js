@@ -98,6 +98,7 @@ export function createUnit(state, player, i, j, heroId = null, champion = false)
     bribedUntil: 0,         // شرطي مرتشٍ: لا يهاجم وحدات اللاعب bribedBy ولا تهاجمه حتى هذا الزمن (بريطانيا)
     bribedBy: -1,
     hasteUntil: 0,          // اندفاع: سرعة أكبر بنسبة hasteFactor حتى هذا الزمن (هجوم عدوة)
+    rallyUntil: 0,          // أجراس الكاتدرائية: أسرع وأقوى حتى هذا الزمن (القسم 3.11)
     hasteFactor: 0,
 
     // الشرطة المحايدة (القسم 3.8)

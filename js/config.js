@@ -231,6 +231,21 @@ export const GANGS = {
 
 export const GANG_IDS = ['crows', 'hammers', 'vipers', 'scorpions'];
 
+// --- الأنماط الأربعة: حجر وورقة ومقص (القسم 3.12، بطلب المستخدم) ---
+// النمط من عصابة الوحدة (unit.gang): الخاطف crows، الصامد hammers، الرامي vipers، الحشد scorpions.
+// مزايا لا تقوية: كل نمط يغلب نمطاً واحداً (beats) بضرر +counter. والمخلوقات (الترول والفيل) خارجها
+export const STYLE_PERKS = {
+  soldierDamage: 0.8,            // ضرر كل الجنود (والشرطة والأطراف المحايدة) أضعف 20%، لا المخلوقات ولا الأبراج
+  beats: { crows: 'hammers', hammers: 'vipers', vipers: 'crows' },
+  counter: 0.2,                  // +20% ضرراً على النمط الذي يغلبه
+  pierce: 0.2,                   // الخاطف يتجاوز 20% من درع الصامد
+  shotGuard: 0.2,                // الصامد يتلقى من المقذوفات (السهام والحجارة والأبراج) 20% أقل
+  shotSpeed: 0.35,               // مقذوفات الرامي تطير أسرع 35%
+  fireRate: 0.25,                // والرامي يرمي أسرع 25%
+  // الحشد: إنتاجه في القاعدة أسرع 30%، وضرره أكبر كلما اجتمع: عدد أفراده من لاعبه داخل radius مربع (معه نفسه)
+  horde: { production: 0.3, radius: 3, tiers: [[14, 0.15], [9, 0.10], [6, 0.05]] }
+};
+
 // --- الشخصيات المميزة: شخصيتان لكل عصابة ---
 // كل شخصية تبدأ من الوحدة الأساسية ثم تُطبق قيمها فوقها
 export const HEROES = {
@@ -803,11 +818,12 @@ export const nations = {
   },
 
   // الأنماط القتالية الأربعة (أسماؤها في قائمة الإعداد)
+  // (ومزايا كل نمط على غيره في STYLE_PERKS)
   styles: {
-    crows:     { name: 'الخاطف', desc: 'سرعة والتفاف واستيلاء سريع' },
-    hammers:   { name: 'الصامد', desc: 'دم ودرع وضربات ثقيلة' },
-    vipers:    { name: 'الرامي', desc: 'قتال من بعيد' },
-    scorpions: { name: 'الحشد',  desc: 'عدد وظهور أسرع وهالات ودعم' }
+    crows:     { name: 'الخاطف', desc: 'سرعة والتفاف واستيلاء سريع • يغلب الصامد: +20% ويخترق 20% من درعه' },
+    hammers:   { name: 'الصامد', desc: 'دم ودرع وضربات ثقيلة • يغلب الرامي: +20%، والمقذوفات عليه أضعف 20%' },
+    vipers:    { name: 'الرامي', desc: 'قتال من بعيد • يغلب الخاطف: +20%، ويرمي أسرع 25% بسهام أسرع' },
+    scorpions: { name: 'الحشد',  desc: 'عدد وهالات ودعم • ينتج أسرع 30%، و+5/10/15% ضرراً إذا اجتمع 6/9/14' }
   },
   classicNote: 'كلاسيكية',       // السطر الصغير تحت العصابة الكلاسيكية في خانة اللاعب
   // آثار ضربات الأبطال: مدة الحلقة المتسعة وغبار ظهور الأفراد، وحلقة الصامدين تحت أقدامهم
@@ -1499,23 +1515,26 @@ export const EMPIRE = {
 // --- مزايا المدن (القسم 3.11، بطلب المستخدم): ميزة واحدة لكل مدينة أمة، في كل مباراة على الاقتصاد ---
 // cities: المدينة ← ميزتها، والمدن التي لا تُذكر بلا ميزة. ground: أرض حي الميزة قبل الاستيلاء عليه تميل لهذا اللون
 // botValue: قيمة حي الميزة عند البوتات (الحي العادي 1، والحي المميز القديم ai.specialValue)
+// ساموراي إيدو: حراس الدوجو والمجنَّدون فيه (أقوى 30% بطلب المستخدم: كانوا 230 دماً و14 ضرراً)
+const SAMURAI = { hp: 300, armor: 0.2, damage: 18, attackTime: 0.9, speed: 2.4, visionRange: 4.5 };
+
 export const CITY_FEATURES = {
   cities: { diriyah: 'storm', shibam: 'villages', cairo: 'pyramid',
             japan: 'dojo', gyeongju: 'bandits', kano: 'bandits', kaifeng: 'clinic', gondar: 'fortress', meroe: 'khartoum',
             paris: 'coups', rothenburg: 'policeHQ', birmingham: 'clock', tenoch: 'cartel', rio: 'statue', laboca: 'mercs',
             yamamah: 'caravan', arab: 'souk', china: 'fireworks', hk: 'triads', jaipur: 'elephants', norway: 'troll',
-            europe: 'trains', mexico: 'mine', chicago: 'bank' },
+            europe: 'bells', mexico: 'mine', chicago: 'bank' },
   ground: ['#c9a24e', 0.24],
   // المبنى المميز (بطلب المستخدم: مساحة خاصة به، وحجم أكبر وفخامة وهالة): كتلة 2×2 وسط حيه لا يُمشى عليها،
   // وبقية الحي ساحة مرصوفة حوله يُمشى عليها. حيه blockTiles مربعاً فأكثر (generator.js)
   blockTiles: 9,
   botValue: { pyramid: 3, village: 2, dojo: 2.5, clinic: 2, fortress: 2.5, khartoum: 3,
               policeHQ: 3, clock: 3, complex: 2.5, cartel: 1.6, statue: 3, mercs: 2, souk: 2.5, triads: 2.5, stable: 2.5,
-              station: 2, mine: 3, bank: 2.5 },
+              cathedral: 2.5, mine: 3, bank: 2.5 },
   names: { pyramid: 'الهرم', village: 'القرية', dojo: 'دوجو الساموراي', clinic: 'دار العلاج', fortress: 'الحصن',
            khartoum: 'برج الخرطوم', policeHQ: 'مركز الشرطة الرئيسي', clock: 'برج الساعة', complex: 'المجمع السكني',
            statue: 'تمثال ريو', mercs: 'بيت المرتزقة', souk: 'السوق الكبير', triads: 'مقر الترياد', stable: 'إسطبل الفيلة',
-           station: 'محطة القطار', mine: 'منجم الفضة', bank: 'البنك' },
+           cathedral: 'الكاتدرائية', mine: 'منجم الفضة', bank: 'البنك' },
   hintSeconds: 6,                     // إشعار ميزة المدينة في بداية المباراة (بعد تلميح قائمة الحي)
   // سطر ميزة المدينة في معاينة المدينة (قائمة الإعداد والمتجر) وإشعار البداية
   desc: { storm: 'العاصفة الرملية: كل 3 دقائق لنصف دقيقة، مدى الرماة أقل والضربات تخطئ',
@@ -1538,7 +1557,7 @@ export const CITY_FEATURES = {
           triads: 'مقر الترياد: مالكه يرسل 6 مقاتلين أقوياء إلى أي حي لعدوه، يقاتلون 45 ثانية ثم يختفون',
           elephants: 'إسطبل الفيلة: مالكه يجنّد فيلاً حربياً ضخماً يدهس كل من حوله',
           troll: 'ترول الجبل: كل 4 دقائق ينزل وحش ضخم يهاجم أكبر تجمعات الجنود، ومن يقتله يأخذ 240 نقطة',
-          trains: 'محطات القطار: من يملك محطتين ينقل جنوده بينهما في ثوانٍ',
+          bells: 'الكاتدرائية: مالكها يقرع أجراسها فيصير كل جنوده أسرع 25% وأقوى 15% لمدة 15 ثانية',
           mine: 'منجم الفضة: دخله يكبر كلما طال امتلاكه حتى 4 نقاط في الثانية',
           bank: 'سرقة البنك: خزنته تمتلئ طوال المباراة، ومن يحتل البنك يسرقها كلها' },
   // الهالة حول كل مبنى مميز وحول القرية التي ينتظر أهلها (رسم فقط): نصف القطر بالمربعات من وسط الكتلة، ونبض بطيء،
@@ -1548,7 +1567,7 @@ export const CITY_FEATURES = {
   colors: { pyramid: '255,206,84', village: '120,140,225', dojo: '232,70,86', clinic: '96,220,150', fortress: '150,214,96',
             khartoum: '255,150,60', policeHQ: '95,160,240', clock: '240,205,120', complex: '47,190,175', statue: '140,230,120',
             mercs: '235,95,110', souk: '230,170,70', triads: '255,80,170', stable: '255,140,190',
-            station: '120,170,255', mine: '200,215,230', bank: '120,230,150' },
+            cathedral: '255,214,120', mine: '200,215,230', bank: '120,230,150' },
   // العاصفة الرملية (الدرعية): أولها عند first ثانية ثم كل every ثانية، لمدة duration، وتنبيه قبلها بـ warn ثانية.
   // أثناءها: مدى الرماة والأبراج × rangeMul، والضربة القريبة والسهم وسهم البرج يخطئ باحتمال miss
   // ("أخطأ!" pop)، والنار وضربات الأبطال أضعف بنفس النسبة
@@ -1569,7 +1588,7 @@ export const CITY_FEATURES = {
   // أول استيلاء يوقف إنتاجهم ويختفي الباقون خلال vanishSeconds، ومالكه: كل جنوده +damageBonus ضرراً
   dojo: { minHomeDistance: 6, start: 2, every: 12, max: 5, chase: 6, vanishSeconds: 5, damageBonus: 0.10, top: 50,
           name: 'الساموراي', color: '#7d1f2c', nation: 'japan', hero: 'dual', look: 'samurai',   // look: صورة الساموراي (بطلب المستخدم)
-          stats: { hp: 230, armor: 0.2, damage: 14, attackTime: 0.9, speed: 2.4, visionRange: 4.5 } },
+          stats: SAMURAI, recruits: ['samurai'] },
   // قطاع الطرق (غيونغجو وكانو): أول عصابة عند first ثانية ثم كل every، في وسط الخريطة، بشكل أفراد أمة المدينة بلون color.
   // الموجة n: count + perWave × (n − 1) فرداً (حتى maxCount)، ودمهم وضررهم × (1 + grow × (n − 1))، ومن الموجة heroFrom
   // شخصية مميزة لكل heroEvery أفراد. تستولي على الأحياء المجاورة حتى cap حياً، وتفكر كل think ثانية. لا تنتج جنوداً
@@ -1637,11 +1656,9 @@ export const CITY_FEATURES = {
   // إسطبل الفيلة (جايبور): يجنّد فيه مالكه الفيل الحربي (recruits.elephant). الفيل يدهس كل عدو داخل radius
   // كل every ثانية بضرر damage، ولا يترنّح ولا يسقط ولا يُدفع
   stable: { top: 62, recruits: ['elephant'], trample: { radius: 1.5, damage: 22, every: 1.5 } },
-  // محطة القطار (المدينة الأوروبية): count محطات حسب حجم الخريطة، متباعدة. من قائمة محطة يملكها من يملك محطتين:
-  // جنوده داخل radius مربع منها (حتى seats، الأقرب أولاً) يركبون القطار ويصلون محطة أخرى له بعد seconds ثانية،
-  // ومرة كل cooldown لكل محطة. والبوت يرسل منها إن كان حولها botRiders فأكثر وحول محطة أخرى له أعداء داخل botThreat
-  station: { count: { small: 2, medium: 2, large: 3 }, minHomeDistance: 4, radius: 4, seats: 12, seconds: 4, cooldown: 45,
-             botRiders: 5, botThreat: 6, top: 60 },
+  // الكاتدرائية (المدينة الأوروبية، بدل محطة القطار): مالكها يقرع أجراسها فيصير كل جنوده على الخريطة أسرع speed وأقوى
+  // damage مدة seconds، مرة كل cooldown. والبوت يقرعها حين يقاتل botFighting من جنوده فأكثر. ring: حلقة تحت الجندي
+  cathedral: { top: 66, cooldown: 90, seconds: 15, speed: 0.25, damage: 0.15, botFighting: 6, ring: '#ffd36b' },
   // منجم الفضة (المدينة المكسيكية): دخله base نقطة/ث في أول every ثانية من امتلاكه، ثم +step كل every حتى max،
   // ويعود إلى base كلما احتُل
   mine: { base: 1, step: 1, every: 60, max: 4, top: 58 },
@@ -1668,6 +1685,8 @@ export const CITY_FEATURES = {
                stats: { hp: 90, damage: 7, attackTime: 0.55, speed: 2.7 } },
     gaucho:  { name: 'مرتزق ثقيل', cost: 140, seconds: 14, nation: 'argentina', hero: 'spear',
                stats: { hp: 520, armor: 0.35, damage: 30, attackTime: 1.3, speed: 2.0 } },
+    // ساموراي الدوجو (إيدو، بطلب المستخدم): يجنّده مالك الدوجو بصورة الساموراي (look) وبلونه
+    samurai: { name: 'ساموراي', cost: 80, seconds: 10, nation: 'japan', hero: 'dual', look: 'samurai', stats: SAMURAI },
     // الفيل الحربي (جايبور): مخلوق (creature) يُرسم بشكله لا بشكل أمة، بحجم scale (أصغر 40% من 2.1 بطلب المستخدم)
     // وشريط دمه عند barY، وواحد فقط لكل لاعب في الوقت نفسه (limit، ومعه ما في الطوابير)
     elephant: { name: 'فيل حربي', cost: 180, seconds: 18, creature: 'elephant', scale: 1.26, barY: -28, limit: 1,
@@ -1689,7 +1708,7 @@ export const UI = {
   // حفظ المباراة الجارية للعودة إليها لاحقاً (خانة واحدة)
   matchKey: 'gangcity.match',      // المباراة نفسها
   matchInfoKey: 'gangcity.matchInfo', // ملخص صغير يقرؤه زر "متابعة المباراة" بلا فك المباراة كلها
-  matchVersion: 7,               // يُرفع عند تغيّر شكل حالة المباراة، فتُهمل الحفظات القديمة (3: الأمم، 4: الآسيوية، 5: الأوروبية، 6: الأفريقية، 7: الاقتصاد في كل الأطوار)
+  matchVersion: 8,               // يُرفع عند تغيّر شكل حالة المباراة، فتُهمل الحفظات القديمة (3: الأمم، 4: الآسيوية، 5: الأوروبية، 6: الأفريقية، 7: الاقتصاد في كل الأطوار، 8: الكاتدرائية بدل محطات القطار)
   matchDecimals: 5,              // دقة الأعداد العشرية في الحفظ (تصغّر حجمه)
 
   // الخلفية الحية للقائمة الرئيسية: الخريطة نفسها وبضع وحدات تتجول

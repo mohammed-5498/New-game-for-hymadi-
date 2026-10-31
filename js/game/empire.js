@@ -7,7 +7,7 @@
 //   مبناه بترقياته كما هي، ولا تعود نقاط لأحد (وطلبات الجنود في طابور القاعدة الساقطة تضيع)
 // الحالة كلها بيانات بسيطة في state.modeState وحقول الأحياء (building وbuildTile وblv)، فتُحفظ مع المباراة.
 // الأرقام كلها في EMPIRE داخل config.js
-import { TICK_SEC, EMPIRE as E, SPAWN, GANGS, ai, CITY_FEATURES } from '../config.js';
+import { TICK_SEC, EMPIRE as E, SPAWN, GANGS, ai, CITY_FEATURES, STYLE_PERKS } from '../config.js';
 import { createUnit } from './units.js';
 import { spawnChampion, championOf, countUnits } from './spawn.js';
 import { applyDamage, isEnemyId } from './combat.js';
@@ -17,7 +17,7 @@ import { soundAt } from '../audio/sound.js';
 import { hypot } from './hypot.js';
 import { random } from './random.js';   // عشوائية المنطق: مشتركة بين الأجهزة في اللعب المحلي
 import { featureIncome, stormRangeMul, stormMiss, recruitsAt, spawnRecruit, featureCostMul, featureIncomeMul, featureProductionMul,
-         payTax, callTriads, sendTrain } from './features.js';
+         payTax, callTriads, ringBells } from './features.js';
 
 const isAlive = (unit) => unit && unit.state !== 'dead' && unit.hp > 0;
 
@@ -126,11 +126,14 @@ function botIncome(player) {
   return (lvl && lvl.incomeFactor) || 1;
 }
 
-// سرعة الإنتاج ترقية القاعدة نفسها (district.blv.production)، ومالك برج الساعة أسرع (القسم 3.11)
+// سرعة الإنتاج ترقية القاعدة نفسها (district.blv.production)، ومالك برج الساعة أسرع (القسم 3.11)،
+// وجنود الحشد في القاعدة أسرع (القسم 3.12)
 export function productionTime(state, district, kind) {
   const level = (district.blv && district.blv.production) || 0;
   const owner = state.players[district.owner];
-  return unitCost(kind).seconds * E.buildings.hq.upgrades.production.times[level] * (owner ? botFactor(owner) * featureProductionMul(state, owner.id) : 1);
+  const horde = owner && owner.gang === 'scorpions' && E.units[kind] ? 1 + STYLE_PERKS.horde.production : 1;
+  return unitCost(kind).seconds * E.buildings.hq.upgrades.production.times[level] *
+    (owner ? botFactor(owner) * featureProductionMul(state, owner.id) : 1) / horde;
 }
 
 // كلفة الطلب وزمنه: جنود القاعدة، أو المجنَّدون في المباني المميزة (CITY_FEATURES.recruits، القسم 3.11)
@@ -249,7 +252,7 @@ function updateShots(state, ms) {
     shot.t += TICK_SEC;
     if (shot.t < shot.duration) { left.push(shot); continue; }
     // في العاصفة الرملية يخطئ السهم أحياناً (القسم 3.11)
-    if (isAlive(shot.target) && !stormMiss(state)) applyDamage(state, { playerId: shot.owner }, shot.target, shot.damage);
+    if (isAlive(shot.target) && !stormMiss(state)) applyDamage(state, { playerId: shot.owner }, shot.target, shot.damage, true);
   }
   ms.shots = left;
 }
@@ -437,7 +440,7 @@ export function empireCommand(state, playerId, a, d, x) {
   if (a === 'queue' && (E.units.order.includes(x) || Object.hasOwn(CITY_FEATURES.recruits, x))) return queueUnit(state, playerId, d, x);
   if (a === 'upgrade' && E.upgrades.order.includes(x)) return buyUpgrade(state, playerId, x);
   if (a === 'triads') return callTriads(state, playerId, d, x);          // مقر الترياد: x رقم حي العدو (القسم 3.11)
-  if (a === 'train') return sendTrain(state, playerId, d, x);            // محطة القطار: x رقم المحطة الأخرى
+  if (a === 'bells') return ringBells(state, playerId, d);              // أجراس الكاتدرائية
   if (a === 'build' && E.buildings.order.includes(x)) return buildDistrict(state, playerId, d, x);
   if (a === 'improve' && district && district.building && E.buildings[district.building].upgrades.order.includes(x)) {
     return upgradeBuilding(state, playerId, d, x);

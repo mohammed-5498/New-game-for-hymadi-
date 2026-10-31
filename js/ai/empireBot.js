@@ -7,7 +7,7 @@ import {
   nextBuildingUpgrade, upgradeBuilding, buildSpot
 } from '../game/empire.js';
 import { isEnemyId } from '../game/combat.js';
-import { recruitsAt, canCallTriads, callTriads, triadTarget, canSendTrain, sendTrain } from '../game/features.js';
+import { recruitsAt, canCallTriads, callTriads, triadTarget, canRingBells, ringBells } from '../game/features.js';
 import { hypot } from '../game/hypot.js';
 
 const B = E.bot;
@@ -33,7 +33,7 @@ export function empireEconomy(state, player) {
   if (!ms.bot) ms.bot = {};
   const memo = ms.bot[pid] || (ms.bot[pid] = { turn: 0, units: 0, tech: 0 });
   botTriads(state, pid);
-  botTrains(state, pid);
+  botBells(state, pid);
   for (let n = 0; n < B.buysPerDecision; n++) {
     const next = pickNext(state, player, memo);
     if (!next || ms.points[pid] < next.cost) return;     // يدّخر للشراء التالي
@@ -183,23 +183,12 @@ function botTriads(state, pid) {
   if (best) callTriads(state, pid, hq.id, best.id);
 }
 
-// محطة القطار (القسم 3.11): من محطة حولها botRiders فأكثر من جنوده إلى محطته التي حولها أعداء أكثر من جنوده
-function botTrains(state, pid) {
-  if (state.feature !== 'trains') return;
-  const T = CITY_FEATURES.station;
-  const stations = state.map.districts.filter(d => d.feature === 'station' && d.featureTile !== undefined && d.owner === pid);
-  if (stations.length < 2) return;
-  const count = (d, mine) => state.units.reduce((n, u) => n + (u.state !== 'dead' && u.hp > 0 &&
-    (mine ? u.playerId === pid : isEnemyId(state, pid, u.playerId)) &&
-    hypot(u.x - d.capture.i, u.y - d.capture.j) <= (mine ? T.radius : T.botThreat) ? 1 : 0), 0);
-  for (const from of stations) {
-    if (!canSendTrain(state, pid, from).ok || count(from, true) < T.botRiders) continue;
-    let best = null, bestNeed = 0;
-    for (const to of stations) {
-      if (to === from) continue;
-      const need = count(to, false) - count(to, true);
-      if (need > bestNeed) { bestNeed = need; best = to; }
-    }
-    if (best) { sendTrain(state, pid, from.id, best.id); return; }
-  }
+// الكاتدرائية (القسم 3.11): يقرع أجراسها حين يقاتل botFighting من جنوده فأكثر
+function botBells(state, pid) {
+  if (state.feature !== 'bells') return;
+  const d = state.map.districts.find(x => x.feature === 'cathedral' && x.featureTile !== undefined && x.owner === pid);
+  if (!d || !canRingBells(state, pid, d).ok) return;
+  let fighting = 0;
+  for (const u of state.units) if (u.playerId === pid && u.target && u.state !== 'dead' && u.hp > 0) fighting++;
+  if (fighting >= CITY_FEATURES.cathedral.botFighting) ringBells(state, pid, d.id);
 }

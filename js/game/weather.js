@@ -1,5 +1,5 @@
 // تأثير الطقس على اللعب: الرصد ليلاً، السرعة في الثلج، ودقة الرمي في المطر
-import { WEATHER } from '../config.js';
+import { WEATHER, CITY_FEATURES } from '../config.js';
 import { empireSpeedMul } from './empire.js';
 import { random } from './random.js';   // عشوائية المنطق: مشتركة بين الأجهزة في اللعب المحلي
 
@@ -15,6 +15,7 @@ export function moveSpeed(state, unit) {
   // traits.spd: تنويع بسيط بين الأفراد (القسم 5.4) فلا تسير الصفوف كآلة واحدة
   let speed = unit.stats.speed * WEATHER[state.weather].speedMul * (unit.traits ? unit.traits.spd : 1);
   if (unit.hasteUntil > state.time) speed *= 1 + unit.hasteFactor;    // اندفاع ضربة بطل (القسم 3.10)
+  if (unit.rallyUntil > state.time) speed *= 1 + CITY_FEATURES.cathedral.speed;   // أجراس الكاتدرائية (القسم 3.11)
   if (state.economy) speed *= empireSpeedMul(state, unit.playerId);   // ترقية سرعة المشي
   if (unit.slowUntil > state.time) return speed * (1 - unit.slowFactor);
   return speed;

@@ -21,7 +21,7 @@
 // - مقر الترياد (هونغ كونغ): مالكه يرسل مقاتلين مؤقتين إلى حي لعدوه (callTriads، أمر triads في empire.js)
 // - إسطبل الفيلة (جايبور): تجنيد فيل حربي (مخلوق creature يُرسم بشكله) يدهس من حوله
 // - ترول الجبل (القرية النرويجية): وحش محايد ضخم ينزل بموعد ويقصد أكبر تجمعات الجنود، ومن يقتله يأخذ مكافأته
-// - محطة القطار (المدينة الأوروبية): من يملك محطتين ينقل جنوده بينهما (sendTrain، أمر train، وstate.trains في الطريق)
+// - الكاتدرائية (المدينة الأوروبية): مالكها يقرع أجراسها فيصير كل جنوده أسرع وأقوى مدة قصيرة (ringBells، أمر bells)
 // - منجم الفضة (المدينة المكسيكية): دخل يكبر كلما طال امتلاكه (d.mineRate)
 // - البنك (شيكاغو): خزنة تمتلئ (d.vault) يسرقها كلها من يحتل البنك
 // الحي يحمل ميزته (district.feature، من مولّد الخريطة)، والمباراة ميزة مدينتها (state.feature).
@@ -102,12 +102,11 @@ export function initFeatures(state) {
   if (state.feature === 'villages') initVillages(state);
   if (state.feature === 'cartel') initCartel(state);
   if (state.feature === 'fireworks') state.fireworks = [];
-  if (state.feature === 'trains') state.trains = [];
   for (const d of state.map.districts) {
     if (!d.capture || d.featureTile === undefined) continue;
     d.cool = 0;
     if (d.feature === 'souk') d.taxed = 0;
-    if (d.feature === 'triads' || d.feature === 'station') d.readyAt = 0;
+    if (d.feature === 'triads' || d.feature === 'cathedral') d.readyAt = 0;
     if (d.feature === 'mine') { d.mineOwner = null; d.mineSince = 0; d.mineRate = 0; }
     if (d.feature === 'bank') { d.vault = 0; d.bankOwner = null; }
     if (d.feature === 'dojo') {
@@ -142,7 +141,6 @@ export function updateFeatures(state) {
     case 'triads': expireTriads(state); break;
     case 'elephants': trample(state); break;
     case 'troll': updateTroll(state); break;
-    case 'trains': updateTrains(state); break;
     case 'mine': updateMine(state); break;
     case 'bank': updateBank(state); break;
   }
@@ -443,6 +441,7 @@ export function spawnRecruit(state, player, d, kind) {
     : createUnit(state, { ...player, gang: nations[R.nation].style, nation: R.nation }, i, j, R.hero);
   if (R.stats) boost(unit, R.stats);
   if (R.name) unit.name = R.name;
+  if (R.look) unit.lookKind = R.look;           // الساموراي بصورته
   if (R.creature) makeCreature(unit, R.creature, R.scale, R.barY);
   unit.recruitKind = kind;
   state.units.push(unit);
@@ -1063,91 +1062,32 @@ function moveTroll(state) {
 }
 
 // ================= ما يُختار بلمسة على الخريطة (القائمة ثم input.js) =================
-// هجوم الترياد (حي عدو) ورحلة القطار (محطة أخرى للاعب). يعيد { ok, reason }
+// هجوم الترياد (حي عدو). يعيد { ok, reason }
 export function canPick(state, pid, pick, target) {
-  const d = state.map.districts[pick.d];
-  return pick.a === 'train' ? canSendTrain(state, pid, d, target) : canCallTriads(state, pid, d, target);
+  return canCallTriads(state, pid, state.map.districts[pick.d], target);
 }
 
-// ================= محطة القطار (المدينة الأوروبية) =================
-const ownStations = (state, pid) =>
-  state.map.districts.filter(d => d.feature === 'station' && d.featureTile !== undefined && d.owner === pid);
-
-// الركاب: جنود اللاعب داخل radius من ساحة المحطة، الأقرب أولاً حتى seats (لا المخلوقات: لا تسعها العربات)
-function riders(state, pid, d) {
-  const T = F.station, near = [];
-  for (const u of state.units) {
-    if (u.playerId !== pid || !isAlive(u) || u.creature) continue;
-    const dist = hypot(u.x - d.capture.i, u.y - d.capture.j);
-    if (dist <= T.radius) near.push([dist, u]);
-  }
-  near.sort((a, b) => a[0] - b[0]);
-  return near.slice(0, T.seats).map(([, u]) => u);
-}
-
-export function canSendTrain(state, pid, from, to) {
-  if (!from || from.feature !== 'station' || from.featureTile === undefined || from.owner !== pid) return { ok: false, reason: 'ليست محطتك' };
-  if (state.time < from.readyAt) return { ok: false, reason: 'القطار يعود بعد ' + Math.ceil(from.readyAt - state.time) + ' ث' };
-  if (ownStations(state, pid).length < 2) return { ok: false, reason: 'تحتاج محطة ثانية' };
-  if (!riders(state, pid, from).length) return { ok: false, reason: 'لا جنود حول المحطة' };
-  if (to === undefined) return { ok: true, reason: '' };
-  if (!to || to === from || to.feature !== 'station' || to.featureTile === undefined || to.owner !== pid) {
-    return { ok: false, reason: 'اختر محطة أخرى لك' };
-  }
+// ================= الكاتدرائية (المدينة الأوروبية، بدل محطة القطار) =================
+// مالكها يقرع أجراسها: كل جنوده على الخريطة أسرع speed وأقوى damage مدة seconds (unit.rallyUntil)، مرة كل cooldown
+export function canRingBells(state, pid, d) {
+  if (!d || d.feature !== 'cathedral' || d.featureTile === undefined || d.owner !== pid) return { ok: false, reason: 'ليست كاتدرائيتك' };
+  if (state.time < d.readyAt) return { ok: false, reason: 'تُقرع بعد ' + Math.ceil(d.readyAt - state.time) + ' ث' };
   return { ok: true, reason: '' };
 }
 
-// المحطة الوحيدة التي يصل إليها القطار من هذه (حين يملك اللاعب محطتين فقط)، وإلا null فيختار بلمسة
-export function onlyStation(state, pid, from) {
-  const others = ownStations(state, pid).filter(d => d !== from);
-  return others.length === 1 ? others[0].id : null;
-}
-
-// الركاب يغادرون الخريطة (لا يُرى منهم شيء ولا يُضرب) حتى يصلوا: من كان يقصدهم يترك هدفه، والمقذوفات إليهم تسقط
-export function sendTrain(state, pid, fromId, toId) {
-  const T = F.station, from = state.map.districts[fromId];
-  const to = Number.isInteger(toId) ? state.map.districts[toId] : null;
-  const check = canSendTrain(state, pid, from, to || null);
+export function ringBells(state, pid, did) {
+  const C = F.cathedral, d = state.map.districts[did];
+  const check = canRingBells(state, pid, d);
   if (!check.ok) return check;
-  const units = riders(state, pid, from), aboard = new Set(units);
-  from.readyAt = state.time + T.cooldown;
-  for (const u of units) {
-    u.path = []; u.flow = null; u.target = null; u.attackMove = null; u.state = 'idle';
-    u.pendingHit = null; u.cMove = null; u.cPhases = null;
-  }
-  state.units = state.units.filter(u => !aboard.has(u));
-  for (const u of state.units) if (u.target && aboard.has(u.target)) u.target = null;
-  state.projectiles = state.projectiles.filter(p => !aboard.has(p.target));
-  state.trains.push({ units, from: from.id, to: to.id, at: tickOf(state) + ticks(T.seconds) });
-  addUltFx(state, 'dust', from.capture.i, from.capture.j);
-  soundAt(state, 'whistle', from.capture.i, from.capture.j);
+  d.readyAt = state.time + C.cooldown;
+  d.rangAt = state.time;                       // حلقات الأجراس حول الكاتدرائية (رسم)
+  const until = state.time + C.seconds;
+  for (const u of state.units) if (u.playerId === pid && isAlive(u)) u.rallyUntil = until;
+  soundAt(state, 'ult_ready', d.capture.i, d.capture.j);
+  state.notice = pid === state.humanId
+    ? { text: 'دقت أجراس الكاتدرائية: جنودك أسرع وأقوى ' + C.seconds + ' ث', mine: true, t: 3 }
+    : { text: state.players[pid].gangName + ' قرعوا أجراس الكاتدرائية!', mine: false, t: 3 };
   return { ok: true, reason: '' };
-}
-
-// القطار وصل: الركاب ينزلون حول ساحة المحطة الأخرى (ولو سقطت أثناء الرحلة)
-function updateTrains(state) {
-  if (!state.trains.length) return;
-  const tick = tickOf(state);
-  for (const train of state.trains) {
-    if (tick < train.at) continue;
-    const to = state.map.districts[train.to];
-    const spots = findFreeTiles(state.map, to.capture.i, to.capture.j, train.units.length);
-    train.units.forEach((u, k) => {
-      const [i, j] = spots[Math.min(k, spots.length - 1)] || [to.capture.i, to.capture.j];
-      u.x = u.prevX = i;
-      u.y = u.prevY = j;
-      u.vx = u.vy = 0;
-      u.chaseOrigin = { x: i, y: j };
-      state.units.push(u);
-    });
-    addUltFx(state, 'dust', to.capture.i, to.capture.j);
-    soundAt(state, 'whistle', to.capture.i, to.capture.j);
-    if (train.units.some(u => u.playerId === state.humanId)) {
-      state.notice = { text: 'وصل القطار: ' + train.units.length + ' من جنودك في ' + F.names.station, mine: true, t: 2.5 };
-    }
-    train.done = true;
-  }
-  state.trains = state.trains.filter(t => !t.done);
 }
 
 // ================= منجم الفضة (المدينة المكسيكية) =================

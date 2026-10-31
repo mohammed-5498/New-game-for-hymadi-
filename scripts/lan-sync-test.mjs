@@ -49,9 +49,9 @@ const pick = (list) => list[Math.floor(rnd() * list.length)];
 function empireCommand(state, L) {
   const own = state.map.districts.filter(d => d.owner === L.slot && d.capture);
   const recruit = own.filter(d => d.feature && CITY_FEATURES[d.feature] && CITY_FEATURES[d.feature].recruits);
-  const stations = own.filter(d => d.feature === 'station');
-  if (stations.length > 1 && rnd() < 0.3) {
-    LS.localCommand(L, { k: 'emp', a: 'train', d: pick(stations).id, x: pick(stations).id });
+  const cathedral = own.find(d => d.feature === 'cathedral');
+  if (cathedral && rnd() < 0.3) {
+    LS.localCommand(L, { k: 'emp', a: 'bells', d: cathedral.id });
     return;
   }
   if (recruit.length && rnd() < 0.3) {

@@ -16,7 +16,7 @@ import { drawUnitsOccluded } from './occlusion.js';
 import { shadedCount } from '../pacing.js';
 import { drawEmpireShots, drawEmpireMarks, drawEmpireHalos, drawEmpireBadges } from './empireArt.js';
 import { drawFeatureBadges, drawStorm, featureHaloEntry, drawFeatureHalo, drawFireworksMarks, drawFireworksBursts,
-         fireworksLights, drawTrains, drawVault } from './featureArt.js';
+         fireworksLights, drawBells, drawVault } from './featureArt.js';
 
 export function resizeCanvas(canvas, state) {
   const view = state.view;
@@ -118,7 +118,7 @@ export function render(ctx, state, alpha, cityBudgetMs = CITY_CACHE.frameBudgetM
   drawEmpireBadges(ctx, state, visible);            // تاج القاعدة وقوس البرج وصليب المستشفى
   drawFeatureBadges(ctx, state, visible);           // شارة الهرم وشارة القرية التي ينتظر أهلها (القسم 3.11)
   drawFireworksBursts(ctx, state, visible);         // انفجارات الألعاب النارية في السماء
-  drawTrains(ctx, state, visible);                  // القطار بين محطتين
+  drawBells(ctx, state, visible);                   // حلقات أجراس الكاتدرائية حين تُقرع
   drawVault(ctx, state, visible);                   // ما في خزنة البنك
   drawEmpireMarks(ctx, state, visible, state.empireOpen);   // شريط الإنتاج ودائرة مدى المبنى المفتوح
   drawHillCrown(ctx, state, visible);

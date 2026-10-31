@@ -1,6 +1,6 @@
 // قدرات الشخصيات المميزة ومكافآت الأحياء المميزة
 // (هالة الزعيم، علاج الطبيب، المستشفى، مخزن السلاح، نار الزجاجات)
-import { TICK_SEC, SPECIAL_BONUS, MAP_GEN } from '../config.js';
+import { TICK_SEC, SPECIAL_BONUS, MAP_GEN, STYLE_PERKS } from '../config.js';
 import { isEnemy, applyDamage, isEnemyId } from './combat.js';
 import { ownsSpecial } from './spawn.js';
 import { policeArmorBonus } from './police.js';
@@ -107,8 +107,25 @@ function applyDamageBonuses(state) {
       speed = CITY_FEATURES.statue.attackSpeed;
     }
     if (unit.auraSpeed !== speed) unit.auraSpeed = speed;
+    if (unit.rallyUntil > state.time) multiplier += CITY_FEATURES.cathedral.damage;   // أجراس الكاتدرائية (القسم 3.11)
+    // الحشد (القسم 3.12): أقوى كلما اجتمع، وكل الجنود أضعف ضرراً إلا المخلوقات
+    if (unit.gang === 'scorpions' && !unit.creature) multiplier += hordeBonus(state, unit);
+    if (!unit.creature) multiplier *= STYLE_PERKS.soldierDamage;
     if (unit.damageMultiplier !== multiplier) unit.damageMultiplier = multiplier;
   }
+}
+
+// مكافأة اجتماع الحشد: أفراده من لاعبه حوله (ومعهم هو نفسه) حسب درجات STYLE_PERKS.horde.tiers
+function hordeBonus(state, unit) {
+  const H = STYLE_PERKS.horde, radiusSq = H.radius * H.radius;
+  let count = 0;
+  forEachNearby(state, unit.x, unit.y, H.radius, (other) => {
+    if (other.playerId !== unit.playerId || other.gang !== 'scorpions' || other.creature || !isAlive(other)) return;
+    const dx = other.x - unit.x, dy = other.y - unit.y;
+    if (dx * dx + dy * dy <= radiusSq) count++;
+  });
+  for (const [n, bonus] of H.tiers) if (count >= n) return bonus;
+  return 0;
 }
 
 function spreadAura(state, boss, aura) {

@@ -10,7 +10,7 @@ import {
   empireCommand, towerStats, hospitalStats, incomeOf, tileOf
 } from '../game/empire.js';
 import { lanCommand } from '../net/session.js';
-import { recruitsAt, featureTowerStats, featureCostMul, canCallTriads, canSendTrain, onlyStation } from '../game/features.js';
+import { recruitsAt, featureTowerStats, featureCostMul, canCallTriads, canRingBells } from '../game/features.js';
 import { drawCreatureIcon } from '../render/creatureArt.js';
 import { worldToScreen } from '../map/coords.js';
 import { drawCharacters } from './charThumb.js';
@@ -72,7 +72,7 @@ function sectionsFor(state, district) {
     const recruits = recruitsAt(district);
     if (recruits) {
       sections.push({ title: 'التجنيد', queue: true, slots: recruits.map(kind => {
-        const R = F.recruits[kind], art = R.hero || 'common';
+        const R = F.recruits[kind], art = R.look || R.hero || 'common';
         return {
           name: R.name || unitName(R.nation, art), art, side: R.nation, creature: R.creature, color: player.color,
           cost: () => unitPrice(state, pid, kind),
@@ -92,15 +92,15 @@ function sectionsFor(state, district) {
         cmd: { a: 'triads', d: district.id }
       }] });
     }
-    // محطة القطار: مع محطتين يذهب مباشرة إلى الأخرى، ومع أكثر يختار اللاعب المحطة بلمسة
-    if (district.feature === 'station') {
-      const T = F.station;
-      sections.push({ title: 'القطار', slots: [{
-        name: 'أرسل بالقطار', desc: 'جنودك حول المحطة (حتى ' + T.seats + ') يصلون محطة أخرى لك بعد ' + T.seconds + ' ث',
-        pick: { text: 'المس المحطة التي يذهبون إليها', direct: () => onlyStation(state, pid, district) },
+    // الكاتدرائية: لمسة تقرع الأجراس
+    if (district.feature === 'cathedral') {
+      const C = F.cathedral;
+      sections.push({ title: 'الأجراس', slots: [{
+        name: 'اقرع الأجراس', desc: 'كل جنودك أسرع ' + Math.round(C.speed * 100) + '% وأقوى ' + Math.round(C.damage * 100) + '% لمدة ' + C.seconds + ' ث',
+        art: 'common', side, color: player.color,
         cost: () => 'مجاناً',
-        check: () => canSendTrain(state, pid, district),
-        cmd: { a: 'train', d: district.id }
+        check: () => canRingBells(state, pid, district),
+        cmd: { a: 'bells', d: district.id }
       }] });
     }
     return sections;
@@ -181,9 +181,9 @@ function statsLine(state, district) {
     return 'ترسل ' + T.heroes.length + ' مقاتلين إلى حي لعدوك يقاتلون ' + T.seconds + ' ث • مرة كل ' + T.cooldown + ' ث' +
            (wait > 0 ? ' • جاهزون بعد ' + wait + ' ث' : '');
   }
-  if (district.feature === 'station') {
-    const T = F.station, wait = Math.ceil((district.readyAt || 0) - state.time);
-    return 'تنقل جنودك حولها إلى محطة أخرى لك في ' + T.seconds + ' ث • مرة كل ' + T.cooldown + ' ث' + (wait > 0 ? ' • يعود بعد ' + wait + ' ث' : '');
+  if (district.feature === 'cathedral') {
+    const C = F.cathedral, wait = Math.ceil((district.readyAt || 0) - state.time);
+    return 'أجراسها تجعل كل جنودك أسرع وأقوى ' + C.seconds + ' ث • مرة كل ' + C.cooldown + ' ث' + (wait > 0 ? ' • تُقرع بعد ' + wait + ' ث' : '');
   }
   if (district.feature === 'mine') {
     return 'دخله الآن ' + district.mineRate + ' نقطة/ث • يكبر كل دقيقة حتى ' + F.mine.max + '، ويعود إلى ' + F.mine.base + ' إن احتُل';

@@ -1,5 +1,5 @@
 // رسم الوحدات: نظام الوضعيات v2 (anim.js + bodies.js + combatArt.js) مربوطاً بحالة الوحدة
-import { TILE_HALF_W, TILE_HALF_H, TICK_SEC, COMBAT, COMBAT_REALISM, PERFORMANCE, UNIT_ART, ULT, nations } from '../config.js';
+import { TILE_HALF_W, TILE_HALF_H, TICK_SEC, COMBAT, COMBAT_REALISM, PERFORMANCE, UNIT_ART, ULT, nations, CITY_FEATURES } from '../config.js';
 import { UI_LIGHT } from './colors.js';
 import { drawOne, stateLabel, drawSpeedLines } from './combatArt.js';
 import { flameLayers } from './anim.js';
@@ -101,8 +101,9 @@ export function drawUnit(ctx, unit, alpha, zoom = 99, time = 0, debug = false, c
   }
   const ghosts = full ? (crowded ? COMBAT_REALISM.trailGhostsCrowded : COMBAT_REALISM.trailGhosts) : 0;
   // صيحة الحارة والراية المغروسة (القسم 3.10): حلقة ذهبية تحت قدمي من يصمد بلا ترنّح ولا سقوط،
-  // والشرطي المرتشي (رشوة الشرطي) بحلقة خضراء ما دامت الهدنة
-  const ring = dead ? null : unit.steadyUntil > time ? nations.fx.steadyRing : unit.bribedUntil > time ? nations.fx.bribeRing : null;
+  // والشرطي المرتشي (رشوة الشرطي) بحلقة خضراء ما دامت الهدنة، ومن دقت له أجراس الكاتدرائية بحلقة ذهبية (القسم 3.11)
+  const ring = dead ? null : unit.steadyUntil > time ? nations.fx.steadyRing : unit.bribedUntil > time ? nations.fx.bribeRing
+    : unit.rallyUntil > time ? CITY_FEATURES.cathedral.ring : null;
   if (ring) {
     ctx.beginPath();
     ctx.ellipse(x, y + 0.6, 6.2 * scale, 2.5 * scale, 0, 0, 6.2832);

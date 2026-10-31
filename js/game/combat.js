@@ -1,5 +1,5 @@
 // الهجوم التلقائي، أمر الهجوم، المقذوفات، الضرر والموت
-import { TICK_SEC, COMBAT, COMBAT_REALISM as CR, UNITS, UNIT_ART, POLICE, AUDIO, CITY_FEATURES } from '../config.js';
+import { TICK_SEC, COMBAT, COMBAT_REALISM as CR, UNITS, UNIT_ART, POLICE, AUDIO, CITY_FEATURES, STYLE_PERKS } from '../config.js';
 import { findPath } from '../map/pathfinding.js';
 import { facingFromAngle } from './units.js';
 import {
@@ -432,6 +432,7 @@ function fightTarget(state, unit, budget) {
         attackTime /= 1 + unit.buffAttackSpeed;
       }
       if (unit.auraSpeed) attackTime /= 1 + unit.auraSpeed;      // هالة تمثال ريو (القسم 3.11)
+      if (ranged && unit.gang === 'vipers') attackTime /= 1 + STYLE_PERKS.fireRate;   // الرامي يرمي أسرع (القسم 3.12)
 
       // الرمي البعيد يبقى ضربة واحدة كما هي؛ والقتال القريب يستعمل الحركات الأربع
       if (ranged) rangedSwing(state, unit, target, damage, attackTime);
@@ -618,11 +619,11 @@ function hitSound(state, attacker, target, amount) {
   }
 }
 
-// ضربة مباشرة: قد تكون دائرية (المحطِّم) فتصيب كل الأعداء حول الهدف
+// ضربة مباشرة: قد تكون دائرية (المحطِّم) فتصيب كل الأعداء حول الهدف. shot: من مقذوف
 // تعيد true إذا مات الهدف الأساسي (ليُدفع جسده)
-function strike(state, attacker, target, amount) {
+function strike(state, attacker, target, amount, shot = false) {
   const splash = attacker.stats.splashRadius;
-  if (!splash) return applyDamage(state, attacker, target, amount);
+  if (!splash) return applyDamage(state, attacker, target, amount, shot);
 
   let died = false;
   const splashSq = splash * splash;
@@ -630,21 +631,26 @@ function strike(state, attacker, target, amount) {
     if (other.state === 'dead' || other.hp <= 0) return;
     if (distanceSq(other, target) > splashSq) return;
     if (!isEnemy(state, attacker, other)) return;
-    const killed = applyDamage(state, attacker, other, amount);
+    const killed = applyDamage(state, attacker, other, amount, shot);
     if (other === target) died = killed;
   });
   return died;
 }
 
-// تعيد true إذا مات الهدف بهذه الضربة
-export function applyDamage(state, attacker, target, amount) {
+// تعيد true إذا مات الهدف بهذه الضربة. shot: الضرر من مقذوف (سهم، حجر، زجاجة، سهم برج)
+export function applyDamage(state, attacker, target, amount, shot = false) {
   if (!isAlive(target)) return false;
   if (target.invulnUntil > state.time) return false;     // تصلّب: لا يتلقى ضرراً ولا يترنّح ولا يُدفع
   retaliateIfCloser(state, attacker, target);
+  // الأنماط الأربعة (القسم 3.12): الغالب أقوى على من يغلبه، والخاطف يتجاوز بعض درع الصامد، والصامد أقل تأثراً بالمقذوفات
+  const P = STYLE_PERKS, beats = !attacker.creature && !target.creature && P.beats[attacker.gang] === target.gang;
+  if (beats) amount *= 1 + P.counter;
   hitSound(state, attacker, target, amount);
   // درع الوحدة + مكافأة مراكز الشرطة المملوكة (القسم 3.8)
-  const armor = Math.min(COMBAT.maxArmor, target.stats.armor + target.armorBonus);
-  const taken = amount * (1 - armor) * target.takenMul;   // takenMul: سمة الأمة داخل أحيائها (القسم 3.10)
+  let armor = Math.min(COMBAT.maxArmor, target.stats.armor + target.armorBonus);
+  if (beats && attacker.gang === 'crows') armor *= 1 - P.pierce;
+  let taken = amount * (1 - armor) * target.takenMul;     // takenMul: سمة الأمة داخل أحيائها (القسم 3.10)
+  if (shot && target.gang === 'hammers' && !target.creature) taken *= 1 - P.shotGuard;
   target.hp -= taken;
   target.lastHitBy = attacker.playerId;            // من أسقط الزعيم (حماية الزعيم، القسم 9.5.3)
   chargeOnDamageTaken(state, target, taken);       // شحن عن كل 50 ضرراً
@@ -682,7 +688,9 @@ export function spawnProjectile(state, unit, target, damage, offset = 0, fire = 
   const dist = distance(unit, target);
   const maxRange = Math.max(unit.stats.attackRange, 0.1);
   const ratio = Math.min(1, dist / maxRange);
-  const duration = COMBAT.projectileMinTime + (COMBAT.projectileMaxTime - COMBAT.projectileMinTime) * ratio;
+  // ومقذوفات الرامي أسرع (القسم 3.12)
+  const duration = (COMBAT.projectileMinTime + (COMBAT.projectileMaxTime - COMBAT.projectileMinTime) * ratio) /
+    (unit.gang === 'vipers' ? 1 + STYLE_PERKS.shotSpeed : 1);
 
   // في المطر تخطئ بعض الرميات فتسقط قرب الهدف بلا ضرر، وفي العاصفة الرملية أيضاً (القسم 3.11)
   const hits = rangedShotHits(state, unit) && !stormMiss(state);
@@ -746,7 +754,7 @@ function rainLanding(state, shot) {
     const dx = other.x - shot.x, dy = other.y - shot.y;
     if (dx * dx + dy * dy > areaSq) return;
     if (!isAlive(other) || !isEnemy(state, shot.attacker, other)) return;
-    applyDamage(state, shot.attacker, other, shot.damage);
+    applyDamage(state, shot.attacker, other, shot.damage, true);
   });
 }
 
@@ -782,7 +790,7 @@ function updateProjectiles(state) {
       const dodged = shot.dodgeable && isAlive(shot.target) && shot.target.cState === 'dodge';
       if (shot.damage > 0 && shot.hits && !dodged && isAlive(shot.target)) {
         const target = shot.target;
-        strike(state, shot.attacker, target, shot.damage);
+        strike(state, shot.attacker, target, shot.damage, true);
         if (isAlive(target) && !target.cState) {
           flinch(target, shot.startX, shot.startY, zoneOf(target, shot.startX, shot.startY) === 'back', false);
         }
