@@ -12,10 +12,11 @@ export const TILE_HALF_W = 18;  // نصف عرض المربع
 export const TILE_HALF_H = 9;   // نصف ارتفاع المربع
 
 // --- أحجام الخريطة ---
+// (بطلب المستخدم، القسم 3.12: مساحتها أكبر 50% من 26 و34 و42 مربعاً للضلع)
 export const MAP_SIZES = {
-  small:  { key: 'small',  name: 'صغيرة',  n: 26, maxPlayers: 4, specialDistricts: 2, policeStations: 2 },
-  medium: { key: 'medium', name: 'متوسطة', n: 34, maxPlayers: 6, specialDistricts: 3, policeStations: 3 },
-  large:  { key: 'large',  name: 'كبيرة',  n: 42, maxPlayers: 8, specialDistricts: 4, policeStations: 4 }
+  small:  { key: 'small',  name: 'صغيرة',  n: 32, maxPlayers: 4, specialDistricts: 2, policeStations: 2 },
+  medium: { key: 'medium', name: 'متوسطة', n: 42, maxPlayers: 6, specialDistricts: 3, policeStations: 3 },
+  large:  { key: 'large',  name: 'كبيرة',  n: 51, maxPlayers: 8, specialDistricts: 4, policeStations: 4 }
 };
 
 // --- طوابع المدن (القسم 3.9): شكل فقط، لا تغيّر قواعد اللعب ---
@@ -236,6 +237,7 @@ export const GANG_IDS = ['crows', 'hammers', 'vipers', 'scorpions'];
 // مزايا لا تقوية: كل نمط يغلب نمطاً واحداً (beats) بضرر +counter. والمخلوقات (الترول والفيل) خارجها
 export const STYLE_PERKS = {
   soldierDamage: 0.8,            // ضرر كل الجنود (والشرطة والأطراف المحايدة) أضعف 20%، لا المخلوقات ولا الأبراج
+  soldierHeal: 0.6,              // وعلاجهم (الطبيب والهالة والضربات المميزة) أضعف 40%: بأقل منها يلغي العلاجُ الضررَ في معارك الحشد فلا يموت أحد
   beats: { crows: 'hammers', hammers: 'vipers', vipers: 'crows' },
   counter: 0.2,                  // +20% ضرراً على النمط الذي يغلبه
   pierce: 0.2,                   // الخاطف يتجاوز 20% من درع الصامد
@@ -1420,7 +1422,8 @@ export const gameModes = {
     capturePower: { easy: 0.25, medium: 0.25, hard: 0.25, insane: 1 },
     // دخل نقاط الاقتصاد في هذا الطور (مضاعف لكل صعوبة): الجنود والأبراج بالنقاط تقوى على الموجات، فيُقلَّل
     // حتى تبقى أهداف الصعوبة (أداة القياس scripts/survival-test.mjs)
-    incomeMul: { easy: 0.55, medium: 0.65, hard: 0.7, insane: 0.6 },
+    // (أُعيد ضبطها بعد توسعة الخرائط 11ب: الخريطة الأكبر تعطي أحياء ودخلاً أكثر، وكانت 0.55 و0.65 و0.7 و0.6)
+    incomeMul: { easy: 0.45, medium: 0.45, hard: 0.5, insane: 0.45 },
     edgeSearchTiles: 12,        // البحث عن شارع قرب حافة الخريطة لظهور الموجة
     spawnSpread: 8,             // مربعات الظهور حول كل مصدر
     retargetSeconds: 2,         // شرطة الموجة الواقفة تختار هدفاً جديداً كل هذه المدة
@@ -1512,12 +1515,12 @@ export const EMPIRE = {
   }
 };
 
-// --- مزايا المدن (القسم 3.11، بطلب المستخدم): ميزة واحدة لكل مدينة أمة، في كل مباراة على الاقتصاد ---
-// cities: المدينة ← ميزتها، والمدن التي لا تُذكر بلا ميزة. ground: أرض حي الميزة قبل الاستيلاء عليه تميل لهذا اللون
-// botValue: قيمة حي الميزة عند البوتات (الحي العادي 1، والحي المميز القديم ai.specialValue)
 // ساموراي إيدو: حراس الدوجو والمجنَّدون فيه (أقوى 30% بطلب المستخدم: كانوا 230 دماً و14 ضرراً)
 const SAMURAI = { hp: 300, armor: 0.2, damage: 18, attackTime: 0.9, speed: 2.4, visionRange: 4.5 };
 
+// --- مزايا المدن (القسم 3.11، بطلب المستخدم): ميزة واحدة لكل مدينة أمة، في كل مباراة على الاقتصاد ---
+// cities: المدينة ← ميزتها، والمدن التي لا تُذكر بلا ميزة. ground: أرض حي الميزة قبل الاستيلاء عليه تميل لهذا اللون
+// botValue: قيمة حي الميزة عند البوتات (الحي العادي 1، والحي المميز القديم ai.specialValue)
 export const CITY_FEATURES = {
   cities: { diriyah: 'storm', shibam: 'villages', cairo: 'pyramid',
             japan: 'dojo', gyeongju: 'bandits', kano: 'bandits', kaifeng: 'clinic', gondar: 'fortress', meroe: 'khartoum',
@@ -1578,7 +1581,7 @@ export const CITY_FEATURES = {
   },
   // القرى المحايدة (شبام): عددها لكل حجم خريطة، وpeople أفراد كل قرية (من، إلى) بشكل أفراد nation العاديين،
   // وminHomeDistance أقل بُعد (بالمربعات) عن الأحياء المنزلية. لا يهاجمون ولا يُهاجَمون، وينضمون لمن يستولي على قريتهم
-  villages: { count: { small: 2, medium: 3, large: 4 }, people: [3, 4], minHomeDistance: 5,
+  villages: { count: { small: 3, medium: 4, large: 6 }, people: [3, 4], minHomeDistance: 5,
               name: 'أهل القرية', color: '#8f7d5c', nation: 'yemen' },
   // الهرم (القاهرة): في الحي الأقرب لوسط المدينة. دخل حيه income في الثانية (بدل EMPIRE.income.district)،
   // وجنود مالكه داخل radius مربعاً منه يتلقون ضرراً أقل بنسبة damageTaken
@@ -1596,12 +1599,12 @@ export const CITY_FEATURES = {
              cap: { small: 6, medium: 8, large: 10 }, think: 2, name: 'قطاع الطرق', color: '#3a312b' },
   // دار العلاج (كايفنغ): عددها لكل حجم خريطة، موزعة بعيدة عن الأحياء المنزلية. تعالج جنود مالكها داخل radius
   // بـ perSecond دم/ث لكل واحد (أقوى من مستشفى الاقتصاد)، وفي قائمتها تجنيد recruits
-  clinic: { count: { small: 1, medium: 2, large: 3 }, minHomeDistance: 5, radius: 4.5, perSecond: 9, top: 44,
+  clinic: { count: { small: 2, medium: 3, large: 4 }, minHomeDistance: 5, radius: 4.5, perSecond: 9, top: 44,
             recruits: ['doctor'] },
   // الحصن (غوندر): عدده لكل حجم خريطة، موزع بعيد عن الأحياء المنزلية. فيه guards حراس محايدون بشكل hero أمة nation
   // وإحصائيات stats (لا يُعوَّضون، ويختفي الباقون عند أول استيلاء)، ويرمي السهام كبرج (tower): على كل من يقترب وهو محايد،
   // وعلى أعداء مالكه بعد احتلاله. ومالكه يجنّد فيه recruits
-  fortress: { count: { small: 1, medium: 2, large: 3 }, minHomeDistance: 6, guards: 4, chase: 6, vanishSeconds: 5, top: 52,
+  fortress: { count: { small: 2, medium: 3, large: 4 }, minHomeDistance: 6, guards: 4, chase: 6, vanishSeconds: 5, top: 52,
               name: 'حراس الحصن', color: '#5b4a2e', nation: 'ethiopia', hero: 'boss',
               stats: { hp: 260, armor: 0.25, damage: 15, speed: 2.1, aura: null },   // بلا هالة قارع النقارة: حرس لا قائد
               tower: { range: 6, damage: 16, attackTime: 1.4 }, recruits: ['drummer', 'healer'] },
@@ -1631,7 +1634,7 @@ export const CITY_FEATURES = {
   // واحتلاله أبطأ (captureMul)
   statue: { radius: 7, attackSpeed: 0.2, damage: 0.15, captureMul: 0.5, top: 70 },
   // بيوت المرتزقة (لا بوكا): عددها لكل حجم خريطة، موزعة بعيدة عن الأحياء المنزلية. يستأجر مالكها فيها recruits
-  mercs: { count: { small: 1, medium: 2, large: 3 }, minHomeDistance: 5, top: 46, recruits: ['blade', 'gaucho'] },
+  mercs: { count: { small: 2, medium: 3, large: 4 }, minHomeDistance: 5, top: 46, recruits: ['blade', 'gaucho'] },
   // قافلة التجارة (صحراء اليمامة): أولها عند first ثم كل every ثانية (لا قوافل في الصمود)، من بوابة في السور إلى الحافة
   // المقابلة: merchants تجار لا يقاتلون يحملون البضائع، وguards حراس (شخصية كل حارس، null للفرد العادي) من حراس القوافل.
   // كل تاجر يُقتل يعطي قاتله loot نقطة. كل think ثانية يمضي التجار ويرافقهم الحراس، ومن بلغ المخرج (exitRadius) يخرج،

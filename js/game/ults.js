@@ -1,6 +1,6 @@
 // الضربات المميزة (القسم 6.7): الشحن، شرط الإطلاق، والتأثير الفعلي
 // الأفراد العاديون لا يملكون ضربة مميزة، فلا شحن لهم.
-import { TICK_SEC, COMBAT, ULT, CAMERA, ai, nations } from '../config.js';
+import { TICK_SEC, COMBAT, ULT, CAMERA, ai, nations, STYLE_PERKS } from '../config.js';
 import { isEnemy, applyDamage, spawnProjectile, spawnFalcon, spawnRain } from './combat.js';
 import { stormDamageMul } from './features.js';
 import { createFire } from './abilities.js';
@@ -344,7 +344,7 @@ function forEachAlly(state, unit, radius, action) {
   });
 }
 
-const heal = (unit, amount) => { unit.hp = Math.min(unit.maxHp, unit.hp + amount); };
+const heal = (unit, amount) => { unit.hp = Math.min(unit.maxHp, unit.hp + amount * STYLE_PERKS.soldierHeal); };
 
 // صدّة بالدرع: ضرر ودفع العدو مربعاً للخلف مع إبطائه (الشرطي، القسم 3.8)
 function bash(state, unit, ult, target) {

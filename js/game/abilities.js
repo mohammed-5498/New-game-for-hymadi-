@@ -264,7 +264,7 @@ function medicHeal(state, medic) {
 }
 
 function heal(unit, amount) {
-  unit.hp = Math.min(unit.maxHp, unit.hp + amount);
+  unit.hp = Math.min(unit.maxHp, unit.hp + amount * STYLE_PERKS.soldierHeal);
 }
 
 // --- النار على الأرض: زجاجة رامي النار أو سهم بطل الأفاعي المشتعل ---
