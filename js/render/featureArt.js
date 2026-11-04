@@ -11,7 +11,7 @@ import { poly, ln, circ, el, rc, box, cyl, cone, dome, arch, ridgeRoof, hipRoof,
 import { streetPalm } from './openCity.js';
 import { frustum, fL, fR } from './empireBuildings.js';
 import { tileOf } from '../game/empire.js';
-import { stormAt, villageWaiting } from '../game/features.js';
+import { stormAt, villageWaiting, cityEvent, eventWindow, nilePhase } from '../game/features.js';
 
 const TAU = 6.2831853;
 const worldOf = (i, j) => ({ x: (i - j) * TILE_HALF_W, y: (i + j) * TILE_HALF_H });
@@ -2316,4 +2316,151 @@ export function drawVault(ctx, state, visible) {
     ctx.fillStyle = '#9dffb0';
     ctx.fillText(text, b.x + size * 0.25, y + size * 0.3);
   }
+}
+
+// ================= أحداث مدن المباني (12و، القسم 3.13): ما يُرسم منها =================
+const iso = (i, j) => [(i - j) * TILE_HALF_W, (i + j) * TILE_HALF_H];
+const fadeK = (w, fade) => Math.max(0, Math.min(1, w.since / fade, w.left / fade));
+
+// على الأرض قبل الوحدات: مجرى السيل، وأحياء ضفة النيل، وصندوق الكنز، ودوائر الصواعق
+export function drawEventGround(ctx, state, visible) {
+  const ev = cityEvent(state), E2 = state.cityEvent;
+  if (!ev || !E2) return;
+  if (ev === 'flood' && E2.band) floodBand(ctx, state, E2.band);
+  else if (ev === 'nile') nileBanks(ctx, state, visible);
+  else if (ev === 'treasure' && E2.chest) chest(ctx, state, E2.chest, visible);
+  else if (ev === 'lightning') boltMarks(ctx, state, visible);
+}
+
+// شريط السيل: إطار متقطع وقت التنبيه، ثم ماء بخطوط موج تجري مع التيار
+function floodBand(ctx, state, b) {
+  const map = state.map, n = map.n, h = F.flood.width / 2, span = b.axis === 'i' ? n : (map.land || n);
+  const at = (u, v) => b.axis === 'i' ? iso(b.c + u, v) : iso(v, b.c + u);   // u عبر الشريط، v على طوله
+  const pts = [at(-h, -0.5), at(h, -0.5), at(h, span - 0.5), at(-h, span - 0.5)];
+  ctx.beginPath();
+  ctx.moveTo(pts[0][0], pts[0][1]);
+  for (const p of pts.slice(1)) ctx.lineTo(p[0], p[1]);
+  ctx.closePath();
+  if (!b.on) {
+    const pulse = 0.5 + 0.5 * Math.sin(state.time * 6);
+    ctx.fillStyle = 'rgba(80,150,220,' + (0.06 + 0.06 * pulse).toFixed(3) + ')';
+    ctx.fill();
+    ctx.setLineDash([5, 4]); ctx.lineWidth = 1.4; ctx.strokeStyle = 'rgba(120,190,255,0.85)'; ctx.stroke(); ctx.setLineDash([]);
+    return;
+  }
+  const k = fadeK(eventWindow('flood', state.time), 1.5);
+  ctx.fillStyle = 'rgba(70,135,190,' + (0.42 * k).toFixed(3) + ')';
+  ctx.fill();
+  ctx.beginPath();                                                   // خطوط الموج تجري مع التيار
+  const shift = ((state.time * F.flood.push * 2 * b.dir) % 1.4 + 1.4) % 1.4;
+  for (let v = -0.5 + shift; v < span; v += 1.4) {
+    const a = at(-h + 0.2, v), c = at(0, v + 0.25 * b.dir), e = at(h - 0.2, v);
+    ctx.moveTo(a[0], a[1]); ctx.quadraticCurveTo(c[0], c[1], e[0], e[1]);
+  }
+  ctx.strokeStyle = 'rgba(220,240,255,' + (0.55 * k).toFixed(3) + ')';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+}
+
+// أحياء الضفة: ماء أزرق والنيل يفيض، ثم أرض الطمي الخضراء
+function nileBanks(ctx, state, visible) {
+  const phase = nilePhase(state.time);
+  if (!phase) return;
+  const w = eventWindow('nile', state.time), map = state.map;
+  const k = phase === 'flood' ? Math.min(1, w.since / 1.5) : Math.min(1, w.left / 1.5);
+  ctx.beginPath();
+  for (const d of map.districts) {
+    if (!d.bank) continue;
+    for (const [i, j] of d.tiles) {
+      const [x, y] = iso(i, j);
+      if (!visible(x, y)) continue;
+      ctx.moveTo(x - TILE_HALF_W, y); ctx.lineTo(x, y - TILE_HALF_H); ctx.lineTo(x + TILE_HALF_W, y); ctx.lineTo(x, y + TILE_HALF_H); ctx.closePath();
+    }
+  }
+  ctx.fillStyle = phase === 'flood' ? 'rgba(60,130,190,' + (0.36 * k).toFixed(3) + ')' : 'rgba(110,170,70,' + (0.26 * k).toFixed(3) + ')';
+  ctx.fill();
+}
+
+// صندوق الكنز الذهبي بتوهج، وحلقة تمتلئ بلون من يمسكه
+function chest(ctx, state, c, visible) {
+  const [x, y] = iso(c.i, c.j);
+  if (!visible(x, y)) return;
+  const R = F.treasure.radius * Math.SQRT2, pulse = 0.5 + 0.5 * Math.sin(state.time * 4);
+  ctx.beginPath(); ctx.ellipse(x, y, R * TILE_HALF_W, R * TILE_HALF_H, 0, 0, TAU);
+  ctx.fillStyle = 'rgba(255,210,90,' + (0.1 + 0.08 * pulse).toFixed(3) + ')'; ctx.fill();
+  ctx.setLineDash([3, 3]); ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(255,215,110,0.85)'; ctx.stroke(); ctx.setLineDash([]);
+  if (c.holder >= 0 && state.players[c.holder]) {
+    ctx.beginPath();
+    ctx.ellipse(x, y, R * TILE_HALF_W, R * TILE_HALF_H, 0, -Math.PI / 2, -Math.PI / 2 + TAU * Math.min(1, c.since / F.treasure.hold));
+    ctx.lineWidth = 2.4; ctx.strokeStyle = state.players[c.holder].color;
+    ctx.stroke();
+  }
+  const w = 4.2, d = 2.1, h = 3.2, f = (pts, col) => { ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (const p of pts.slice(1)) ctx.lineTo(p[0], p[1]); ctx.closePath(); ctx.fillStyle = col; ctx.fill(); };
+  f([[x - w, y], [x, y + d], [x, y + d - h], [x - w, y - h]], '#7a4a1c');
+  f([[x, y + d], [x + w, y], [x + w, y - h], [x, y + d - h]], '#9a5e24');
+  f([[x - w, y - h], [x, y + d - h], [x + w, y - h], [x + w * 0.9, y - h - 2.2], [x, y + d - h - 2.6], [x - w * 0.9, y - h - 2.2]], '#d9a93a');
+  f([[x - 0.6, y + d - h + 0.4], [x + 0.6, y + d - h + 0.1], [x + 0.6, y + d - h - 1.6], [x - 0.6, y + d - h - 1.3]], '#f6d878');
+  ctx.beginPath(); ctx.arc(x + 1.2, y - h - 3.4, 0.9 + 0.5 * pulse, 0, TAU); ctx.fillStyle = 'rgba(255,250,210,0.9)'; ctx.fill();
+}
+
+// دوائر الصواعق قبل نزولها: زرقاء بيضاء تنبض
+function boltMarks(ctx, state, visible) {
+  const R = F.lightning.radius * Math.SQRT2, now = state.time / TICK_SEC;
+  for (const b of state.cityEvent.bolts) {
+    if (b.done) continue;
+    const [x, y] = iso(b.x, b.y);
+    if (!visible(x, y)) continue;
+    const left = Math.max(0, (b.at - now) * TICK_SEC), pulse = 0.5 + 0.5 * Math.sin(state.time * 18);
+    ctx.beginPath(); ctx.ellipse(x, y, R * TILE_HALF_W, R * TILE_HALF_H, 0, 0, TAU);
+    ctx.fillStyle = 'rgba(150,200,255,' + (0.12 + 0.16 * pulse).toFixed(3) + ')'; ctx.fill();
+    ctx.setLineDash([3, 2]); ctx.lineWidth = 1.3; ctx.strokeStyle = 'rgba(200,230,255,0.95)'; ctx.stroke(); ctx.setLineDash([]);
+    const g = Math.max(0, Math.min(1, 1 - left / F.lightning.delay));            // حلقة تضيق حتى النزول
+    ctx.beginPath(); ctx.ellipse(x, y, R * TILE_HALF_W * g, R * TILE_HALF_H * g, 0, 0, TAU);
+    ctx.lineWidth = 0.8; ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.stroke();
+  }
+}
+
+// في السماء بعد الوحدات: الصواعق النازلة، و"×2" فوق أعلام الأحياء في موسم التجارة وفي أحياء الضفة أيام الطمي
+export function drawEventSky(ctx, state, visible) {
+  const ev = cityEvent(state), E2 = state.cityEvent;
+  if (!ev || !E2) return;
+  if (ev === 'lightning') {
+    const now = state.time / TICK_SEC;
+    for (const b of E2.bolts) {
+      if (!b.done) continue;
+      const age = (now - b.at) * TICK_SEC, k = 1 - age / F.lightning.fade;
+      if (k <= 0) continue;
+      const [x, y] = iso(b.x, b.y);
+      if (!visible(x, y)) continue;
+      ctx.beginPath(); ctx.moveTo(x + 6, y - 150);                   // خط متكسر ثابت لكل صاعقة
+      for (let s = 1; s <= 7; s++) ctx.lineTo(x + (hsh(Math.round(b.x * 10), Math.round(b.y * 10), 990 + s) - 0.5) * 14 * (1 - s / 7), y - 150 + s * 150 / 7);
+      ctx.strokeStyle = 'rgba(200,225,255,' + k.toFixed(3) + ')'; ctx.lineWidth = 3; ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,255,255,' + k.toFixed(3) + ')'; ctx.lineWidth = 1.2; ctx.stroke();
+      ctx.beginPath(); ctx.ellipse(x, y, 16 * k + 6, 8 * k + 3, 0, 0, TAU); ctx.fillStyle = 'rgba(220,235,255,' + (0.5 * k).toFixed(3) + ')'; ctx.fill();
+    }
+  }
+  const season = ev === 'season' && eventWindow('season', state.time).on, silt = ev === 'nile' && nilePhase(state.time) === 'silt';
+  if (!season && !silt) return;
+  ctx.font = '700 7px system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  for (const d of state.map.districts) {
+    if (!d.capture || d.owner === null || state.players[d.owner].neutral || (silt && !d.bank)) continue;
+    const [x0, y0] = iso(d.capture.i, d.capture.j), x = x0 + 10, y = y0 - 12 + Math.sin(state.time * 3 + d.id) * 1.2;   // بجانب العلم
+    if (!visible(x, y)) continue;
+    ctx.beginPath(); ctx.arc(x, y, 5.2, 0, TAU); ctx.fillStyle = silt ? '#6fae4a' : '#e8b83a'; ctx.fill();
+    ctx.lineWidth = 0.8; ctx.strokeStyle = '#fff1b8'; ctx.stroke();
+    ctx.fillStyle = '#3a2a0a'; ctx.fillText('×2', x, y + 2.4);
+  }
+}
+
+// فوق المشهد كله: سماء عاصفة البرق الداكنة، وومضة بيضاء مع كل صاعقة
+export function drawEventOverlay(ctx, state, view) {
+  if (cityEvent(state) !== 'lightning' || !state.cityEvent) return;
+  const w = eventWindow('lightning', state.time);
+  if (!w.on) return;
+  ctx.fillStyle = 'rgba(20,28,60,' + (0.28 * fadeK(w, 2)).toFixed(3) + ')';
+  ctx.fillRect(0, 0, view.w, view.h);
+  const now = state.time / TICK_SEC, last = state.cityEvent.bolts.filter(b => b.done).reduce((a, b) => Math.max(a, b.at), -1e9);
+  const age = (now - last) * TICK_SEC;
+  if (age >= 0 && age < 0.15) { ctx.fillStyle = 'rgba(235,240,255,' + (0.22 * (1 - age / 0.15)).toFixed(3) + ')'; ctx.fillRect(0, 0, view.w, view.h); }
 }

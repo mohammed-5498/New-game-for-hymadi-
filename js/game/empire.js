@@ -17,7 +17,7 @@ import { findFreeTiles } from '../map/pathfinding.js';
 import { soundAt } from '../audio/sound.js';
 import { hypot } from './hypot.js';
 import { random } from './random.js';   // عشوائية المنطق: مشتركة بين الأجهزة في اللعب المحلي
-import { featureIncome, rangeMul, stormMiss, buildingOwner, launchRocket, recruitsAt, spawnRecruit, featureCostMul, featureIncomeMul, featureProductionMul,
+import { featureIncome, rangeMul, stormMiss, buildingOwner, launchRocket, eventIncomeMul, recruitsAt, spawnRecruit, featureCostMul, featureIncomeMul, featureProductionMul,
          payTax, callTriads, ringBells } from './features.js';
 
 const isAlive = (unit) => unit && unit.state !== 'dead' && unit.hp > 0;
@@ -91,7 +91,7 @@ function collectIncome(state, ms) {
   const mul = (ms.incomeMul || 1) * TICK_SEC;
   for (const d of state.map.districts) {
     if (d.owner === null || !d.capture || state.players[d.owner].neutral) continue;
-    const gain = districtIncome(d) * mul * botIncome(state.players[d.owner]) * featureIncomeMul(state, d.owner);
+    const gain = districtIncome(d) * mul * botIncome(state.players[d.owner]) * featureIncomeMul(state, d.owner) * eventIncomeMul(state, d);
     ms.points[d.owner] += gain;
     ms.earned[d.owner] += gain;
   }
@@ -487,7 +487,7 @@ export function incomeOf(state, playerId) {
   let total = 0;
   for (const d of state.map.districts) {
     if (d.owner !== playerId || !d.capture) continue;
-    total += districtIncome(d);
+    total += districtIncome(d) * eventIncomeMul(state, d);       // موسم التجارة وطمي النيل (12و)
   }
   return total * (state.modeState.incomeMul || 1) * featureIncomeMul(state, playerId);
 }

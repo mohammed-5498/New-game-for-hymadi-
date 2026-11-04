@@ -50,6 +50,7 @@ export function createMatch(settings) {
     humanId: players.findIndex(p => p.isHuman),
     weather: WEATHER[settings.weather] ? settings.weather : 'day',
     feature,                   // ميزة المدينة (القسم 3.11): storm | villages | pyramid، أو null
+    cityEvent: null,           // حالة حدث مدينة المباني (12و): مجرى السيل والصندوق والصواعق
     maxUnits: settings.maxUnits,
     camera: { x: 0, y: 0, z: CAMERA.startZoom },
     view: { w: 1, h: 1, dpr: 1 },
@@ -211,6 +212,9 @@ export function resetMatch(state, settings = state.settings) {
   state.modeState = fresh.modeState;
   state.empireHinted = false;                // تلميح قائمة الحي مرة في كل مباراة
   state.featureHinted = false;               // وإشعار ميزة المدينة (القسم 3.11)
+  state.buildingHinted = false;              // وإشعار مبنى مدينة الأحداث (12هـ) وحدث مدينة المباني (12و)
+  state.eventHinted = false;
+  state.cityEvent = fresh.cityEvent;
   // اللعب المحلي (القسم 16): مباراة بعد مباراة شبكية لا ترث كاميرات اللاعبين (مستويات التفصيل منها) ولا عدّادها
   state.netCams = null;
   state.netTick = 0;
