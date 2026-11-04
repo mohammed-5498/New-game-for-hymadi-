@@ -92,12 +92,20 @@ setupLanScreen(state);
 showScreen('main');
 introBlackout();          // تشغيل اللعبة: شاشة سوداء قصيرة (مكان مقدمة التطبيق لاحقاً)
 
-// تصغير التطبيق أو إغلاقه أو مغادرة الصفحة: تُحفظ المباراة الجارية للعودة إليها
+// تصغير التطبيق أو إغلاقه أو مغادرة الصفحة: تُحفظ المباراة الجارية للعودة إليها.
+// وفي التطبيق حدث pause من Capacitor قبل أن يوقف الصفحة كلها (KeepRunning = false)، ومرة واحدة لكل خروج
+let leftAt = -1e9;
+function saveNow() {
+  if (performance.now() - leftAt < 1000 || !canSaveMatch(state)) return;
+  leftAt = performance.now();
+  saveMatch(state);
+}
 function saveOnLeave() {
-  if (document.visibilityState === 'hidden' && canSaveMatch(state)) saveMatch(state);
+  if (document.visibilityState === 'hidden') saveNow();
 }
 document.addEventListener('visibilitychange', saveOnLeave);
-window.addEventListener('pagehide', () => { if (canSaveMatch(state)) saveMatch(state); });
+document.addEventListener('pause', saveNow);
+window.addEventListener('pagehide', saveNow);
 
 // زر الرجوع في أندرويد: أثناء المباراة يفتح الإيقاف، وفي القوائم يرجع خطوة،
 // وفي القائمة الرئيسية يسأل "هل تريد الخروج؟" (القسم 2.1). في المتصفح لا يفعل شيئاً.

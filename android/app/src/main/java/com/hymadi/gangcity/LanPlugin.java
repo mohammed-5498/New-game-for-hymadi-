@@ -20,6 +20,9 @@ public class LanPlugin extends Plugin implements LanCore.Listener {
 
     private final LanCore core = new LanCore(this);
     private WifiManager.MulticastLock lock;
+    // البحث بسؤال عناوين الشبكة (startScan) يتوقف حين يخرج اللاعب من التطبيق ويعود معه، فلا يستهلك المعالج في الخلفية
+    private boolean scanning = false;
+    private int scanPort, scanMs, probeMs;
 
     private void holdLock(boolean on) {
         try {
@@ -58,7 +61,11 @@ public class LanPlugin extends Plugin implements LanCore.Listener {
     @PluginMethod
     public void discover(PluginCall call) {
         holdLock(true);
-        core.startScan(call.getInt("port", 47821), call.getInt("scanMs", 6000), call.getInt("probeMs", 350));
+        scanPort = call.getInt("port", 47821);
+        scanMs = call.getInt("scanMs", 6000);
+        probeMs = call.getInt("probeMs", 350);
+        scanning = true;
+        core.startScan(scanPort, scanMs, probeMs);
         try {
             core.startDiscovery(call.getInt("beaconPort", 47820));
         } catch (Exception ignored) { }
@@ -67,6 +74,7 @@ public class LanPlugin extends Plugin implements LanCore.Listener {
 
     @PluginMethod
     public void stopDiscover(PluginCall call) {
+        scanning = false;
         core.stopDiscovery();
         call.resolve();
     }
@@ -101,6 +109,7 @@ public class LanPlugin extends Plugin implements LanCore.Listener {
 
     @PluginMethod
     public void stop(PluginCall call) {
+        scanning = false;
         core.stopAll();
         holdLock(false);
         call.resolve();
@@ -114,7 +123,18 @@ public class LanPlugin extends Plugin implements LanCore.Listener {
     }
 
     @Override
+    protected void handleOnPause() {
+        if (scanning) core.stopScan();
+    }
+
+    @Override
+    protected void handleOnResume() {
+        if (scanning) core.startScan(scanPort, scanMs, probeMs);
+    }
+
+    @Override
     protected void handleOnDestroy() {
+        scanning = false;
         core.stopAll();
         holdLock(false);
     }

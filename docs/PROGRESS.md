@@ -26,7 +26,7 @@
     1. أدوات أندرويد (`platform-tools` و`platforms;android-36` و`build-tools;36.0.0`) عبر `sdkmanager`.
     2. `npm ci`، ثم `npm run build:web`، ثم `npx cap sync android`، ثم `./gradlew assembleDebug`.
     - إن رد Maven Central بـ 429: سكربت `--init-script` يضيف مرآة Google (`maven-central.storage-download.googleapis.com/maven2/`) قبل المستودعات.
-  - **التوقيع:** لا مفتاح ثابت في المستودع، فكل بناء (على GitHub أو محلياً) بمفتاح تصحيح جديد، والتثبيت فوق نسخة قديمة قد يحتاج حذفها أولاً.
+  - **التوقيع (منذ 2026-11-04):** مفتاح تجربة ثابت في `android/app/gangcity-debug.keystore`، فكل بناء (على GitHub أو محلياً) بالمفتاح نفسه وتُثبَّت النسخ فوق بعضها. لا تغيّره (يضيع حفظ اللاعبين مع التحديث)، ونسخة Google Play بمفتاح نشر آخر.
 
 ## 2. مراحل التنفيذ (القسم 15 في GAME_SPEC) — كلها مكتملة
 
