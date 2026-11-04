@@ -2,6 +2,7 @@
 // متتالٍ، بسرعة وارتفاع يتغيران قليلاً كل مرة. المؤثرات تمر بمرشح يخفف حدتها ثم ضاغط يمنع تراكم المتزامنة،
 // ومؤثرات القتال بحد AUDIO.combatVoices معاً. ولحن القوائم وأصوات البداية ولحن الخريطة بمسار الموسيقى ومؤشرها
 import { AUDIO } from '../config.js';
+import { gfx } from '../graphics.js';
 
 let ctx = null, sfxIn = null, sfxOut = null, musicOut = null;
 const buffers = {};
@@ -83,7 +84,7 @@ export function playSample(event, opt = {}) {
   const list = (opt.style && E[opt.style]) || E.any;
   if (!list.length) return true;
   const fight = AUDIO.mix.priority[event] !== undefined;
-  if (fight && combat >= AUDIO.combatVoices) return true;
+  if (fight && combat >= Math.min(AUDIO.combatVoices, gfx().voices)) return true;
   const now = ctx.currentTime;
   if (now - (lastAt[event] || -1) < (opt.minGap ?? 0.045)) return true;
   const buf = buffers[pick(event + (opt.style || ''), list)];

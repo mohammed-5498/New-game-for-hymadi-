@@ -23,6 +23,11 @@ const base = createMatch({
   ]
 });
 LS.prepareLanMatch(base);
+// GIVE=مفتاح مبنى مميز: يملكه الصاحب من البداية، فتُجرَّب أوامره (مثل GIVE=powder في الصينية لصاروخ البارود)
+if (process.env.GIVE) {
+  for (const d of base.map.districts) if (d.feature === process.env.GIVE) { d.owner = 1; d.progress = 100; d.progressOwner = 1; }
+  if (base.modeState.points) base.modeState.points[1] = 400;
+}
 const text = packMatch(base);
 const host = { view: { w: 900, h: 420, dpr: 1 } }, client = { view: { w: 800, h: 400, dpr: 1 } };
 unpackMatch(host, text); host.humanId = 0;
@@ -52,6 +57,12 @@ function empireCommand(state, L) {
   const cathedral = own.find(d => d.feature === 'cathedral');
   if (cathedral && rnd() < 0.3) {
     LS.localCommand(L, { k: 'emp', a: 'bells', d: cathedral.id });
+    return;
+  }
+  const powder = own.find(d => d.feature === 'powder');           // صاروخ البارود على حي ليس له (12هـ)
+  if (powder && rnd() < 0.3) {
+    const others = state.map.districts.filter(d => d.capture && d.owner !== L.slot);
+    if (others.length) LS.localCommand(L, { k: 'emp', a: 'rocket', d: powder.id, x: pick(others).id });
     return;
   }
   if (recruit.length && rnd() < 0.3) {
@@ -118,7 +129,8 @@ while (now < end && !(host.matchResult && client.matchResult)) {
 
 const ok = tally.before[0] > 0 && tally.before[1] === 0 && resyncs >= 1 && tally.after[0] > 0 && tally.after[1] === 0;
 const economy = host.modeState.points ? { city: host.map.city, points: host.modeState.points.map(Math.floor),
-  buildings: host.map.districts.filter(d => d.building).length } : undefined;
+  buildings: host.map.districts.filter(d => d.building).length,
+  rocketsReadyAt: host.map.districts.filter(d => d.feature === 'powder').map(d => Math.round(d.readyAt || 0)) } : undefined;
 console.log(JSON.stringify({ mode, mapSize, seconds: Math.round(now / 1000), ticks: [host.netTick, client.netTick],
   before: tally.before, resyncs, afterResync: tally.after, economy, ok }));
 process.exit(ok ? 0 : 1);

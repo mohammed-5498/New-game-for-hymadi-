@@ -16,7 +16,20 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // مفتاح توقيع ثابت لنسخ التجربة (بطلب المستخدم): كل APK من GitHub أو من بناء محلي بالمفتاح نفسه، فتُثبَّت النسخة
+    // الجديدة فوق القديمة ويبقى التقدم المحفوظ. مفتاح تجربة فقط: نسخة النشر في Google Play بمفتاح آخر لا يُرفع للمستودع
+    signingConfigs {
+        debug {
+            storeFile file('gangcity-debug.keystore')
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+        }
+    }
     buildTypes {
+        debug {
+            signingConfig signingConfigs.debug
+        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'

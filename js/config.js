@@ -276,7 +276,7 @@ export const GANG_IDS = ['crows', 'hammers', 'vipers', 'scorpions'];
 // مزايا لا تقوية: كل نمط يغلب نمطاً واحداً (beats) بضرر +counter. والمخلوقات (الترول والفيل) خارجها
 export const STYLE_PERKS = {
   soldierDamage: 0.8,            // ضرر كل الجنود (والشرطة والأطراف المحايدة) أضعف 20%، لا المخلوقات ولا الأبراج
-  soldierHeal: 0.6,              // وعلاجهم (الطبيب والهالة والضربات المميزة) أضعف 40%: بأقل منها يلغي العلاجُ الضررَ في معارك الحشد فلا يموت أحد
+  soldierHeal: 0.3,              // علاج الجنود (الطبيب والهالة والضربات المميزة والمستشفى المميز): 0.6 في 11ب كي لا يلغي العلاجُ الضررَ في معارك الحشد، ثم −50% بطلب المستخدم (12أ)
   beats: { crows: 'hammers', hammers: 'vipers', vipers: 'crows' },
   // ضرر كل نمط على النمط الذي يغلبه: الخاطف +50% (قوّاه المستخدم بعد 11هـ: كان يخسر حتى أمام الصامد 0 من 8)، والبقية +20%
   counter: { crows: 0.5, hammers: 0.2, vipers: 0.2 },
@@ -1357,6 +1357,25 @@ export const PERFORMANCE = {
   }
 };
 
+// --- جودة الرسم وتوفير البطارية (القسم 14.1، بطلب المستخدم: أخف على المعالج) ---
+// في الإعدادات: تلقائي (الافتراضي) أو أحد المستويات. التلقائي: منخفضة لجوال بذاكرة أو أنوية قليلة
+// (auto، من navigator.deviceMemory وhardwareConcurrency)، ومتوسطة لغيره. العالية باختيار اللاعب وحده.
+// maxDpr: أقصى دقة للوحة (أكبر وفر: البكسلات المرسومة)، fps: سقف إطارات المباراة (0 بلا سقف)،
+// menuFps: رسم خلفية القوائم (0 صورة ثابتة)، detail: تفاصيل المباني (CITY_DETAIL)، shaded: النمط المظلَّل،
+// lights وparticles: نسبة إضاءات الليل وجزيئات الطقس، voices: مؤثرات القتال معاً، maxUnits: حد الوحدات الافتراضي
+// وتوفير البطارية: 30 إطاراً/ث في المباراة بأي مستوى. والإيقاف وشاشة النهاية يُرسمان idleFps فقط (المشهد ثابت)
+export const GRAPHICS = {
+  levels: {
+    high:   { name: 'عالية',   maxDpr: 4,   fps: 0,  menuFps: 30, detail: true,  shaded: true,  lights: 1,   particles: 1,   voices: 20 },
+    medium: { name: 'متوسطة',  maxDpr: 2,   fps: 0,  menuFps: 20, detail: true,  shaded: true,  lights: 1,   particles: 1,   voices: 20 },
+    low:    { name: 'منخفضة',  maxDpr: 1.5, fps: 30, menuFps: 0,  detail: false, shaded: false, lights: 0.5, particles: 0.5, voices: 10, maxUnits: 50 }
+  },
+  order: ['auto', 'high', 'medium', 'low'],   // ترتيب زر الإعدادات
+  auto: { lowMemory: 3, lowCores: 4 },        // ذاكرة (غيغابايت) أو أنوية بهذا أو أقل: منخفضة
+  batteryFps: 30,
+  idleFps: 5
+};
+
 // --- أطوار اللعب (القسم 9.5) ---
 // كل الأطوار تُلعب على اقتصاد الإمبراطورية (بطلب المستخدم، EMPIRE أدناه): الأحياء تجمع النقاط، والجنود والترقيات
 // والمباني بها. والطور يحدد شرط الفوز وحده. والمباراة التي لا يُذكر طورها (ساحة التجربة وخلفية القوائم) بلا اقتصاد
@@ -1393,7 +1412,7 @@ export const gameModes = {
     short: 'احمِ زعيمك',
     desc: 'بطلك هو زعيمك: إن مات خسرت فوراً. آخر من يبقى زعيمه حياً يفوز.',
     hpBonus: 0.5,               // دم الزعيم +50%
-    homeHealPerSecond: 2,       // علاجه داخل حيه المنزلي
+    homeHealPerSecond: 1,       // علاجه داخل حيه المنزلي (كان 2، و−50% مع كل علاج بطلب المستخدم، 12أ)
     homeHealRadius: 4,          // "داخل الحي": مربعاته، أو شوارعه حتى هذا البعد عن علمه
     fadeSeconds: 1,             // تلاشي وحدات من سقط زعيمه
     hitAlertSeconds: 2.5,       // عمر السهم الأحمر حين يُضرب زعيمك
@@ -1517,7 +1536,7 @@ export const EMPIRE = {
                             damage: { name: 'الضرر', costs: [40, 70], per: 0.35 },        // +35% ضرر لكل مستوى
                             rate:   { name: 'سرعة الضرب', costs: [40, 70], per: 0.2 } } }, // زمن الرمية −20%
     // المستشفى: يعالج جنود صاحبه داخل radius مربعاً حوله، perSecond دم في الثانية لكل واحد
-    hospital: { name: 'مستشفى', cost: 50, desc: 'يعالج جنودك حوله', radius: 3.5, perSecond: 4,
+    hospital: { name: 'مستشفى', cost: 50, desc: 'يعالج جنودك حوله', radius: 3.5, perSecond: 2,   // كان 4، و−50% بطلب المستخدم (12أ)
                 upgrades: { order: ['radius', 'rate'],
                             radius: { name: 'مدى العلاج', costs: [40, 70], per: 1 },      // +1 مربع
                             rate:   { name: 'سرعة العلاج', costs: [40, 70], per: 0.5 } } } // +50% علاج
@@ -1557,7 +1576,51 @@ export const EMPIRE = {
     merlon: { every: 4.2, w: 1.7, h: 1.6 }, banner: { pole: 6, w: 4.2, h: 2.8 },
     // البوابة على كل ضلع مدخل (ساحة أو أرض أو ممر يطل على الشارع): أعلى من السور بـ extra، وقوسها المفتوح يبدأ
     // من spring وقمته apex (نسبتان من ارتفاعها)، وعمودان على طرفيها (pillar: عرض وزيادة ارتفاع)، فيحيط السور بالحي كله
-    gate: { extra: 3.2, spring: 0.5, apex: 0.78, pillar: { w: 2.2, extra: 1.4 } }
+    gate: { extra: 3.2, spring: 0.5, apex: 0.78, pillar: { w: 2.2, extra: 1.4 } },
+    // طراز السور لكل منطقة (12ب، بطلب المستخدم: مظهر جديد للأسوار). face لون الوجه (أو colors لكل قطعة)، وtop سطح الممشى
+    // من فوق، وbase أسفل الجص، وtexture نقش الوجه (mud طين، toron طين بأوتاد، blocks حجارة، bricks طوب، plaster جص على
+    // حجر، logs جذوع، tin صفيح، panels خرسانة)، وcrown تاج السور من المستوى 2 (teeth مثلثة نجدية، round مستديرة، square
+    // مربعة، stepped مدرجة، stakes رؤوس جذوع، tiles سقف قرميد، spikes أسياخ)، وtower شكل أبراج الأركان (round أو square)
+    // وcap غطاؤها (teeth، cone، dome، pagoda، chhatri، roof، flat، stepped، lamp) بلون capColor، وgate البوابة (wood
+    // مصراعان، iron شبكة مرفوعة، roofed سقف فوقها، open قوس فقط). ولون المالك: شريط تحت الحافة، وأغطية أعمدة البوابة، والرايات
+    thick: 1.5,
+    styles: {
+      najdi:    { face: '#c99a62', top: '#dcb07a', edge: 'rgba(96,58,26,0.6)', texture: 'mud', crown: 'teeth', crownColor: '#efe2c8',
+                  tower: 'round', cap: 'teeth', gate: 'wood' },
+      sahel:    { face: '#b8774a', top: '#cf9264', edge: 'rgba(86,44,20,0.6)', texture: 'toron', crown: 'round', crownColor: '#c98a5c',
+                  tower: 'round', cap: 'cone', capColor: '#b8774a', gate: 'wood' },
+      stone:    { face: '#a9a396', top: '#c4beb0', edge: 'rgba(52,48,42,0.6)', texture: 'blocks', crown: 'square',
+                  tower: 'round', cap: 'cone', capColor: '#4e5866', gate: 'wood' },
+      asian:    { face: '#ece6d6', base: '#8c8a84', top: '#4a4f58', edge: 'rgba(44,44,48,0.55)', texture: 'plaster', crown: 'tiles',
+                  tile: '#4a4f58', tower: 'square', cap: 'pagoda', capColor: '#4a4f58', gate: 'roofed' },
+      rajput:   { face: '#dc9984', top: '#efb9a6', edge: 'rgba(112,52,36,0.55)', texture: 'blocks', crown: 'round', crownColor: '#f2e6d8',
+                  tower: 'round', cap: 'chhatri', capColor: '#f2e6d8', gate: 'wood' },
+      brick:    { face: '#9c4e36', top: '#b5674b', edge: 'rgba(60,24,14,0.6)', texture: 'bricks', crown: 'square',
+                  tower: 'square', cap: 'flat', gate: 'iron' },
+      wood:     { face: '#8a6440', top: '#a27a50', edge: 'rgba(48,30,14,0.7)', texture: 'logs', crown: 'stakes',
+                  tower: 'square', cap: 'roof', capColor: '#4a3a2c', gate: 'wood' },
+      colonial: { face: '#efe2c8', base: '#b9a78a', top: '#e0d0b0', edge: 'rgba(90,70,40,0.5)', texture: 'plaster', crown: 'tiles',
+                  tile: '#b85a35', tower: 'square', cap: 'dome', capColor: '#d77b4a', gate: 'wood' },
+      aztec:    { face: '#a39a86', top: '#bdb39e', edge: 'rgba(56,50,40,0.6)', texture: 'blocks', crown: 'stepped',
+                  tower: 'square', cap: 'stepped', gate: 'open' },
+      tin:      { colors: ['#c8392f', '#e8c23a', '#2f6db3', '#3f9b5a'], top: '#9aa0a6', edge: 'rgba(30,30,34,0.55)', texture: 'tin',
+                  crown: 'flat', tower: 'square', cap: 'roof', capColor: '#8a9096', gate: 'iron' },
+      modern:   { face: '#9ba2a8', top: '#b8bec4', edge: 'rgba(40,44,48,0.55)', texture: 'panels', crown: 'spikes',
+                  tower: 'square', cap: 'lamp', gate: 'iron' }
+    },
+    // طراز كل مدينة، وما يخالفه منها
+    cities: {
+      arab: 'najdi', yamamah: 'najdi', diriyah: ['najdi', { face: '#bf8c56', top: '#d4a46e' }], shibam: 'najdi',
+      cairo: ['stone', { face: '#d2bd92', top: '#e3d2ac', crown: 'round', crownColor: '#e3d2ac', tower: 'square', cap: 'dome', capColor: '#d2bd92' }],
+      kano: 'sahel', meroe: ['sahel', { face: '#a9744e', top: '#c08a62', cap: 'dome', capColor: '#a9744e' }],
+      gondar: ['stone', { face: '#8f7b62', top: '#a8927a', cap: 'dome', capColor: '#7a6a58' }],
+      japan: 'asian', gyeongju: 'asian', china: ['asian', { face: '#b4473a', tile: '#4d6a5a', capColor: '#4d6a5a', top: '#4d6a5a' }],
+      kaifeng: ['asian', { face: '#a8473c', tile: '#5a5a5e', capColor: '#5a5a5e', top: '#5a5a5e' }], hk: 'modern', jaipur: 'rajput',
+      europe: 'stone', paris: ['stone', { face: '#cdc4ae', top: '#ddd5c2' }], rothenburg: ['stone', { capColor: '#a8452e' }],
+      birmingham: 'brick', chicago: ['brick', { crown: 'spikes', cap: 'lamp' }], norway: 'wood',
+      mexico: 'colonial', rio: ['colonial', { face: '#f3e3a0', top: '#e8d58e' }], tenoch: 'aztec', laboca: 'tin',
+      default: 'stone'
+    }
   },
   halo: { width: 5, alpha: 0.32 },          // هالة على حدود الحي المملوك (تحت الحد الملون)
   // قائمة الحي (لمستان على حيك): تحديثها، ومكان الحي فوقها حين تغطيه (نسبة من ارتفاع ما فوقها)
@@ -1590,48 +1653,75 @@ const SAMURAI = { hp: 300, armor: 0.2, damage: 18, attackTime: 0.9, speed: 2.4, 
 // --- مزايا المدن (القسم 3.11، بطلب المستخدم): ميزة واحدة لكل مدينة أمة، في كل مباراة على الاقتصاد ---
 // cities: المدينة ← ميزتها، والمدن التي لا تُذكر بلا ميزة. ground: أرض حي الميزة قبل الاستيلاء عليه تميل لهذا اللون
 // botValue: قيمة حي الميزة عند البوتات (الحي العادي 1، والحي المميز القديم ai.specialValue)
+// --- تفاصيل المباني العادية وأرض الأحياء (12ج، بطلب المستخدم: "تحسين شامل وإضافة تفاصيل أكثر للمباني والأحياء") ---
+// طبقة واحدة فوق رسم كل مدينة (js/render/detail.js) بطابع منطقتها (REGIONS)، رسم فقط وحتمية من موضع المربع:
+// minBox أصغر جسم مبنى تُرسم عليه (نصف العرض والارتفاع)، وao ظل قاعدته، وtopLight ضوء أعلى وجهه المضاء، وedge حافته الأمامية.
+// roof فرصة أشياء السطح المسطح، وflowers/ac/shutters/frames فرص زينة النوافذ (أحواض زهور أوروبا، ومكيفات المدن الحديثة
+// والعربية، ومصاريع الأمريكتين الملونة، وإطارات أفريقيا الملونة)، وpot فرصة أصيص عند الباب، وground فرصة أشياء أرض الحي الفارغة.
+// modern: مدن حديثة (مكيفات وهوائيات)
+export const CITY_DETAIL = {
+  enabled: true,                 // للإيقاف كله (الأجهزة الضعيفة جداً): false
+  minBox: { w: 7, h: 8 }, ao: 0.11, topLight: 0.1, edge: 0.32,
+  roof: 0.6, flowers: 0.28, ac: 0.22, shutters: 0.4, frames: 0.3, pot: 0.5, ground: 0.55, stains: 0.3, tufts: 4,   // stains: أثر المطر تحت النافذة، tufts: حصى أو عشب الأرض الفارغة
+  modern: ['hk', 'chicago', 'birmingham']
+};
+
 export const CITY_FEATURES = {
   cities: { diriyah: 'storm', shibam: 'villages', cairo: 'pyramid',
             japan: 'dojo', gyeongju: 'bandits', kano: 'bandits', kaifeng: 'clinic', gondar: 'fortress', meroe: 'khartoum',
             paris: 'coups', rothenburg: 'policeHQ', birmingham: 'clock', tenoch: 'cartel', rio: 'statue', laboca: 'mercs',
             yamamah: 'caravan', arab: 'souk', china: 'fireworks', hk: 'triads', jaipur: 'elephants', norway: 'troll',
             europe: 'bells', mexico: 'mine', chicago: 'bank' },
+  // مبانٍ مميزة لمدن الأحداث (12هـ، القسم 3.13، بطلب المستخدم): كل مدينة لها حدث صار لها مبنى مميز معه.
+  // المفتاح مبنى الحي (district.feature)، والحدث كما كان في cities (state.feature). وأرقام كل مبنى في قسمه أدناه
+  buildings: { diriyah: 'salwa', gyeongju: 'observatory', kano: 'kanoGate', paris: 'arch', yamamah: 'khan', china: 'powder',
+               norway: 'hunters' },
   ground: ['#c9a24e', 0.24],
   // المبنى المميز (بطلب المستخدم: مساحة خاصة به، وحجم أكبر وفخامة وهالة): كتلة 2×2 وسط حيه لا يُمشى عليها،
   // وبقية الحي ساحة مرصوفة حوله يُمشى عليها. حيه blockTiles مربعاً فأكثر (generator.js)
   blockTiles: 9,
   botValue: { pyramid: 3, village: 2, dojo: 2.5, clinic: 2, fortress: 2.5, khartoum: 3,
               policeHQ: 3, clock: 3, complex: 2.5, cartel: 1.6, statue: 3, mercs: 2, souk: 2.5, triads: 2.5, stable: 2.5,
-              cathedral: 2.5, mine: 3, bank: 2.5 },
+              cathedral: 2.5, mine: 3, bank: 2.5,
+              salwa: 3, observatory: 2.5, kanoGate: 2, arch: 2.5, khan: 2, powder: 2.5, hunters: 2 },
   names: { pyramid: 'الهرم', village: 'القرية', dojo: 'دوجو الساموراي', clinic: 'دار العلاج', fortress: 'الحصن',
            khartoum: 'برج الخرطوم', policeHQ: 'مركز الشرطة الرئيسي', clock: 'برج الساعة', complex: 'المجمع السكني',
-           statue: 'تمثال ريو', mercs: 'بيت المرتزقة', souk: 'السوق الكبير', triads: 'مقر الترياد', stable: 'إسطبل الفيلة',
-           cathedral: 'الكاتدرائية', mine: 'منجم الفضة', bank: 'البنك' },
+           statue: 'المعبد القديم', mercs: 'بيت المرتزقة', souk: 'السوق الكبير', triads: 'مقر الترياد', stable: 'إسطبل الفيلة',
+           cathedral: 'الكاتدرائية', mine: 'منجم الفضة', bank: 'البنك',
+           salwa: 'قصر سلوى', observatory: 'مرصد تشومسونغداي', kanoGate: 'بوابة كانو القديمة', arch: 'قوس النصر',
+           khan: 'خان القوافل', powder: 'ورشة البارود', hunters: 'بيت صيادي الترول' },
   hintSeconds: 6,                     // إشعار ميزة المدينة في بداية المباراة (بعد تلميح قائمة الحي)
   // سطر ميزة المدينة في معاينة المدينة (قائمة الإعداد والمتجر) وإشعار البداية
-  desc: { storm: 'العاصفة الرملية: كل 3 دقائق لنصف دقيقة، مدى الرماة أقل والضربات تخطئ',
+  desc: { storm: 'العاصفة الرملية: كل دقيقة و48 ثانية لنصف دقيقة، مدى الرماة أقل والضربات تخطئ',
           villages: 'القرى المحايدة: أهلها ينضمون لمن يستولي على قريتهم',
           pyramid: 'الهرم: 5 نقاط في الثانية، وجنود مالكه حوله يتلقون ضرراً أقل',
           dojo: 'دوجو الساموراي: ساموراي محايدون يحرسونه، ومن يحتله جنوده أقوى 10%',
-          bandits: 'قطاع الطرق: عصابة تظهر في الوسط كل دقيقتين، أكبر وأقوى في كل مرة، وتستولي على الأحياء',
+          bandits: 'قطاع الطرق: عصابة تظهر في الوسط كل 72 ثانية، أكبر وأقوى في كل مرة، وتستولي على الأحياء',
           clinic: 'دار العلاج: تعالج جنود مالكها حولها، ويجنّد فيها أطباء',
           fortress: 'الحصن: حراس أقوياء وسهام، ومن يحتله يجنّد فيه أبطال عدوة',
           khartoum: 'برج الخرطوم: برج رماية بعيد المدى بضعف الضرر، واحتلاله أطول بكثير',
-          coups: 'الانقلابات: كل دقيقتين تتمرد أحياء من العصابات الكبيرة وتستولي على ما حولها',
+          coups: 'الانقلابات: كل 72 ثانية تتمرد أحياء من العصابات الكبيرة وتستولي على ما حولها',
           policeHQ: 'مركز الشرطة الرئيسي: من يحتله تصير الشرطة صديقة له، وتنضم إليه شرطة كل مركز يحتله',
           clock: 'برج الساعة: مالكه دخله +30% وإنتاجه أسرع 40%، واحتلاله أطول',
           cartel: 'المجمع السكني: عصابة محايدة تحرس أربعة أحياء، وكل حي تنتزعه منها يرخّص جنودك 5%',
-          statue: 'تمثال ريو: جنود مالكه حوله أسرع ضرباً 20% وأقوى 15%، واحتلاله أطول',
+          statue: 'المعبد القديم: جنود مالكه حوله أسرع ضرباً 20% وأقوى 15%، واحتلاله أطول',
           mercs: 'بيوت المرتزقة: يستأجر مالكها مرتزقاً خفيفاً رخيصاً أو ثقيلاً غالياً',
-          caravan: 'قافلة التجارة: كل 3 دقائق قافلة تعبر المدينة بحراسها، وكل تاجر تنهبه يعطيك 20 نقطة',
+          caravan: 'قافلة التجارة: كل دقيقة و48 ثانية قافلة تعبر المدينة بحراسها، وكل تاجر تنهبه يعطيك 20 نقطة',
           souk: 'السوق الكبير: مالكه يأخذ 10% من كل ما يصرفه غيره',
-          fireworks: 'مهرجان الألعاب النارية: كل دقيقتين ونصف تنفجر فوق أكبر تجمعات الجنود، فابتعد عن الدوائر الحمراء',
+          fireworks: 'مهرجان الألعاب النارية: كل دقيقة ونصف تنفجر فوق أكبر تجمعات الجنود، فابتعد عن الدوائر الحمراء',
           triads: 'مقر الترياد: مالكه يرسل 6 مقاتلين أقوياء إلى أي حي لعدوه، يقاتلون 45 ثانية ثم يختفون',
           elephants: 'إسطبل الفيلة: مالكه يجنّد فيلاً حربياً ضخماً يدهس كل من حوله',
-          troll: 'ترول الجبل: كل 4 دقائق ينزل وحش ضخم يهاجم أكبر تجمعات الجنود، ومن يقتله يأخذ 240 نقطة',
+          troll: 'ترول الجبل: كل دقيقتين و24 ثانية ينزل وحش ضخم يهاجم أكبر تجمعات الجنود، ومن يقتله يأخذ 240 نقطة',
           bells: 'الكاتدرائية: مالكها يقرع أجراسها فيصير كل جنوده أسرع 25% وأقوى 15% لمدة 15 ثانية',
           mine: 'منجم الفضة: دخله يكبر كلما طال امتلاكه حتى 4 نقاط في الثانية',
-          bank: 'سرقة البنك: خزنته تمتلئ طوال المباراة، ومن يحتل البنك يسرقها كلها' },
+          bank: 'سرقة البنك: خزنته تمتلئ طوال المباراة، ومن يحتل البنك يسرقها كلها',
+          salwa: 'قصر سلوى: جنود مالكه لا تضرهم العاصفة، ودخل حيه 3 نقاط في الثانية',
+          observatory: 'مرصد تشومسونغداي: مدى رماة مالكه وأبراجه أطول 25%',
+          kanoGate: 'بوابة كانو القديمة: تحصين أحياء مالكها بنصف السعر',
+          arch: 'قوس النصر: أحياء مالكه لا تتمرد، وجنوده أسرع مشياً 10%',
+          khan: 'خان القوافل: كل تاجر يخرج من المدينة سالماً يعطي مالكه 10 نقاط',
+          powder: 'ورشة البارود: مالكها يطلق صاروخاً على أي حي بـ 40 نقطة، مرة كل دقيقة',
+          hunters: 'بيت صيادي الترول: جنود مالكه يضربون الترول بضعف الضرر' },
   // الهالة حول كل مبنى مميز وحول القرية التي ينتظر أهلها (رسم فقط): نصف القطر بالمربعات من وسط الكتلة، ونبض بطيء،
   // ونجوم صغيرة تدور عليها. colors: لون هالة كل ميزة
   halo: { radius: 1.95, width: 1.6, glow: 8, alpha: 0.85, glowAlpha: 0.3, pulse: 0.3, speed: 1.8,
@@ -1639,12 +1729,31 @@ export const CITY_FEATURES = {
   colors: { pyramid: '255,206,84', village: '120,140,225', dojo: '232,70,86', clinic: '96,220,150', fortress: '150,214,96',
             khartoum: '255,150,60', policeHQ: '95,160,240', clock: '240,205,120', complex: '47,190,175', statue: '140,230,120',
             mercs: '235,95,110', souk: '230,170,70', triads: '255,80,170', stable: '255,140,190',
-            cathedral: '255,214,120', mine: '200,215,230', bank: '120,230,150' },
+            cathedral: '255,214,120', mine: '200,215,230', bank: '120,230,150',
+            salwa: '235,200,130', observatory: '160,195,255', kanoGate: '225,140,80', arch: '245,230,185', khan: '235,185,95',
+            powder: '255,105,60', hunters: '150,205,140' },
+  // --- مباني مدن الأحداث (12هـ): top ارتفاع الشارة فوق المبنى ---
+  // قصر سلوى (الدرعية): دخل حيه income، وجنود مالكه وأبراجه لا تمسها العاصفة (لا يخطئون ومداهم كامل)
+  salwa: { income: 3, top: 46 },
+  // مرصد تشومسونغداي (غيونغجو): مدى رماة مالكه وأبراجه × rangeMul
+  observatory: { rangeMul: 1.25, top: 52 },
+  // بوابة كانو القديمة (كانو): سعر تحصين أحياء مالكها × fortifyMul
+  kanoGate: { fortifyMul: 0.5, top: 44 },
+  // قوس النصر (باريس): أحياء مالكه لا تتمرد في الانقلابات، وجنوده أسرع مشياً speed
+  arch: { speed: 0.1, top: 52 },
+  // خان القوافل (صحراء اليمامة): كل تاجر يبلغ مخرجه بحمولته يعطي مالك الخان points
+  khan: { points: 10, top: 40 },
+  // ورشة البارود (الصينية): صاروخ بـ cost على حي ليس لمالكها، مرة كل cooldown: دائرة الألعاب النارية نفسها (radius)
+  // تنفجر بعد delay ثانية بضرر damage على أعدائه وحدهم. والبوت يطلقه على تجمع عدو فيه botMin جنود على الأقل ويبقي botReserve
+  powder: { cost: 40, cooldown: 60, delay: 3, damage: 40, top: 42, botMin: 3, botReserve: 0 },
+  // بيت صيادي الترول (النرويجية): ضرب جنود مالكه للترول × trollDamage
+  hunters: { trollDamage: 2, top: 44 },
   // العاصفة الرملية (الدرعية): أولها عند first ثانية ثم كل every ثانية، لمدة duration، وتنبيه قبلها بـ warn ثانية.
   // أثناءها: مدى الرماة والأبراج × rangeMul، والضربة القريبة والسهم وسهم البرج يخطئ باحتمال miss
   // ("أخطأ!" pop)، والنار وضربات الأبطال أضعف بنفس النسبة
   storm: {
-    first: 180, every: 180, duration: 30, warn: 10, rangeMul: 0.6, miss: 0.3, pop: 'أخطأ!',
+    // first وevery كانتا 180 و180، وأقصر 40% بطلب المستخدم (12أ)
+    first: 108, every: 108, duration: 30, warn: 10, rangeMul: 0.6, miss: 0.3, pop: 'أخطأ!',
     // الرسم: الغبار يشتد في أول fade ثانية ويخف في آخرها، بلون color وشفافية alpha، وخطوط رمل particles
     fade: 2.5, color: '190,142,78', alpha: 0.42, particles: 190, streak: '255,240,210'
   },
@@ -1664,10 +1773,12 @@ export const CITY_FEATURES = {
   // قطاع الطرق (غيونغجو وكانو): أول عصابة عند first ثانية ثم كل every، في وسط الخريطة، بشكل أفراد أمة المدينة بلون color.
   // الموجة n: count + perWave × (n − 1) فرداً (حتى maxCount)، ودمهم وضررهم × (1 + grow × (n − 1))، ومن الموجة heroFrom
   // شخصية مميزة لكل heroEvery أفراد. تستولي على الأحياء المجاورة حتى cap حياً، وتفكر كل think ثانية. لا تنتج جنوداً
-  bandits: { first: 120, every: 120, count: 3, perWave: 2, maxCount: 15, grow: 0.12, heroFrom: 3, heroEvery: 5,
+  bandits: { first: 72, every: 72, count: 3,       // كانت 120 و120 (12أ)
+             perWave: 2, maxCount: 15, grow: 0.12, heroFrom: 3, heroEvery: 5,
              cap: { small: 6, medium: 8, large: 10 }, think: 2, name: 'قطاع الطرق', color: '#3a312b' },
   // دار العلاج (كايفنغ): عددها لكل حجم خريطة، موزعة بعيدة عن الأحياء المنزلية. تعالج جنود مالكها داخل radius
-  // بـ perSecond دم/ث لكل واحد (أقوى من مستشفى الاقتصاد)، وفي قائمتها تجنيد recruits
+  // بـ perSecond دم/ث لكل واحد (أقوى من مستشفى الاقتصاد)، وفي قائمتها تجنيد recruits. لم يُخفَّض علاجها مع العلاج كله
+  // في 12أ (بطلب المستخدم: "ما عدا المبنى المميز في الصين")، وطبيبها وحدة فيُخفَّض
   clinic: { count: { small: 2, medium: 3, large: 4 }, minHomeDistance: 5, radius: 4.5, perSecond: 9, top: 44,
             recruits: ['doctor'] },
   // الحصن (غوندر): عدده لكل حجم خريطة، موزع بعيد عن الأحياء المنزلية. فيه guards حراس محايدون بشكل hero أمة nation
@@ -1684,7 +1795,8 @@ export const CITY_FEATURES = {
   // ولا مركز شرطة ولا التلة، وما بلا مبنى أولاً)، ويظهر في كل حي متمرد perDistrict متمردين بشكل أفراد nation بلون color،
   // دمهم وضررهم × (1 + grow × (n − 1)) في الانقلاب n. يستولون على الأحياء المجاورة داخل range مربعاً من حيهم،
   // ويقررون كل think ثانية. لا انقلابات في الصمود
-  coups: { first: 120, every: 120, at: [6, 9, 12], perDistrict: 3, grow: 0.1, range: 8, think: 2,
+  coups: { first: 72, every: 72, at: [6, 9, 12],   // كانت 120 و120 (12أ)
+           perDistrict: 3, grow: 0.1, range: 8, think: 2,
            name: 'المتمردون', color: '#4a1c22', nation: 'france' },
   // مركز الشرطة الرئيسي (روتنبورغ): مركز شرطة كبير قرب الوسط بجانب المراكز العادية، شرطته بشكل أفراد nation
   // (والضابط بشكل captainLook)، ودمها وضررها × boost. من يحتله: الشرطة كلها صديقة له، وتنضم إليه شرطته
@@ -1699,17 +1811,18 @@ export const CITY_FEATURES = {
   cartel: { neighbors: 3, total: 10, start: 4, every: 20, leash: 9, think: 2, discount: 0.05, heroes: ['sniper', 'firebomber'],
             name: 'عصابة المجمع', color: '#1f5f5a', nation: 'mexico' },
   complex: { top: 52 },                     // مبنى المجمع: ارتفاع قمته للشارة
-  // تمثال ريو (ريو): على صخرة قرب الوسط. جنود مالكه داخل radius مربعاً منه: سرعة الضرب + attackSpeed والضرر + damage،
-  // واحتلاله أبطأ (captureMul)
-  statue: { radius: 7, attackSpeed: 0.2, damage: 0.15, captureMul: 0.5, top: 70 },
+  // المعبد القديم (ريو، بطلب المستخدم بدل التمثال بمزاياه نفسها؛ المفتاح statue كما كان للحفظ واللعب المحلي): أطلال كنيسة
+  // إرسالية قرب الوسط. جنود مالكه داخل radius مربعاً منه: سرعة الضرب + attackSpeed والضرر + damage، واحتلاله أبطأ (captureMul)
+  statue: { radius: 7, attackSpeed: 0.2, damage: 0.15, captureMul: 0.5, top: 62 },
   // بيوت المرتزقة (لا بوكا): عددها لكل حجم خريطة، موزعة بعيدة عن الأحياء المنزلية. يستأجر مالكها فيها recruits
   mercs: { count: { small: 2, medium: 3, large: 4 }, minHomeDistance: 5, top: 46, recruits: ['blade', 'gaucho'] },
   // قافلة التجارة (صحراء اليمامة): أولها عند first ثم كل every ثانية (لا قوافل في الصمود)، من بوابة في السور إلى الحافة
   // المقابلة: merchants تجار لا يقاتلون يحملون البضائع، وguards حراس (شخصية كل حارس، null للفرد العادي) من حراس القوافل.
   // كل تاجر يُقتل يعطي قاتله loot نقطة. كل think ثانية يمضي التجار ويرافقهم الحراس، ومن بلغ المخرج (exitRadius) يخرج،
   // ومن بقي بعد maxSeconds يخرج على أي حال
-  caravan: { first: 150, every: 180, merchants: 4, guards: [null, null, 'sniper'], loot: 20, think: 2, exitRadius: 1.6,
-             maxSeconds: 150, escort: 1.5, name: 'القافلة', merchantName: 'تاجر', color: '#7a5a34', nation: 'saudi',
+  // (12أ: كانت 150 و180، وmaxSeconds 150؛ وصار أقل من every فلا تلتقي قافلتان)
+  caravan: { first: 90, every: 108, merchants: 4, guards: [null, null, 'sniper'], loot: 20, think: 2, exitRadius: 1.6,
+             maxSeconds: 100, escort: 1.5, name: 'القافلة', merchantName: 'تاجر', color: '#7a5a34', nation: 'saudi',
              merchant: { hp: 120, damage: 0, speed: 0.9 }, guard: { hp: 200, armor: 0.15, speed: 1.6 } },
   // السوق الكبير (المدينة العربية): مالكه يأخذ tax من كل ما يصرفه غيره، ولا يدفع الصارف أكثر من سعره
   souk: { tax: 0.1, top: 50 },
@@ -1717,7 +1830,8 @@ export const CITY_FEATURES = {
   // تجمعات للجنود (minUnits فأكثر في الدائرة، ولا تتداخل)، وبعد warn ثانية تنفجر: damage لكل وحدة داخلها من أي طرف.
   // كل بوت يُخرج جنوده من الدائرة إلى dodge مربع خارجها بفرصة dodgeChance حسب صعوبته (لكل دائرة).
   // والانفجار يبقى مرسوماً fade ثانية
-  fireworks: { first: 150, every: 150, count: 3, minUnits: 3, radius: 2.5, warn: 5, damage: 40, dodge: 1.2, fade: 1.6,
+  fireworks: { first: 90, every: 90, count: 3,      // كانت 150 و150 (12أ)
+               minUnits: 3, radius: 2.5, warn: 5, damage: 40, dodge: 1.2, fade: 1.6,
                dodgeChance: { easy: 0, medium: 0.5, hard: 0.8, insane: 1 },
                name: 'الألعاب النارية', color: '#c0392b', nation: 'china' },
   // مقر الترياد (هونغ كونغ): من قائمته يدفع مالكه cost ويلمس حياً لعدو، فيظهر حوله fighters مقاتلين بلونه (heroes:
@@ -1741,7 +1855,8 @@ export const CITY_FEATURES = {
   // ويقصد كل think ثانية أكبر تجمع للجنود (cluster مربع)، ولا يقاتل الشرطة، وبعد stay ثانية يعود إلى الجبل ويختفي. ضربته تُسقط المصاب
   // وتدفعه slam مربع، ومن يقتله يأخذ reward نقطة. hero: شخصية الأساس من نمط أمته، وscale حجم رسمه
   // (بطلب المستخدم: أقوى 50% دماً وضرراً من 2500 و60، وجائزته 120 نقطة زيادة)
-  troll: { first: 180, every: 240, stay: 120, think: 3, cluster: 4, reward: 240, scale: 2.7, barY: -44,
+  troll: { first: 108, every: 144, stay: 120,       // كانت 180 و240 (12أ)
+           think: 3, cluster: 4, reward: 240, scale: 2.7, barY: -44,
            name: 'ترول الجبل', color: '#5f6f58', nation: 'germany', hero: 'smasher',
            stats: { hp: 3750, armor: 0.2, damage: 90, attackTime: 1.8, speed: 1.4, attackRange: 2.2, visionRange: 8,
                     slam: 1.6, capturePower: 0 } },
@@ -1780,7 +1895,7 @@ export const UI = {
   // حفظ المباراة الجارية للعودة إليها لاحقاً (خانة واحدة)
   matchKey: 'gangcity.match',      // المباراة نفسها
   matchInfoKey: 'gangcity.matchInfo', // ملخص صغير يقرؤه زر "متابعة المباراة" بلا فك المباراة كلها
-  matchVersion: 8,               // يُرفع عند تغيّر شكل حالة المباراة، فتُهمل الحفظات القديمة (3: الأمم، 4: الآسيوية، 5: الأوروبية، 6: الأفريقية، 7: الاقتصاد في كل الأطوار، 8: الكاتدرائية بدل محطات القطار)
+  matchVersion: 9,               // يُرفع عند تغيّر شكل حالة المباراة، فتُهمل الحفظات القديمة (3: الأمم، 4: الآسيوية، 5: الأوروبية، 6: الأفريقية، 7: الاقتصاد في كل الأطوار، 8: الكاتدرائية بدل محطات القطار، 9: مباني مدن الأحداث)
   matchDecimals: 5,              // دقة الأعداد العشرية في الحفظ (تصغّر حجمه)
 
   // الخلفية الحية للقائمة الرئيسية: الخريطة نفسها وبضع وحدات تتجول

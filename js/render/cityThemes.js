@@ -35,6 +35,9 @@ export function setTone(fn,info=null){tone=fn;toneInfo=info;roofMode=false;}
 export const getTone=()=>tone;
 export const getToneInfo=()=>toneInfo;
 export const getCtx=()=>ctx;
+// خطافات طبقة التفاصيل (12ج، detail.js): تعمل فقط أثناء رسم مبنى عادي، بعد جسمه ونوافذه وأقواسه
+let detail=null;
+export function setDetailHooks(h){detail=h;}
 const TAU=6.2831853;
 function poly(a,c){ctx.beginPath();ctx.moveTo(a[0][0],a[0][1]);for(let k=1;k<a.length;k++)ctx.lineTo(a[k][0],a[k][1]);ctx.closePath();ctx.fillStyle=paint(c);ctx.fill();}
 function circ(x,y,r,c,al){ctx.beginPath();ctx.arc(x,y,r,0,TAU);ctx.fillStyle=paint(c);if(al!==undefined)ctx.globalAlpha=al;ctx.fill();ctx.globalAlpha=1;}
@@ -44,13 +47,15 @@ function el(x,y,rx,ry,c){ctx.beginPath();ctx.ellipse(x,y,rx,ry,0,0,TAU);ctx.fill
 const hsh=(i,j,k)=>{const s=Math.sin(i*127.1+j*311.7+k*74.7+SEED*0.013)*43758.5453;return s-Math.floor(s);};
 const mixc=(a,b,t)=>{const p=s=>[1,3,5].map(i=>parseInt(s.substr(i,2),16)),A=p(a),B=p(b);
   return '#'+A.map((v,i)=>Math.round(v+(B[i]-v)*t).toString(16).padStart(2,'0')).join('');};
-function box(x,y,w,d,h,L,R,T){poly([[x-w,y],[x,y+d],[x,y+d-h],[x-w,y-h]],L);poly([[x,y+d],[x+w,y],[x+w,y-h],[x,y+d-h]],R);
-  if(T){roofMode=true;poly([[x-w,y-h],[x,y-d-h],[x+w,y-h],[x,y+d-h]],T);roofMode=false;}}
+function box(x,y,w,d,h,L,R,T){if(detail&&detail.on)detail.pre();poly([[x-w,y],[x,y+d],[x,y+d-h],[x-w,y-h]],L);poly([[x,y+d],[x+w,y],[x+w,y-h],[x,y+d-h]],R);
+  if(T){roofMode=true;poly([[x-w,y-h],[x,y-d-h],[x+w,y-h],[x,y+d-h]],T);roofMode=false;}
+  if(detail&&detail.on)detail.box(x,y,w,d,h,T);}
 const qL=(x,y,w,d)=>(a,b)=>[x-w+a*w,y+a*d-b], qR=(x,y,w,d)=>(a,b)=>[x+a*w,y+d-a*d-b];
-function wL(x,y,w,d,u,v,du,dv,c){const q=qL(x,y,w,d);poly([q(u,v),q(u+du,v),q(u+du,v+dv),q(u,v+dv)],c);}
-function wR(x,y,w,d,u,v,du,dv,c){const q=qR(x,y,w,d);poly([q(u,v),q(u+du,v),q(u+du,v+dv),q(u,v+dv)],c);}
+function wL(x,y,w,d,u,v,du,dv,c){const q=qL(x,y,w,d);poly([q(u,v),q(u+du,v),q(u+du,v+dv),q(u,v+dv)],c);if(detail&&detail.on)detail.win(q,u,v,du,dv,c);}
+function wR(x,y,w,d,u,v,du,dv,c){const q=qR(x,y,w,d);poly([q(u,v),q(u+du,v),q(u+du,v+dv),q(u,v+dv)],c);if(detail&&detail.on)detail.win(q,u,v,du,dv,c);}
 function arch(q,u,du,dv,c){const pts=[q(u,0),q(u+du,0),q(u+du,dv*0.62)];
-  for(let i=1;i<8;i++){const t=i/8;pts.push(q(u+du*(1-t),dv*0.62+Math.sin(Math.PI*t)*dv*0.38));}pts.push(q(u,dv*0.62));poly(pts,c);}
+  for(let i=1;i<8;i++){const t=i/8;pts.push(q(u+du*(1-t),dv*0.62+Math.sin(Math.PI*t)*dv*0.38));}pts.push(q(u,dv*0.62));poly(pts,c);
+  if(detail&&detail.on)detail.arch(q,u,du,dv,c);}
 /* سقف بسنام: السنام موازٍ للواجهة اليسرى. gable=جدار مثلث على الواجهة اليمنى (أوروبي/نرويجي)،
    وإلا سقف بأطراف مائلة (صيني/ياباني) مع تقعّر sag وأطراف مرفوعة flare وخطوط قرميد tile */
 function ridgeRoof(x,y,w,d,h,rh,o){roofMode=true;try{return ridgeRoof0(x,y,w,d,h,rh,o);}finally{roofMode=false;}}

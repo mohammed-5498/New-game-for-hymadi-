@@ -9,6 +9,7 @@
 import { TILE_HALF_W, TILE_HALF_H, TICK_SEC, EMPIRE as E, CITY_FEATURES as F } from '../config.js';
 import { poly, ln, circ, el, rc, box, cyl, cone, dome, arch, ridgeRoof, hipRoof, qL, qR, wL, wR, hsh, getCtx, getTone, getToneInfo, setTone } from './cityThemes.js';
 import { streetPalm } from './openCity.js';
+import { frustum, fL, fR } from './empireBuildings.js';
 import { tileOf } from '../game/empire.js';
 import { stormAt, villageWaiting } from '../game/features.js';
 
@@ -40,6 +41,74 @@ const onFace = (P, Q, A, u, t) => {
   const bx = P[0] + (Q[0] - P[0]) * u, by = P[1] + (Q[1] - P[1]) * u;
   return [bx + (A[0] - bx) * t, by + (A[1] - by) * t];
 };
+
+// --- تفاصيل 12د (القسم 3.13): أدوات صغيرة مشتركة لما يُضاف حول المباني المميزة وعليها ---
+// البروز عن الوجه الأيمن (نحو +i) والأيسر (نحو +j) على الشاشة
+const OUT_R = [1, 0.5], OUT_L = [-1, 0.5];
+const outP = (p, o, k) => [p[0] + o[0] * k, p[1] + o[1] * k];
+const WOODS = ['#6b4a2e', '#8a6440', '#9c7450'];
+function crate(px, py, s, c = WOODS) {
+  box(px, py, s, s / 2, s, c[0], c[1], c[2]);
+  const r = qR(px, py, s, s / 2), a = r(0.1, 0.15 * s), b = r(0.9, 0.85 * s), e = r(0.1, 0.85 * s), f = r(0.9, 0.15 * s);
+  ln(a[0], a[1], b[0], b[1], 'rgba(40,25,10,0.45)', 0.35);
+  ln(e[0], e[1], f[0], f[1], 'rgba(40,25,10,0.45)', 0.35);
+}
+function barrel(px, py, r, h, c = ['#6b4a2e', '#8a6440', '#7a5636']) {
+  cyl(px, py, r, h, c[0], c[1], c[2]);
+  const ctx = getCtx();
+  ctx.beginPath();
+  for (const v of [h * 0.22, h * 0.78]) { ctx.moveTo(px + r, py - v); ctx.ellipse(px, py - v, r, r * 0.5, 0, 0, Math.PI); }
+  ctx.strokeStyle = 'rgba(30,20,10,0.55)';
+  ctx.lineWidth = 0.4;
+  ctx.stroke();
+}
+function jar(px, py, r, c) {
+  el(px, py - r, r, r * 1.1, c);
+  el(px, py - r * 2.05, r * 0.55, r * 0.28, c);
+  el(px - r * 0.35, py - r * 1.25, r * 0.25, r * 0.5, 'rgba(255,255,255,0.22)');
+}
+function torch(px, py, h) {
+  ln(px, py, px, py - h, '#3a2a1c', 0.8);
+  poly([[px - 1.2, py - h], [px, py - h - 3.6], [px + 1.2, py - h]], '#ff9a3c');
+  poly([[px - 0.5, py - h - 0.3], [px, py - h - 2.2], [px + 0.5, py - h - 0.3]], '#ffe08a');
+}
+// خطوط كثيرة بمسار واحد: segs [[x1, y1, x2, y2], ...]
+function lines(segs, color, w) {
+  const c = getCtx();
+  c.beginPath();
+  for (const s of segs) { c.moveTo(s[0], s[1]); c.lineTo(s[2], s[3]); }
+  c.strokeStyle = color;
+  c.lineWidth = w;
+  c.lineCap = 'round';
+  c.stroke();
+}
+// مداميك حجر على وجه q بعرض w وارتفاع h: صفوف كل rowH وفواصل متناوبة
+function masonry(q, w, h, rowH, color, v0 = 0) {
+  const segs = [], n = Math.max(2, Math.round(w / 4.5));
+  for (let v = v0 + rowH, r = 0; v < h - 0.5; v += rowH, r++) {
+    const a = q(0, v), b = q(1, v);
+    segs.push([a[0], a[1], b[0], b[1]]);
+    for (let k = (r % 2) * 0.5; k < n; k++) {
+      const u = (k + 0.5) / n, p = q(u, v), t = q(u, Math.min(h, v + rowH));
+      segs.push([p[0], p[1], t[0], t[1]]);
+    }
+  }
+  lines(segs, color, 0.35);
+}
+
+// بئر القرية في ساحة علمها (شبام، 12د): حافة حجرية وقائمان وبكرة ودلو، وجرار ماء وكيسا حبوب وحوض للماشية
+export function villageWell(x, y) {
+  const wx = x - 8, wy = y - 1.2;
+  cyl(wx, wy, 2.6, 2.4, '#8a6a4a', '#a8865e', '#3a5a6a');
+  el(wx, wy - 2.4, 1.6, 0.8, '#2a4050');
+  lines([[wx - 2.2, wy - 2, wx - 2.2, wy - 8], [wx + 2.2, wy - 2, wx + 2.2, wy - 8], [wx - 2.6, wy - 8, wx + 2.6, wy - 8]], '#5a3e26', 0.8);
+  circ(wx, wy - 8, 0.9, '#6b4a2e');
+  ln(wx, wy - 7.2, wx, wy - 4.6, '#3a2a1c', 0.3);
+  box(wx, wy - 3.6, 0.7, 0.35, 1, '#5a3e26', '#6b4a2e', '#7a5636');
+  for (const [px, py, c] of [[x + 7.6, y - 2.2, '#a8643a'], [x + 9.6, y - 1, '#b8774a']]) jar(px, py, 1.3, c);
+  for (const [px, py] of [[x - 4, y + 4.4], [x - 2, y + 5.4]]) { el(px, py - 1.1, 1.3, 1.2, '#d8c49a'); ln(px - 0.6, py - 2.2, px + 0.6, py - 2.2, '#8a6a4a', 0.4); }
+  box(x + 6.4, y + 3.2, 3, 1.5, 1.2, '#8a6a4a', '#a8865e', '#6f9aae');
+}
 
 // --- الهرم (القاهرة): منصة حجرية، ومداميك، وحجارة ناقصة، ومدخل بعمودين، وقمة ذهبية لامعة ---
 function pyramid(x, y, i, j) {
@@ -76,6 +145,34 @@ function pyramid(x, y, i, j) {
   poly([cL, cF, A], '#c99a2c');
   poly([cF, cR, A], '#f6d362');
   ln(cF[0], cF[1], A[0], A[1], '#fff3c4', 0.9);
+  // 12د: كسوة الحجر الجيري الملساء تحت القمة، ونقوش بجانب المدخل، ودرج إليه، وكثبان رمل وأبو الهول صغير على المنصة
+  const kL = onFace(L, Fr, A, 0, 0.7), kF = onFace(L, Fr, A, 1, 0.7), kR = onFace(Fr, R, A, 1, 0.7);
+  poly([kL, kF, cF, cL], '#c4a873');
+  poly([kF, kR, cR, cF], '#ecd8a8');
+  ln(kF[0], kF[1], cF[0], cF[1], 'rgba(255,245,215,0.7)', 0.9);
+  ln(kL[0], kL[1], kF[0], kF[1], 'rgba(90,64,30,0.35)', 0.5);
+  ln(kF[0], kF[1], kR[0], kR[1], 'rgba(120,86,40,0.3)', 0.5);
+  const glyphs = [];
+  for (const u0 of [0.24, 0.6]) for (let r = 0; r < 3; r++) for (let k = 0; k < 3; k++) {
+    const p = onFace(Fr, R, A, u0 + k * 0.035, 0.03 + r * 0.035);
+    glyphs.push(k % 2 ? [p[0], p[1] - 1.1, p[0], p[1] + 0.2] : [p[0] - 0.5, p[1] - 0.4, p[0] + 0.6, p[1] - 0.9]);
+  }
+  lines(glyphs, 'rgba(70,45,20,0.6)', 0.45);
+  for (let k = 0; k < 3; k++) {                                     // درج المدخل نحو المنصة
+    const p = outP(onFace(Fr, R, A, 0.46, 0), OUT_R, 1.6 + k * 1.6);
+    box(p[0], p[1] + k * 0.5, 3.6 - k * 0.2, 1.8 - k * 0.1, 1.4 - k * 0.35, '#b39261', '#d8bc86', '#e6cc98');
+  }
+  for (const [px, py, rx] of [[x - 22, y + 7.5, 7], [x + 2, y + 16.5, 9], [x + 24, y + 6.5, 6]]) {
+    el(px, py, rx, rx * 0.3, '#d9bd86');
+    el(px - rx * 0.2, py - rx * 0.08, rx * 0.6, rx * 0.17, '#e9d3a4');
+  }
+  const sx = x - 15, sy = y + 9;                                    // أبو الهول: جسد رابض ورأس بغطاء مخطط
+  box(sx, sy, 3.2, 1.6, 2.2, '#a8865a', '#c9a874', '#d6b886');
+  box(sx + 2.2, sy + 1.1, 1.3, 0.65, 4.4, '#a8865a', '#c9a874', '#d6b886');
+  poly([[sx + 0.6, sy - 3.4], [sx + 2.2, sy - 5.6], [sx + 3.8, sy - 2.6], [sx + 3.5, sy - 1.6], [sx + 0.9, sy - 2.6]], '#d6b886');
+  ln(sx + 1.3, sy - 3.9, sx + 3.4, sy - 2.4, '#3f6aa0', 0.6);
+  ln(sx + 1, sy - 3.1, sx + 3.2, sy - 1.8, '#3f6aa0', 0.5);
+  circ(sx + 2.4, sy - 3.4, 0.35, '#3a2a18');
 }
 
 // --- دوجو الساموراي (إيدو): منصة بدرجات، وقاعة خشب داكن بألواح بيضاء وأعمدة حمراء، وسقفان مقعّران
@@ -85,6 +182,7 @@ function dojo(x, y, i, j) {
   box(x, y + 2, 33, 16.5, 5, '#77736b', '#96918a', '#a8a39a');
   box(x + 9, y + 9.5, 7, 3.5, 2.5, '#77736b', '#96918a', '#a8a39a');              // درجات المدخل
   const by = y - 3, w = 25, d = 12.5, h = 15;
+  box(x, by, w + 3, (w + 3) / 2, 1.3, '#4e3322', '#6b4a32', '#80593c');          // 12د: شرفة خشبية (إنغاوا) حول القاعة
   box(x, by, w, d, h, '#4a2e22', '#5e3b2a');
   for (let k = 0; k < 4; k++) {
     wR(x, by, w, d, 0.06 + k * 0.235, 2.5, 0.18, 9.5, '#f0e7cf');
@@ -119,6 +217,22 @@ function dojo(x, y, i, j) {
     circ(px + (px < x ? -3 : 3), py - 29, 2.2, '#f3ead8');
     circ(px + (px < x ? -3 : 3), py - 29, 1.1, '#b3262f');
   }
+  // 12د: ستارة نورن فوق المدخل، وحامل سيوف خشبية، وطبل تايكو، وشجرة بونساي في أصيص
+  poly([qr(0.3, h - 2.6), qr(0.47, h - 2.6), qr(0.47, h - 6.4), qr(0.385, h - 7), qr(0.3, h - 6.4)], '#243a5e');
+  { const p = qr(0.385, h - 4.4); circ(p[0], p[1], 1.1, '#f3ead8'); }
+  const rx = x + 17, ry = y + 4.5;
+  ln(rx - 2.6, ry + 1.3, rx - 2.6, ry - 4.6, WOODS[0], 0.9); ln(rx + 2.6, ry - 1.3, rx + 2.6, ry - 7.2, WOODS[0], 0.9);
+  ln(rx - 3, ry - 3.6, rx + 3, ry - 6.6, WOODS[1], 1);
+  lines([0, 1, 2].map(k => [rx - 1.8 + k * 1.8, ry + 0.6 - k * 0.9, rx - 1 + k * 1.8, ry - 7.4 - k * 0.9]), '#c9a46a', 0.8);
+  const kx = x - 9, ky = y + 8;
+  ln(kx - 2, ky + 0.6, kx - 1, ky - 2.4, WOODS[0], 0.8); ln(kx + 2, ky + 0.6, kx + 1, ky - 2.4, WOODS[0], 0.8);
+  el(kx, ky - 4.4, 3, 2.6, '#8a2a1e');
+  el(kx + 0.9, ky - 4.4, 1.6, 2.4, '#e8dcc0');
+  lines([[kx - 2.2, ky - 6, kx - 2.2, ky - 2.8], [kx + 0.4, ky - 6.7, kx + 0.4, ky - 2.1]], '#d4af4f', 0.4);
+  const bx = x - 26, bb = y + 2;
+  box(bx, bb, 2.6, 1.3, 2, '#4a5a6a', '#5f7080', '#6e7f8e');
+  ln(bx, bb - 2, bx - 1, bb - 6, '#5a3a22', 1); ln(bx - 1, bb - 6, bx + 2, bb - 8, '#5a3a22', 0.8);
+  el(bx - 2.2, bb - 6.4, 3, 1.3, '#3f6a3a'); el(bx + 2, bb - 8.4, 2.6, 1.1, '#4f7a44'); el(bx - 0.4, bb - 9.8, 2, 0.9, '#5e8a50');
 }
 
 // --- دار العلاج (كايفنغ): مصطبة حجرية، وقاعة حمراء بنوافذ مشبكة، وسقف أخضر مزجج بأطراف مرفوعة
@@ -142,8 +256,12 @@ function clinic(x, y, i, j) {
     ln(a[0], a[1], b[0], b[1], '#6e1d18', 1.6);
     ln(c[0], c[1], e[0], e[1], '#5a1814', 1.6);
   }
-  ridgeRoof(x, by, w, d, h, 12, { ov: 7, sag: 2.8, flare: 4, front: '#3f8f6a', front2: '#367d5c', end: '#327256', end2: '#2b6249',
+  const roof = ridgeRoof(x, by, w, d, h, 12, { ov: 7, sag: 2.8, flare: 4, front: '#3f8f6a', front2: '#367d5c', end: '#327256', end2: '#2b6249',
                                   back: '#22503b', tile: 'rgba(10,40,25,0.35)', ridge: '#d1a33f', ridgeW: 1.8 });
+  for (const P of [roof.P1, roof.P2]) {                              // 12د: تنينان ذهبيان على طرفي السنام
+    poly([[P[0], P[1]], [P[0] - 1.4, P[1] - 4.2], [P[0] + 0.4, P[1] - 2.6], [P[0] + 1.6, P[1] - 4.6], [P[0] + 1.4, P[1] - 0.4]], '#e2bd4f');
+    circ(P[0] - 1.3, P[1] - 4.4, 0.5, '#f6d878');
+  }
   for (const u of [0.18, 0.82]) {                                    // فوانيس حمراء تحت الحافة
     const p = qr(u, h + 1);
     ln(p[0], p[1] + 3, p[0], p[1] - 1, '#3a2a20', 0.5);
@@ -159,12 +277,32 @@ function clinic(x, y, i, j) {
     box(px, py, 3.5, 1.8, 5, '#6b4a2e', '#7e5836', '#8a6440');
     for (let k = 0; k < 3; k++) circ(px - 2 + k * 2, py - 6 - (k % 2), 1.4, ['#5e9a4a', '#7cb35a', '#4f8a3e'][k]);
   }
+  // 12د: لوحة رأسية بحروف ذهبية، وجرار دواء من الخزف، ومبخرة برونزية أمام القاعة يتصاعد دخانها
+  poly([qr(0.315, 12.4), qr(0.385, 12.4), qr(0.385, 4.2), qr(0.315, 4.2)], '#2a1a12');
+  lines([0, 1, 2].map(k => { const a = qr(0.335, 11 - k * 2.6), b = qr(0.365, 10.4 - k * 2.6); return [a[0], a[1], b[0], b[1]]; }), '#e2bd4f', 0.6);
+  [['#3f6aa0', x - 18, y + 5], ['#e8e2d4', x - 15, y + 6.5], ['#7a4a2a', x - 12, y + 8]].forEach(([c, px, py]) => jar(px, py, 1.3, c));
+  ln(x - 15.6, y + 3.6, x - 14.4, y + 3.6, '#3f6aa0', 0.5);
+  const ix = x + 14, iy = y + 6;
+  lines([[ix - 1.6, iy, ix - 1.2, iy - 1.6], [ix + 1.6, iy - 0.4, ix + 1.2, iy - 1.8], [ix, iy + 0.8, ix, iy - 1.2]], '#5a4a2a', 0.6);
+  el(ix, iy - 2.6, 2.4, 1.6, '#8a6a2a');
+  el(ix, iy - 3.6, 2.4, 0.9, '#b08a3a');
+  lines([[ix - 1.8, iy - 3.6, ix - 2.4, iy - 5.2], [ix + 1.8, iy - 3.6, ix + 2.4, iy - 5.2]], '#8a6a2a', 0.5);
+  const c = getCtx();                                                // الدخان: خطان متموجان شفافان
+  c.beginPath();
+  c.moveTo(ix - 0.4, iy - 4); c.bezierCurveTo(ix - 2, iy - 7, ix + 1.4, iy - 9, ix - 0.6, iy - 12.5);
+  c.moveTo(ix + 0.6, iy - 4); c.bezierCurveTo(ix + 2, iy - 6.5, ix - 0.6, iy - 8.5, ix + 1, iy - 11);
+  c.strokeStyle = 'rgba(235,235,230,0.45)'; c.lineWidth = 0.6; c.stroke();
 }
 
 // --- الحصن (غوندر): سور قاعدة، وبرج أسطواني خلفي أعلى، وقلعة مربعة بشُرَف ونوافذ مقوسة، وبرجان أماميان
 // بقباب، وبوابة خشبية، وراية خضراء بحافة ذهبية ---
 function roundTower(x, y, r, h) {
   cyl(x, y, r, h, '#76603f', '#a3845b');
+  const segs = [];                                                   // 12د: مداميك وفتحتا رمي
+  for (let v = 4; v < h - 2; v += 4) segs.push([x - r * 0.95, y - v + r * 0.12, x + r * 0.95, y - v + r * 0.12]);
+  lines(segs, 'rgba(60,45,25,0.3)', 0.35);
+  rc(x - 0.5, y + r * 0.5 - h * 0.62, 1, 3.2, '#2a2018');
+  rc(x + r * 0.5, y + r * 0.35 - h * 0.38, 0.9, 3, '#2a2018');
   for (let k = 0; k < 6; k++) {                                      // شُرَف حول القمة
     const a = Math.PI * (0.08 + k * 0.17);
     box(x + Math.cos(a) * r * 0.92, y - h + Math.sin(a) * r * 0.46, 1, 0.5, 2.4, '#76603f', '#a3845b', '#8f7550');
@@ -188,8 +326,12 @@ function fortress(x, y, i, j) {
   poly([[back[0], back[1] - 12], [back[0] + 9, back[1] - 10], [back[0], back[1] - 7]], '#2e8b57');
   ln(back[0], back[1] - 12, back[0] + 9, back[1] - 10, '#d9b24a', 0.6);
   const w = 20, d = 10, h = 28;
+  masonry(qL(x, y + 2, 33, 16.5), 33, 6, 2, 'rgba(50,38,22,0.3)');      // 12د: مداميك السور والقلعة
+  masonry(qR(x, y + 2, 33, 16.5), 33, 6, 2, 'rgba(60,45,25,0.26)');
   box(x, by, w, d, h, '#7b6346', '#9c7d57', '#8b6f4d');
   const ql = qL(x, by, w, d), qr = qR(x, by, w, d);
+  masonry(ql, w, h, 3.5, 'rgba(50,38,22,0.28)');
+  masonry(qr, w, h, 3.5, 'rgba(60,45,25,0.24)');
   for (let k = 0; k < 6; k++) {                                      // شُرَف القلعة
     const a = ql(0.04 + k * 0.17, h), b = qr(0.04 + k * 0.17, h);
     box(a[0], a[1], 1.4, 0.7, 2.4, '#7b6346', '#9c7d57', '#8b6f4d');
@@ -201,6 +343,12 @@ function fortress(x, y, i, j) {
   }
   arch(qr, 0.38, 0.24, 11, '#3a2616');                               // البوابة
   arch((a, b) => qr(a + 0.02, b), 0.38, 0.2, 9.6, '#6b4526');
+  for (const u of [0.31, 0.69]) { const p = outP(qr(u, 6), OUT_R, 1); torch(p[0], p[1] + 2, 3); }   // 12د: مشعلا البوابة
+  const b0 = ql(0.36, 16.6), b1 = ql(0.64, 16.6), o0 = outP(b0, OUT_L, 2.4), o1 = outP(b1, OUT_L, 2.4);   // شرفة خشبية
+  poly([b0, b1, o1, o0], '#5a3e26');
+  lines([[o0[0], o0[1], o0[0], o0[1] - 3], [o1[0], o1[1], o1[0], o1[1] - 3], [o0[0], o0[1] - 3, o1[0], o1[1] - 3],
+         [(o0[0] + o1[0]) / 2, (o0[1] + o1[1]) / 2, (o0[0] + o1[0]) / 2, (o0[1] + o1[1]) / 2 - 3],
+         [o0[0], o0[1] + 0.2, b0[0] + 0.4, b0[1] + 3], [o1[0], o1[1] + 0.2, b1[0] + 0.4, b1[1] + 3]], '#3e2a18', 0.6);
   roundTower(x - 22, by + 4, 6.5, 32);
   roundTower(x + 22, by + 4, 6.5, 32);
 }
@@ -244,6 +392,25 @@ function khartoum(x, y, i, j) {
   }
   ln(x, by - H - 9.5, x, by - H - 22, '#2b2420', 0.9);               // راية
   poly([[x, by - H - 22], [x + 9, by - H - 20], [x, by - H - 17.5]], '#c98a3a');
+  // 12د: عوارض خشبية بارزة من الطين (طراز الساحل)، وإطار أبيض للبوابة، ودروع جلدية على الشرفة، وجرار ماء ورماح عند القاعدة
+  const sticks = [];
+  for (const t of [0.16, 0.4, 0.63, 0.86]) for (const u of [0.18, 0.5, 0.82]) {
+    const pr = lerp(lerp(BF, BR, u), lerp(TF, TR, u), t), pl = lerp(lerp(BL, BF, u), lerp(TL, TF, u), t);
+    sticks.push([pr[0], pr[1], pr[0] + 1.8, pr[1] + 0.9], [pl[0], pl[1], pl[0] - 1.8, pl[1] + 0.9]);
+  }
+  lines(sticks, '#5a3e26', 0.75);
+  lines([[g0[0], g0[1], g0[0], g0[1] - 9], [g0[0], g0[1] - 9, (g0[0] + g1[0]) / 2, (g0[1] + g1[1]) / 2 - 12],
+         [(g0[0] + g1[0]) / 2, (g0[1] + g1[1]) / 2 - 12, g1[0], g1[1] - 9], [g1[0], g1[1] - 9, g1[0], g1[1]]], '#ecd6b6', 0.8);
+  for (const [q, u, c] of [[ql, 0.3, '#7a2a1e'], [ql, 0.72, '#efe2c8'], [qr, 0.28, '#2a2420'], [qr, 0.7, '#7a2a1e']]) {
+    const p = q(u, 2.6);
+    el(p[0], p[1], 1.2, 1.6, c);
+    ln(p[0], p[1] - 1.4, p[0], p[1] + 1.4, 'rgba(0,0,0,0.3)', 0.4);
+  }
+  for (const [px, py] of [[x + 12, y + 9.6], [x + 15.6, y + 8], [x + 9, y + 11]]) jar(px, py, 1.6, '#a8643a');
+  const sp = outP(g0, OUT_R, 1.5);
+  lines([[sp[0] - 1, sp[1] + 1, sp[0] + 0.6, sp[1] - 12], [sp[0] + 0.4, sp[1] + 1.4, sp[0] + 1.8, sp[1] - 11]], '#6b4a2e', 0.6);
+  poly([[sp[0] + 0.6, sp[1] - 12], [sp[0] + 0.1, sp[1] - 14.4], [sp[0] + 1.1, sp[1] - 12.2]], '#c8ccd2');
+  poly([[sp[0] + 1.8, sp[1] - 11], [sp[0] + 1.4, sp[1] - 13.4], [sp[0] + 2.3, sp[1] - 11.2]], '#c8ccd2');
 }
 
 // نقطة على السقف الأمامي مما يعيده ridgeRoof: u على الحافة من L إلى F، وt من الحافة (0) إلى السنام (1)
@@ -272,6 +439,10 @@ function policeHQ(x, y, i, j) {
   arch((a, b) => gr(a + 0.025, b), 0.38, 0.19, 7.4, '#6b4526');
   for (const u of [0.1, 0.74]) wR(x, by, w, d, u, 3.5, 0.13, 4.5, '#2c3440');
   for (const u of [0.12, 0.44, 0.76]) wL(x, by, w, d, u, 3.5, 0.13, 4.5, '#262d38');
+  // 12د: مصاريع خضراء للنوافذ الحجرية
+  for (const [q, u] of [[gr, 0.1], [gr, 0.74], [gl, 0.12], [gl, 0.44], [gl, 0.76]]) for (const s of [u - 0.055, u + 0.135]) {
+    poly([q(s, 3.5), q(s + 0.05, 3.5), q(s + 0.05, 8), q(s, 8)], q === gr ? '#3f7a52' : '#336844');
+  }
   const s0 = gr(0.34, 9.2), s1 = gr(0.66, 9.2);                                     // لوحة الشرطة الزرقاء
   poly([s0, s1, [s1[0], s1[1] - 2.6], [s0[0], s0[1] - 2.6]], '#2a5ca8');
   ln(s0[0] + 1.2, s0[1] - 1.3, s1[0] - 1.2, s1[1] - 1.3, '#e9eef6', 0.7);
@@ -325,6 +496,25 @@ function policeHQ(x, y, i, j) {
   cone(mx, my - 8, 4.4, 12, '#7e2f22', '#a8432f');
   ln(mx, my - 20, mx, my - 23.5, '#d4af4f', 0.8);
   circ(mx, my - 24, 1, '#d4af4f');
+  // 12د: سيارة شرطة أمام الوجه الأيسر، ولوحة إعلانات ودراجة عند الدرج
+  const cx = x - 15, cy = y + 5.6;
+  el(cx - 2.6, cy + 1, 0.9, 0.55, '#1e1e20'); el(cx + 2.2, cy + 1.6, 0.9, 0.55, '#1e1e20');
+  box(cx, cy, 4.6, 2.3, 2.2, '#c9ccd0', '#e6e8ea', '#f2f3f4');
+  const cl = qL(cx, cy, 4.6, 2.3);
+  poly([cl(0, 0.6), cl(1, 0.6), cl(1, 1.3), cl(0, 1.3)], '#2a5ca8');
+  box(cx + 0.4, cy - 2.2, 2.8, 1.4, 1.6, '#3b4a5a', '#56687a', '#e6e8ea');
+  rc(cx - 0.4, cy - 4.6, 1.6, 0.7, '#3a7ae8');
+  circ(cx - 0.1, cy - 4.4, 0.35, '#bfe0ff');
+  const nx = x + 20, ny = y + 3.4;
+  lines([[nx - 2, ny + 1, nx - 2, ny - 6], [nx + 2, ny - 1, nx + 2, ny - 8]], '#4a3222', 0.8);
+  poly([[nx - 2.4, ny - 2.4], [nx + 2.4, ny - 4.8], [nx + 2.4, ny - 8.4], [nx - 2.4, ny - 6]], '#6b4a2e');
+  for (const [u, v, c] of [[-1.4, -4, '#f4f1ea'], [0.4, -5.2, '#f2d46a'], [-0.6, -6.3, '#f4f1ea']]) {
+    poly([[nx + u - 0.8, ny + v + 0.4], [nx + u + 0.8, ny + v - 0.4], [nx + u + 0.8, ny + v - 1.8], [nx + u - 0.8, ny + v - 1]], c);
+  }
+  const bx = x + 17, bb = y + 6.6, wheel = (px, py) => { const c = getCtx(); c.beginPath(); c.ellipse(px, py, 1.2, 1.4, 0, 0, TAU);
+    c.strokeStyle = '#1e1e22'; c.lineWidth = 0.4; c.stroke(); };
+  wheel(bx - 1.6, bb); wheel(bx + 1.6, bb - 0.8);
+  lines([[bx - 1.6, bb, bx, bb - 1.6], [bx, bb - 1.6, bx + 1.6, bb - 0.8], [bx, bb - 1.6, bx - 0.3, bb - 2.6], [bx + 1.6, bb - 0.8, bx + 1.3, bb - 2.8]], '#2a5ca8', 0.45);
 }
 
 // قرص على وجه مائل (وجه الساعة): q دالة الوجه، ومركزه (a, b)، ونصف قطره r بكسل، وw عرض الوجه
@@ -380,6 +570,23 @@ function clock(x, y, i, j) {
   for (const [px, py] of [[x - 12, ty - 2.2], [x, ty - 2.2 + 6], [x + 12, ty - 2.2]]) cone(px, py, 1.5, 8, '#a8916c', '#c4ad86');
   ln(x, ty - 26.2, x, ty - 32, '#d4af4f', 0.9);
   circ(x, ty - 28.6, 1.1, '#e6c35a');
+  // 12د: درابزين حديدي فيكتوري على حافتي المنصة الأماميتين، وصندوق بريد أحمر، ومقعد خشبي
+  const rail = [], pl = qL(x, y + 2, 31, 15.5), pr = qR(x, y + 2, 31, 15.5);
+  for (const [q, u0, u1] of [[pl, 0.06, 0.78], [pr, 0.22, 0.94]]) {
+    const a = q(u0, 3), b = q(u1, 3);
+    rail.push([a[0], a[1] - 2.4, b[0], b[1] - 2.4], [a[0], a[1] - 0.9, b[0], b[1] - 0.9]);
+    for (let u = u0; u <= u1 + 0.001; u += (u1 - u0) / 10) { const p = q(u, 3); rail.push([p[0], p[1], p[0], p[1] - 2.9]); }
+  }
+  lines(rail, '#1e2126', 0.45);
+  const mx = x - 10, my = y + 7.4;
+  cyl(mx, my, 1.15, 4.2, '#8e1c1c', '#c42a2a', '#d63a3a');
+  dome(mx, my - 4.2, 1.2, '#2a2a2c', '#1e1e20', null);
+  rc(mx - 0.5, my - 3.4, 1, 0.35, '#1e1e20');
+  const ex = x + 11, ey = y + 7.4;
+  box(ex, ey - 1.4, 3.4, 1.7, 0.5, '#5a3a22', '#7a5434', '#8a6440');
+  lines([[ex - 3, ey - 0.2, ex - 3, ey - 1.6], [ex + 3, ey - 1.6, ex + 3, ey - 3], [ex - 3.4, ey - 3.8, ex + 3.4, ey - 7.2],
+         [ex - 3.4, ey - 2.6, ex - 3.4, ey - 3.8], [ex + 3.4, ey - 6, ex + 3.4, ey - 7.2]], '#1e2126', 0.5);
+  lines([[ex - 3.2, ey - 3.1, ex + 3.2, ey - 6.3]], '#7a5434', 0.9);
 }
 
 // حزام أحمر بنقش متدرج فيروزي أعلى الجدارين، وإزار أحمر أسفلهما (المجمع السكني)
@@ -438,6 +645,15 @@ function complex(x, y, i, j) {
     wR(x, hy, hw, hd, u + 0.06, 14.5, 0.12, 4.2, '#33241b');
   }
   merlons(x, hy, hw, hd, hh, 6);
+  { // 12د: جدارية بشمس ذهبية ونقش متدرج على الوجه الأيسر للقاعة
+    const q = qL(x, hy, hw, hd);
+    poly([q(0.04, 3.6), q(0.34, 3.6), q(0.34, 11.4), q(0.04, 11.4)], '#b8503a');
+    const s = q(0.19, 7.5);
+    lines([0, 1, 2, 3, 4, 5, 6, 7].map(k => { const t = k * TAU / 8; return [s[0], s[1], s[0] + Math.cos(t) * 3.2, s[1] + Math.sin(t) * 3.2]; }), '#f2c14e', 0.5);
+    circ(s[0], s[1], 1.8, '#f2c14e');
+    circ(s[0], s[1], 0.9, '#36b2a8');
+    for (const u of [0.06, 0.27]) poly([q(u, 4.2), q(u + 0.04, 4.2), q(u + 0.04, 10.8), q(u, 10.8)], '#36b2a8');
+  }
   const fy = y + 2, fw = 14, fd = 7, fh = 11;
   box(x, fy, fw, fd, fh, A[0], A[1], A[2]);                                          // الجناح الأمامي
   aztecBand(x, fy, fw, fd, fh);
@@ -457,68 +673,208 @@ function complex(x, y, i, j) {
   featherStandard(x + hw - 2, ry - 0.5, 13);
   nopal(x - 25, y + 0.5);
   nopal(x + 25, y + 0.5);
+  // 12د: مجمرتان نحاسيتان على سطح القاعة، ورأسا أفعى ريشية من الحجر على حافة الدرجة، وذرة في أصيصين
+  for (const [px, py] of [[x + 1, y - 21.5], [x + 13, y - 26]]) {
+    el(px, py - 1.6, 2.2, 1, '#8a4a2a');
+    el(px, py - 2.2, 2.2, 0.8, '#b8683a');
+    poly([[px - 1.6, py - 2.2], [px - 0.4, py - 6.6], [px + 0.4, py - 4.4], [px + 1, py - 7.2], [px + 1.6, py - 2.2]], '#ff8a2a');
+    poly([[px - 0.8, py - 2.4], [px, py - 5], [px + 0.8, py - 2.4]], '#ffe08a');
+  }
+  for (const [px, py, s] of [[x - 7.5, y + 11, -1], [x + 7.5, y + 11, 1]]) {
+    circ(px, py - 2.6, 2.4, '#3f9b5a');
+    for (let k = 0; k < 5; k++) { const t = Math.PI * (1.05 + k * 0.22); circ(px + Math.cos(t) * 2.4, py - 2.6 + Math.sin(t) * 2.4, 0.7, k % 2 ? '#36b2a8' : '#c8392f'); }
+    box(px + s * 0.8, py, 1.9, 0.95, 3.2, '#7d8a6c', '#9aa888', '#aab894');
+    circ(px + s * 1.6, py - 2.2, 0.45, '#f2c14e');
+    ln(px + s * 0.6, py - 0.9, px + s * 2.4, py - 0.4, '#3a2a1c', 0.5);
+  }
+  for (const [px, py] of [[x - 18, y + 1.5], [x + 18, y + 0.5]]) {
+    box(px, py, 1.8, 0.9, 1.8, '#8a4a32', '#a85c3e', '#6b3a28');
+    lines([[px - 0.6, py - 1.8, px - 1, py - 9], [px + 0.6, py - 1.8, px + 1.2, py - 8.4]], '#4f8a3e', 0.6);
+    lines([[px - 0.8, py - 5, px - 2.8, py - 6.4], [px + 0.9, py - 4.6, px + 2.8, py - 6.2], [px - 0.9, py - 7, px + 0.4, py - 8.6]], '#5e9a4a', 0.5);
+    el(px + 1.1, py - 7.4, 0.5, 1.2, '#e8c23a');
+  }
 }
 
-// --- تمثال ريو: تل من الغرانيت تكسو الغابة سفحه وتعلوه صخرة عارية، وعلى قمته منصة وقاعدة بطراز آرت ديكو،
-// والتمثال بذراعين مفتوحتين من الحجر الفاتح ---
+// --- معبد ريو (بطلب المستخدم بدل التمثال، بمزاياه نفسها): أطلال كنيسة إرسالية من الحجر الرملي الأحمر على مرج،
+// كصور سان ميغيل التي أرسلها: واجهة بطابقين بأعمدة ملتصقة وثلاثة أبواب وجبهة مثلثة بأوانٍ حجرية، وحلزونان داكنان
+// على جانبي الطابق الأعلى، وبرج أجراس على يسارها بفتحات مقوسة وقمة مكسورة، ورواق أعمدة أمامها، وصحن بلا سقف
+// بجدران مكسورة ونوافذ مقوسة، وأساسات منخفضة وحجارة متناثرة وشجرتان خلفها.
+// a وb بالمربعات على محوري i وj من وسط الكتلة، وh الارتفاع بالبكسل فوق المرج؛ الضوء من اليمين كبقية المباني ---
+const CH = { shade: '#a45537', lit: '#c46d45', top: '#d6936a', pil: '#b86745', dark: '#2b1a12', inner: '#5a2f1f',
+             edge: 'rgba(255,214,170,0.55)', ledge: ['#b8694a', '#d07f56', '#e0a077'], stone: ['#9a5a3c', '#b8714d', '#c98a64'] };
 function statue(x, y, i, j) {
-  el(x, y + 7, 38, 17, 'rgba(25,30,20,0.24)');
-  const P = [x + 1, y - 30];
-  // نقطة على سطح التل: u من −1 (يسار) إلى 1 (يمين) على قوس القاعدة، وt من القاعدة (0) إلى القمة (1)، بانتفاخ يجعله قبة
-  const S = (u, t) => {
-    const bx = x + 34 * u, by = y + 1 + 16 * Math.sqrt(Math.max(0, 1 - u * u)), s = Math.sin(Math.PI * t);
-    return [bx + (P[0] - bx) * t + 7 * u * s, by + (P[1] - by) * t - 6 * s];
+  const G = 1.4, c = getCtx();
+  const W = (a, b, h = 0) => [x + (a - b) * TILE_HALF_W, y + (a + b) * TILE_HALF_H - h - G];
+  const onJ = (b, a0, a1) => (u, h) => W(a0 + (a1 - a0) * u, b, h);       // وجه يواجه +j: في الظل
+  const onI = (a, b1, b0) => (u, h) => W(a, b1 + (b0 - b1) * u, h);       // وجه يواجه +i: مضاء، u من الأمام للخلف
+  const up = (q, v) => (u, h) => q(u, h + v);
+  const quad = (q, u0, u1, h0, h1, col) => poly([q(u0, h0), q(u1, h0), q(u1, h1), q(u0, h1)], col);
+  const prism = (a0, a1, b0, b1, h0, h1, cl, cr, ct) => {
+    poly([W(a0, b1, h0), W(a1, b1, h0), W(a1, b1, h1), W(a0, b1, h1)], cl);
+    poly([W(a1, b1, h0), W(a1, b0, h0), W(a1, b0, h1), W(a1, b1, h1)], cr);
+    poly([W(a0, b0, h1), W(a1, b0, h1), W(a1, b1, h1), W(a0, b1, h1)], ct);
   };
-  // ما بين u0 وu1 من الحد السفلي tb(u) حتى القمة
-  const side = (u0, u1, tb, color) => {
-    const pts = [];
-    for (let k = 0; k <= 12; k++) { const u = u0 + (u1 - u0) * k / 12; pts.push(S(u, tb(u))); }
-    for (let k = 1; k <= 10; k++) pts.push(S(u1, tb(u1) + (1 - tb(u1)) * k / 10));
-    for (let k = 9; k > 0; k--) pts.push(S(u0, tb(u0) + (1 - tb(u0)) * k / 10));
-    poly(pts, color);
+  const ledge = (a0, a1, b0, b1, h0, h1, o = 0.03) => prism(a0 - o, a1 + o, b0 - o, b1 + o, h0, h1, ...CH.ledge);
+  // حجارة الوجه: مداميك أفقية وكتل أفتح وأغمق، مواضعها ثابتة لكل خريطة
+  const masonry = (q, u0, u1, h0, h1, seed, n) => {
+    c.beginPath();
+    for (let h = h0 + 2.6; h < h1 - 0.5; h += 2.6) { const p = q(u0, h), r = q(u1, h); c.moveTo(p[0], p[1]); c.lineTo(r[0], r[1]); }
+    c.strokeStyle = 'rgba(70,30,15,0.22)';
+    c.lineWidth = 0.45;
+    c.stroke();
+    for (let k = 0; k < n; k++) {
+      const u = u0 + (u1 - u0 - 0.08) * hsh(i, j, seed + k), h = h0 + (h1 - h0 - 2.6) * hsh(i, j, seed + 40 + k);
+      quad(q, u, u + 0.04 + 0.05 * hsh(i, j, seed + 80 + k), h, h + 2.4, k % 3 ? 'rgba(255,200,160,0.14)' : 'rgba(40,20,10,0.2)');
+    }
   };
-  const ground = () => 0, rock = (u) => 0.42 + 0.07 * Math.sin(u * 7 + 1.3);
-  side(-1, 0, ground, '#3f6a3a');                                                   // الغابة
-  side(0, 1, ground, '#55874a');
-  side(-1, 0, rock, '#76746c');                                                     // الصخرة العارية
-  side(0, 1, rock, '#9a978d');
-  const edge = [];                                                                   // حد الغابة المتعرج
-  for (let k = 0; k <= 20; k++) { const u = -1 + k / 10; edge.push(S(u, rock(u) - 0.02)); }
-  edge.forEach(([px, py], k) => circ(px, py, 2.3, k < 10 ? '#3a6334' : '#4f8044'));
-  for (let k = 0; k < 44; k++) {                                                     // تيجان الأشجار، مواضعها ثابتة لكل خريطة
-    const u = -0.95 + 1.9 * hsh(i, j, 900 + k), t = 0.04 + (rock(u) - 0.12) * hsh(i, j, 940 + k);
-    const [px, py] = S(u, t), r = 1.8 + hsh(i, j, 980 + k) * 1.3;
-    circ(px + 0.5, py + 0.6, r, u < 0 ? '#2c4e28' : '#3d6c36');                          // ظل التاج
-    circ(px, py, r, u < 0 ? (k % 2 ? '#3b6635' : '#4a7a42') : (k % 2 ? '#6aa055' : '#579048'));
+  // جدار مكسور على الوجه q: حافته العليا درجات حجرية بارتفاع top(u) ± jag/2، وخط فاتح عليها؛ يعيد الارتفاعات
+  const ruin = (q, n, top, jag, seed, col) => {
+    const hs = [];
+    for (let k = 0; k < n; k++) hs.push(Math.max(1, top((k + 0.5) / n) + (hsh(i, j, seed + k) - 0.5) * jag));
+    const pts = [q(0, 0), q(1, 0)];
+    for (let k = n - 1; k >= 0; k--) pts.push(q((k + 1) / n, hs[k]), q(k / n, hs[k]));
+    poly(pts, col);
+    c.beginPath();
+    pts.slice(2).forEach(([px, py], k) => (k ? c.lineTo(px, py) : c.moveTo(px, py)));
+    c.strokeStyle = CH.edge;
+    c.lineWidth = 0.7;
+    c.stroke();
+    return hs;
+  };
+  // سمك الجدار المكسور من فوق: شريط بين وجهه الخارجي qo والداخلي qi على كل درجة
+  const ruinTop = (qo, qi, hs) => hs.forEach((h, k) => {
+    const u0 = k / hs.length, u1 = (k + 1) / hs.length;
+    poly([qo(u0, h), qo(u1, h), qi(u1, h), qi(u0, h)], CH.top);
+  });
+  const tree = (a, b, s) => {
+    const [px, py] = W(a, b);
+    el(px + 2, py + 1, 6 * s, 2.6 * s, 'rgba(20,35,15,0.25)');
+    ln(px, py, px, py - 9 * s, '#5a4128', 1.6 * s);
+    for (const [dx, dy, r, col] of [[-3, -10, 4.2, '#3d6a32'], [3, -11, 4, '#4d7d3c'], [0, -14, 4.6, '#5b8d45'], [1.5, -12.5, 2.4, '#7aa95a']])
+      circ(px + dx * s, py + dy * s, r * s, col);
+  };
+
+  // المرج بحافة حجرية، وبقع العشب، والأساسات المنخفضة والحجارة المتناثرة، وشجرتان خلف الكنيسة
+  el(x, y + 8, 40, 18, 'rgba(30,40,20,0.2)');
+  prism(-0.97, 0.97, -0.97, 0.97, -G, 0, '#7a5b3c', '#94714b', '#6d9846');
+  for (let k = 0; k < 30; k++) {
+    const [px, py] = W(-0.9 + 1.8 * hsh(i, j, 1200 + k), -0.9 + 1.8 * hsh(i, j, 1240 + k));
+    el(px, py, 2 + 1.4 * hsh(i, j, 1280 + k), 0.9, k % 2 ? 'rgba(45,85,25,0.28)' : 'rgba(180,215,120,0.24)');
   }
-  for (const u of [-0.45, -0.2, 0.25, 0.55]) {                                       // شقوق الصخرة
-    const a = S(u, rock(u) + 0.06), b = S(u + 0.08, 0.9);
-    ln(a[0], a[1], b[0], b[1], 'rgba(255,255,255,0.22)', 0.6);
+  // الحجارة: ما خلف الكنيسة يُرسم قبلها، وما أمامها (يمين الصحن وأمام البرج) بعدها مع الأساسات
+  const stones = [];
+  for (let k = 0; k < 48 && stones.length < 12; k++) {
+    const a = -0.92 + 1.84 * hsh(i, j, 1320 + k), b = -0.92 + 1.84 * hsh(i, j, 1370 + k);
+    if ((a > -0.42 && a < 0.8) || (a > -0.9 && b > 0.02 && b < 0.68)) continue;   // لا حجارة تحت الكنيسة وبرجها
+    stones.push([a, b, 0.035 + 0.03 * hsh(i, j, 1420 + k), 1 + 1.2 * hsh(i, j, 1470 + k)]);
   }
-  // المنصة والقاعدة
-  el(P[0], P[1] + 1.2, 9, 3.8, '#8f8b80');
-  el(P[0], P[1], 8.4, 3.4, '#bdb7a8');
-  const pedestal = P[1] - 0.5;
-  box(P[0], pedestal, 3.4, 1.7, 9, '#cbc4b4', '#e4ded0', '#dcd6c8');
-  box(P[0], pedestal - 9, 2.5, 1.25, 2, '#cbc4b4', '#e4ded0', '#dcd6c8');
-  // التمثال: حد داكن حوله ليُقرأ على الأرض الفاتحة، ثم الثوب والذراعان المفتوحتان والرأس
-  const fx = P[0], fy = pedestal - 11, sh = fy - 20, c = getCtx();
-  c.beginPath();
-  [[fx - 15.5, sh], [fx + 15.5, sh], [fx + 15.5, sh + 2.6], [fx + 2.6, sh + 6], [fx + 3, fy], [fx - 3, fy],
-   [fx - 2.6, sh + 6], [fx - 15.5, sh + 2.6]].forEach(([px, py], k) => (k ? c.lineTo(px, py) : c.moveTo(px, py)));
-  c.closePath();
-  c.moveTo(fx + 2.4, sh - 3);
-  c.arc(fx, sh - 3, 2.4, 0, TAU);
-  c.strokeStyle = 'rgba(55,55,50,0.55)';
-  c.lineWidth = 1.4;
-  c.stroke();
-  poly([[fx - 3, fy], [fx, fy + 0.7], [fx, sh], [fx - 2.5, sh]], '#cdc7b9');
-  poly([[fx, fy + 0.7], [fx + 3, fy], [fx + 2.5, sh], [fx, sh]], '#f1ede4');
-  poly([[fx - 15.5, sh], [fx, sh - 0.5], [fx, sh + 4], [fx - 2.6, sh + 6], [fx - 15.5, sh + 2.6]], '#cdc7b9');
-  poly([[fx, sh - 0.5], [fx + 15.5, sh], [fx + 15.5, sh + 2.6], [fx + 2.6, sh + 6], [fx, sh + 4]], '#f1ede4');
-  ln(fx, sh + 6, fx, fy, 'rgba(0,0,0,0.12)', 0.5);                                   // ثنية الثوب
-  circ(fx, sh - 3, 2.4, '#f1ede4');
-  el(fx - 0.9, sh - 3, 1.2, 2.1, 'rgba(0,0,0,0.12)');
+  const stone = ([a, b, s, h]) => prism(a, a + s * 1.4, b, b + s, 0, h, ...CH.stone);
+  const ahead = ([a, b]) => a >= 0.8 || b > 0.68;
+  stones.filter((st) => !ahead(st)).forEach(stone);
+  tree(-0.85, -0.85, 1.2);
+
+  const aW = -0.45, aE = 0.78, bF = 0.55, bB = -0.95, T = 0.07;
+  // برج الأجراس: ثلاثة طوابق بأفاريز، وفتحات مقوسة، وقمة مكسورة بعمودين، بارتفاع الجبهة تقريباً كما في الصور
+  const t0 = -0.95, t1 = aW, tb0 = 0.08, tb1 = 0.62;
+  prism(t0, t1, tb0, tb1, 0, 24, '#9c4f33', '#c06b44', CH.top);
+  masonry(onJ(tb1, t0, t1), 0, 1, 0, 24, 1600, 8);
+  masonry(onI(t1, tb1, tb0), 0, 1, 0, 24, 1650, 8);
+  ledge(t0, t1, tb0, tb1, 24, 26.5);
+  prism(t0, t1, tb0, tb1, 26.5, 36, '#9c4f33', '#c06b44', CH.top);
+  arch(up(onJ(tb1, t0, t1), 28), 0.3, 0.4, 7, CH.dark);
+  arch(up(onI(t1, tb1, tb0), 28), 0.3, 0.4, 7, '#3a2216');
+  ledge(t0, t1, tb0, tb1, 36, 38);
+  const s0 = t0 + 0.06, s1 = t1 - 0.06, sb0 = tb0 + 0.06, sb1 = tb1 - 0.06;
+  prism(s0, s1, sb0, sb1, 38, 45, '#9c4f33', '#c06b44', CH.top);
+  arch(up(onJ(sb1, s0, s1), 39.3), 0.32, 0.36, 5, CH.dark);
+  arch(up(onI(s1, sb1, sb0), 39.3), 0.32, 0.36, 5, '#3a2216');
+  ledge(s0, s1, sb0, sb1, 45, 46.5, 0.02);
+  prism(s1 - 0.1, s1, sb0, sb0 + 0.1, 46.5, 49, ...CH.ledge);               // بقايا القمة
+  prism(s0, s0 + 0.1, sb1 - 0.1, sb1, 46.5, 50, ...CH.ledge);
+
+  // داخل الصحن بلا سقف: الجدار الخلفي والجدار الأيسر من الداخل، وركام على أرضه
+  ruin(onJ(bB + T, aW + T, aE - T), 8, (u) => 23 - 3 * u, 4, 1500, '#8c482e');
+  const west = onI(aW + T, bF - T, bB + T);
+  ruin(west, 10, (u) => 18 + 5 * u, 5, 1520, '#b8643f');
+  for (const u of [0.22, 0.47, 0.72]) arch(up(west, 7), u, 0.08, 9, CH.inner);
+  for (let k = 0; k < 7; k++) {
+    const a = aW + 0.12 + (aE - aW - 0.3) * hsh(i, j, 1700 + k), b = bB + 0.15 + (bF - bB - 0.3) * hsh(i, j, 1720 + k);
+    prism(a, a + 0.06, b, b + 0.045, 0, 1.2 + hsh(i, j, 1740 + k), ...CH.stone);
+  }
+
+  // الجدار الأيمن من الخارج: مكسور في وسطه، بأعمدة ملتصقة ونوافذ مقوسة، وسمكه ظاهر من فوق
+  const east = onI(aE, bF, bB), eastIn = onI(aE - T, bF, bB);
+  const eh = ruin(east, 12, (u) => 21 + 3 * u - 8 * Math.exp(-(((u - 0.5) / 0.17) ** 2)), 4, 1540, CH.lit);
+  ruinTop(east, eastIn, eh);
+  masonry(east, 0, 1, 0, 12, 1560, 14);
+  for (const u of [0.04, 0.24, 0.66, 0.86]) {
+    const k = Math.min(eh.length - 1, Math.floor(u * eh.length)), h = eh[k] - 0.5;
+    quad(east, u, u + 0.035, 0, h, '#d27d52');
+    ln(...east(u + 0.035, 0), ...east(u + 0.035, h), 'rgba(80,35,18,0.35)', 0.5);
+  }
+  for (const u of [0.12, 0.74]) arch(up(east, 6), u, 0.07, 11, CH.inner);
+  arch(up(east, 5), 0.45, 0.07, 6, CH.inner);
+
+  // الواجهة: الطابق الأسفل بأعمدته الملتصقة وأبوابه الثلاثة، ثم الإفريز
+  const F0 = onJ(bF, aW, aE);
+  quad(F0, 0, 1, 0, 24, CH.shade);
+  masonry(F0, 0, 1, 0, 24, 1800, 18);
+  for (const u of [0.05, 0.19, 0.33, 0.67, 0.81, 0.95]) {
+    quad(F0, u - 0.022, u + 0.022, 0, 24, CH.pil);
+    quad(F0, u - 0.03, u + 0.03, 0, 2.4, '#8f4529');
+    ln(...F0(u + 0.022, 2.4), ...F0(u + 0.022, 24), 'rgba(60,25,12,0.35)', 0.5);
+  }
+  quad(F0, 0.43, 0.57, 0, 14, CH.dark);
+  quad(F0, 0.41, 0.59, 14, 15.6, '#c07a55');
+  for (const u of [0.11, 0.83]) { quad(F0, u, u + 0.06, 0, 10, CH.dark); quad(F0, u - 0.01, u + 0.07, 10, 11.2, '#c07a55'); }
+  for (const u of [0.245, 0.715]) arch(up(F0, 9), u, 0.04, 6, '#5a3020');
+  ledge(aW, aE, bF - 0.02, bF, 24, 26.5);
+  // الحلزونان الداكنان على جانبي الطابق الأعلى
+  for (const side of [-1, 1]) {
+    const u0 = side < 0 ? 0.25 : 0.75, pts = [F0(u0, 26.5), F0(u0, 36.5)];
+    for (let k = 1; k <= 8; k++) { const t = k / 8; pts.push(F0(u0 + side * 0.17 * t, 26.5 + 10 * (1 - t) ** 2)); }
+    poly(pts, '#6a3a27');
+    circ(...F0(u0 + side * 0.16, 28), 1.1, '#4e2a1b');
+  }
+  // الطابق الأعلى بنافذته ومحرابيه، وجانبه الأيمن، ثم الإفريز والجبهة المثلثة بأوانيها الحجرية
+  quad(F0, 0.25, 0.75, 26.5, 37, CH.shade);
+  masonry(F0, 0.25, 0.75, 26.5, 37, 1860, 8);
+  for (const u of [0.28, 0.4, 0.6, 0.72]) quad(F0, u - 0.018, u + 0.018, 26.5, 37, CH.pil);
+  quad(F0, 0.45, 0.55, 29.5, 35, '#3d2418');
+  quad(F0, 0.44, 0.56, 28.9, 29.6, '#c98a62');
+  for (const u of [0.32, 0.65]) arch(up(F0, 29.5), u, 0.035, 5, '#5a3020');
+  const aU = aW + (aE - aW) * 0.75;
+  quad(onI(aU, bF, bF - T), 0, 1, 26.5, 37, CH.lit);
+  ledge(aW + (aE - aW) * 0.24, aU + 0.01, bF - 0.02, bF, 37, 39, 0.02);
+  const pL = F0(0.24, 39), pR = F0(0.76, 39), pA = F0(0.5, 47.5);
+  poly([pL, pR, pA], '#ad5a3b');
+  poly([F0(0.3, 39.8), F0(0.7, 39.8), F0(0.5, 45.6)], '#93462d');
+  ln(...pL, ...pA, '#d6946a', 1);
+  ln(...pA, ...pR, '#d6946a', 1);
+  for (const [u, h] of [[0.5, 47.5], [0.25, 39], [0.75, 39]]) {
+    const [px, py] = F0(u, h);
+    ln(px, py, px, py - 2.2, '#7b8466', 1);
+    circ(px, py - 2.8, 1.2, '#9aa384');
+  }
+  for (const u of [0.15, 0.37, 0.58, 0.9]) {                                       // سواد المطر على الحجر
+    const [px, py] = F0(u, 23.5);
+    ln(px, py, px, py + 7 + 6 * hsh(i, j, 1900 + u * 100), 'rgba(35,25,18,0.2)', 1.4);
+  }
+
+  // أمام الواجهة: أرضية الرواق القديم من البلاط، وبقايا أعمدته قصيرة مكسورة كما في الصور
+  poly([W(aW, bF, 0.3), W(aE, bF, 0.3), W(aE, 0.93, 0.3), W(aW, 0.93, 0.3)], '#c9a27c');
+  [5, 3.5, 6, 4.2, 5.4].forEach((h, k) => {
+    const a = aW + 0.06 + (aE - aW - 0.12) * k / 4;
+    prism(a - 0.035, a + 0.035, 0.86, 0.93, 0, 1.2, ...CH.stone);
+    prism(a - 0.025, a + 0.025, 0.875, 0.915, 1.2, h, '#b86c48', '#d0835a', CH.ledge[2]);
+  });
+  const low = (a0, a1, b0, b1) => prism(a0, a1, b0, b1, 0, 2.2, ...CH.stone);
+  low(0.9, 0.96, -0.8, 0.3);                              // أساسات المدرسة يمين الصحن
+  low(0.8, 0.96, -0.3, -0.25);
+  low(0.8, 0.96, 0.25, 0.3);
+  low(-0.95, -0.9, 0.62, 0.9);                            // وأمام البرج
+  low(-0.95, -0.42, 0.86, 0.9);
+  stones.filter(ahead).forEach(stone);
 }
 
 // ألواح صفيح مموجة: خطوط رأسية خفيفة على الوجهين، بمسار واحد لكل وجه
@@ -623,6 +979,22 @@ function mercs(x, y, i, j) {
   const [mx, my] = at(0.5, 8.5);
   circ(mx, my, 2.4, '#e8c45a');
   circ(mx, my, 1.4, '#c99a2c');
+  // 12د: حبل غسيل ملون على الطابق الأعلى، وأصص على الشرفة، وبرميل وإطارات عند الركن
+  const h0a = outP(ul(0.06, 10.6), OUT_L, 1), h1a = outP(ul(0.94, 10.6), OUT_L, 1);
+  const cc = getCtx();
+  cc.beginPath(); cc.moveTo(h0a[0], h0a[1]); cc.quadraticCurveTo((h0a[0] + h1a[0]) / 2, (h0a[1] + h1a[1]) / 2 + 1.6, h1a[0], h1a[1]);
+  cc.strokeStyle = '#2a2420'; cc.lineWidth = 0.35; cc.stroke();
+  ['#f4f1ea', '#c8392f', '#5fa8e8', '#e8c23a', '#3f9b5a', '#f4f1ea'].forEach((col, k) => {
+    const t = 0.12 + k * 0.15, px = h0a[0] + (h1a[0] - h0a[0]) * t, py = h0a[1] + (h1a[1] - h0a[1]) * t + Math.sin(t * Math.PI) * 1.2;
+    poly([[px - 0.9, py + 0.45], [px + 0.9, py - 0.45], [px + 0.9, py - 0.45 + 2.6 + (k % 2)], [px - 0.9, py + 0.45 + 2.6 + (k % 2)]], col);
+  });
+  for (const t of [0.15, 0.5, 0.85]) {
+    const px = b0[0] + (b1[0] - b0[0]) * t, py = b0[1] + (b1[1] - b0[1]) * t - 0.6;
+    box(px, py, 0.9, 0.45, 1.1, '#a85c3e', '#c06a46', '#7a3a28');
+    el(px, py - 1.9, 1.2, 0.9, '#4f8a3e');
+  }
+  barrel(x + 26, y + 1.6, 1.6, 3.4, ['#2f6db3', '#3f7fc3', '#2a5ca8']);
+  for (let k = 0; k < 3; k++) { el(x + 21.5, y + 4.2 - k * 0.9, 2.1, 1, '#1e1e20'); el(x + 21.5, y + 4.2 - k * 0.9, 1, 0.45, '#5f5a54'); }
 }
 
 
@@ -682,6 +1054,27 @@ function souk(x, y, i, j) {
     ln(p[0], p[1] - 1.6, p[0], p[1] + 0.6, '#5a3a22', 0.5);
     poly([[p[0] - 1.1, p[1] + 0.6], [p[0] + 1.1, p[1] + 0.6], [p[0] + 0.7, p[1] + 3.4], [p[0] - 0.7, p[1] + 3.4]], '#c99a3c');
     circ(p[0], p[1] + 2, 0.6, '#ffe7a3');
+  }
+  // 12د: سلسلة فوانيس نحاسية على الوجه الأيسر، وسجادة معروضة على حامل، وصناديق فاكهة عند الوجه الأيمن
+  const s0 = outP(L(0.02, 11.2), OUT_L, 0.8), s1 = outP(L(0.98, 11.2), OUT_L, 0.8), c = getCtx();
+  c.beginPath(); c.moveTo(s0[0], s0[1]);
+  for (let k = 1; k <= 6; k++) { const t = k / 6, m = (k - 0.5) / 6;
+    c.quadraticCurveTo(s0[0] + (s1[0] - s0[0]) * m, s0[1] + (s1[1] - s0[1]) * m + 1.4, s0[0] + (s1[0] - s0[0]) * t, s0[1] + (s1[1] - s0[1]) * t); }
+  c.strokeStyle = '#4a3020'; c.lineWidth = 0.3; c.stroke();
+  for (let k = 0; k < 6; k++) {
+    const m = (k + 0.5) / 6, px = s0[0] + (s1[0] - s0[0]) * m, py = s0[1] + (s1[1] - s0[1]) * m + 0.7;
+    poly([[px - 0.7, py], [px + 0.7, py], [px + 0.45, py + 1.8], [px - 0.45, py + 1.8]], '#c99a3c');
+    circ(px, py + 1, 0.4, '#ffe7a3');
+  }
+  const cx = x - 28, cy = y + 0.8;
+  lines([[cx - 3, cy + 1.5, cx - 3, cy - 9], [cx + 3, cy - 1.5, cx + 3, cy - 12]], '#5a3a22', 0.8);
+  poly([[cx - 3, cy - 8.6], [cx + 3, cy - 11.6], [cx + 3, cy - 2.6], [cx - 3, cy + 0.4]], '#9a2a24');
+  poly([[cx - 2.3, cy - 7.6], [cx + 2.3, cy - 9.9], [cx + 2.3, cy - 3.4], [cx - 2.3, cy - 1.1]], '#c8392f');
+  poly([[cx, cy - 7.4], [cx + 1.4, cy - 5.4], [cx, cy - 3.4], [cx - 1.4, cy - 4.6]], '#2f5a8a');
+  circ(cx, cy - 5.2, 0.5, '#f2c14e');
+  for (const [px, py, f] of [[x + 17, y + 5.4, '#e8862a'], [x + 20.6, y + 3.6, '#7cb35a']]) {
+    crate(px, py, 1.7);
+    for (let k = 0; k < 3; k++) circ(px - 0.9 + k * 0.9, py - 1.9 - (k % 2) * 0.3, 0.6, f);
   }
 }
 
@@ -749,6 +1142,24 @@ function triads(x, y, i, j) {
     ln(p[0], p[1] - 1, p[0], p[1] + 1.5, '#3a2a20', 0.5);
     el(p[0], p[1] + 3.4, 1.8, 2.2, '#d8402e');
   }
+  // 12د: أعواد غسيل خيزران من نوافذ الوجه الأيسر، ومكيفات عليه، ولافتة نيون أفقية فوق البوابة، ومزار أحمر صغير
+  const poles = [], clothes = [];
+  for (const [f, u] of [[1, 0.2], [3, 0.5], [4, 0.2], [5, 0.5]]) {
+    const a = L(u + 0.09, 6 + f * 7.4 - 0.4), b = outP(a, OUT_L, 5.5);
+    poles.push([a[0], a[1], b[0], b[1]]);
+    for (const t of [0.35, 0.7]) clothes.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, (f + t * 10) % 3]);
+  }
+  lines(poles, '#c9b07a', 0.5);
+  for (const [px, py, k] of clothes) poly([[px - 0.7, py - 0.35], [px + 0.7, py + 0.35], [px + 0.7, py + 2.6], [px - 0.7, py + 1.9]],
+                                          ['#f4f1ea', '#5fa8e8', '#e8a23a'][Math.floor(k)]);
+  for (let f = 0; f < 7; f += 2) { const ac = L(0.06, 6 + f * 7.4 + 0.6); box(ac[0], ac[1], 1.2, 0.6, 1.4, '#b8b4ae', '#d4d0ca', '#c8c4be'); }
+  const n0 = R(0.3, 12.6), n1 = R(0.7, 12.6);
+  poly([n0, n1, [n1[0], n1[1] - 2.6], [n0[0], n0[1] - 2.6]], '#1c1220');
+  ln(n0[0] + 1, n0[1] - 1.3, n1[0] - 1, n1[1] - 1.3, '#ffd23f', 0.8);
+  const sh = outP(R(0.1, 0), OUT_R, 1.6);
+  box(sh[0], sh[1], 1.4, 0.7, 2.4, '#8a1e22', '#b3262f', '#c8392f');
+  circ(sh[0] + 0.4, sh[1] - 1.4, 0.45, '#ffd98a');
+  lines([[sh[0] - 0.4, sh[1] - 2.4, sh[0] - 0.6, sh[1] - 4.4], [sh[0] + 0.3, sh[1] - 2.6, sh[0] + 0.4, sh[1] - 4.6]], '#d8c8a8', 0.3);
 }
 
 // --- إسطبل الفيلة (جايبور): منصة من الحجر الرملي، وقصر وردي بحزامين أبيضين ونوافذ مشبكة (جالي)، وبوابة عالية
@@ -776,6 +1187,7 @@ function stable(x, y, i, j) {
     arch((a, b) => R(a, b + 5), u, 0.11, 7, '#f4e3e6');
     for (let k = 0; k < 3; k++) { const p = R(u + 0.055, 7 + k * 1.8); circ(p[0], p[1], 0.35, '#b05a6a'); }
   }
+  arch(R, 0.31, 0.38, 15.9, '#d4af4f');                             // 12د: حافة ذهبية حول البوابة
   arch(R, 0.32, 0.36, 15, '#f4e3e6');                               // البوابة العالية بإطار أبيض
   arch((a, b) => R(a + 0.02, b), 0.32, 0.32, 13.6, '#3a2420');
   arch((a, b) => R(a + 0.05, b), 0.32, 0.26, 10, '#6b4526');
@@ -787,6 +1199,22 @@ function stable(x, y, i, j) {
   ln(x, top - 18, x, top - 26, '#5a3a22', 0.7);
   poly([[x, top - 26], [x + 7, top - 24.5], [x, top - 23]], '#f2a33a');
   chhatri(x, top + d - 2, 3.4);
+  // 12د: زهور مرسومة بين النوافذ، وحزم تبن على الركن الأيسر، وحوض ماء حجري، وجرس معلّق فوق البوابة
+  for (const u of [0.24, 0.5, 0.76]) {
+    const p = L(u, 9);
+    for (let k = 0; k < 5; k++) { const t = k * TAU / 5; circ(p[0] + Math.cos(t) * 0.9, p[1] + Math.sin(t) * 0.9, 0.45, '#f4e3e6'); }
+    circ(p[0], p[1], 0.4, '#e2a33a');
+  }
+  for (const [px, py] of [[x - 27, y + 1.6], [x - 24.5, y + 3.4], [x - 26, y - 0.6]]) {
+    box(px, py, 2.4, 1.2, 2, '#b8943a', '#d8b44e', '#e6c45e');
+    const q = qR(px, py, 2.4, 1.2), a = q(0, 1), b = q(1, 1);
+    ln(a[0], a[1], b[0], b[1], '#8a6a2a', 0.35);
+  }
+  box(x + 18, y + 5, 3.6, 1.8, 1.6, '#a07c5c', '#c39c78', '#5fa8c8');
+  el(x + 18, y + 3.4, 2.4, 1.1, '#7cc0dc');
+  const g = R(0.5, 14.4);
+  ln(g[0], g[1], g[0], g[1] + 1.6, '#5a3a22', 0.4);
+  poly([[g[0] - 0.9, g[1] + 3.4], [g[0] - 0.6, g[1] + 1.6], [g[0] + 0.6, g[1] + 1.6], [g[0] + 0.9, g[1] + 3.4]], '#d4af4f');
 }
 
 // --- الكاتدرائية (المدينة الأوروبية، بدل محطة القطار): منصة حجرية بدرج، وصحن من الحجر بنوافذ مدببة ملونة ودعامات
@@ -812,6 +1240,15 @@ function cathedral(x, y, i, j) {
   }
   ridgeRoof(nx, ny, w, d, h, 14, { ov: 1.5, front: '#48505a', back: '#353c45', end: '#56606b', ridge: '#2b3137', ridgeW: 1,
                                     tile: 'rgba(20,24,30,0.3)' });
+  for (const u of [0.02, 0.27, 0.52, 0.77]) {                                      // 12د: قمم صغيرة فوق الدعامات
+    const b = L(u, h - 1.5);
+    cone(b[0], b[1] + 0.4, 1, 4.6, '#7a746a', '#968f83');
+    circ(b[0], b[1] - 4.4, 0.4, '#d4af4f');
+  }
+  for (const [gx, gy] of [[x - 26, y + 1.4], [x - 22.4, y + 3.4], [x - 23, y + 0.2]]) {   // مقبرة صغيرة: شواهد وصليب
+    box(gx, gy, 1.1, 0.55, 2.6, '#6f695f', '#8b857a', '#a59e91');
+  }
+  lines([[x - 19.4, y + 4.6, x - 19.4, y - 1.4], [x - 21, y + 0.4, x - 17.8, y - 1.2]], '#8b857a', 0.9);
   // الواجهة نحو الركن الأيمن، والبرج الخلفي قبلها والأمامي بعدها
   const fx = x + 9, fy = y + 3.5, fw = 16, fd = 8, fh = 21;
   const tower = (tx, ty) => {
@@ -849,6 +1286,13 @@ function cathedral(x, y, i, j) {
     ln(rc0[0], rc0[1], p[0], p[1], 'rgba(230,210,140,0.75)', 0.5);
   }
   circ(rc0[0], rc0[1], 0.8, '#e8c25a');
+  for (const u of [mid - 0.22, mid + 0.2]) {                                       // 12د: تمثالا قديسين في محرابين بجانب البوابة
+    const p = R(u + 0.02, 1.4);
+    arch((a, b) => R(a, b + 0.6), u - 0.035, 0.11, 8, '#4f4a42');
+    poly([R(u - 0.02, 0.6), R(u + 0.06, 0.6), R(u + 0.06, 1.4), R(u - 0.02, 1.4)], '#d6cfc1');
+    poly([[p[0] - 0.7, p[1]], [p[0] + 0.9, p[1] - 0.5], [p[0] + 0.7, p[1] - 5.6], [p[0] - 0.5, p[1] - 5.2]], '#ddd6c8');
+    circ(p[0] + 0.1, p[1] - 6.4, 0.9, '#e6e0d4');
+  }
   tower(fx, fy + fd);
 }
 
@@ -866,7 +1310,9 @@ function mine(x, y, i, j) {
   poly([[x + 6, y - 1], [x + 16, y - 6], [x + 16, y - 17], [x + 6, y - 12]], '#1e140c');
   for (const [a, b] of [[[x + 5.4, y - 0.6], [x + 5.4, y - 13]], [[x + 16.6, y - 5.6], [x + 16.6, y - 18]]]) ln(a[0], a[1], b[0], b[1], '#6b4a2e', 1.6);
   ln(x + 4.6, y - 13, x + 17.4, y - 19.2, '#6b4a2e', 1.8);
-  // القضبان والعربة المحمّلة بالفضة
+  // القضبان والعربة المحمّلة بالفضة (12د: وعوارض خشبية تحتها)
+  lines([0, 1, 2, 3, 4, 5, 6].map(k => { const t = k / 6, px = x + 11 + 15 * t, py = y - 3 + 7.5 * t; return [px - 2.4, py - 1.2, px + 2.4, py + 1.2]; }),
+        '#5a3e26', 0.9);
   for (const off of [-1.6, 1.6]) ln(x + 11 + off, y - 3 + off * 0.5, x + 26 + off, y + 4.5 + off * 0.5, '#4a4038', 0.6);
   box(x + 20, y + 2.5, 4, 2, 3.2, '#4a3a2c', '#5e4a38', '#3a2c20');
   for (const [px, py] of [[x + 18.6, y + 1.2], [x + 20.8, y + 1.6], [x + 19.8, y - 0.2], [x + 21.6, y + 0.2]]) circ(px, py - 2.4, 1.2, '#d9dde2');
@@ -895,6 +1341,20 @@ function mine(x, y, i, j) {
   const lamp = [x - 16.5, y - 2];
   ln(lamp[0], lamp[1] + 2, lamp[0], lamp[1] - 2, '#3a2a20', 0.5);
   el(lamp[0], lamp[1] - 3.2, 1, 1.3, '#ffd98a');
+  // 12د: براميل عند المكتب، وصندوق متفجرات أحمر، ومعول ومجرفة مسنودان، وفانوس عند النفق، وصبار
+  barrel(x - 27.5, y + 2, 1.5, 3.2);
+  barrel(x - 25, y + 4.4, 1.5, 3.2);
+  crate(x + 1, y + 9.2, 1.8, ['#8a1e1e', '#b3262f', '#c8392f']);
+  { const q = qR(x + 1, y + 9.2, 1.8, 0.9), a = q(0.2, 1), b = q(0.8, 1.2); ln(a[0], a[1], b[0], b[1], '#f2d46a', 0.4); }
+  lines([[x - 17.6, y + 6.6, x - 15.8, y - 1], [x - 15.6, y + 7.4, x - 14.4, y - 0.4]], '#6b4a2e', 0.6);
+  ln(x - 16.8, y - 0.6, x - 14.6, y - 1.4, '#5c5650', 0.9);
+  poly([[x - 15, y - 0.8], [x - 13.8, y - 1.2], [x - 13.6, y + 0.8], [x - 14.6, y + 1.2]], '#7a7470');
+  ln(x + 11, y - 18.6, x + 11, y - 16.6, '#2a2420', 0.4);
+  el(x + 11, y - 15.6, 0.9, 1.1, '#ffd98a');
+  const kx = x + 27, ky = y + 1.2;
+  lines([[kx, ky, kx, ky - 8.4]], '#4f8a3e', 1.6);
+  lines([[kx - 2.2, ky - 3.6, kx - 2.2, ky - 6.4], [kx + 2, ky - 4.6, kx + 2, ky - 7.6]], '#4f8a3e', 1.1);
+  lines([[kx - 2.2, ky - 3.6, kx - 0.4, ky - 3.6], [kx + 2, ky - 4.6, kx + 0.4, ky - 4.6]], '#4f8a3e', 1);
 }
 
 // --- البنك (شيكاغو الثلاثينيات): درج حجري، ومبنى كلاسيكي من الحجر الفاتح بأربعة أعمدة أمام الوجه الأيمن وجملون
@@ -929,10 +1389,279 @@ function bank(x, y, i, j) {
   for (const q of [L, R]) { const a = q(0, h - 0.6), b = q(1, h - 0.6); ln(a[0], a[1], b[0], b[1], '#b8b3aa', 1.4); }
   ln(x - 4, by - h - 3, x - 4, by - h - 18, '#3a3530', 0.7);
   poly([[x - 4, by - h - 18], [x + 5, by - h - 16.5], [x - 4, by - h - 14]], '#2f7a4a');
+  // 12د: أسنان ذهبية تحت الإفريز، وعمودا إنارة على الدرج، وساعة فوق الأبواب، وشاحنة نقل أموال مصفحة
+  const dent = [];
+  for (const q of [L, R]) for (let k = 1; k < 16; k++) { const a = q(k / 16, h - 2), b = q(k / 16, h - 1.2); dent.push([a[0], a[1], b[0], b[1]]); }
+  lines(dent, '#c9a046', 0.5);
+  for (const [px, py] of [[x - 10, y + 8.6], [x + 28, y + 1.6]]) {
+    box(px, py, 0.9, 0.45, 1.2, '#1e2126', '#2c3036', '#24282d');
+    ln(px, py - 1.2, px, py - 11, '#1e2126', 0.8);
+    circ(px, py - 12.2, 1.5, '#fff4d0');
+    poly([[px - 1.3, py - 13.2], [px + 1.3, py - 13.2], [px, py - 14.6]], '#1e2126');
+  }
+  faceDisc(R, 0.5, 13.4, 1.8, w, '#d4af4f');
+  faceDisc(R, 0.5, 13.4, 1.3, w, '#f4efe2');
+  { const o = R(0.5, 13.4); ln(o[0], o[1], o[0], o[1] - 1, '#262626', 0.35); ln(o[0], o[1], o[0] + 0.8, o[1], '#262626', 0.35); }
+  const tx = x - 19, ty = y + 5;
+  el(tx - 2.8, ty + 0.9, 0.9, 0.55, '#1e1e20'); el(tx + 2.4, ty + 1.6, 0.9, 0.55, '#1e1e20');
+  box(tx, ty, 4.8, 2.4, 3.6, '#2f4a3a', '#3f5f4a', '#4a6a54');
+  box(tx + 2.6, ty + 1.2, 1.8, 0.9, 2.6, '#2f4a3a', '#3f5f4a', '#4a6a54');
+  wR(tx + 2.6, ty + 1.2, 1.8, 0.9, 0.2, 1.4, 0.6, 1, '#8fb0c8');
+  const vl = qL(tx, ty, 4.8, 2.4);
+  for (const u of [0.3, 0.7]) { const p = vl(u, 2); circ(p[0], p[1], 0.35, '#c9a046'); }
+}
+
+// ================= مباني مدن الأحداث (12هـ، القسم 3.13) =================
+// شُرَف مثلثة بيضاء على حافتي وجهين q1 وq2 عند الارتفاع h
+function whiteTeeth(qs, h, n, c = '#f4ecdc') {
+  for (const q of qs) for (let k = 0; k < n; k++) {
+    const a = q(k / n, h), b = q((k + 1) / n, h), m = q((k + 0.5) / n, h + 2.6);
+    poly([a, b, m], c);
+  }
+}
+
+// --- قصر سلوى (الدرعية): قصر طين نجدي بجدران تضيق للأعلى وأحزمة وفتحات مثلثة، وشُرَف بيضاء، وطابق خلفي أعلى،
+// وبرج مراقبة مستدق على ركنه، وباب خشبي بنقوش بيضاء، ونخلتان ---
+function salwa(x, y, i, j) {
+  el(x, y + 6, 37, 16, 'rgba(40,25,10,0.22)');
+  box(x, y + 2, 33, 16.5, 2.5, '#a88a62', '#c2a47a', '#ccae84');
+  const by = y - 0.5, M = ['#a07c52', '#c9a476', '#d6b488'];
+  box(x + 5, by - 6, 12, 6, 30, M[0], M[1], M[2]);                       // الطابق الخلفي الأعلى
+  whiteTeeth([qL(x + 5, by - 6, 12, 6), qR(x + 5, by - 6, 12, 6)], 30, 5);
+  for (const u of [0.25, 0.6]) { wL(x + 5, by - 6, 12, 6, u, 22, 0.12, 3, '#3a2618'); wR(x + 5, by - 6, 12, 6, u, 22, 0.12, 3, '#3a2618'); }
+  frustum(x, by, 24, 22.5, 18, M[0], M[1], M[2]);                         // البيت الكبير بجدران تضيق
+  const L = fL(x, by, 24, 22.5, 18), R = fR(x, by, 24, 22.5, 18);
+  for (const q of [L, R]) {
+    for (const v of [6.5, 13]) { const a = q(0, v), b = q(1, v); ln(a[0], a[1], b[0], b[1], 'rgba(90,60,30,0.35)', 0.6); }
+    for (let k = 0; k < 5; k++) {                                         // صف فتحات مثلثة عالية
+      const u = 0.1 + k * 0.18, a = q(u, 14.6), b = q(u + 0.06, 14.6), m = q(u + 0.03, 16.4);
+      poly([a, b, m], '#3a2618');
+    }
+  }
+  for (const u of [0.12, 0.42, 0.72]) poly([L(u, 7.5), L(u + 0.1, 7.5), L(u + 0.1, 11), L(u, 11)], '#3a2618');
+  whiteTeeth([L, R], 18, 8);
+  poly([R(0.38, 0), R(0.6, 0), R(0.6, 10), R(0.38, 10)], '#6b4526');       // الباب ونقوشه البيضاء
+  for (let k = 0; k < 3; k++) { const a = R(0.42, 2 + k * 2.6), b = R(0.49, 3.4 + k * 2.6), c = R(0.56, 2 + k * 2.6); poly([a, b, c], '#efe2c8'); }
+  poly([R(0.35, 10), R(0.63, 10), R(0.63, 11.3), R(0.35, 11.3)], '#efe2c8');
+  // برج المراقبة المستدق على الركن الأيسر
+  const tx = x - 22, ty = y + 1;
+  poly([[tx - 4.2, ty], [tx + 4.2, ty], [tx + 3, ty - 34], [tx - 3, ty - 34]], M[1]);
+  poly([[tx - 4.2, ty], [tx - 1.2, ty + 1], [tx - 1, ty - 33.6], [tx - 3, ty - 34]], M[0]);
+  for (const v of [10, 20, 28]) rc(tx - 0.5, ty - v, 1, 2.6, '#3a2618');
+  for (let k = 0; k < 4; k++) poly([[tx - 3 + k * 1.5, ty - 34], [tx - 1.5 + k * 1.5, ty - 34], [tx - 2.25 + k * 1.5, ty - 36.6]], '#f4ecdc');
+  streetPalm(x + 26, y + 1, i, j);
+  streetPalm(x - 9, y + 12, i + 1, j);
+}
+
+// --- مرصد تشومسونغداي (غيونغجو): برج حجري على شكل قارورة بمداميك، ونافذة مربعة في وسطه، وإطار مربع مزدوج فوقه،
+// على قاعدة مربعة بدرجتين، وفانوسان حجريان وأشجار صنوبر ---
+function observatory(x, y, i, j) {
+  el(x, y + 6, 37, 16, 'rgba(30,25,20,0.22)');
+  box(x, y + 2, 33, 16.5, 2, '#7f7a70', '#9c968a', '#aaa498');
+  box(x, y - 0.5, 14, 7, 2.6, '#8a8478', '#a8a296', '#b8b2a6');
+  box(x, y - 3.1, 11, 5.5, 2.2, '#8a8478', '#a8a296', '#b8b2a6');
+  const by = y - 5.3, H = 40, c = getCtx();
+  const rAt = (t) => 8.2 - 3.4 * t + 2.6 * Math.sin(t * Math.PI) * (1 - t) - 0.9 * t * t;   // انتفاخ القارورة ثم عنقها
+  const side = [], back = [];
+  for (let k = 0; k <= 16; k++) { const t = k / 16, r = rAt(t); side.push([x - r, by - t * H]); back.push([x + r, by - t * H]); }
+  c.beginPath();
+  c.moveTo(side[0][0], side[0][1]);
+  for (const p of side) c.lineTo(p[0], p[1]);
+  for (const p of back.slice().reverse()) c.lineTo(p[0], p[1]);
+  c.closePath();
+  const g = c.createLinearGradient(x - 8, 0, x + 8, 0);
+  g.addColorStop(0, '#8f877a'); g.addColorStop(0.55, '#c9c0ae'); g.addColorStop(1, '#a89f8f');
+  c.fillStyle = g; c.fill();
+  const rows = [];                                                         // مداميك الحجر (27 صفاً في الأصل)
+  for (let k = 1; k < 20; k++) { const t = k / 20, r = rAt(t); rows.push([x - r, by - t * H + r * 0.12, x + r, by - t * H + r * 0.12]); }
+  lines(rows, 'rgba(70,62,50,0.32)', 0.4);
+  const wy = by - H * 0.5;                                                 // النافذة المربعة
+  poly([[x - 1.2, wy + 2.8], [x + 2.2, wy + 1.4], [x + 2.2, wy - 2], [x - 1.2, wy - 0.6]], '#2a2420');
+  const ty = by - H, tw = 4.4;                                             // الإطار المربع المزدوج فوقه
+  for (const [v, w] of [[0, tw], [2.2, tw]]) {
+    const q = [[x - w, ty - v], [x, ty + w / 2 - v], [x + w, ty - v], [x, ty - w / 2 - v]];
+    c.beginPath(); c.moveTo(q[0][0], q[0][1]); for (const p of q.slice(1)) c.lineTo(p[0], p[1]); c.closePath();
+    c.strokeStyle = '#d8d0c0'; c.lineWidth = 1.2; c.stroke();
+  }
+  for (const [px, py] of [[x - 21, y + 1.5], [x + 21, y + 1.5]]) {         // فانوسان حجريان
+    box(px, py, 1.6, 0.8, 1.4, '#7d786f', '#9a948a', '#aaa49a');
+    box(px, py - 1.4, 0.7, 0.35, 4, '#8a857b', '#a29c92');
+    box(px, py - 5.4, 1.8, 0.9, 2.2, '#8a857b', '#a29c92', '#f2d58a');
+    poly([[px - 2.4, py - 7.6], [px, py - 9.8], [px + 2.4, py - 7.6], [px, py - 6.6]], '#6f6a62');
+  }
+  for (const [px, py] of [[x - 27, y - 0.5], [x + 26, y - 1.5]]) {         // صنوبر
+    ln(px, py, px, py - 9, '#5a3a22', 1.2);
+    for (const [dy, r] of [[-6, 4], [-9, 3.4], [-11.6, 2.4]]) el(px, py + dy, r, r * 0.45, '#3f6a3a');
+  }
+}
+
+// --- بوابة كانو القديمة (كانو): سور طيني سميك يضيق للأعلى بقوس مدبب كبير وبابين خشبيين، وقرون الزانكو على قمته،
+// ونقوش بارزة حول القوس، وجذوع بارزة من الطين، وسوران قصيران على جانبيه ---
+function kanoGate(x, y, i, j) {
+  el(x, y + 6, 37, 16, 'rgba(40,25,10,0.22)');
+  box(x, y + 2, 33, 16.5, 2, '#9a6a44', '#b8804e', '#c48e5c');
+  const M = ['#9a5e36', '#b8774a', '#c88a5a'];
+  for (const [ox, oy] of [[-17, -7], [17, -7]]) {                          // سوران قصيران بشُرَف مستديرة
+    frustum(x + ox, y + oy + 7, 8, 7, 10, M[0], M[1], M[2]);
+    for (const dx of [-5, -1.6, 1.8, 5]) el(x + ox + dx, y + oy + 7 - 10 + dx * (ox < 0 ? 0.25 : -0.25), 1, 1.4, M[2]);
+  }
+  frustum(x, y + 1, 15, 13, 26, M[0], M[1], M[2]);                         // كتلة البوابة
+  const L = fL(x, y + 1, 15, 13, 26), R = fR(x, y + 1, 15, 13, 26);
+  poly([R(0.22, 0), R(0.78, 0), R(0.78, 13), R(0.5, 19), R(0.22, 13)], '#ecd6b6');   // إطار القوس الأبيض
+  poly([R(0.28, 0), R(0.72, 0), R(0.72, 12), R(0.5, 17), R(0.28, 12)], '#2a1a0e');
+  poly([R(0.3, 0), R(0.49, 0), R(0.49, 11), R(0.3, 11)], '#6b4526');
+  poly([R(0.51, 0), R(0.7, 0), R(0.7, 11), R(0.51, 11)], '#5a3a20');
+  for (const u of [0.36, 0.63]) { const p = R(u, 5.5); circ(p[0], p[1], 0.5, '#d4af4f'); }
+  for (const q of [L, R]) {                                                // نقوش بارزة: زخارف متعرجة ودوائر
+    for (let k = 0; k < 5; k++) {
+      const a = q(0.08 + k * 0.18, 21), b = q(0.17 + k * 0.18, 23), c = q(0.26 + k * 0.18, 21);
+      lines([[a[0], a[1], b[0], b[1]], [b[0], b[1], c[0], c[1]]], '#ecd6b6', 0.7);
+    }
+  }
+  for (const u of [0.12, 0.88]) { const p = R(u, 16); circ(p[0], p[1], 1.5, '#ecd6b6'); circ(p[0], p[1], 0.8, M[1]); }
+  const sticks = [];
+  for (const v of [8, 16]) for (const u of [0.2, 0.55, 0.85]) { const p = L(u, v); sticks.push([p[0], p[1], p[0] - 1.8, p[1] + 0.9]); }
+  lines(sticks, '#5a3e26', 0.75);
+  for (const [px, py] of [[x - 13, y + 1 - 26], [x, y + 1 + 6.5 - 26], [x + 13, y + 1 - 26], [x - 6.5, y + 1 + 3.2 - 26], [x + 6.5, y + 1 + 3.2 - 26]]) {
+    poly([[px - 1.2, py], [px + 1.2, py], [px + 0.4, py - 5.5]], M[1]);   // قرون الزانكو
+    ln(px - 1.2, py, px + 0.4, py - 5.5, M[0], 0.4);
+  }
+}
+
+// --- قوس النصر (باريس): قوس حجري ضخم بفتحة كبيرة على وجهه الأيمن وأصغر على الأيسر، وأعمدة ملتصقة ونقوش بارزة،
+// وإفريز وعلّية فوقه، وراية معلقة تحت القوس، ومصباحان ---
+function triumph(x, y, i, j) {
+  el(x, y + 6, 37, 16, 'rgba(30,25,20,0.22)');
+  box(x, y + 2, 33, 16.5, 2, '#8f897d', '#aaa498', '#b6b0a4');
+  const by = y - 0.5, w = 16, d = 9, h = 36, S = ['#c2b8a2', '#e0d6c0', '#ece4d2'];
+  box(x, by, w, d, h, S[0], S[1], S[2]);
+  const L = qL(x, by, w, d), R = qR(x, by, w, d);
+  arch3(R, 0.26, 0.48, 24, '#cfc5ae', '#2a2620');                          // الفتحة الكبيرة
+  arch3(L, 0.32, 0.36, 15, '#b8ae98', '#24201c');                          // الفتحة الجانبية
+  for (const q of [L, R]) {
+    for (const v of [h - 7, h - 5.6]) { const a = q(0, v), b = q(1, v); ln(a[0], a[1], b[0], b[1], 'rgba(90,80,60,0.4)', 0.6); }
+    for (const u of [0.1, 0.9]) {                                          // أعمدة ملتصقة
+      const a = q(u, 1), b = q(u, h - 8); ln(a[0], a[1], b[0], b[1], 'rgba(255,250,235,0.55)', 1.1);
+    }
+  }
+  for (const u of [0.04, 0.78]) poly([R(u, 6), R(u + 0.16, 6), R(u + 0.16, 16), R(u, 16)], '#d2c8b0');   // نقوش بارزة
+  for (const u of [0.07, 0.81]) { const a = R(u, 8), b = R(u + 0.05, 14), c = R(u + 0.1, 9); lines([[a[0], a[1], b[0], b[1]], [b[0], b[1], c[0], c[1]]], '#a89e88', 0.6); }
+  const fr = [];                                                           // العلّية: نقش شبكي
+  for (let k = 0; k < 10; k++) { const a = R(k / 10, h - 4.6), b = R(k / 10, h - 1); fr.push([a[0], a[1], b[0], b[1]]); }
+  for (let k = 0; k < 6; k++) { const a = L(k / 6, h - 4.6), b = L(k / 6, h - 1); fr.push([a[0], a[1], b[0], b[1]]); }
+  lines(fr, 'rgba(120,110,90,0.4)', 0.4);
+  const t = R(0.5, 24.2);                                                  // راية معلقة تحت القوس الكبير
+  ln(t[0] - 4, t[1] + 2, t[0] + 4, t[1] - 2, '#3a3530', 0.4);
+  poly([[t[0] - 2.4, t[1] + 1.2], [t[0] + 2.4, t[1] - 1.2], [t[0] + 2.4, t[1] + 8], [t[0], t[1] + 10.4], [t[0] - 2.4, t[1] + 10.4]], '#2a4f8a');
+  poly([[t[0] - 0.8, t[1] + 0.4], [t[0] + 0.8, t[1] - 0.4], [t[0] + 0.8, t[1] + 9.4], [t[0] - 0.8, t[1] + 10.2]], '#f4f1ea');
+  for (const [px, py] of [[x + 21, y + 4], [x - 4, y + 13]]) {             // مصباحان
+    ln(px, py, px, py - 11, '#1e2126', 0.8);
+    circ(px, py - 12.2, 1.4, '#fff4d0');
+  }
+}
+// قوس على وجه q: عرض du من u وارتفاع dv بإطار حجري ثم فتحة مظلمة
+function arch3(q, u, du, dv, frame, dark) {
+  arch(q, u - 0.03, du + 0.06, dv + 2.4, frame);
+  arch(q, u, du, dv, dark);
+}
+
+// --- خان القوافل (صحراء اليمامة): فناء مربع بأسوار طينية منخفضة وأبراج ركن مستديرة وبوابة عالية مقوسة، وفي الفناء
+// بئر وأكياس وجرار، وجملان باركان أمامه ---
+function khan(x, y, i, j) {
+  el(x, y + 6, 37, 16, 'rgba(40,25,10,0.22)');
+  box(x, y + 2, 33, 16.5, 2, '#a88a62', '#c2a47a', '#ccae84');
+  const by = y - 0.5, w = 25, d = 12.5, hw = 10, M = ['#a8845a', '#c9a476', '#d6b488'];
+  const wall = (x0, y0, x1, y1, c) => poly([[x0, y0], [x1, y1], [x1, y1 - hw], [x0, y0 - hw]], c);
+  wall(x - w, by, x, by - d, M[0]);                                        // السوران الخلفيان
+  wall(x, by - d, x + w, by, M[1]);
+  poly([[x - w + 2.4, by], [x, by - d + 1.2], [x + w - 2.4, by], [x, by + d - 1.2]], '#d8bd8e');   // أرض الفناء
+  const cx = x, cy = by;                                                   // البئر وما حوله في الفناء
+  cyl(cx - 4, cy - 1, 2.2, 2, '#8a6a4a', '#a8865e', '#3a5a6a');
+  for (const [px, py] of [[cx + 6, cy - 3], [cx + 8.4, cy - 1.6]]) { el(px, py - 1, 1.4, 1.3, '#d8c49a'); }
+  jar(cx + 3, cy + 2, 1.2, '#a8643a');
+  wall(x - w, by, x, by + d, M[1]);                                        // السوران الأماميان
+  wall(x, by + d, x + w, by, M[2]);
+  const L = qL(x, by, w, d), R = qR(x, by, w, d);
+  whiteTeeth([L, R], hw, 9, '#efe2c8');
+  poly([R(0.36, 0), R(0.64, 0), R(0.64, 15), R(0.36, 15)], M[2]);          // البوابة العالية
+  poly([R(0.41, 0), R(0.59, 0), R(0.59, 9), R(0.5, 12.6), R(0.41, 9)], '#3a2618');
+  poly([R(0.33, 15), R(0.67, 15), R(0.67, 16.4), R(0.33, 16.4)], '#efe2c8');
+  for (const [px, py] of [[x - w, by], [x, by + d], [x + w, by]]) {        // أبراج الركن
+    cyl(px, py + 0.5, 3, hw + 4, M[0], M[1], M[2]);
+    for (let k = 0; k < 4; k++) poly([[px - 3 + k * 1.5, py + 0.5 - hw - 4], [px - 1.5 + k * 1.5, py + 0.5 - hw - 4], [px - 2.25 + k * 1.5, py - hw - 6]], '#efe2c8');
+  }
+  for (const [px, py, s] of [[x + 20, y + 7.5, 1], [x - 18, y + 8.5, -1]]) {   // جملان باركان
+    el(px, py, 3.4, 1.6, '#b8904e');
+    el(px + s * 0.4, py - 1.6, 1.6, 1.2, '#c9a05e');
+    ln(px + s * 2.6, py - 0.6, px + s * 4, py - 4, '#b8904e', 1.1);
+    el(px + s * 4.4, py - 4.4, 1.1, 0.7, '#c9a05e');
+    rc(px - 1.6, py - 2.6, 3.2, 0.8, '#b8382c');
+  }
+}
+
+// --- ورشة البارود (الصينية): ورشة بجدران حمراء وسقف أخضر بأطراف مرفوعة، وحامل صواريخ مائل بصواريخ ورقية حمراء،
+// وبراميل بارود وصناديق، وفوانيس، ودخان خفيف ---
+function powder(x, y, i, j) {
+  el(x, y + 6, 37, 16, 'rgba(30,20,15,0.22)');
+  box(x, y + 2, 33, 16.5, 3, '#8b867c', '#a8a298', '#b8b2a8');
+  const bx = x - 5, by = y - 3, w = 18, d = 9, h = 12;
+  box(bx, by, w, d, h, '#8f2a22', '#b3362b');
+  const L = qL(bx, by, w, d), R = qR(bx, by, w, d);
+  for (const u of [0.12, 0.62]) { wL(bx, by, w, d, u, 4, 0.2, 5, '#e2c27a'); }
+  poly([R(0.3, 0), R(0.62, 0), R(0.62, 8), R(0.3, 8)], '#3a2416');
+  for (const u of [0.1, 0.8]) { const p = R(u, h + 1); ln(p[0], p[1], p[0], p[1] + 2, '#3a2a20', 0.4); el(p[0], p[1] + 3.6, 1.6, 2, '#d8402e'); }
+  ridgeRoof(bx, by, w, d, h, 10, { ov: 5, sag: 2.2, flare: 3.2, front: '#3f7a52', front2: '#356a46', end: '#2f5e40', end2: '#285236',
+                                    back: '#22503b', tile: 'rgba(10,40,25,0.35)', ridge: '#d1a33f', ridgeW: 1.4 });
+  // حامل الصواريخ المائل على الركن الأيمن
+  const rx = x + 17, ry = y + 2;
+  lines([[rx - 4, ry + 1, rx + 2, ry - 12], [rx + 2, ry - 1, rx + 6, ry - 11], [rx - 4, ry + 1, rx + 2, ry - 1]], '#5a3e26', 1);
+  for (let k = 0; k < 4; k++) {
+    const sx = rx - 2.6 + k * 1.9, sy = ry - 2 - k * 1;
+    ln(sx, sy, sx + 3.4, sy - 9.4, '#c8392f', 1.3);
+    poly([[sx + 3.4, sy - 9.4], [sx + 2.6, sy - 8.4], [sx + 4.4, sy - 11.6]], '#e8c23a');
+    ln(sx - 0.6, sy + 1.6, sx, sy, '#5a3e26', 0.4);
+  }
+  for (const [px, py] of [[x + 6, y + 9], [x + 9.6, y + 7.4], [x + 7.8, y + 5.8]]) barrel(px, py, 1.7, 3.6, ['#4a3a2c', '#6b4a2e', '#7a5636']);
+  for (const [px, py] of [[x + 6, y + 5.4], [x + 9.6, y + 3.8]]) { el(px, py, 1.2, 0.6, '#2a2420'); }
+  crate(x - 18, y + 6.6, 2, ['#8a1e1e', '#b3262f', '#c8392f']);
+  crate(x - 21.5, y + 4.6, 2, ['#8a1e1e', '#b3262f', '#c8392f']);
+  const c = getCtx();
+  c.beginPath(); c.moveTo(x + 2, y - 16); c.bezierCurveTo(x, y - 22, x + 5, y - 26, x + 2, y - 32);
+  c.strokeStyle = 'rgba(200,200,195,0.4)'; c.lineWidth = 1.4; c.stroke();
+}
+
+// --- بيت صيادي الترول (النرويجية): كوخ جذوع داكنة بسقف عشب، وجمجمة ترول كبيرة بقرنين فوق الباب، وحامل رماح وفؤوس،
+// وقوس منجنيق كبير، ودروع مستديرة ملونة، وحطب ---
+function hunters(x, y, i, j) {
+  el(x, y + 6, 37, 16, 'rgba(25,20,15,0.24)');
+  box(x, y + 2, 33, 16.5, 2.5, '#6f6a62', '#8a857b', '#9a948a');
+  const by = y - 1, w = 22, d = 11, h = 12;
+  box(x, by, w, d, h, '#4a3222', '#5e4030');
+  const L = qL(x, by, w, d), R = qR(x, by, w, d), logs = [];
+  for (let v = 1.5; v < h; v += 1.8) for (const q of [L, R]) { const a = q(0, v), b = q(1, v); logs.push([a[0], a[1], b[0], b[1]]); }
+  lines(logs, 'rgba(25,15,8,0.45)', 0.5);
+  for (const p of [L(0, 0), R(1, 0)]) for (let v = 1; v < h; v += 1.8) circ(p[0], p[1] - v, 0.8, '#8a6440');   // أطراف الجذوع
+  poly([R(0.38, 0), R(0.62, 0), R(0.62, 8), R(0.38, 8)], '#2a1a10');
+  wL(x, by, w, d, 0.3, 4.5, 0.16, 3.4, '#f2c86a');
+  const roof = ridgeRoof(x, by, w, d, h, 11, { ov: 2.2, gable: true, front: '#5e8a44', back: '#4a7036', end: '#4e3624', wallEnd: '#56392a',
+                                                 eave: '#3a5a2a', ridge: '#46683a', ridgeW: 1.2, tile: 'rgba(30,50,20,0.25)' });
+  for (const [u, t] of [[0.2, 0.3], [0.55, 0.6], [0.8, 0.25]]) { const [px, py] = roofAt(roof, u, t); el(px, py, 1.8, 0.8, '#7aa858'); }
+  const g = R(0.5, 9.6);                                                   // جمجمة الترول بقرنيها فوق الباب
+  el(g[0], g[1] - 1.4, 3, 2.6, '#e8e0cc');
+  el(g[0] - 1.1, g[1] - 1.6, 0.7, 0.6, '#2a2420'); el(g[0] + 1.1, g[1] - 2, 0.7, 0.6, '#2a2420');
+  lines([[g[0] - 2.4, g[1] - 2.6, g[0] - 5, g[1] - 6.4], [g[0] + 2.4, g[1] - 3.4, g[0] + 5, g[1] - 7.6]], '#d8ccb0', 1.1);
+  for (const [px, py, c] of [[x - 18, y + 3.4, '#c8392f'], [x - 14.4, y + 5.2, '#2f6db3'], [x - 10.8, y + 7, '#e8c23a']]) {
+    el(px, py - 3, 2, 2.4, c); circ(px, py - 3, 0.6, '#c8ccd2');            // دروع مستديرة مسنودة
+  }
+  const rx = x + 17, ry = y + 4;                                           // حامل رماح وفؤوس
+  lines([[rx - 2.4, ry + 1.2, rx - 2.4, ry - 7], [rx + 2.4, ry - 1.2, rx + 2.4, ry - 9.4], [rx - 2.8, ry - 5.2, rx + 2.8, ry - 8]], '#5a3e26', 0.8);
+  lines([0, 1, 2].map(k => [rx - 1.6 + k * 1.6, ry + 0.4 - k * 0.8, rx - 1.2 + k * 1.6, ry - 11 - k * 0.8]), '#8a6a48', 0.6);
+  for (let k = 0; k < 3; k++) poly([[rx - 1.2 + k * 1.6, ry - 11 - k * 0.8], [rx - 1.7 + k * 1.6, ry - 9 - k * 0.8], [rx - 0.6 + k * 1.6, ry - 9.2 - k * 0.8]], '#c8ccd2');
+  for (const [px, py] of [[x + 25, y + 0.5], [x + 23, y + 2]]) { box(px, py, 2.6, 1.3, 1.4, '#6b4a2e', '#8a6440', '#c9a46a'); }
 }
 
 const BUILDINGS = { pyramid, dojo, clinic, fortress, khartoum, policeHQ, clock, complex, statue, mercs, souk, triads, stable,
-                    cathedral, mine, bank };
+                    cathedral, mine, bank, salwa, observatory, kanoGate, arch: triumph, khan, powder, hunters };
 
 // --- ساحة المبنى المميز (fplaza) ---
 // البلاط في طبقة الأرض (chunkCache.js): مربع داخلي بحافة ذهبية خفيفة وفاصلان
@@ -1031,6 +1760,14 @@ const PROPS = {
     poly([[x - 4, y - 9], [x + 4, y - 7], [x + 4, y - 9.6], [x - 4, y - 11.6]], '#b8382c');
     poly([[x - 1.3, y - 8.35], [x + 1.3, y - 7.7], [x + 1.3, y - 10.3], [x - 1.3, y - 10.95]], '#f1e6cf');
   },
+  // مباني مدن الأحداث (12هـ): نخيل الصحراء، وفوانيس آسيا الحجرية، ومشاعل أفريقيا، وأعمدة باريس، ومشاعل النرويج
+  salwa: (x, y, i, j) => streetPalm(x, y, i, j),
+  khan: (x, y, i, j) => streetPalm(x, y, i, j),
+  observatory(x, y) { PROPS.dojo(x, y); },
+  powder(x, y) { PROPS.dojo(x, y); },
+  kanoGate: brazier,
+  hunters: brazier,
+  arch(x, y) { PROPS.clock(x, y); },
   mercs(x, y) {                          // عمود بألوان لا بوكا وفانوس
     const cols = ['#c8392f', '#e8c23a', '#2f6db3', '#3f9b5a'];
     for (let k = 0; k < 4; k++) ln(x, y - k * 4, x, y - k * 4 - 4, cols[k], 1.3);
@@ -1150,14 +1887,15 @@ const ICONS = {
     ctx.fillStyle = '#a63a2a';
     ctx.fillRect(x - s * 0.22, y + s * 0.35, s * 0.44, s * 0.55);
   },
-  // تمثال بذراعين مفتوحتين
+  // واجهة المعبد: برج على يسارها وجبهة مثلثة وباب وفتحة البرج
   statue(ctx, x, y, s) {
-    ctx.fillStyle = '#f2efe6';
-    ctx.fillRect(x - s * 0.95, y - s * 0.5, s * 1.9, s * 0.28);
-    tri(ctx, [[x - s * 0.28, y - s * 0.5], [x + s * 0.28, y - s * 0.5], [x + s * 0.4, y + s * 0.95], [x - s * 0.4, y + s * 0.95]], '#f2efe6');
-    ctx.beginPath();
-    ctx.arc(x, y - s * 0.78, s * 0.22, 0, TAU);
-    ctx.fill();
+    ctx.fillStyle = '#d77d4e';
+    ctx.fillRect(x - s * 0.95, y - s * 0.95, s * 0.5, s * 1.9);
+    ctx.fillRect(x - s * 0.45, y - s * 0.1, s * 1.4, s * 1.05);
+    tri(ctx, [[x - s * 0.25, y - s * 0.1], [x + s * 0.75, y - s * 0.1], [x + s * 0.25, y - s * 0.62]], '#d77d4e');
+    ctx.fillStyle = '#3a2216';
+    ctx.fillRect(x + s * 0.1, y + s * 0.4, s * 0.32, s * 0.55);
+    ctx.fillRect(x - s * 0.82, y - s * 0.62, s * 0.24, s * 0.36);
   },
   // فانوس أحمر بشرابة ذهبية
   triads(ctx, x, y, s) {
@@ -1257,6 +1995,75 @@ const ICONS = {
     tri(ctx, [[x - s * 0.3, y - s * 0.35], [x + s * 0.3, y - s * 0.35], [x + s * 0.5, y - s * 0.85], [x - s * 0.5, y - s * 0.85]], '#e8c45a');
     ctx.fillStyle = '#8a5a1c';
     ctx.fillRect(x - s * 0.36, y - s * 0.45, s * 0.72, s * 0.14);
+  },
+  // --- مباني مدن الأحداث (12هـ) ---
+  // قصر نجدي بشُرَف مثلثة
+  salwa(ctx, x, y, s) {
+    ctx.fillStyle = '#e8c45a';
+    ctx.fillRect(x - s * 0.85, y - s * 0.35, s * 1.7, s * 1.1);
+    for (let k = 0; k < 4; k++) tri(ctx, [[x - s * 0.85 + k * s * 0.425, y - s * 0.35], [x - s * 0.425 + k * s * 0.425, y - s * 0.35], [x - s * 0.64 + k * s * 0.425, y - s * 0.8]], '#e8c45a');
+    ctx.fillStyle = '#8a5a1c';
+    ctx.fillRect(x - s * 0.18, y + s * 0.2, s * 0.36, s * 0.55);
+  },
+  // برج القارورة وإطاره المربع
+  observatory(ctx, x, y, s) {
+    ctx.fillStyle = '#e8c45a';
+    ctx.beginPath();
+    ctx.moveTo(x - s * 0.7, y + s * 0.85); ctx.quadraticCurveTo(x - s * 0.85, y - s * 0.1, x - s * 0.32, y - s * 0.6);
+    ctx.lineTo(x + s * 0.32, y - s * 0.6); ctx.quadraticCurveTo(x + s * 0.85, y - s * 0.1, x + s * 0.7, y + s * 0.85);
+    ctx.closePath(); ctx.fill();
+    ctx.fillRect(x - s * 0.45, y - s * 0.95, s * 0.9, s * 0.25);
+    ctx.fillStyle = '#8a5a1c';
+    ctx.fillRect(x - s * 0.15, y - s * 0.05, s * 0.3, s * 0.3);
+  },
+  // بوابة بقوس مدبب وقرنين
+  kanoGate(ctx, x, y, s) {
+    ctx.fillStyle = '#e8c45a';
+    ctx.fillRect(x - s * 0.8, y - s * 0.5, s * 1.6, s * 1.3);
+    for (const dx of [-0.65, 0.65]) tri(ctx, [[x + dx * s - s * 0.15, y - s * 0.5], [x + dx * s + s * 0.15, y - s * 0.5], [x + dx * s, y - s * 0.98]], '#e8c45a');
+    tri(ctx, [[x - s * 0.35, y + s * 0.8], [x + s * 0.35, y + s * 0.8], [x + s * 0.35, y], [x, y - s * 0.3], [x - s * 0.35, y]], '#8a5a1c');
+  },
+  // قوس النصر
+  arch(ctx, x, y, s) {
+    ctx.fillStyle = '#e8c45a';
+    ctx.fillRect(x - s * 0.85, y - s * 0.8, s * 1.7, s * 1.6);
+    ctx.fillStyle = '#8a5a1c';
+    ctx.beginPath();
+    ctx.moveTo(x - s * 0.38, y + s * 0.8); ctx.lineTo(x - s * 0.38, y); ctx.arc(x, y, s * 0.38, Math.PI, 0); ctx.lineTo(x + s * 0.38, y + s * 0.8);
+    ctx.closePath(); ctx.fill();
+    ctx.fillRect(x - s * 0.85, y - s * 0.5, s * 1.7, s * 0.08);
+  },
+  // جمل
+  khan(ctx, x, y, s) {
+    ctx.fillStyle = '#e8c45a';
+    ctx.beginPath(); ctx.ellipse(x - s * 0.1, y, s * 0.6, s * 0.35, 0, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(x - s * 0.15, y - s * 0.3, s * 0.3, s * 0.3, 0, Math.PI, 0); ctx.fill();
+    ctx.fillRect(x + s * 0.42, y - s * 0.75, s * 0.16, s * 0.75);
+    ctx.beginPath(); ctx.ellipse(x + s * 0.65, y - s * 0.78, s * 0.24, s * 0.14, 0, 0, TAU); ctx.fill();
+    for (const dx of [-0.55, -0.2, 0.15, 0.4]) ctx.fillRect(x + dx * s, y + s * 0.2, s * 0.12, s * 0.65);
+  },
+  // صاروخ ورقي مائل بلهبه
+  powder(ctx, x, y, s) {
+    ctx.save(); ctx.translate(x, y); ctx.rotate(-0.6);
+    ctx.fillStyle = '#e8c45a';
+    ctx.fillRect(-s * 0.16, -s * 0.6, s * 0.32, s * 1.1);
+    tri(ctx, [[-s * 0.24, -s * 0.6], [s * 0.24, -s * 0.6], [0, -s * 0.98]], '#e8c45a');
+    tri(ctx, [[-s * 0.14, s * 0.5], [s * 0.14, s * 0.5], [0, s * 0.95]], '#ff8a3a');
+    ctx.restore();
+  },
+  // جمجمة بقرنين
+  hunters(ctx, x, y, s) {
+    ctx.strokeStyle = '#e8c45a';
+    ctx.lineCap = 'round';
+    ctx.lineWidth = s * 0.2;
+    ctx.beginPath();
+    ctx.moveTo(x - s * 0.4, y - s * 0.2); ctx.quadraticCurveTo(x - s * 0.95, y - s * 0.4, x - s * 0.8, y - s * 0.95);
+    ctx.moveTo(x + s * 0.4, y - s * 0.2); ctx.quadraticCurveTo(x + s * 0.95, y - s * 0.4, x + s * 0.8, y - s * 0.95);
+    ctx.stroke();
+    ctx.fillStyle = '#e8c45a';
+    ctx.beginPath(); ctx.ellipse(x, y + s * 0.05, s * 0.5, s * 0.58, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#8a5a1c';
+    for (const dx of [-0.2, 0.2]) { ctx.beginPath(); ctx.arc(x + dx * s, y - s * 0.05, s * 0.12, 0, TAU); ctx.fill(); }
   }
 };
 

@@ -11,7 +11,7 @@ import {
   empireCommand, towerStats, hospitalStats, incomeOf, tileOf, nextFort, canFortify
 } from '../game/empire.js';
 import { lanCommand } from '../net/session.js';
-import { recruitsAt, featureTowerStats, featureCostMul, canCallTriads, canRingBells, clinicStats } from '../game/features.js';
+import { recruitsAt, featureTowerStats, featureCostMul, canCallTriads, canRingBells, canRocket, clinicStats } from '../game/features.js';
 import { drawCreatureIcon } from '../render/creatureArt.js';
 import { worldToScreen } from '../map/coords.js';
 import { drawCharacters } from './charThumb.js';
@@ -75,7 +75,7 @@ function sectionsFor(state, district) {
     name: 'سور', max: F.costs.length,
     perks: () => [['castle', '+' + pct(F.capture[nextLevel(district.fort || 0, F.costs.length) - 1])]],
     level: () => district.fort || 0,
-    cost: () => (nextFort(district) || {}).cost,
+    cost: () => (nextFort(district, state, state.humanId) || {}).cost,
     check: () => canFortify(state, state.humanId, district),
     cmd: { a: 'fortify', d: district.id }
   });
@@ -111,6 +111,17 @@ function districtSections(state, district) {
         cost: () => T.cost,
         check: () => canCallTriads(state, pid, district),
         cmd: { a: 'triads', d: district.id }
+      }] });
+    }
+    // ورشة البارود (12هـ): الخانة تبدأ اختيار الحي، واللمسة التالية على الخريطة تطلق الصاروخ إليه
+    if (district.feature === 'powder') {
+      const P = F.powder;
+      sections.push({ title: 'الصاروخ', slots: [{
+        name: 'صاروخ البارود', perks: () => [['sword', String(P.damage)], ['clock', sec(P.delay)]],
+        art: 'common', side, color: player.color, pick: { text: 'المس حياً ليس لك ليسقط عليه الصاروخ' },
+        cost: () => P.cost,
+        check: () => canRocket(state, pid, district),
+        cmd: { a: 'rocket', d: district.id }
       }] });
     }
     // الكاتدرائية: لمسة تقرع الأجراس
@@ -269,6 +280,18 @@ function statsLine(state, district) {
     return 'جنودك داخل ' + S.radius + ' مربعات منه: +' + pct(S.damage) + ' ضرر و+' + pct(S.attackSpeed) + ' سرعة ضرب • احتلاله أبطأ';
   }
   if (district.feature === 'mercs') return 'مرتزقة بالنقاط: الخفيف سريع ورخيص، والثقيل قوي وغالٍ';
+  // مباني مدن الأحداث (12هـ)
+  if (district.feature === 'salwa') return 'جنودك وأبراجك لا تمسها العاصفة: لا يخطئون ومداهم كامل • دخل حيه ' + F.salwa.income + ' نقاط/ث';
+  if (district.feature === 'observatory') return 'مدى رماتك وأبراجك +' + pct(F.observatory.rangeMul - 1) + ' ما دمت تملكه';
+  if (district.feature === 'kanoGate') return 'تحصين أحيائك بنصف السعر ما دمت تملكها';
+  if (district.feature === 'arch') return 'أحياؤك لا تتمرد في الانقلابات • جنودك أسرع مشياً ' + pct(F.arch.speed);
+  if (district.feature === 'khan') return 'كل تاجر يخرج من المدينة سالماً يعطيك ' + F.khan.points + ' نقاط • احمِ القوافل';
+  if (district.feature === 'hunters') return 'جنودك يضربون الترول بضعف الضرر • ومن يقتله يأخذ مكافأته';
+  if (district.feature === 'powder') {
+    const P = F.powder, wait = Math.ceil((district.readyAt || 0) - state.time);
+    return 'صاروخ على أي حي ليس لك: ضرر ' + P.damage + ' بعد ' + P.delay + ' ث على أعدائك وحدهم • مرة كل ' + P.cooldown + ' ث' +
+           (wait > 0 ? ' • جاهز بعد ' + wait + ' ث' : '');
+  }
   if (district.feature === 'triads') {
     const T = F.triads, wait = Math.ceil((district.readyAt || 0) - state.time);
     return 'ترسل ' + T.heroes.length + ' مقاتلين إلى حي لعدوك يقاتلون ' + T.seconds + ' ث • مرة كل ' + T.cooldown + ' ث' +

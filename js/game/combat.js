@@ -15,7 +15,7 @@ import { forEachNearby } from './spatialHash.js';
 import { soundAt, soundAlert, onScreen } from '../audio/sound.js';
 import { raiseAlert } from './alerts.js';
 import { random } from './random.js';   // عشوائية المنطق: مشتركة بين الأجهزة في اللعب المحلي
-import { stormMiss, stormRangeMul } from './features.js';
+import { stormMiss, rangeMul, buildingOwner } from './features.js';
 
 // اختيار الهدف للبوتات (القسم 11.2): يُسجَّل من ai/bot.js، ولا يغيّر قواعد القتال
 // يُستدعى فقط حين تحتاج الوحدة هدفاً جديداً، ويعيد undefined ليبقى الاختيار العادي
@@ -173,7 +173,7 @@ function resolveHit(state, unit) {
   if (hit.ranged) { if (isAlive(hit.target)) spawnVolley(state, unit, hit.target, hit.damage); return; }
 
   // العاصفة الرملية (القسم 3.11): الضربة القريبة تمر في الهواء أحياناً
-  if (stormMiss(state)) { addPop(state, unit, CITY_FEATURES.storm.pop, 'miss'); return; }
+  if (stormMiss(state, unit.playerId)) { addPop(state, unit, CITY_FEATURES.storm.pop, 'miss'); return; }
 
   // القتال الواقعي: الحركة تحدد من تصيب، والزاوية تحدد الضرر (القسم 5.4)
   if (hit.move) { resolveMove(state, unit, hit); return; }
@@ -415,7 +415,7 @@ function fightTarget(state, unit, budget) {
   // الرمي البعيد وحده يُعتبر "بعيداً": حركات الرماة للقتال القريب فقط (القسم 5.4)
   const ranged = !melee && !!unit.stats.projectile;
   // والعاصفة الرملية تقصّر مداه (القسم 3.11)
-  const range = melee ? unit.stats.meleeRange : unit.stats.attackRange * (ranged ? stormRangeMul(state) : 1);
+  const range = melee ? unit.stats.meleeRange : unit.stats.attackRange * (ranged ? rangeMul(state, unit.playerId) : 1);
   const damage = melee ? unit.stats.meleeDamage : unit.stats.damage;
   let attackTime = melee ? unit.stats.meleeAttackTime : unit.stats.attackTime;
 
@@ -646,6 +646,8 @@ export function applyDamage(state, attacker, target, amount, shot = false) {
   // الأنماط الأربعة (القسم 3.12): الغالب أقوى على من يغلبه، والخاطف يتجاوز بعض درع الصامد، والصامد أقل تأثراً بالمقذوفات
   const P = STYLE_PERKS, beats = !attacker.creature && !target.creature && P.beats[attacker.gang] === target.gang;
   if (beats) amount *= 1 + P.counter[attacker.gang];
+  // بيت صيادي الترول (12هـ): جنود مالكه يضربون الترول بضعف الضرر
+  if (target.creature === 'troll' && attacker.playerId === buildingOwner(state, 'hunters')) amount *= CITY_FEATURES.hunters.trollDamage;
   hitSound(state, attacker, target, amount);
   // درع الوحدة + مكافأة مراكز الشرطة المملوكة (القسم 3.8)
   let armor = Math.min(COMBAT.maxArmor, target.stats.armor + target.armorBonus);
@@ -694,7 +696,7 @@ export function spawnProjectile(state, unit, target, damage, offset = 0, fire = 
     (unit.gang === 'vipers' ? 1 + STYLE_PERKS.shotSpeed : 1);
 
   // في المطر تخطئ بعض الرميات فتسقط قرب الهدف بلا ضرر، وفي العاصفة الرملية أيضاً (القسم 3.11)
-  const hits = rangedShotHits(state, unit) && !stormMiss(state);
+  const hits = rangedShotHits(state, unit) && !stormMiss(state, unit.playerId);
   const angle = random() * 6.2832;
   const spread = COMBAT.missSpread * (0.6 + random() * 0.4);
 

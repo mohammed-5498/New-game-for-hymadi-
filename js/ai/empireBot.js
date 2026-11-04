@@ -8,7 +8,8 @@ import {
   nextBuildingUpgrade, upgradeBuilding, buildSpot, nextFort, fortifyDistrict
 } from '../game/empire.js';
 import { isEnemyId } from '../game/combat.js';
-import { recruitsAt, canCallTriads, callTriads, triadTarget, canRingBells, ringBells } from '../game/features.js';
+import { recruitsAt, canCallTriads, callTriads, triadTarget, canRingBells, ringBells, canRocket, launchRocket } from '../game/features.js';
+import { forEachNearby } from '../game/spatialHash.js';
 import { hypot } from '../game/hypot.js';
 
 const B = E.bot;
@@ -35,6 +36,7 @@ export function empireEconomy(state, player) {
   const memo = ms.bot[pid] || (ms.bot[pid] = { turn: 0, units: 0, tech: 0 });
   botTriads(state, pid);
   botBells(state, pid);
+  botRocket(state, pid);
   for (let n = 0; n < B.buysPerDecision; n++) {
     const next = pickNext(state, player, memo);
     if (!next || ms.points[pid] < next.cost) return;     // يدّخر للشراء التالي
@@ -134,7 +136,7 @@ function bestTech(state, pid, owned, hqs, plain, enemyDist) {
   // التحصين (القسم 3.12): القاعدة والبرج الأقرب للأعداء أولاً
   const wall = (list, max, rank) => {
     const d = [...list].sort((a, b) => enemyDist(a) - enemyDist(b)).find(d => (d.fort || 0) < max);
-    const next = d && nextFort(d);
+    const next = d && nextFort(d, state, pid);
     if (next) add(rank + 2 * next.level, next.cost, () => fortifyDistrict(state, pid, d.id));
   };
   wall(hqs, B.fort.hq, B.fort.rank);
@@ -192,6 +194,26 @@ function botTriads(state, pid) {
     }
   }
   if (best) callTriads(state, pid, hq.id, best.id);
+}
+
+// ورشة البارود (12هـ): متى كانت جاهزة ومع البوت كلفتها وفضل botReserve، يطلق الصاروخ على ساحة علم الحي الذي حولها
+// أكثر جنود أعدائه (botMin على الأقل)
+function botRocket(state, pid) {
+  if (state.feature !== 'fireworks') return;
+  const P = CITY_FEATURES.powder, R = CITY_FEATURES.fireworks.radius, map = state.map;
+  const ws = map.districts.find(d => d.feature === 'powder' && d.owner === pid && d.featureTile !== undefined);
+  if (!ws || state.modeState.points[pid] < P.cost + P.botReserve || !canRocket(state, pid, ws).ok) return;
+  let best = null, bestCount = P.botMin - 1;
+  for (const d of map.districts) {
+    if (!d.capture || d.owner === pid) continue;
+    let count = 0;
+    forEachNearby(state, d.capture.i, d.capture.j, R, (u) => {
+      if (u.state !== 'dead' && u.hp > 0 && isEnemyId(state, pid, u.playerId) && !state.players[u.playerId].neutral &&
+          hypot(u.x - d.capture.i, u.y - d.capture.j) <= R) count++;
+    });
+    if (count > bestCount) { bestCount = count; best = d; }
+  }
+  if (best) launchRocket(state, pid, ws.id, best.id);
 }
 
 // الكاتدرائية (القسم 3.11): يقرع أجراسها حين يقاتل botFighting من جنوده فأكثر

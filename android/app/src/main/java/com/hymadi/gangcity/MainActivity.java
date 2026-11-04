@@ -1,5 +1,8 @@
 package com.hymadi.gangcity;
 
+import android.content.ActivityNotFoundException;
+import android.content.Intent;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
@@ -25,6 +28,23 @@ public class MainActivity extends BridgeActivity {
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
         if (hasFocus) hideSystemBars();   // الأشرطة تعود بعد السحب أو بعد العودة للتطبيق
+    }
+
+    // زرا شاشة تعذر WebView (res/layout/no_webview.xml): إعادة المحاولة تعيد إنشاء النشاط فيحاول Capacitor من جديد،
+    // وفتح المتجر على صفحة Android System WebView (أو موقع المتجر إن لم يوجد تطبيقه)
+    public void retryWebView(View view) {
+        recreate();
+    }
+
+    public void openWebViewStore(View view) {
+        final String id = "com.google.android.webview";
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=" + id)));
+        } catch (ActivityNotFoundException e) {
+            try {
+                startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=" + id)));
+            } catch (ActivityNotFoundException ignored) { }
+        }
     }
 
     @SuppressWarnings("deprecation")
