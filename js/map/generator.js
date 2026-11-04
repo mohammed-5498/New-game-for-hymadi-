@@ -406,7 +406,9 @@ function assignPoliceDistricts(map, districts, size) {
 // center: الأقرب لوسط المدينة (بلا رقم عشوائي)، spread: موزعة بعيدة عن الأحياء المنزلية (الأولى عشوائية ثم الأبعد)
 const FEATURE_BUILDINGS = { pyramid: 'center', khartoum: 'center', dojo: 'center', clinic: 'spread', fortress: 'spread',
                             policeHQ: 'center', clock: 'center', complex: 'center', statue: 'center', mercs: 'spread',
-                            souk: 'center', triads: 'center', stable: 'center', cathedral: 'center', mine: 'center', bank: 'center' };
+                            souk: 'center', triads: 'center', stable: 'center', cathedral: 'center', mine: 'center', bank: 'center',
+                            salwa: 'center', observatory: 'center', kanoGate: 'center', arch: 'center', khan: 'center', powder: 'center',
+                            hunters: 'center' };
 const DISTRICT_FEATURE = { pyramid: 'pyramid', villages: 'village', dojo: 'dojo', clinic: 'clinic', fortress: 'fortress',
                            khartoum: 'khartoum', policeHQ: 'policeHQ', clock: 'clock', cartel: 'complex', statue: 'statue',
                            mercs: 'mercs', souk: 'souk', triads: 'triads', elephants: 'stable', bells: 'cathedral', mine: 'mine',
@@ -414,7 +416,8 @@ const DISTRICT_FEATURE = { pyramid: 'pyramid', villages: 'village', dojo: 'dojo'
 const FEATURE_CONFIG = { village: 'villages', complex: 'cartel' };   // قسم الأرقام في CITY_FEATURES إن اختلف اسمه
 
 function assignFeatures(map, districts, size) {
-  const feature = DISTRICT_FEATURE[CITY_FEATURES.cities[map.city]];
+  // مدن الأحداث مبناها في buildings (12هـ)، وغيرها مبنى ميزتها
+  const feature = CITY_FEATURES.buildings[map.city] || DISTRICT_FEATURE[CITY_FEATURES.cities[map.city]];
   if (!feature) return;
   const cfg = CITY_FEATURES[FEATURE_CONFIG[feature] || feature];
   const homes = districts.filter(d => d.isHome);

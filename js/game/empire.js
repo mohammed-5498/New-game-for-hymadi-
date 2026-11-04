@@ -17,7 +17,7 @@ import { findFreeTiles } from '../map/pathfinding.js';
 import { soundAt } from '../audio/sound.js';
 import { hypot } from './hypot.js';
 import { random } from './random.js';   // عشوائية المنطق: مشتركة بين الأجهزة في اللعب المحلي
-import { featureIncome, stormRangeMul, stormMiss, recruitsAt, spawnRecruit, featureCostMul, featureIncomeMul, featureProductionMul,
+import { featureIncome, rangeMul, stormMiss, buildingOwner, launchRocket, recruitsAt, spawnRecruit, featureCostMul, featureIncomeMul, featureProductionMul,
          payTax, callTriads, ringBells } from './features.js';
 
 const isAlive = (unit) => unit && unit.state !== 'dead' && unit.hp > 0;
@@ -217,7 +217,7 @@ export const tileOf = (map, k) => ({ i: k % map.n, j: Math.floor(k / map.n) });
 const towerStats = (district, state = null) => {
   const T = E.buildings.tower, lv = district.blv || {}, size = sizeOf(district);
   return {
-    range: T.range * DS.reach[size] * (state ? stormRangeMul(state) : 1),
+    range: T.range * DS.reach[size] * (state ? rangeMul(state, district.owner === null ? -1 : district.owner) : 1),
     damage: T.damage * DS.power[size] * (1 + (lv.damage || 0) * T.upgrades.damage.per),
     attackTime: T.attackTime * (1 - (lv.rate || 0) * T.upgrades.rate.per)
   };
@@ -255,7 +255,7 @@ function updateShots(state, ms) {
     shot.t += TICK_SEC;
     if (shot.t < shot.duration) { left.push(shot); continue; }
     // في العاصفة الرملية يخطئ السهم أحياناً (القسم 3.11)
-    if (isAlive(shot.target) && !stormMiss(state)) applyDamage(state, { playerId: shot.owner }, shot.target, shot.damage, true);
+    if (isAlive(shot.target) && !stormMiss(state, shot.owner)) applyDamage(state, { playerId: shot.owner }, shot.target, shot.damage, true);
   }
   ms.shots = left;
 }
@@ -438,14 +438,17 @@ export function upgradeBuilding(state, playerId, districtId, key) {
 }
 
 // --- تحصين الأحياء (القسم 3.12): ثلاثة مستويات، والتحصين ملك الحي فيبقى لمن يحتله (district.fort) ---
-export function nextFort(district) {
+// والمستوى التالي بسعره: بنصفه لمالك بوابة كانو القديمة (12هـ، state وpid للاعب الذي يحصّن)
+export function nextFort(district, state = null, pid = -1) {
   const level = (district && district.fort) || 0, C = E.fortify.costs;
-  return level < C.length ? { level: level + 1, cost: C[level] } : null;
+  if (level >= C.length) return null;
+  const half = state && pid >= 0 && buildingOwner(state, 'kanoGate') === pid;
+  return { level: level + 1, cost: half ? Math.round(C[level] * CITY_FEATURES.kanoGate.fortifyMul) : C[level] };
 }
 
 export function canFortify(state, playerId, district) {
   if (!owns(state, playerId, district)) return fail('ليس حيك');
-  const next = nextFort(district);
+  const next = nextFort(district, state, playerId);
   if (!next) return fail('أعلى مستوى');
   if (pointsOf(state, playerId) < next.cost) return fail('النقاط لا تكفي');
   return OK;
@@ -455,7 +458,7 @@ export function fortifyDistrict(state, playerId, districtId) {
   const district = state.map.districts[districtId];
   const check = canFortify(state, playerId, district);
   if (!check.ok) return check;
-  const next = nextFort(district);
+  const next = nextFort(district, state, playerId);
   spend(state, playerId, next.cost);
   district.fort = next.level;                     // السور في الطبقة الثابتة (الحي يُعاد رسمه)
   soundAt(state, 'capture_done', district.capture.i, district.capture.j);
@@ -470,6 +473,7 @@ export function empireCommand(state, playerId, a, d, x) {
   if (a === 'upgrade' && E.upgrades.order.includes(x)) return buyUpgrade(state, playerId, x);
   if (a === 'triads') return callTriads(state, playerId, d, x);          // مقر الترياد: x رقم حي العدو (القسم 3.11)
   if (a === 'bells') return ringBells(state, playerId, d);              // أجراس الكاتدرائية
+  if (a === 'rocket') return launchRocket(state, playerId, d, x);       // ورشة البارود: x رقم الحي المستهدف (12هـ)
   if (a === 'fortify') return fortifyDistrict(state, playerId, d);      // تحصين الحي (القسم 3.12)
   if (a === 'build' && E.buildings.order.includes(x)) return buildDistrict(state, playerId, d, x);
   if (a === 'improve' && district && district.building && E.buildings[district.building].upgrades.order.includes(x)) {

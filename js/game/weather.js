@@ -1,6 +1,7 @@
 // تأثير الطقس على اللعب: الرصد ليلاً، السرعة في الثلج، ودقة الرمي في المطر
 import { WEATHER, CITY_FEATURES } from '../config.js';
 import { empireSpeedMul } from './empire.js';
+import { buildingOwner } from './features.js';
 import { random } from './random.js';   // عشوائية المنطق: مشتركة بين الأجهزة في اللعب المحلي
 
 // مدى رصد الوحدة بعد تأثير الطقس (ليلاً × 0.75)
@@ -16,6 +17,7 @@ export function moveSpeed(state, unit) {
   let speed = unit.stats.speed * WEATHER[state.weather].speedMul * (unit.traits ? unit.traits.spd : 1);
   if (unit.hasteUntil > state.time) speed *= 1 + unit.hasteFactor;    // اندفاع ضربة بطل (القسم 3.10)
   if (unit.rallyUntil > state.time) speed *= 1 + CITY_FEATURES.cathedral.speed;   // أجراس الكاتدرائية (القسم 3.11)
+  if (state.feature === 'coups' && buildingOwner(state, 'arch') === unit.playerId) speed *= 1 + CITY_FEATURES.arch.speed;   // قوس النصر (12هـ)
   if (state.economy) speed *= empireSpeedMul(state, unit.playerId);   // ترقية سرعة المشي
   if (unit.slowUntil > state.time) return speed * (1 - unit.slowFactor);
   return speed;

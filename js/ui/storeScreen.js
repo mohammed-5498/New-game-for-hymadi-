@@ -135,6 +135,8 @@ function mapAside(node, city) {
   if (host) lines.push('مدينة أمة ' + NATIONS[host].name + ': مدينة المضيف حين تلعب بها.');
   const feature = CITY_FEATURES.desc[CITY_FEATURES.cities[city]];      // ميزة المدينة (القسم 3.11)
   if (feature) lines.push('ميزتها: ' + feature);
+  const building = CITY_FEATURES.desc[CITY_FEATURES.buildings[city]];  // ومبنى مدن الأحداث (12هـ)
+  if (building) lines.push('مبناها: ' + building);
   asideText(node, title, isFreeCity(city), cityPrice(city), lines);
 }
 

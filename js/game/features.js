@@ -24,6 +24,14 @@
 // - الكاتدرائية (المدينة الأوروبية): مالكها يقرع أجراسها فيصير كل جنوده أسرع وأقوى مدة قصيرة (ringBells، أمر bells)
 // - منجم الفضة (المدينة المكسيكية): دخل يكبر كلما طال امتلاكه (d.mineRate)
 // - البنك (شيكاغو): خزنة تمتلئ (d.vault) يسرقها كلها من يحتل البنك
+// ومدن الأحداث السبع لها مبنى مميز أيضاً (12هـ، CITY_FEATURES.buildings، مالكه buildingOwner):
+// - قصر سلوى (الدرعية): دخل حيه، وجنود مالكه وأبراجه لا تمسها العاصفة
+// - مرصد تشومسونغداي (غيونغجو): مدى رماة مالكه وأبراجه أطول (rangeMul)
+// - بوابة كانو القديمة (كانو): تحصين أحياء مالكها أرخص (nextFort في empire.js)
+// - قوس النصر (باريس): أحياء مالكه لا تتمرد، وجنوده أسرع مشياً (weather.js)
+// - خان القوافل (صحراء اليمامة): كل تاجر يخرج سالماً يعطي مالكه نقاطاً
+// - ورشة البارود (الصينية): صاروخ على حي بدائرة الألعاب النارية نفسها، لا يضر إلا أعداء مالكها (launchRocket، أمر rocket)
+// - بيت صيادي الترول (النرويجية): جنود مالكه يضربون الترول بضعف الضرر (combat.js)
 // الحي يحمل ميزته (district.feature، من مولّد الخريطة)، والمباراة ميزة مدينتها (state.feature).
 // الأرقام كلها في CITY_FEATURES داخل config.js
 import { TICK_SEC, CITY_FEATURES as F, EMPIRE as E, COMBAT, SPAWN, nations, DISTRICT_SIZES as DS } from '../config.js';
@@ -79,6 +87,15 @@ export function createFeaturePlayer(players, feature, city) {
 
 export const featurePlayer = (state) => state.players.find(p => p.feature) || null;
 
+// مالك مبنى مدينة الأحداث key (12هـ): رقم لاعب من العصابات، أو −1 بلا مالك أو في مدينة أخرى
+export function buildingOwner(state, key) {
+  if (F.buildings[state.map.city] !== key) return -1;
+  for (const d of state.map.districts) {
+    if (d.feature === key && d.owner !== null && d.featureTile !== undefined) return state.players[d.owner].neutral ? -1 : d.owner;
+  }
+  return -1;
+}
+
 // وسط مبنى الميزة بالمربعات: وسط كتلته 2×2 (مربعها الأمامي featureTile ناقص نصف مربع)، أو مربعه الوحيد
 export function featureCenter(map, d) {
   const at = tileOf(map, d.featureTile);
@@ -107,7 +124,7 @@ export function initFeatures(state) {
     if (!d.capture || d.featureTile === undefined) continue;
     d.cool = 0;
     if (d.feature === 'souk') d.taxed = 0;
-    if (d.feature === 'triads' || d.feature === 'cathedral') d.readyAt = 0;
+    if (d.feature === 'triads' || d.feature === 'cathedral' || d.feature === 'powder') d.readyAt = 0;
     if (d.feature === 'mine') { d.mineOwner = null; d.mineSince = 0; d.mineRate = 0; }
     if (d.feature === 'bank') { d.vault = 0; d.bankOwner = null; }
     if (d.feature === 'dojo') {
@@ -126,6 +143,9 @@ export function updateFeatures(state) {
   if (!state.featureHinted && state.empireHinted && !state.notice) {
     state.featureHinted = true;
     state.notice = { text: 'ميزة المدينة — ' + F.desc[state.feature], mine: true, t: F.hintSeconds };
+  } else if (state.featureHinted && !state.buildingHinted && !state.notice && F.buildings[state.map.city]) {
+    state.buildingHinted = true;                        // ومبنى مدينة الأحداث بعدها (12هـ)
+    state.notice = { text: 'مبنى المدينة — ' + F.desc[F.buildings[state.map.city]], mine: true, t: F.hintSeconds };
   }
   switch (state.feature) {
     case 'storm': stormNotices(state); break;
@@ -159,14 +179,18 @@ export function stormAt(time) {
 
 export const stormActive = (state) => state.feature === 'storm' && stormAt(state.time).on;
 
-// مدى الرماة والأبراج الآن (1 بلا عاصفة)
-export const stormRangeMul = (state) => stormActive(state) ? F.storm.rangeMul : 1;
+// العاصفة على جنود اللاعب pid وأبراجه: لا تمس مالك قصر سلوى (12هـ)
+const stormHits = (state, pid) => stormActive(state) && !(pid >= 0 && buildingOwner(state, 'salwa') === pid);
+
+// مدى رماة اللاعب وأبراجه الآن: العاصفة تقصّره، ومرصد تشومسونغداي يطيله لمالكه (12هـ)
+export const rangeMul = (state, pid) => (stormHits(state, pid) ? F.storm.rangeMul : 1) *
+  (pid >= 0 && buildingOwner(state, 'observatory') === pid ? F.observatory.rangeMul : 1);
 
 // ضرر النار وضربات الأبطال الآن (1 بلا عاصفة): أضعف بقدر احتمال الخطأ
-export const stormDamageMul = (state) => stormActive(state) ? 1 - F.storm.miss : 1;
+export const stormDamageMul = (state, pid) => stormHits(state, pid) ? 1 - F.storm.miss : 1;
 
 // هل تخطئ هذه الضربة أو هذا السهم؟ (لا رقم عشوائي يُسحب بلا عاصفة)
-export const stormMiss = (state) => stormActive(state) && random() < F.storm.miss;
+export const stormMiss = (state, pid) => stormHits(state, pid) && random() < F.storm.miss;
 
 // التنبيه قبلها، وبدايتها ونهايتها: بمقارنة هذا التحديث بالذي قبله
 function stormNotices(state) {
@@ -196,7 +220,8 @@ export function featureBar(state) {
   }
   if (state.feature === 'fireworks') {
     const pending = state.fireworks && state.fireworks.find(f => !f.done);
-    if (pending) return { text: 'ألعاب نارية! ابتعد عن الدوائر ' + clock((pending.at - tickOf(state)) * TICK_SEC), alarm: true };
+    if (pending) return { text: (pending.owner !== undefined ? 'صاروخ البارود! ابتعد عن الدائرة ' : 'ألعاب نارية! ابتعد عن الدوائر ') +
+                                clock((pending.at - tickOf(state)) * TICK_SEC), alarm: true };
   }
   if (state.feature === 'caravan' && state.mode !== 'survival' && state.units.some(u => u.cargo && isAlive(u))) {
     return { text: 'قافلة في المدينة', alarm: false };
@@ -266,7 +291,7 @@ export function featureValue(d) {
 // دخل الحي في الثانية: الهرم بدل نقطة الحي العادي، وnull لغير حي الهرم
 // والمنجم دخله الحالي (يكبر مع مدة امتلاكه، updateMine)، والبنك رسومه
 export const featureIncome = (d) => d.feature === 'pyramid' ? F.pyramid.income : d.feature === 'mine' ? d.mineRate
-  : d.feature === 'bank' ? F.bank.fee : null;
+  : d.feature === 'bank' ? F.bank.fee : d.feature === 'salwa' ? F.salwa.income : null;
 
 // الأهرام المملوكة الآن: { owner, x, y, r2 } لحساب الضرر المتلقى حولها (abilities.js)
 export function pyramidZones(state) {
@@ -361,7 +386,7 @@ export function featureDamageBonus(state, playerId) {
 // سهم على أقرب عدو للرامي داخل المدى كل attackTime، بسهام أبراج الاقتصاد نفسها (empire.js) من أعلى المبنى.
 // وحجم الحي يطيل المدى ويقوّي السهام (القسم 3.12)
 export function featureTowerStats(d, state = null) {
-  const size = sizeOf(d), range = DS.reach[size] * (state ? stormRangeMul(state) : 1), power = DS.power[size];
+  const size = sizeOf(d), range = DS.reach[size] * (state ? rangeMul(state, d.owner === null ? -1 : d.owner) : 1), power = DS.power[size];
   if (d.feature === 'fortress') {
     const T = F.fortress.tower;
     return { range: T.range * range, damage: T.damage * power, attackTime: T.attackTime };
@@ -532,10 +557,10 @@ function updateCoups(state) {
 function coup(state, wave) {
   const C = F.coups, rebels = featurePlayer(state), map = state.map;
   if (!rebels) return;
-  const mul = 1 + C.grow * (wave - 1);
+  const mul = 1 + C.grow * (wave - 1), arch = buildingOwner(state, 'arch');
   let mine = 0, total = 0;
   for (const player of state.players) {
-    if (player.neutral) continue;
+    if (player.neutral || player.id === arch) continue;         // قوس النصر: أحياء مالكه لا تتمرد (12هـ)
     const owned = map.districts.filter(d => d.owner === player.id && d.capture);
     const count = C.at.filter(n => owned.length >= n).length;
     if (!count) continue;
@@ -770,10 +795,16 @@ function moveCaravan(state) {
   if (!player) return;
   const mine = state.units.filter(u => u.playerId === player.id && u.caravanExit && isAlive(u));
   if (!mine.length) return;
-  const gone = new Set();
+  const gone = new Set(), khan = buildingOwner(state, 'khan'), ms = state.modeState;
+  let paid = 0;
   for (const u of mine) {
     const exit = u.caravanExit;
     if (state.time < exit.until && hypot(u.x - exit.i, u.y - exit.j) > C.exitRadius) continue;
+    if (u.harmless && u.cargo && khan >= 0 && ms.points) {     // خان القوافل: تاجر خرج سالماً (12هـ)
+      ms.points[khan] += F.khan.points;
+      ms.earned[khan] += F.khan.points;
+      paid += F.khan.points;
+    }
     u.cargo = false;
     u.hp = 0;
     u.state = 'dead';
@@ -783,6 +814,7 @@ function moveCaravan(state) {
     gone.add(u);
   }
   if (gone.size) state.units = state.units.filter(u => !gone.has(u));
+  if (paid && khan === state.humanId) state.notice = { text: 'تجار خرجوا سالمين إلى خانك: +' + paid + ' نقطة', mine: true, t: 2.5 };
   const merchants = mine.filter(u => u.harmless && !gone.has(u)), guards = mine.filter(u => !u.harmless && !gone.has(u));
   const idle = merchants.filter(u => u.state === 'idle');
   if (idle.length) commandMove(state, idle[0].caravanExit.i, idle[0].caravanExit.j, idle, false);
@@ -875,15 +907,16 @@ function dodgeFireworks(state, x, y) {
 }
 
 function burstFireworks(state, f) {
-  const W = F.fireworks, r2 = W.radius * W.radius, player = featurePlayer(state), hit = [];
+  const W = F.fireworks, r2 = W.radius * W.radius, player = featurePlayer(state), hit = [], rocket = f.owner !== undefined;
   f.done = true;
-  if (!player) return;
-  const by = { playerId: player.id };          // صاحب الضرر: طرف الألعاب النارية المحايد (لا مكافأة لأحد)
+  if (!player && !rocket) return;
+  // صاحب الضرر: طرف الألعاب النارية المحايد (لا مكافأة لأحد)، أو مالك ورشة البارود لصاروخه فلا يضر إلا أعداءه (12هـ)
+  const by = { playerId: rocket ? f.owner : player.id };
   forEachNearby(state, f.x, f.y, W.radius, (u) => {
     const dx = u.x - f.x, dy = u.y - f.y;
-    if (dx * dx + dy * dy <= r2 && isAlive(u)) hit.push(u);
+    if (dx * dx + dy * dy <= r2 && isAlive(u) && (!rocket || isEnemyId(state, f.owner, u.playerId))) hit.push(u);
   });
-  for (const u of hit) applyDamage(state, by, u, W.damage);
+  for (const u of hit) applyDamage(state, by, u, rocket ? F.powder.damage : W.damage);
   soundAt(state, 'fire', f.x, f.y);
 }
 
@@ -1066,9 +1099,39 @@ function moveTroll(state) {
 }
 
 // ================= ما يُختار بلمسة على الخريطة (القائمة ثم input.js) =================
-// هجوم الترياد (حي عدو). يعيد { ok, reason }
+// هجوم الترياد (حي عدو)، وصاروخ البارود (حي ليس لك). يعيد { ok, reason }
 export function canPick(state, pid, pick, target) {
-  return canCallTriads(state, pid, state.map.districts[pick.d], target);
+  const d = state.map.districts[pick.d];
+  return pick.a === 'rocket' ? canRocket(state, pid, d, target) : canCallTriads(state, pid, d, target);
+}
+
+// ================= ورشة البارود (المدينة الصينية، 12هـ) =================
+// مالكها يدفع cost ويختار حياً ليس له: دائرة كدائرة الألعاب النارية على ساحة علمه تنفجر بعد delay بضرر damage على أعدائه
+// وحدهم (burstFireworks)، مرة كل cooldown (d.readyAt). target undefined: هل الخانة متاحة؟ null: لمسة على غير حي
+export function canRocket(state, pid, d, target) {
+  const P = F.powder;
+  if (!d || d.feature !== 'powder' || d.featureTile === undefined || d.owner !== pid) return { ok: false, reason: 'ليست ورشتك' };
+  if (state.time < d.readyAt) return { ok: false, reason: 'جاهز بعد ' + Math.ceil(d.readyAt - state.time) + ' ث' };
+  if (state.modeState.points[pid] < P.cost) return { ok: false, reason: 'النقاط لا تكفي' };
+  if (target === undefined) return { ok: true, reason: '' };
+  return target && target.capture && target.owner !== pid ? { ok: true, reason: '' } : { ok: false, reason: 'اختر حياً ليس لك' };
+}
+
+export function launchRocket(state, pid, did, targetId) {
+  const P = F.powder, d = state.map.districts[did];
+  const target = Number.isInteger(targetId) ? state.map.districts[targetId] || null : null;
+  const check = canRocket(state, pid, d, target);
+  if (!check.ok) return check;
+  spend(state, pid, P.cost);
+  d.readyAt = state.time + P.cooldown;
+  const x = target.capture.i, y = target.capture.j;
+  state.fireworks.push({ x, y, at: tickOf(state) + ticks(P.delay), done: false, owner: pid });
+  dodgeFireworks(state, x, y);
+  soundAt(state, 'ult_cast', d.capture.i, d.capture.j);
+  state.notice = pid === state.humanId
+    ? { text: 'انطلق صاروخ البارود: ينفجر بعد ' + P.delay + ' ث', mine: true, t: 2.5 }
+    : { text: state.players[pid].gangName + ' أطلقوا صاروخ البارود!', mine: false, t: 3 };
+  return { ok: true, reason: '' };
 }
 
 // ================= الكاتدرائية (المدينة الأوروبية، بدل محطة القطار) =================

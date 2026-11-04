@@ -179,7 +179,8 @@ function openCityPicker() {
       const city = choice === 'host' ? hostCity(setup.slots[0].side) : choice;
       updateCityThumb(el('pickerThumb'), el('pickerThumbName'), city, isPickerOpen);
       const feature = CITY_FEATURES.desc[CITY_FEATURES.cities[city]];    // ميزة المدينة (القسم 3.11)
-      el('pickerFeature').textContent = feature ? 'ميزتها: ' + feature : '';
+      const building = CITY_FEATURES.desc[CITY_FEATURES.buildings[city]];   // ومبنى مدن الأحداث (12هـ)
+      el('pickerFeature').textContent = feature ? 'ميزتها: ' + feature + (building ? ' • ' + building : '') : '';
       el('pickerFeature').hidden = !feature;
     },
     close: showCity

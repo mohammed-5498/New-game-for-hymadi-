@@ -283,10 +283,9 @@ export function createFire(state, playerId, i, j, fire) {
 function updateFires(state) {
   if (!state.fires.length) return;
   const remaining = [];
-  const weak = stormDamageMul(state);     // العاصفة الرملية تضعف النار (القسم 3.11)
-
   for (const fire of state.fires) {
     fire.life -= TICK_SEC;
+    const weak = stormDamageMul(state, fire.playerId);     // العاصفة الرملية تضعف النار (القسم 3.11)، إلا لمالك قصر سلوى
 
     const radiusSq = fire.radius * fire.radius;
     forEachNearby(state, fire.x, fire.y, fire.radius, (unit) => {

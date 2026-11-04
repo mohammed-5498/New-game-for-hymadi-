@@ -206,7 +206,7 @@ function shakeCamera(state, unit) {
 
 // ضرر الضربة يتأثر بمكافآت الضرر مثل الضربة العادية (مخزن السلاح، الهالات)
 // والعاصفة الرملية تضعفها (القسم 3.11)
-const ultDamage = (state, unit, amount) => amount * unit.damageMultiplier * stormDamageMul(state);
+const ultDamage = (state, unit, amount) => amount * unit.damageMultiplier * stormDamageMul(state, unit.playerId);
 
 function harden(state, unit, duration) {
   unit.invulnUntil = state.time + duration;

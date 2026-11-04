@@ -17,15 +17,15 @@ export const sizeStyle = (size) => SIZES[size] || SIZES.medium;
 
 // --- أدوات الأشكال ---
 // جذع مخروطي مربع: قاعدته نصف عرضها w0 وقمته w1 (الأسوار الطينية تضيق للأعلى)
-function frustum(x, y, w0, w1, h, L, R, top) {
+export function frustum(x, y, w0, w1, h, L, R, top) {
   const d0 = w0 / 2, d1 = w1 / 2;
   poly([[x - w0, y], [x, y + d0], [x, y + d1 - h], [x - w1, y - h]], L);
   poly([[x, y + d0], [x + w0, y], [x + w1, y - h], [x, y + d1 - h]], R);
   if (top) asRoof(() => poly([[x - w1, y - h], [x, y - d1 - h], [x + w1, y - h], [x, y + d1 - h]], top));
 }
 // نقطة على وجه الجذع: u من الركن الجانبي (0) إلى الأمامي (1)، وv الارتفاع
-const fL = (x, y, w0, w1, h) => (u, v) => { const w = w0 + (w1 - w0) * v / h; return [x - w + u * w, y + u * w / 2 - v]; };
-const fR = (x, y, w0, w1, h) => (u, v) => { const w = w0 + (w1 - w0) * v / h; return [x + u * w, y + w / 2 - u * w / 2 - v]; };
+export const fL = (x, y, w0, w1, h) => (u, v) => { const w = w0 + (w1 - w0) * v / h; return [x - w + u * w, y + u * w / 2 - v]; };
+export const fR = (x, y, w0, w1, h) => (u, v) => { const w = w0 + (w1 - w0) * v / h; return [x + u * w, y + w / 2 - u * w / 2 - v]; };
 const quad = (q, u, v, du, dv, c) => poly([q(u, v), q(u + du, v), q(u + du, v + dv), q(u, v + dv)], c);
 const tri = (q, u, v, du, dv, c) => poly([q(u, v), q(u + du, v), q(u + du / 2, v + dv)], c);
 
