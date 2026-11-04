@@ -2333,6 +2333,96 @@ export function drawEventGround(ctx, state, visible) {
   else if (ev === 'quake' && E2.quake) quakeGround(ctx, state, E2.quake);
   else if (ev === 'holi' && E2.clouds) holiClouds(ctx, state, E2.clouds);
   else if (ev === 'watch' || ev === 'knight') unitGlows(ctx, state, visible, ev);
+  else if (ev === 'ash' && E2.ash) ashClouds(ctx, state, E2.ash);
+  else if (ev === 'carnival' && E2.dancers) paradeRings(ctx, state, E2.dancers, visible);
+  else if (ev === 'derby' && E2.derby) derbyZone(ctx, state, E2.derby);
+  else if (ev === 'silver' && E2.silver) silverPieces(ctx, state, E2.silver, visible);
+  else if (ev === 'fire' && E2.fire) fireDistricts(ctx, state, E2.fire, visible);
+}
+
+// بقع رماد البركان: دوائر برتقالية متقطعة وقت التنبيه، ثم رماد رمادي داكن يتساقط وجمر
+function ashClouds(ctx, state, a) {
+  for (const c of a.list) {
+    const [x, y] = iso(c.x, c.y), R = c.r * Math.SQRT2, rx = R * TILE_HALF_W, ry = R * TILE_HALF_H;
+    ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, TAU);
+    if (!a.on) { ctx.setLineDash([5, 3]); ctx.lineWidth = 1.4; ctx.strokeStyle = 'rgba(255,140,50,0.9)'; ctx.stroke(); ctx.setLineDash([]); continue; }
+    const k = fadeK(eventWindow('ash', state.time), 1);
+    ctx.fillStyle = 'rgba(60,55,52,' + (0.38 * k).toFixed(3) + ')'; ctx.fill();
+    ctx.beginPath();                                                 // ذرات الرماد تتساقط
+    for (let m = 0; m < 24; m++) {
+      const fx = (hsh(m, 1, 950) - 0.5) * 2 * rx * 0.85, ph = (state.time * (0.5 + hsh(m, 2, 950)) + hsh(m, 3, 950)) % 1;
+      const fy = (hsh(m, 4, 950) - 0.5) * 2 * ry * 0.85 - 30 * (1 - ph);
+      ctx.moveTo(x + fx + 1, y + fy); ctx.arc(x + fx, y + fy, 1, 0, TAU);
+    }
+    ctx.fillStyle = 'rgba(150,145,140,' + (0.8 * k).toFixed(3) + ')'; ctx.fill();
+    ctx.beginPath();
+    for (let m = 0; m < 6; m++) { const ex = x + (hsh(m, 5, 951) - 0.5) * rx, ey = y + (hsh(m, 6, 951) - 0.5) * ry; ctx.moveTo(ex + 1.2, ey); ctx.arc(ex, ey, 1.2, 0, TAU); }
+    ctx.fillStyle = 'rgba(255,' + (110 + Math.round(60 * Math.sin(state.time * 6))) + ',40,' + (0.85 * k).toFixed(3) + ')'; ctx.fill();
+  }
+}
+
+// حلقة وردية خفيفة حول كل راقص: من يمشي داخلها أسرع
+function paradeRings(ctx, state, dancers, visible) {
+  const R = F.carnival.radius * Math.SQRT2;
+  ctx.beginPath();
+  for (const [i, j] of dancers) {
+    const [x, y] = iso(i, j);
+    if (!visible(x, y)) continue;
+    ctx.moveTo(x + R * TILE_HALF_W, y); ctx.ellipse(x, y, R * TILE_HALF_W, R * TILE_HALF_H, 0, 0, TAU);
+  }
+  ctx.fillStyle = 'rgba(255,120,200,0.1)'; ctx.fill();
+  ctx.lineWidth = 0.8; ctx.strokeStyle = 'rgba(255,150,215,0.55)'; ctx.stroke();
+}
+
+// منطقة الديربي المزدحمة: أرض زرقاء خفيفة ودائرة متقطعة بلوني الفريقين
+function derbyZone(ctx, state, z) {
+  const [x, y] = iso(z.x, z.y), R = F.derby.radius * Math.SQRT2;
+  ctx.beginPath(); ctx.ellipse(x, y, R * TILE_HALF_W, R * TILE_HALF_H, 0, 0, TAU);
+  ctx.fillStyle = 'rgba(90,150,220,0.12)'; ctx.fill();
+  ctx.setLineDash([6, 4]); ctx.lineWidth = 1.6; ctx.strokeStyle = 'rgba(245,210,70,0.85)'; ctx.stroke();
+  ctx.lineDashOffset = 5; ctx.strokeStyle = 'rgba(47,109,179,0.85)'; ctx.stroke(); ctx.setLineDash([]); ctx.lineDashOffset = 0;
+}
+
+// قطع الفضة: سبيكة لامعة بوهج يلمع
+function silverPieces(ctx, state, ps, visible) {
+  for (const p of ps.pieces) {
+    const [x0, y0] = iso(p.i, p.j);
+    if (!visible(x0, y0)) continue;
+    ctx.save(); ctx.translate(x0, y0); ctx.scale(1.8, 1.8);       // أكبر من مقاس المربع حتى تُرى بين المباني
+    const x = 0, y = 0, pulse = 0.5 + 0.5 * Math.sin(state.time * 5 + p.i);
+    ctx.beginPath(); ctx.ellipse(x, y, 9, 4.5, 0, 0, TAU); ctx.fillStyle = 'rgba(220,235,255,' + (0.18 + 0.15 * pulse).toFixed(3) + ')'; ctx.fill();
+    const f = (pts, col) => { ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (const q of pts.slice(1)) ctx.lineTo(q[0], q[1]); ctx.closePath(); ctx.fillStyle = col; ctx.fill(); };
+    f([[x - 4, y - 1], [x, y + 1], [x, y - 1.2], [x - 3.2, y - 2.8]], '#9aa2ab');
+    f([[x, y + 1], [x + 4, y - 1], [x + 3.2, y - 2.8], [x, y - 1.2]], '#c6ccd3');
+    f([[x - 3.2, y - 2.8], [x, y - 1.2], [x + 3.2, y - 2.8], [x, y - 4.4]], '#eef2f6');
+    ctx.beginPath(); ctx.arc(x + 1.6, y - 4.6, 0.8 + pulse * 0.8, 0, TAU); ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.fill();
+    ctx.restore();
+  }
+}
+
+// الأحياء المحترقة: أرض برتقالية ولهب يرتجف على كل مربع
+function fireDistricts(ctx, state, fire, visible) {
+  const map = state.map, t = state.time;
+  ctx.beginPath();
+  const flames = [];
+  for (const id of fire.burning) {
+    for (const [i, j] of map.districts[id].tiles) {
+      const [x, y] = iso(i, j);
+      if (!visible(x, y)) continue;
+      ctx.moveTo(x - TILE_HALF_W, y); ctx.lineTo(x, y - TILE_HALF_H); ctx.lineTo(x + TILE_HALF_W, y); ctx.lineTo(x, y + TILE_HALF_H); ctx.closePath();
+      flames.push([x, y, hsh(i, j, 940)]);
+    }
+  }
+  ctx.fillStyle = 'rgba(230,90,30,0.22)'; ctx.fill();
+  for (const layer of [['#e8521e', 1], ['#ffb43a', 0.6]]) {
+    ctx.beginPath();
+    for (const [x, y, r] of flames) {
+      const h = (9 + 5 * Math.sin(t * 9 + r * 20)) * layer[1], w = 3.2 * layer[1], ox = (r - 0.5) * 8;
+      ctx.moveTo(x + ox - w, y); ctx.quadraticCurveTo(x + ox - w * 0.6, y - h * 0.6, x + ox + Math.sin(t * 7 + r * 9) * 1.5, y - h);
+      ctx.quadraticCurveTo(x + ox + w * 0.6, y - h * 0.6, x + ox + w, y); ctx.closePath();
+    }
+    ctx.fillStyle = layer[0]; ctx.fill();
+  }
 }
 
 // دائرة الزلزال: إطار أحمر متقطع وقت التنبيه، ثم شقوق في الأرض وغبار
@@ -2503,6 +2593,8 @@ export function drawEventSky(ctx, state, visible) {
     }
   }
   if ((ev === 'market' || ev === 'whistle') && eventWindow(ev, state.time).on) { hqTags(ctx, state, visible, ev); return; }
+  if (ev === 'carnival' && E2.dancers && E2.dancers.length) { confetti(ctx, state, E2.dancers, visible); return; }
+  if (ev === 'fire' && E2.fire) { smoke(ctx, state, E2.fire, visible); return; }
   const season = ev === 'season' && eventWindow('season', state.time).on, silt = ev === 'nile' && nilePhase(state.time) === 'silt';
   if (!season && !silt) return;
   ctx.font = '700 7px system-ui, sans-serif';
@@ -2569,4 +2661,33 @@ function typhoonSky(ctx, state, view) {
   ctx.strokeStyle = 'rgba(210,225,240,' + (0.55 * k).toFixed(3) + ')';
   ctx.lineWidth = 1;
   ctx.stroke();
+}
+
+// قصاصات ملونة تتطاير فوق راقصي الكرنفال
+function confetti(ctx, state, dancers, visible) {
+  const cols = ['#ff4fb4', '#ffd23f', '#4fe3a0', '#5fa8e8', '#ff8a3a'];
+  dancers.forEach(([i, j], n) => {
+    const [x, y] = iso(i, j);
+    if (!visible(x, y)) return;
+    for (let m = 0; m < 6; m++) {
+      const ph = (state.time * 0.7 + hsh(n, m, 945)) % 1, px = x + (hsh(n, m, 946) - 0.5) * 22 + Math.sin(state.time * 3 + m) * 3;
+      ctx.fillStyle = cols[(n + m) % cols.length];
+      ctx.fillRect(px, y - 36 + ph * 26, 2, 1.4);
+    }
+  });
+}
+
+// دخان رمادي يتصاعد فوق الأحياء المحترقة
+function smoke(ctx, state, fire, visible) {
+  for (const id of fire.burning) {
+    const d = state.map.districts[id];
+    if (!d.capture) continue;
+    const [x, y] = iso(d.capture.i, d.capture.j);
+    if (!visible(x, y - 40)) continue;
+    for (let m = 0; m < 5; m++) {
+      const ph = (state.time * 0.35 + m / 5) % 1;
+      ctx.beginPath(); ctx.ellipse(x + Math.sin(ph * 6 + m) * 6, y - 18 - ph * 60, 6 + ph * 12, 4 + ph * 8, 0, 0, TAU);
+      ctx.fillStyle = 'rgba(70,65,62,' + (0.38 * (1 - ph)).toFixed(3) + ')'; ctx.fill();
+    }
+  }
 }

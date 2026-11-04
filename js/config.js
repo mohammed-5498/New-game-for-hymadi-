@@ -1680,7 +1680,7 @@ export const CITY_FEATURES = {
   // لا أحداث في الصمود. وأرقام كل حدث في قسمه أدناه
   events: { shibam: 'flood', cairo: 'treasure', arab: 'season', gondar: 'lightning', meroe: 'nile',
             japan: 'quake', kaifeng: 'market', hk: 'typhoon', jaipur: 'holi', rothenburg: 'watch', birmingham: 'whistle',
-            europe: 'knight' },
+            europe: 'knight', tenoch: 'ash', rio: 'carnival', laboca: 'derby', mexico: 'silver', chicago: 'fire' },
   ground: ['#c9a24e', 0.24],
   // المبنى المميز (بطلب المستخدم: مساحة خاصة به، وحجم أكبر وفخامة وهالة): كتلة 2×2 وسط حيه لا يُمشى عليها،
   // وبقية الحي ساحة مرصوفة حوله يُمشى عليها. حيه blockTiles مربعاً فأكثر (generator.js)
@@ -1738,7 +1738,12 @@ export const CITY_FEATURES = {
           holi: 'مهرجان الألوان: سحب ألوان على 3 أماكن 15 ثانية، لا يقاتل أحد داخلها',
           watch: 'جولة الحارس الليلي: دورية شرطة قوية تجول بين الأحياء وتهاجم كل عصابة إلا مالك المركز الرئيسي',
           whistle: 'صافرة المصانع: كل دقيقتين يصير إنتاج الجنود أسرع 50% للجميع 30 ثانية',
-          knight: 'الفارس الأسود: فارس قوي يقف في وسط المدينة، ومن يقتله يأخذ 120 نقطة' },
+          knight: 'الفارس الأسود: فارس قوي يقف في وسط المدينة، ومن يقتله يأخذ 120 نقطة',
+          ash: 'رماد البركان: يتساقط على 3 أماكن 15 ثانية، من تحته أبطأ ويأخذ ضرراً',
+          carnival: 'الكرنفال: موكب راقصين يعبر المدينة، ومن يمشي معه من الجنود أسرع 30%',
+          derby: 'جمهور الديربي: جمهور يملأ شوارع الوسط 30 ثانية فيسدّها',
+          silver: 'حمى الفضة: 4 قطع فضة في الشوارع، كل قطعة 25 نقطة لأول جندي يصلها',
+          fire: 'الحريق الكبير: حريق في حي ينتقل إلى جيرانه كل 10 ثوانٍ، ويحرق من فيه' },
   // الهالة حول كل مبنى مميز وحول القرية التي ينتظر أهلها (رسم فقط): نصف القطر بالمربعات من وسط الكتلة، ونبض بطيء،
   // ونجوم صغيرة تدور عليها. colors: لون هالة كل ميزة
   halo: { radius: 1.95, width: 1.6, glow: 8, alpha: 0.85, glowAlpha: 0.3, pulse: 0.3, speed: 1.8,
@@ -1800,6 +1805,23 @@ export const CITY_FEATURES = {
   // ومن يقتله يأخذ reward. فارس واحد في كل مرة
   knight: { first: 100, every: 150, reward: 120, chase: 4, name: 'الفارس الأسود', color: '#1c1c22', nation: 'britain', hero: 'boss',
             stats: { hp: 1400, armor: 0.35, damage: 45, speed: 1.6, capturePower: 0 } },
+  // --- أحداث 12ح (الأمريكتان) ---
+  // رماد البركان (تينوتشتيتلان): count بقع نصف قطرها radius حول جنود عشوائيين متباعدين apart مدة duration، تُعلَن مع التنبيه:
+  // من تحتها أبطأ slow ويأخذ dps ضرراً في الثانية
+  ash: { first: 90, every: 105, warn: 5, duration: 15, count: 3, radius: 2.6, apart: 6, dps: 3, slow: 0.2 },
+  // الكرنفال (ريو): موكب من count راقصين مسالمين بشكل أمة nation بلون color يدخل من حافة ويمشي إلى المقابلة (حتى life
+  // ثانية)، وكل جندي داخل radius من راقص أسرع boost
+  carnival: { first: 90, every: 120, count: 8, life: 70, radius: 2.5, boost: 0.3, think: 2, exitRadius: 1.6,
+              name: 'الكرنفال', color: '#e0398a', nation: 'brazil', stats: { speed: 1.2, hp: 400 } },
+  // جمهور الديربي (لا بوكا): count مشجعاً مسالماً يقفون في شوارع الوسط (حتى radius مربعاً من المركز) مدة duration،
+  // ومن في المنطقة أبطأ jam (الشوارع مسدودة)
+  derby: { first: 95, every: 120, warn: 5, duration: 30, count: 16, radius: 5, jam: 0.65,
+           name: 'جمهور الديربي', color: '#2f6db3', nation: 'argentina' },
+  // حمى الفضة (المكسيكية): count قطع في شوارع عشوائية تبقى life ثانية، كل قطعة points لأول جندي يبلغ pick مربعاً منها
+  silver: { first: 80, every: 100, count: 4, life: 40, points: 25, pick: 0.9 },
+  // الحريق الكبير (شيكاغو): يبدأ في حي عشوائي، وكل spread ثانية يشعل كل حي محترق جاراً واحداً له مدة duration،
+  // ومن في حي محترق يأخذ dps ضرراً في الثانية
+  fire: { first: 95, every: 120, warn: 5, duration: 30, spread: 10, dps: 4 },
   // العاصفة الرملية (الدرعية): أولها عند first ثانية ثم كل every ثانية، لمدة duration، وتنبيه قبلها بـ warn ثانية.
   // أثناءها: مدى الرماة والأبراج × rangeMul، والضربة القريبة والسهم وسهم البرج يخطئ باحتمال miss
   // ("أخطأ!" pop)، والنار وضربات الأبطال أضعف بنفس النسبة
