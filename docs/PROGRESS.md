@@ -22,6 +22,11 @@
   2. تنزيل الملف `GangCity-apk` بعد اكتمال البناء.
   3. فحص الملف.
   4. إرساله بأداة إرسال الملفات (SendUserFile).
+  - **إن تعذر الوصول إلى GitHub من الجلسة:** يُبنى محلياً بخطوات الملف نفسه في نسخة نظيفة (`git worktree`):
+    1. أدوات أندرويد (`platform-tools` و`platforms;android-36` و`build-tools;36.0.0`) عبر `sdkmanager`.
+    2. `npm ci`، ثم `npm run build:web`، ثم `npx cap sync android`، ثم `./gradlew assembleDebug`.
+    - إن رد Maven Central بـ 429: سكربت `--init-script` يضيف مرآة Google (`maven-central.storage-download.googleapis.com/maven2/`) قبل المستودعات.
+  - **التوقيع:** لا مفتاح ثابت في المستودع، فكل بناء (على GitHub أو محلياً) بمفتاح تصحيح جديد، والتثبيت فوق نسخة قديمة قد يحتاج حذفها أولاً.
 
 ## 2. مراحل التنفيذ (القسم 15 في GAME_SPEC) — كلها مكتملة
 
