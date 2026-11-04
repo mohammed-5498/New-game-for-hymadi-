@@ -436,19 +436,51 @@ export function evolveOf(state, d) {
 export const evolveKey = (t) => t ? '|e' + Object.values(t).join('') : '';
 
 // --- البرج ---
-// السرعة: شرفة رماة خشبية حول جذعه (ورامٍ عليها وجعبة سهام عند قاعدته في المستوى 2)
-// والضرر: قوس منجنيق ثقيل على وجهه الأيمن (وآخر على الأيسر ومجمرتان مشتعلتان عند قاعدته في المستوى 2)
-export function towerUpgrades(x, y, a, tech) {
+// السرعة: شرفة رماة خشبية حول جذعه برايتين صغيرتين بلون مالكه (وفي المستوى 2 سقف قرميد فوقها ورامٍ عليها وجعبة
+// سهام وحزمة سهام عند قاعدته). والضرر: قوس منجنيق ثقيل على وجهه الأيمن وحزمة سهامه الثقيلة (وفي المستوى 2 قوس آخر
+// على الأيسر، وطوقان حديديان حول أعلاه، ومجمرتان مشتعلتان وكومة حجارة قذف عند قاعدته). 12د: كل مستوى أوضح من سابقه
+export function towerUpgrades(x, y, a, tech, owner = null) {
   if (!a || !tech) return;
-  if (tech.rate) gallery(x, y, a, tech.rate);
+  if (tech.rate) gallery(x, y, a, tech.rate, owner);
   if (tech.damage) {
+    if (tech.damage > 1) ironBands(x, y, a);
     ballista(x, y, a, 1);
-    if (tech.damage > 1) { ballista(x, y, a, -1); brazier(x - 13.5, y + 1.6); brazier(x + 13.5, y + 1.6); }
+    bolts(x + 10.5, y + 3.4);
+    if (tech.damage > 1) {
+      ballista(x, y, a, -1);
+      brazier(x - 13.5, y + 1.6); brazier(x + 13.5, y + 1.6);
+      for (const [dx, dy, r] of [[-7, 5.2, 1.3], [-5.2, 5.8, 1.2], [-6.2, 4.4, 1.1]]) { circ(x + dx, y + dy, r, '#8a857c'); circ(x + dx - r * 0.3, y + dy - r * 0.3, r * 0.4, '#b4afa6'); }
+    }
   }
 }
 
-function gallery(x, y, a, level) {
+// طوقان حديديان بمسامير حول أعلى الجذع (الضرر 2)
+function ironBands(x, y, a) {
+  for (const t of [0.8, 0.92]) {
+    const v = a.h * t, w = a.w + 0.3, d = w / 2;
+    if (a.round) { const c = ctx(); c.beginPath(); c.ellipse(x, y - v, w, d, 0, 0, Math.PI); c.strokeStyle = IRON; c.lineWidth = 1.1; c.stroke(); }
+    else { ln(x - w, y - v, x, y + d - v, IRON, 1.1); ln(x, y + d - v, x + w, y - v, IRON, 1.1); }
+    for (const u of [0.25, 0.5, 0.75]) for (const sx of [-1, 1]) circ(x + sx * w * (1 - u), y - v + d * u, 0.35, STEEL);
+  }
+}
+
+// حزمة سهام ثقيلة مربوطة عند القاعدة
+function bolts(px, py) {
+  for (let k = 0; k < 5; k++) ln(px - 2.4, py - 0.4 + k * 0.45, px + 2.4, py - 2.8 + k * 0.45, '#8a6a48', 0.7);
+  for (const t of [0.3, 0.7]) ln(px - 2.4 + 4.8 * t - 0.4, py - 0.9 - 2.4 * t, px - 2.4 + 4.8 * t + 0.2, py + 1.4 - 2.4 * t, '#3a2a1c', 0.6);
+  for (let k = 0; k < 5; k++) poly([[px + 2.4, py - 2.8 + k * 0.45], [px + 3.4, py - 3.4 + k * 0.45], [px + 2.6, py - 2.2 + k * 0.45]], STEEL);
+}
+
+function gallery(x, y, a, level, owner) {
   const gh = a.h * 0.62, bh = 3.4, w = a.w + 1.8, d = w / 2;
+  if (level >= 2) {                                         // سقف قرميد فوق الشرفة (يُرسم قبلها فتغطي الشرفة طرفه)
+    const rt = gh + bh, rh = 3.6;
+    if (a.round) cone(x, y - rt + 0.6, w + 0.8, rh + 0.6, '#6a3424', '#8a4a32');
+    else {
+      poly([[x - w - 0.6, y - rt + 0.4], [x, y + d - rt + 0.7], [x, y + a.w / 2 - rt - rh], [x - a.w, y - rt - rh]], '#6a3424');
+      poly([[x, y + d - rt + 0.7], [x + w + 0.6, y - rt + 0.4], [x + a.w, y - rt - rh], [x, y + a.w / 2 - rt - rh]], '#8a4a32');
+    }
+  }
   if (a.round) cyl(x, y - gh, w, bh, WOOD_D, WOOD, null);
   else {
     poly([[x - w, y - gh], [x, y + d - gh], [x, y + d - gh - bh], [x - w, y - gh - bh]], WOOD_D);
@@ -461,7 +493,13 @@ function gallery(x, y, a, level) {
     }
   }
   for (const sx of [-1, 1]) ln(x + sx * w * 0.8, y - gh + d * 0.2, x + sx * a.w * 0.9, y - gh + 5, WOOD_D, 0.8);   // دعامتان
+  for (const sx of [-1, 1]) {                                // رايتان صغيرتان على طرفي الشرفة بلون المالك
+    const px = x + sx * w, py = y - gh - bh;
+    ln(px, py, px, py - 5.5, WOOD_D, 0.6);
+    poly([[px, py - 5.5], [px + sx * 3.2, py - 4.6], [px, py - 3.6]], owner || '#c9a046');
+  }
   if (level < 2) return;
+  bolts(x - 10.8, y + 4.6);                                 // حزمة سهام إضافية عند القاعدة
   const ax = x + 3, ay = y + d - gh - bh - 0.6;             // رامٍ على الشرفة بقوسه
   ln(ax, ay, ax, ay - 4.2, '#3a2e24', 1.3);
   circ(ax, ay - 5.2, 1.1, '#e0b896');
@@ -497,12 +535,49 @@ function brazier(px, py) {
 }
 
 // --- المستشفى ---
-// المدى: خيمة إسعاف عند ركنه (وثانية عند الركن الآخر في المستوى 2)، وحلقة علاج خضراء حوله (empireArt.js)
-// والسرعة: سيارة إسعاف عند مدخله (ومنارة وامضة على سطحه في المستوى 2)
+// المدى: خيمة إسعاف عند ركنه ونقالة بجانبها (وفي المستوى 2 خيمة ثانية عند الركن الآخر وصناديق إمداد)، وحلقة علاج
+// خضراء حوله (empireArt.js). والسرعة: سيارة إسعاف عند مدخله (وفي المستوى 2 مظلة إسعاف فوقها ومنارة وامضة على سطحه)
 export function hospitalUpgrades(x, y, a, tech, city) {
   if (!a || !tech) return;
-  if (tech.radius) { tent(x - 13.6, y + 1.6, city); if (tech.radius > 1) tent(x + 13.6, y + 1.6, city); }
-  if (tech.rate) { ambulance(x + 6.2, y + 6.4, city); if (tech.rate > 1) beacon(x - 3, y - a.top); }
+  if (tech.radius) {
+    tent(x - 13.6, y + 1.6, city);
+    stretcher(x - 8.4, y + 5.2);
+    if (tech.radius > 1) {
+      tent(x + 13.6, y + 1.6, city);
+      for (const [px, py] of [[x - 11.6, y + 6.6], [x - 14, y + 5.6]]) {
+        box(px, py, 1.5, 0.75, 1.8, '#d8d3c6', '#f4f1e8', '#ffffff');
+        medicSign(ctx(), px + 0.75, py - 0.7, 0.55, medicOf(city));
+      }
+    }
+  }
+  if (tech.rate) {
+    if (tech.rate > 1) canopy(x + 6.2, y + 6.4, city, true);
+    ambulance(x + 6.2, y + 6.4, city);
+    if (tech.rate > 1) { canopy(x + 6.2, y + 6.4, city, false); beacon(x - 3, y - a.top); }
+  }
+}
+
+// نقالة بأرجل وغطاء أبيض
+function stretcher(px, py) {
+  for (const [dx, dy] of [[-2.2, 0.4], [2.2, -1.4], [-1.4, 1.2], [3, -0.6]]) ln(px + dx, py + dy, px + dx, py + dy - 1.4, IRON, 0.4);
+  poly([[px - 2.6, py - 1], [px + 2.2, py - 3.4], [px + 3.4, py - 2.6], [px - 1.4, py - 0.2]], '#f4f1e8');
+  ln(px - 2.6, py - 1, px + 2.2, py - 3.4, '#8a8478', 0.35);
+  el(px + 2.2, py - 3, 0.8, 0.5, '#e8e4da');
+}
+
+// مظلة الإسعاف: أربعة أعمدة وسقف أبيض بشريط أحمر. back الأعمدة الخلفية والسقف قبل السيارة، وإلا الأماميان
+function canopy(px, py, city, back) {
+  const w = 5.6, d = 2.8, h = 7.4;
+  const pts = [[px - w, py], [px, py + d], [px + w, py], [px, py - d]];
+  if (back) {
+    for (const p of [pts[0], pts[3], pts[2]]) ln(p[0], p[1], p[0], p[1] - h, '#8a8478', 0.6);
+    return;
+  }
+  ln(pts[1][0], pts[1][1], pts[1][0], pts[1][1] - h, '#8a8478', 0.6);
+  poly(pts.map(p => [p[0], p[1] - h]), '#f4f1e8');
+  poly([[px - w, py - h], [px, py + d - h], [px, py + d - h + 1.2], [px - w, py - h + 1.2]], MEDIC.red);
+  poly([[px, py + d - h], [px + w, py - h], [px + w, py - h + 1.2], [px, py + d - h + 1.2]], '#c8302b');
+  medicSign(ctx(), px, py - h - 0.2, 1.2, medicOf(city));
 }
 
 function tent(px, py, city) {
@@ -529,12 +604,50 @@ function beacon(px, py) {
 }
 
 // --- القاعدة الرئيسية: ساحة علم حيها تصير ساحة تدريب بمستواها ---
-// 1 حاملا رماح على ركنيها الجانبيين، 2 ودميتا تدريب على الأمامي والخلفي، 3 ومجمرتان ذهبيتان حول العلم
-export function hqYard(x, y, tier) {
+// 1 حاملا رماح على ركنيها الجانبيين وهدف رماية، 2 ودميتا تدريب على الأمامي والخلفي وصندوق سيوف، 3 ومجمرتان ذهبيتان
+// حول العلم ورايتا حرب ذهبيتان بلون المالك على الركنين وطبل حرب (12د)
+export function hqYard(x, y, tier, owner = null) {
   if (tier >= 2) { dummy(x, y - 5.2); }
+  target(x + 6.4, y - 3);
+  if (tier >= 2) swordCrate(x - 6.4, y - 2.6);
   for (const sx of [-1, 1]) rack(x + sx * 11, y);
   if (tier >= 2) dummy(x, y + 5.4);
-  if (tier >= 3) { brazier(x - 5, y + 2); brazier(x + 5, y + 2); }
+  if (tier >= 3) {
+    brazier(x - 5, y + 2); brazier(x + 5, y + 2);
+    drum(x + 7.6, y + 4.2);
+    for (const sx of [-1, 1]) warStandard(x + sx * 13.2, y + 3.4, owner);
+  }
+}
+
+function target(px, py) {
+  ln(px - 1.4, py + 0.6, px - 0.6, py - 4, WOOD_D, 0.8); ln(px + 1.4, py - 0.6, px + 0.6, py - 4.6, WOOD_D, 0.8);
+  el(px, py - 5.2, 2.6, 2.9, '#d8bc72');
+  el(px, py - 5.2, 1.8, 2, '#f4efe2');
+  el(px, py - 5.2, 1, 1.1, '#c8392f');
+  ln(px - 0.4, py - 5.6, px + 1.4, py - 7.6, '#5a4028', 0.5);
+}
+
+function swordCrate(px, py) {
+  box(px, py, 2.4, 1.2, 2.2, WOOD_D, WOOD, '#8a6a48');
+  for (let k = 0; k < 3; k++) {
+    const sx = px - 1.2 + k * 1.2;
+    ln(sx, py - 2.4 + k * 0.3, sx + 0.4, py - 7 + k * 0.3, STEEL, 0.6);
+    ln(sx - 0.7, py - 3 + k * 0.3, sx + 0.7, py - 3.2 + k * 0.3, '#c9a046', 0.6);
+  }
+}
+
+function drum(px, py) {
+  cyl(px, py, 2.2, 2.6, '#6a2a1e', '#8a3a28', '#e8dcc0');
+  for (const dx of [-1.4, 1.4]) ln(px + dx, py - 2.6, px + dx * 0.6, py - 5, '#5a4028', 0.5);
+}
+
+function warStandard(px, py, owner) {
+  ln(px, py, px, py - 20, '#c9a046', 1);
+  circ(px, py - 20.6, 0.9, '#f2c14e');
+  ln(px - 3, py - 18.6, px + 3, py - 18.6, '#c9a046', 0.7);
+  poly([[px - 2.6, py - 18.4], [px + 2.6, py - 18.4], [px + 2.6, py - 10], [px, py - 8.2], [px - 2.6, py - 10]], owner || '#c9a046');
+  ln(px - 2.6, py - 10, px + 2.6, py - 10, 'rgba(255,230,150,0.7)', 0.5);
+  circ(px, py - 14.4, 1, '#f2c14e');
 }
 
 function rack(px, py) {
@@ -630,7 +743,7 @@ function hqTurret(px, py, h, st, wall, side) {
   }
 }
 
-export function drawCityHQ(x, y, i, j, T, city, size, owner) {
+export function drawCityHQ(x, y, i, j, T, city, size, owner, tier = 0) {
   const st = Q_STYLE[city] || Q_STYLE.arab, s = sizeStyle(size), ex = st.extras || [];
   const W = s.small ? 12 : s.big ? 14.5 : 13.5, D = W / 2, fh = 8;            // أعلى وأعرض من بيوت الحي فيُرى من بينها
   const floors = Math.max(1, (st.floors || 3) + (s.big ? 1 : 0) - (s.small ? 1 : 0)), H = floors * fh + 3;
@@ -752,6 +865,30 @@ export function drawCityHQ(x, y, i, j, T, city, size, owner) {
   }
   // برجا الركنين الجانبيين (لا في الحي الصغير)
   if (st.turret && !s.small) for (const sx of [-1, 1]) hqTurret(x + sx * W, y, H + 5, st, wall, side);
+  // تطور القصر بمستوى القاعدة (12د): 1 فانوسان مضيئان عند البوابة، 2 وحافة ذهبية أعلى الجدارين وكرات ذهبية على
+  // أركانهما، 3 وحلقة ذهبية ثانية حول الشعار وراية كبرى بلون المالك فوق السطح
+  if (tier >= 1) for (const u of [0.2, 0.8]) {
+    const p = qr(u, Math.min(dv, H - 3) * 0.78), o = [p[0] + 1.3, p[1] + 0.65];
+    ln(p[0], p[1], o[0], o[1], IRON, 0.6);
+    glow(o[0], o[1] + 1.8, 4.2, 'rgba(255,200,90,0.4)');
+    poly([[o[0] - 0.9, o[1] + 0.4], [o[0] + 0.9, o[1] + 0.4], [o[0] + 0.6, o[1] + 3], [o[0] - 0.6, o[1] + 3]], '#2a2a2e');
+    poly([[o[0] - 0.55, o[1] + 0.8], [o[0] + 0.55, o[1] + 0.8], [o[0] + 0.35, o[1] + 2.6], [o[0] - 0.35, o[1] + 2.6]], '#ffd98a');
+  }
+  if (tier >= 2) {
+    const a = ql(0, H - 0.6), b = ql(1, H - 0.6), c = qr(1, H - 0.6);
+    ln(a[0], a[1], b[0], b[1], GOLD, 0.9); ln(b[0], b[1], c[0], c[1], GOLD, 0.9);
+    for (const p of [[x - W, y - H], [x, y + D - H], [x + W, y - H]]) { ln(p[0], p[1], p[0], p[1] - 2.2, GOLD, 0.6); circ(p[0], p[1] - 2.6, 0.9, '#f2c14e'); }
+  }
+  if (tier >= 3 && owner) {
+    const e = qr(0.5, dv + 3.4);
+    const c = getCtx();
+    c.beginPath(); c.arc(e[0], e[1], 3.3, 0, 6.2832); c.strokeStyle = GOLD; c.lineWidth = 0.6; c.stroke();
+    const px = x - W * 0.25, py = y - top + 1;
+    ln(px, py, px, py - 15, '#3a322a', 1);
+    circ(px, py - 15.6, 1, '#f2c14e');
+    poly([[px, py - 15], [px + 10, py - 13], [px + 9, py - 10.4], [px, py - 8.4]], owner);
+    ln(px, py - 15, px + 10, py - 13, GOLD, 0.6);
+  }
   return { w: W, h: H, top: Math.max(top, st.turret && !s.small ? H + 9 : 0) };
 }
 

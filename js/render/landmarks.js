@@ -7,7 +7,7 @@
 // العلامات لا تُصبغ بلون المالك حتى تبقى واضحة دائماً.
 import { CITY_SPECIALS, CAPTURE, EMPIRE } from '../config.js';
 import { THEMES, getCtx, setThemeContext, setTone, getTone, getToneInfo, poly, circ, ln, box, el } from './cityThemes.js';
-import { drawFeatureBuilding } from './featureArt.js';
+import { drawFeatureBuilding, villageWell } from './featureArt.js';
 import { drawCityTower, drawCityHospital, drawCityHQ, medicSign, medicOf, towerUpgrades, hospitalUpgrades, hqYard, ownerBanner } from './empireBuildings.js';
 import { sizeOf } from '../map/sizes.js';
 
@@ -121,12 +121,12 @@ export function drawLandmark(map, type, x, y, i, j, ownerColor, flagColor, light
     const district = districtOfTile(map, i, j);
     const kind = empireKind(map, type, district);
     let body;
-    if (kind.startsWith(HQ)) plain(() => { body = drawCityHQ(x, y, i, j, T, map.city, kind.slice(HQ.length), ownerColor || flagColor); });
+    if (kind.startsWith(HQ)) plain(() => { body = drawCityHQ(x, y, i, j, T, map.city, kind.slice(HQ.length), ownerColor || flagColor, tech ? tech.tier : 0); });
     else if (kind.startsWith(TOWER)) plain(() => { body = drawKind(map, kind, x, y, i, j); ownerBanner(x, y, body, ownerColor || flagColor); });
     else body = drawKind(map, kind, x, y, i, j);
     const top = y - roofTop(map, kind, i, j);
     // البرج يتطور بترقياته: شرفة رماة، وقوس منجنيق، ومجمرتان (صور اليمامة: جذع تقديري من ارتفاعها المقيس)
-    if (type === 'T' && tech) plain(() => towerUpgrades(x, y, body || { w: 6.5, h: y - top - 4 }, tech));
+    if (type === 'T' && tech) plain(() => towerUpgrades(x, y, body || { w: 6.5, h: y - top - 4 }, tech, ownerColor || flagColor));
     // القاعدة الرئيسية في طور الإمبراطورية: رايتان بلون مالكها عند مدخلها، وأكبر بقمم ذهبية في الحي الكبير (11هـ)
     // أو حين تبلغ المستوى 2 من تطورها
     if (type === 'Q' && badges && ownerColor && district) {
@@ -247,7 +247,8 @@ export function drawLandmark(map, type, x, y, i, j, ownerColor, flagColor, light
       c.lineWidth = 0.5;
       c.stroke();
       // ساحة حي القاعدة تصير ساحة تدريب بمستوى تطورها، وإلا أحواض النبات
-      if (tech && tech.tier) hqYard(x, y, tech.tier);
+      if (tech && tech.tier) hqYard(x, y, tech.tier, ownerColor || flagColor);
+      else if (district && district.feature === 'village') villageWell(x, y);   // 12د: بئر القرية وجرارها (شبام)
       else if (size !== 'small') plazaPlanters(x, y, size === 'large');
       c.beginPath();
       c.ellipse(x, y, 15, 7.5, 0, 0, 6.2832);
