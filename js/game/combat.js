@@ -15,7 +15,7 @@ import { forEachNearby } from './spatialHash.js';
 import { soundAt, soundAlert, onScreen } from '../audio/sound.js';
 import { raiseAlert } from './alerts.js';
 import { random } from './random.js';   // عشوائية المنطق: مشتركة بين الأجهزة في اللعب المحلي
-import { stormMiss, rangeMul, buildingOwner } from './features.js';
+import { stormMiss, rangeMul, buildingOwner, holiTruce } from './features.js';
 
 // اختيار الهدف للبوتات (القسم 11.2): يُسجَّل من ai/bot.js، ولا يغيّر قواعد القتال
 // يُستدعى فقط حين تحتاج الوحدة هدفاً جديداً، ويعيد undefined ليبقى الاختيار العادي
@@ -35,6 +35,7 @@ function chooseTarget(state, unit) {
 export function isEnemy(state, a, b) {
   if (a.bribedUntil > state.time && a.bribedBy === b.playerId) return false;
   if (b.bribedUntil > state.time && b.bribedBy === a.playerId) return false;
+  if (state.cityEvent && holiTruce(state, a, b)) return false;     // مهرجان الألوان: لا قتال داخل سحبه (12ز)
   return isEnemyId(state, a.playerId, b.playerId);
 }
 
@@ -391,6 +392,7 @@ function comboAttackTime(state, unit, target, baseTime) {
 
 function fightTarget(state, unit, budget) {
   const target = unit.target;
+  if (state.cityEvent && holiTruce(state, unit, target)) { finishFight(state, unit); return; }   // مهرجان الألوان (12ز)
   const dist = distance(unit, target);
 
   // وجه الوحدة يدور بسرعة محدودة (القسم 5.4.4ب): البطيء في الدوران يُلتف عليه

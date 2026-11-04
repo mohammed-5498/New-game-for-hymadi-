@@ -2330,6 +2330,69 @@ export function drawEventGround(ctx, state, visible) {
   else if (ev === 'nile') nileBanks(ctx, state, visible);
   else if (ev === 'treasure' && E2.chest) chest(ctx, state, E2.chest, visible);
   else if (ev === 'lightning') boltMarks(ctx, state, visible);
+  else if (ev === 'quake' && E2.quake) quakeGround(ctx, state, E2.quake);
+  else if (ev === 'holi' && E2.clouds) holiClouds(ctx, state, E2.clouds);
+  else if (ev === 'watch' || ev === 'knight') unitGlows(ctx, state, visible, ev);
+}
+
+// دائرة الزلزال: إطار أحمر متقطع وقت التنبيه، ثم شقوق في الأرض وغبار
+function quakeGround(ctx, state, q) {
+  const [x, y] = iso(q.x, q.y), R = F.quake.radius * Math.SQRT2, rx = R * TILE_HALF_W, ry = R * TILE_HALF_H;
+  ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, TAU);
+  if (!q.on) {
+    const pulse = 0.5 + 0.5 * Math.sin(state.time * 8);
+    ctx.fillStyle = 'rgba(200,60,40,' + (0.06 + 0.07 * pulse).toFixed(3) + ')'; ctx.fill();
+    ctx.setLineDash([6, 4]); ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(255,90,60,0.9)'; ctx.stroke(); ctx.setLineDash([]);
+    return;
+  }
+  const k = fadeK(eventWindow('quake', state.time), 0.6);
+  ctx.fillStyle = 'rgba(120,85,50,' + (0.22 * k).toFixed(3) + ')'; ctx.fill();
+  ctx.beginPath();                                                   // شقوق متكسرة من المركز، ثابتة لكل زلزال
+  const seed = Math.round(q.x * 7 + q.y * 13);
+  for (let a = 0; a < 9; a++) {
+    let px = x, py = y;
+    ctx.moveTo(px, py);
+    const ang = a * TAU / 9 + hsh(seed, a, 970) * 0.5;
+    for (let s = 1; s <= 5; s++) {
+      const len = s / 5 * (0.55 + hsh(seed, a, 980 + s) * 0.4);
+      px = x + Math.cos(ang + (hsh(seed, a, 990 + s) - 0.5) * 0.6) * rx * len;
+      py = y + Math.sin(ang + (hsh(seed, a, 990 + s) - 0.5) * 0.6) * ry * len;
+      ctx.lineTo(px, py);
+    }
+  }
+  ctx.strokeStyle = 'rgba(40,25,15,' + (0.7 * k).toFixed(3) + ')'; ctx.lineWidth = 1.4; ctx.stroke();
+}
+
+// سحب الألوان: دوائر متداخلة بألوان المهرجان تنبض، ودوائر متقطعة وقت التنبيه
+const HOLI = ['255,80,160', '255,210,60', '80,200,120', '90,150,255', '255,140,60'];
+function holiClouds(ctx, state, cl) {
+  for (const c of cl.list) {
+    const [x, y] = iso(c.x, c.y), R = c.r * Math.SQRT2;
+    if (!cl.on) {
+      ctx.beginPath(); ctx.ellipse(x, y, R * TILE_HALF_W, R * TILE_HALF_H, 0, 0, TAU);
+      ctx.setLineDash([4, 3]); ctx.lineWidth = 1.3; ctx.strokeStyle = 'rgba(' + HOLI[c.hue % HOLI.length] + ',0.9)'; ctx.stroke(); ctx.setLineDash([]);
+      continue;
+    }
+    const k = fadeK(eventWindow('holi', state.time), 1);
+    for (let n = 0; n < 5; n++) {
+      const a = n * TAU / 5 + state.time * 0.4, d = 0.45 * R;
+      const px = x + Math.cos(a) * d * TILE_HALF_W, py = y + Math.sin(a) * d * TILE_HALF_H;
+      ctx.beginPath(); ctx.ellipse(px, py, R * 0.62 * TILE_HALF_W, R * 0.62 * TILE_HALF_H, 0, 0, TAU);
+      ctx.fillStyle = 'rgba(' + HOLI[(n + c.hue) % HOLI.length] + ',' + (0.2 * k).toFixed(3) + ')'; ctx.fill();
+    }
+  }
+}
+
+// وهج فانوس تحت دورية الحارس الليلي، وهالة داكنة تحت الفارس الأسود
+function unitGlows(ctx, state, visible, ev) {
+  for (const u of state.units) {
+    if (u.state === 'dead' || !(ev === 'watch' ? u.patrol : u.blackKnight)) continue;
+    const [x, y] = iso(u.x, u.y);
+    if (!visible(x, y)) continue;
+    ctx.beginPath(); ctx.ellipse(x, y, ev === 'watch' ? 16 : 20, ev === 'watch' ? 8 : 10, 0, 0, TAU);
+    ctx.fillStyle = ev === 'watch' ? 'rgba(255,200,90,0.22)' : 'rgba(20,10,30,0.35)'; ctx.fill();
+    if (ev === 'knight') { ctx.lineWidth = 1.2; ctx.strokeStyle = 'rgba(170,40,50,0.8)'; ctx.stroke(); }
+  }
 }
 
 // شريط السيل: إطار متقطع وقت التنبيه، ثم ماء بخطوط موج تجري مع التيار
@@ -2439,6 +2502,7 @@ export function drawEventSky(ctx, state, visible) {
       ctx.beginPath(); ctx.ellipse(x, y, 16 * k + 6, 8 * k + 3, 0, 0, TAU); ctx.fillStyle = 'rgba(220,235,255,' + (0.5 * k).toFixed(3) + ')'; ctx.fill();
     }
   }
+  if ((ev === 'market' || ev === 'whistle') && eventWindow(ev, state.time).on) { hqTags(ctx, state, visible, ev); return; }
   const season = ev === 'season' && eventWindow('season', state.time).on, silt = ev === 'nile' && nilePhase(state.time) === 'silt';
   if (!season && !silt) return;
   ctx.font = '700 7px system-ui, sans-serif';
@@ -2453,8 +2517,31 @@ export function drawEventSky(ctx, state, visible) {
   }
 }
 
-// فوق المشهد كله: سماء عاصفة البرق الداكنة، وومضة بيضاء مع كل صاعقة
+// بجانب علم كل قاعدة: فانوس أحمر "−25%" في سوق الليل، وترس "×1.5" في صافرة المصانع
+function hqTags(ctx, state, visible, ev) {
+  ctx.font = '700 6px system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  for (const d of state.map.districts) {
+    if (d.building !== 'hq' || !d.capture || d.owner === null || state.players[d.owner].neutral) continue;
+    const [x0, y0] = iso(d.capture.i, d.capture.j), x = x0 + 11, y = y0 - 13 + Math.sin(state.time * 3 + d.id) * 1.2;
+    if (!visible(x, y)) continue;
+    if (ev === 'market') {
+      ctx.beginPath(); ctx.ellipse(x, y, 6, 7, 0, 0, TAU); ctx.fillStyle = '#c8302b'; ctx.fill();
+      ctx.fillStyle = '#e8b83a'; ctx.fillRect(x - 3, y - 8, 6, 1.6); ctx.fillRect(x - 3, y + 6.4, 6, 1.6);
+      ctx.fillStyle = '#fff1b8'; ctx.fillText('−25%', x, y + 2.2);
+    } else {
+      ctx.beginPath();
+      for (let k = 0; k < 16; k++) { const a = k * TAU / 16, r = k % 2 ? 6.4 : 5; ctx.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r); }
+      ctx.closePath(); ctx.fillStyle = '#8a9096'; ctx.fill();
+      ctx.beginPath(); ctx.arc(x, y, 4.2, 0, TAU); ctx.fillStyle = '#3a3f45'; ctx.fill();
+      ctx.fillStyle = '#f4f1ea'; ctx.fillText('×1.5', x, y + 2.2);
+    }
+  }
+}
+
+// فوق المشهد كله: سماء عاصفة البرق الداكنة وومضتها، ومطر الإعصار المائل مع الريح
 export function drawEventOverlay(ctx, state, view) {
+  if (cityEvent(state) === 'typhoon' && state.cityEvent && state.cityEvent.wind && state.cityEvent.wind.on) { typhoonSky(ctx, state, view); return; }
   if (cityEvent(state) !== 'lightning' || !state.cityEvent) return;
   const w = eventWindow('lightning', state.time);
   if (!w.on) return;
@@ -2463,4 +2550,23 @@ export function drawEventOverlay(ctx, state, view) {
   const now = state.time / TICK_SEC, last = state.cityEvent.bolts.filter(b => b.done).reduce((a, b) => Math.max(a, b.at), -1e9);
   const age = (now - last) * TICK_SEC;
   if (age >= 0 && age < 0.15) { ctx.fillStyle = 'rgba(235,240,255,' + (0.22 * (1 - age / 0.15)).toFixed(3) + ')'; ctx.fillRect(0, 0, view.w, view.h); }
+}
+
+// مطر الإعصار: سماء رمادية وخطوط مائلة تجري في اتجاه الريح على الشاشة
+function typhoonSky(ctx, state, view) {
+  const w = state.cityEvent.wind, k = fadeK(eventWindow('typhoon', state.time), 1.5);
+  ctx.fillStyle = 'rgba(40,55,70,' + (0.3 * k).toFixed(3) + ')';
+  ctx.fillRect(0, 0, view.w, view.h);
+  const sx = (w.dx - w.dy) * TILE_HALF_W, sy = (w.dx + w.dy) * TILE_HALF_H + 30, n = Math.hypot(sx, sy);
+  const ux = sx / n, uy = sy / n, t = state.time;
+  ctx.beginPath();
+  for (let m = 0; m < 90; m++) {
+    const speed = 380 + hsh(m, 3, 960) * 220;
+    const px = ((hsh(m, 1, 960) * view.w + ux * speed * t) % view.w + view.w) % view.w;
+    const py = ((hsh(m, 2, 960) * view.h + uy * speed * t) % view.h + view.h) % view.h;
+    ctx.moveTo(px, py); ctx.lineTo(px - ux * 16, py - uy * 16);
+  }
+  ctx.strokeStyle = 'rgba(210,225,240,' + (0.55 * k).toFixed(3) + ')';
+  ctx.lineWidth = 1;
+  ctx.stroke();
 }

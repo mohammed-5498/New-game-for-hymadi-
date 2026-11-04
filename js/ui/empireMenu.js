@@ -8,7 +8,7 @@ import { EMPIRE as E, TILE_HALF_W, TILE_HALF_H, CITY_FEATURES as F, DISTRICT_SIZ
 import { sizeOf } from '../map/sizes.js';
 import {
   canQueue, unitPrice, heroFor, productionTime, nextUpgrade, canUpgrade, canBuild, nextBuildingUpgrade, canUpgradeBuilding,
-  empireCommand, towerStats, hospitalStats, incomeOf, tileOf, nextFort, canFortify
+  empireCommand, towerStats, hospitalStats, incomeOf, tileOf, nextFort, canFortify, buildCost
 } from '../game/empire.js';
 import { lanCommand } from '../net/session.js';
 import { recruitsAt, featureTowerStats, featureCostMul, canCallTriads, canRingBells, canRocket, clinicStats } from '../game/features.js';
@@ -163,7 +163,7 @@ function districtSections(state, district) {
     return [{ title: 'ابنِ في هذا الحي', slots: E.buildings.order.map(type => ({
       name: E.buildings[type].name,
       perks: () => buildPerks(district, type),
-      cost: () => E.buildings[type].cost,
+      cost: () => buildCost(state, type),
       check: () => canBuild(state, pid, district, type),
       cmd: { a: 'build', d: district.id, x: type }
     })) }];
@@ -179,7 +179,7 @@ function buildingSlots(state, pid, district) {
     name: U[key].name, max: U[key].costs.length,
     perks: () => upgradePerks(district.building, key, nextLevel((district.blv && district.blv[key]) || 0, U[key].costs.length)),
     level: () => (district.blv && district.blv[key]) || 0,
-    cost: () => (nextBuildingUpgrade(district, key) || {}).cost,
+    cost: () => (nextBuildingUpgrade(district, key, state) || {}).cost,
     check: () => canUpgradeBuilding(state, pid, district, key),
     cmd: { a: 'improve', d: district.id, x: key }
   }));
