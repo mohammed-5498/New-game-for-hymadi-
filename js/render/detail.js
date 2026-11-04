@@ -9,6 +9,7 @@
 // تعمل فقط أثناء رسم مبنى عادي أو أرض فارغة (beginDetail/endDetail في cityRender.js)، فلا تمس المباني المميزة ولا مباني
 // الاقتصاد. ترسم بالسياق مباشرة بلا صبغ المالك (أشياء بألوانها). الأرقام في CITY_DETAIL في config.js
 import { CITY_DETAIL as CD, REGIONS } from '../config.js';
+import { gfx } from '../graphics.js';
 import { getCtx, hsh, setDetailHooks } from './cityThemes.js';
 
 const TAU = Math.PI * 2;
@@ -22,7 +23,7 @@ const rnd = () => hsh(ti, tj, 700 + (seq++ % 97));
 // الخطافات يستدعيها cityThemes.js حين يكون on فقط، فلا كلفة على بقية الرسم
 const HOOKS = { on: false, pre: null, box: null, win: null, arch: null };
 export function beginDetail(c, i, j) {
-  if (!CD.enabled) return;
+  if (!CD.enabled || !gfx().detail) return;
   city = c; region = REGION.get(c) || 'arabic'; modern = CD.modern.includes(c);
   ti = i; tj = j; seq = 0; base = null; HOOKS.on = true;
 }
@@ -309,7 +310,7 @@ const GROUND_CITY = { japan: ['lantern', 'planter', 'basket', 'bicycle'], gyeong
 
 const ARID = ['arabic', 'african'];
 export function detailGround(x, y, i, j, c, snow = false) {
-  if (!CD.enabled) return;
+  if (!CD.enabled || !gfx().detail) return;
   beginDetail(c, i, j);
   const ctx0 = getCtx(), arid = ARID.includes(region) || c === 'tenoch' || c === 'mexico';
   ctx0.beginPath();                                                // حصى في المدن الجافة، وخصل عشب في غيرها: مسار واحد

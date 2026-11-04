@@ -1,6 +1,7 @@
 // نقطة البداية: القوائم، دورة حياة المباراة، وحلقة اللعبة
 // منطق اللعبة بخطوة زمنية ثابتة (20 تحديثاً/ث)، والرسم كل إطار مع تنعيم المواقع
-import { MATCH_DEFAULTS, TICK_MS, CITY_CACHE } from './config.js';
+import { MATCH_DEFAULTS, TICK_MS, CITY_CACHE, GRAPHICS } from './config.js';
+import { viewDpr, gfxLevel } from './graphics.js';
 import { paceFrame, paceWork } from './pacing.js';
 import { createMatch, resetMatch } from './state.js';
 import { updateMatch } from './game/loop.js';
@@ -137,6 +138,8 @@ function update() {
 
 let lastTime = performance.now();
 let hudMeasuredAt = 0;
+let idleDrawnAt = 0;       // آخر رسم أثناء الإيقاف أو شاشة النهاية
+let cityPending = 0;       // قطع المدينة الظاهرة الناقصة في آخر رسم (تُكمَل بلا انتظار)
 let accumulator = 0;
 let warmedMap = null;      // آخر خريطة بدأ تجهيز مدينتها
 let warmUntil = 0;         // أقصى وقت لتجهيز المدينة قبل أن تبدأ المباراة على أي حال
@@ -161,8 +164,9 @@ function loop(now) {
     return;
   }
 
-  // إعادة تهيئة اللوحة عند تغير حجم الشاشة بدون إعادة تشغيل المباراة
-  if (canvas.clientWidth && (canvas.clientWidth !== state.view.w || canvas.clientHeight !== state.view.h)) {
+  // إعادة تهيئة اللوحة عند تغير حجم الشاشة أو جودة الرسم بدون إعادة تشغيل المباراة
+  if (canvas.clientWidth && (canvas.clientWidth !== state.view.w || canvas.clientHeight !== state.view.h ||
+      state.view.dpr !== viewDpr() || state.view.gfx !== gfxLevel())) {
     resizeCanvas(canvas, state);
     resetParticles(state.weather, state.view);
     clampCamera(state);
@@ -186,6 +190,13 @@ function loop(now) {
     return;
   }
 
+  // الإيقاف وشاشة النهاية: المشهد خلفهما لا يتحرك، فيُرسم idleFps مرات في الثانية فقط
+  // (لا في اللعب المحلي: أدواره تتقدم مع الإطارات، ولا والمدينة الظاهرة ناقصة بعد تغيير الدقة أو الجودة)
+  if ((state.paused || state.matchResult) && !lanActive()) {
+    if (now - idleDrawnAt < 1000 / GRAPHICS.idleFps && !cityPending) { requestAnimationFrame(loop); return; }
+    idleDrawnAt = now;
+  }
+
   let alpha;
   if (lanActive()) {
     alpha = lanFrame(state, frameMs, now);       // اللعب المحلي: التحديثات حسب أدوار المضيف (القسم 16)
@@ -202,7 +213,7 @@ function loop(now) {
   }
 
   updateParticles(state.weather, state.view, frameMs / 1000);
-  render(ctx, state, alpha);
+  cityPending = render(ctx, state, alpha);
   updateHud(state);
   updatePower(state);          // شريط القوة يتحدث كل ثانية لا كل إطار
   updateGroups(state, frameMs); // أعداد المجموعات وانتقال الكاميرا إليها

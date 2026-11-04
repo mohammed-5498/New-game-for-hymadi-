@@ -5,6 +5,7 @@
 // التخطي بالزمن لا بالعدّ: الإطار الذي تأخر أصلاً عن موعده يُرسم فوراً بلا أي انتظار إضافي،
 // فتحت الحمل الثقيل (إطارات أبطأ من 30 أصلاً) لا يغيّر الإيقاع شيئاً.
 import { PERFORMANCE } from './config.js';
+import { gfx, fpsCap } from './graphics.js';
 
 const P = PERFORMANCE.pacing;
 const pace = {
@@ -38,11 +39,13 @@ export function paceFrame(now, active) {
   }
   pace.skipped = false;
 
-  if (!P.enabled || !active) {
+  const lo = minDiv();
+  if ((!P.enabled && lo === 1) || !active) {
     pace.div = 1; pace.probing = 0; pace.hold = P.holdMs;
     pace.shown = now; pace.frames = pace.late = 0; pace.windowAt = now; pace.work.length = 0;
     return true;
   }
+  if (pace.div < lo) pace.div = lo;            // سقف الإطارات (جودة الرسم أو توفير البطارية)
   const shownMs = now - pace.shown;
   // قبل موعد الإيقاع (مع نصف إطار شاشة للتذبذب): تخطَّ. بعده: ارسم فوراً مهما تأخر
   if (pace.div > 1 && shownMs < pace.vsync * (pace.div - 0.5)) { pace.skipped = true; return false; }
@@ -52,8 +55,14 @@ export function paceFrame(now, active) {
     // متأخر: فاته إطار شاشة كامل بعد موعده، وبقدر يُرى (إطار 16 على شاشة 120 لا يُلحظ)
     if (shownMs > pace.vsync * (pace.div + P.lateExtra) && shownMs > P.minLateMs) pace.late++;
   }
-  if (now - pace.windowAt >= P.windowMs) judge(now);
+  if (P.enabled && now - pace.windowAt >= P.windowMs) judge(now);
   return true;
+}
+
+// أقل div يحقق سقف الإطارات (graphics.js): 30 إطاراً/ث = كل إطار ثانٍ على شاشة 60، ورابع على 120
+function minDiv() {
+  const cap = fpsCap();
+  return cap ? Math.max(1, Math.round(1000 / cap / pace.vsync)) : 1;
 }
 
 function quantile(list, q) {
@@ -97,7 +106,7 @@ function judge(now) {
       pace.div++;
       pace.holdUntil = now + pace.hold;
     }
-  } else if (pace.div > 1 && now >= pace.holdUntil) {
+  } else if (pace.div > minDiv() && now >= pace.holdUntil) {
     // نجرّب الإيقاع الأسرع نافذة واحدة، فقط إن كان عمل أغلب الإطارات يتسع له بوضوح؛
     // وإلا ننتظر مدة أخرى بلا تجربة (التجربة الفاشلة نفسها نافذة متقطعة)
     const typical = pace.work.length ? quantile(pace.work, 0.75) : Infinity;
@@ -123,13 +132,14 @@ export const pacingState = () => ({ div: pace.div, vsync: pace.vsync, probing: p
 // إيقاع أبطأ مما كانت عليه بلا النمط، ولا يزيد أثناء تجربة الإيقاع الأسرع
 const SH = PERFORMANCE.shaded;
 const shade = { count: SH.start, cap: SH.max, capUntil: 0 };
-export const shadedCount = () => PERFORMANCE.shadedStyle ? shade.count : 0;
+export const shadedCount = () => PERFORMANCE.shadedStyle && gfx().shaded ? shade.count : 0;
 // للاختبارات: عدد ثابت يبدأ منه
 export function setShadedCount(n) { shade.count = n; shade.cap = SH.max; shade.capUntil = 0; }
 function judgeShaded(now, lateShare) {
   if (!pace.work.length) return;
+  // سقف الإطارات ليس بطئاً، لكن الوقت الذي يوفره لا يُصرف على النمط المظلَّل (توفير البطارية يبقى توفيراً)
   const target = Math.max(pace.vsync, 1000 / 60), work = quantile(pace.work, 0.75);
-  const slow = pace.vsync * pace.div > target * 1.05;
+  const slow = pace.vsync * pace.div > Math.max(target, pace.vsync * minDiv()) * 1.05;
   if (lateShare > SH.lateShare || slow || work > target * SH.workShrink) {
     if (lateShare > SH.lateShare && shade.count > SH.min) {   // لا يعود قريباً إلى العدد الذي أبطأ الإطارات
       shade.cap = Math.max(SH.min, shade.count - SH.growStep);

@@ -1,5 +1,6 @@
 // الطقس: طبقات لونية، ندف ثلج، خطوط مطر، وإضاءة الليل
 import { WEATHER, PERFORMANCE } from '../config.js';
+import { gfx } from '../graphics.js';
 
 let particles = [];
 let currentKey = null;
@@ -8,7 +9,7 @@ let currentKey = null;
 export function resetParticles(weatherKey, view) {
   currentKey = weatherKey;
   particles = [];
-  const count = WEATHER[weatherKey].particles;
+  const count = Math.round(WEATHER[weatherKey].particles * gfx().particles);
   for (let k = 0; k < count; k++) {
     particles.push(weatherKey === 'snow'
       ? { x: Math.random() * view.w, y: Math.random() * view.h, vy: 18 + Math.random() * 22, vx: -4 + Math.random() * 8, r: 0.8 + Math.random() * 1.6 }
@@ -55,9 +56,10 @@ function cachedGradient(ctx, color, alpha, radius) {
 export function drawLights(ctx, lights, camera, view) {
   ctx.globalCompositeOperation = 'lighter';
   let drawn = 0;
+  const max = PERFORMANCE.maxLights * gfx().lights;
 
   for (const light of lights) {
-    if (drawn >= PERFORMANCE.maxLights) break;
+    if (drawn >= max) break;
     const sx = (light.x - camera.x) * camera.z + view.w / 2;
     const sy = (light.y - camera.y) * camera.z + view.h / 2;
     const r = Math.round(light.r * camera.z);

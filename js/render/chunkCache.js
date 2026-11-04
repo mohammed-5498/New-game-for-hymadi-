@@ -12,6 +12,7 @@ import { beginCity, groundColor, drawRoadSurface, drawTileStatic, debrisLight, s
 import { isLane, drawLanePaving, roundaboutAnchor, drawRoundaboutRing, laneLight, roundaboutLights } from './openCity.js';
 import { lampSpot } from './landmarks.js';
 import { mixc } from './cityThemes.js';
+import { gfx } from '../graphics.js';
 import { drawFeaturePaving, featureLight, featureLamp } from './featureArt.js';
 
 const TAU = Math.PI * 2;
@@ -62,7 +63,7 @@ function setup(state) {
 
   cache = {
     gen: (cache ? cache.gen : 0) + 1,
-    map, weather: state.weather, mode: state.mode, x0, y0, cols, rows, chunks, districtChunks,
+    map, weather: state.weather, mode: state.mode, detail: gfx().detail, x0, y0, cols, rows, chunks, districtChunks,
     keys: map.districts.map(d => tintKey(d, state)),
     lights: [], lamps: [], frame: 0, pixels: 0, base: null,
     tileMs: cache ? cache.tileMs : 0.3          // الزمن الحقيقي لرسم مربع واحد (يُقاس ويُحدَّث)
@@ -783,7 +784,8 @@ function pickScale(need) {
 // يعيد عدد القطع الظاهرة التي لم تكتمل بعد
 export function drawCityLayer(ctx, state, view, budgetMs = CC.frameBudgetMs, maxScale = Infinity) {
   if (!cityReady(state.map)) return Infinity;      // صور مباني المدينة لم تُحمّل بعد: لا شيء يُرسم ولا يُخزن
-  if (!cache || cache.map !== state.map || cache.weather !== state.weather || cache.mode !== state.mode) setup(state);
+  if (!cache || cache.map !== state.map || cache.weather !== state.weather || cache.mode !== state.mode ||
+      cache.detail !== gfx().detail) setup(state);
   cache.frame++;
   markDirty(state);
 

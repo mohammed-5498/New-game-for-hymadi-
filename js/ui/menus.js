@@ -1,8 +1,10 @@
 // القوائم (القسم 12): الرئيسية، الإعداد، المتجر، الإعدادات، الإحصائيات، سؤال الخروج، وتبديل الشاشات
 import {
   MAP_SIZES, PLAYER_COLORS, GANGS, GANG_IDS, BOT, BOT_LEVELS, COMBAT_REALISM,
-  WEATHER, WEATHER_KEYS, UNITS, MATCH_DEFAULTS, AUDIO, UI, CITIES, NET, gameModes as GM, nations as NATIONS, CITY_FEATURES
+  WEATHER, WEATHER_KEYS, UNITS, MATCH_DEFAULTS, AUDIO, UI, CITIES, NET, gameModes as GM, nations as NATIONS, CITY_FEATURES,
+  GRAPHICS
 } from '../config.js';
+import { gfx, autoLevel, refreshGraphics } from '../graphics.js';
 import { SIDE_CHOICES, resolveSide, nationOf } from '../game/nations.js';
 import { sound, audioSettings, setAudioSettings, startMusic, menuMusic } from '../audio/sound.js';
 import { isNativeApp, exitApp } from '../platform.js';
@@ -22,6 +24,8 @@ import { lan, lanPeers, broadcastLobby } from '../net/session.js';
 const el = (id) => document.getElementById(id);
 
 const MAP_SIZE_KEYS = ['small', 'medium', 'large'];
+// حد الوحدات الافتراضي: أقل في الجودة المنخفضة (الجوال الضعيف)، ما لم يُحفظ إعداد سابق
+const DEFAULT_UNITS = gfx().maxUnits || UNITS.maxUnitsDefault;
 const MAX_UNIT_CHOICES = [30, 50, 100, 150, 200, 250];
 const WEATHER_CHOICES = [...WEATHER_KEYS, 'random'];
 // خيار المدينة: المدن، ثم "مدينة المضيف" (مدينة أمة اللاعب الأول، القسم 3.10)، ثم عشوائي
@@ -39,7 +43,7 @@ const setup = {
   survivalLevel: GM.survival.defaultLevel,
   mapSize: MATCH_DEFAULTS.mapSize,
   city: CITIES.defaultCity,                   // طابع المدينة (القسم 3.9)، الافتراضي عشوائي، أو 'host'
-  maxUnits: UNITS.maxUnitsDefault,
+  maxUnits: DEFAULT_UNITS,
   weather: 'day',
   slots: []
 };
@@ -326,7 +330,7 @@ function activePlayers() {
 function openUnitsPicker() {
   openPicker({
     title: 'الحد الأقصى للوحدات',
-    groups: single(MAX_UNIT_CHOICES.map(v => ({ value: v, text: String(v), note: v === UNITS.maxUnitsDefault ? 'الافتراضي' : '' }))),
+    groups: single(MAX_UNIT_CHOICES.map(v => ({ value: v, text: String(v), note: v === DEFAULT_UNITS ? 'الافتراضي' : '' }))),
     icon: drawUnitsIcon,
     columns: 6,
     current: () => setup.maxUnits,
@@ -461,6 +465,20 @@ function setupSettings() {
     setPref('pops', !getPref('pops'));
     refreshSettings();
   });
+
+  // جودة الرسم (القسم 14.1): كل لمسة تنقل إلى المستوى التالي، واللوحة تتبعه في الإطار التالي
+  el('btnQuality').addEventListener('click', () => {
+    sound('ui_tap');
+    const order = GRAPHICS.order;
+    setPref('quality', order[(order.indexOf(getPref('quality')) + 1) % order.length]);
+    refreshGraphics();
+    refreshSettings();
+  });
+  el('tglBattery').addEventListener('click', () => {
+    sound('ui_tap');
+    setPref('battery', !getPref('battery'));
+    refreshSettings();
+  });
   refreshSettings();
 }
 
@@ -476,6 +494,9 @@ function refreshSettings() {
   }
   setSwitch('tglMute', audio.muted);
   setSwitch('tglPops', !!getPref('pops'));
+  const level = GRAPHICS.levels[getPref('quality')];
+  el('qualityValue').textContent = level ? level.name : 'تلقائي (' + GRAPHICS.levels[autoLevel()].name + ')';
+  setSwitch('tglBattery', !!getPref('battery'));
 }
 
 // الإعدادات من قائمة الإيقاف (بطلب المستخدم): نفس الشاشة فوق المباراة، و"رجوع" يعيد إلى الإيقاف (onClose) لا إلى

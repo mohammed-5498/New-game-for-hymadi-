@@ -2,7 +2,9 @@
 // الأصوات لها حفظها الخاص في audio/sound.js؛ هنا ما سواها.
 const KEY = 'gangcity.prefs';
 const DEFAULTS = {
-  pops: true              // الكلمات الطائرة فوق أحداث القتال (القسم 5.4.4ب): مفعّلة افتراضياً
+  pops: true,             // الكلمات الطائرة فوق أحداث القتال (القسم 5.4.4ب): مفعّلة افتراضياً
+  quality: 'auto',        // جودة الرسم (GRAPHICS في config.js، js/graphics.js)
+  battery: false          // توفير البطارية: 30 إطاراً/ث في المباراة
 };
 
 let prefs = { ...DEFAULTS };

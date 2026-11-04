@@ -8,6 +8,7 @@ import { snapDistrictTints } from '../game/capture.js';
 import { render } from '../render/renderer.js';
 import { updateParticles, resetParticles } from '../render/weather.js';
 import { fadeIn, fadeOut } from './transition.js';
+import { gfx, viewDpr } from '../graphics.js';
 
 const SCENE = UI.menuScene;
 const pick = (list) => list[Math.floor(Math.random() * list.length)];
@@ -17,6 +18,7 @@ let canvas = null, ctx = null, layer = null;
 let city = null;          // حالة المدينة الخلفية، تُبنى عند أول ظهور
 let active = false;
 let lastTime = 0, accumulator = 0, sinceDraw = 0;
+let still = false;        // الصورة الثابتة (جودة منخفضة) اكتملت
 let drift = null;         // مسار انجراف الكاميرا
 let half = null;          // نصف عرض المدينة ونصف ارتفاعها بالبكسل
 
@@ -33,6 +35,7 @@ export function showMenuScene() {
   lastTime = performance.now();
   accumulator = 0;
   sinceDraw = Infinity;     // ارسم في أول إطار
+  still = false;
   fadeIn(layer);
 }
 
@@ -139,16 +142,17 @@ function tick(state) {
   updateUnits(state);
 }
 
-// اللوحة بدقة مخفّضة: الخلفية تحت طبقة داكنة لا تحتاج دقة الشاشة الكاملة
+// اللوحة بدقة مخفّضة: الخلفية تحت طبقة داكنة لا تحتاج دقة الشاشة الكاملة. يعيد true إن تغيّر مقاسها
 function fit(state) {
   const view = state.view;
   const w = canvas.clientWidth || window.innerWidth, h = canvas.clientHeight || window.innerHeight;
-  const dpr = Math.min(window.devicePixelRatio || 1, SCENE.maxDpr);
-  if (w === view.w && h === view.h && dpr === view.dpr) return;
+  const dpr = Math.min(viewDpr(), SCENE.maxDpr);
+  if (w === view.w && h === view.h && dpr === view.dpr) return false;
   view.w = w; view.h = h; view.dpr = dpr;
   canvas.width = Math.round(w * dpr);
   canvas.height = Math.round(h * dpr);
   resetParticles(state.weather, view);
+  return true;
 }
 
 // إطار واحد من حلقة اللعبة: تُستدعى في القوائم فقط
@@ -159,6 +163,10 @@ export function menuSceneFrame(now) {
     resetParticles(city.weather, city.view);
   }
 
+  // جودة منخفضة: صورة ثابتة، تُرسم عند الظهور وعند تغير المقاس فقط (بلا تحديث ولا رسم بينهما)
+  const fps = Math.min(SCENE.fps, gfx().menuFps);
+  if (!fps && still && !fit(city)) return;
+
   const frameMs = Math.min(250, Math.max(0, now - lastTime));
   lastTime = now;
   accumulator += frameMs;
@@ -168,13 +176,13 @@ export function menuSceneFrame(now) {
 
   // رسم بمعدل أقل من الشاشة: الحركة بطيئة، والبطارية أهم في القوائم
   sinceDraw += frameMs;
-  if (sinceDraw < 1000 / SCENE.fps - 2) return;
+  if (fps && sinceDraw < 1000 / fps - 2) return;
   const seconds = Math.min(0.25, sinceDraw / 1000);
   sinceDraw = 0;
 
   fit(city);
   moveCamera(city, seconds);
   updateParticles(city.weather, city.view, seconds);
-  render(ctx, city, accumulator / TICK_MS);
+  still = !render(ctx, city, accumulator / TICK_MS);   // ثابتة: تكتمل قطع المدينة الظاهرة ثم تتوقف
   canvas.classList.add('ready');          // تظهر الخلفية بتلاشٍ بعد أول رسم
 }

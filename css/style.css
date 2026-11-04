@@ -887,6 +887,7 @@ input[type=range].muted { opacity: .4; }
 }
 .toggle[aria-checked="true"] .switch { background: var(--gold); }
 .toggle[aria-checked="true"] .switch::after { right: 25px; }
+.toggle output { color: var(--gold); font-weight: 700; }
 
 /* --- بطاقات الأرقام: الإحصائيات وشاشة النهاية --- */
 .stat-cards {

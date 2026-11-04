@@ -14,6 +14,7 @@ import { drawCityLayer, cityStatics } from './chunkCache.js';
 import { drawPoliceLamp } from './landmarks.js';
 import { drawUnitsOccluded } from './occlusion.js';
 import { shadedCount } from '../pacing.js';
+import { viewDpr, gfxLevel } from '../graphics.js';
 import { drawEmpireShots, drawEmpireMarks, drawEmpireHalos, drawEmpireBadges } from './empireArt.js';
 import { drawFeatureBadges, drawStorm, featureHaloEntry, drawFeatureHalo, drawFireworksMarks, drawFireworksBursts,
          fireworksLights, drawBells, drawVault } from './featureArt.js';
@@ -22,7 +23,8 @@ export function resizeCanvas(canvas, state) {
   const view = state.view;
   view.w = canvas.clientWidth || window.innerWidth;
   view.h = canvas.clientHeight || window.innerHeight;
-  view.dpr = window.devicePixelRatio || 1;
+  view.dpr = viewDpr();                  // دقة الشاشة بسقف جودة الرسم
+  view.gfx = gfxLevel();
   canvas.width = Math.round(view.w * view.dpr);
   canvas.height = Math.round(view.h * view.dpr);
 }
@@ -54,6 +56,7 @@ export function warmCity(ctx, state, budgetMs) {
 }
 
 // cityBudgetMs: وقت رسم قطع المدينة في هذا الإطار (صفر أثناء تجهيز البداية: warmCity وحدها ترسم)
+// يعيد عدد قطع المدينة الظاهرة التي لم تكتمل بعد
 export function render(ctx, state, alpha, cityBudgetMs = CITY_CACHE.frameBudgetMs) {
   const { map, camera, view } = state;
   const lights = [];
@@ -74,7 +77,7 @@ export function render(ctx, state, alpha, cityBudgetMs = CITY_CACHE.frameBudgetM
   const visible = (x, y) => x > vx0 && x < vx1 && y > vy0 && y < vy1;
 
   // الطبقة الثابتة للمدينة (الأرض والمباني والزينة) من القطع المخزنة (المرحلة 7ب)
-  drawCityLayer(ctx, state, { x0: vx0, x1: vx1, y0: vy0, y1: vy1 }, cityBudgetMs);
+  const pending = drawCityLayer(ctx, state, { x0: vx0, x1: vx1, y0: vy0, y1: vy1 }, cityBudgetMs);
 
   // إضاءة الليل الثابتة
   const statics = cityStatics();
@@ -130,6 +133,7 @@ export function render(ctx, state, alpha, cityBudgetMs = CITY_CACHE.frameBudgetM
   drawParticles(ctx, state.weather);
   drawSelectionBox(ctx, state);
   drawEdgeAlerts(ctx, state);
+  return pending;
 }
 
 // --- شرر تصادم الأسلحة والكلمات الطائرة (القسم 5.4.4ب) ---
