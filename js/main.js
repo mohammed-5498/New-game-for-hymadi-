@@ -19,6 +19,7 @@ import {
   openExitDialog, closeExitDialog, isExitDialogOpen, closeGameSettings
 } from './ui/menus.js';
 import { setupLanScreen, lanBack } from './ui/lanScreen.js';
+import { setupStoryScreen, storyBack } from './ui/storyScreen.js';
 import { lanActive, lanFrame, startLanHost } from './net/session.js';
 import { setupMenuScene, menuSceneFrame } from './ui/menuScene.js';
 import { isPickerOpen, closePicker } from './ui/picker.js';
@@ -89,6 +90,19 @@ setupMenus({
 });
 
 setupLanScreen(state);
+// طور القصة (القسم 17): «ابدأ المعركة» كـ«ابدأ» في قائمة الإعداد
+setupStoryScreen({
+  start(settings) {
+    matchBlackout(() => {
+      clearSavedMatch();
+      resetMatch(state, settings);
+      state.running = true;
+      showScreen('game');
+    });
+    startMusic();
+  },
+  back() { showScreen('main'); }
+});
 
 showScreen('main');
 introBlackout();          // تشغيل اللعبة: شاشة سوداء قصيرة (مكان مقدمة التطبيق لاحقاً)
@@ -126,6 +140,7 @@ onBackButton(() => {
 
   // اللعب المحلي: شاشته وقائمة إعداد المضيف ترجعان خطوة (وتوقفان الاستضافة أو الانضمام)
   if (currentScreen() === 'lan' || (currentScreen() === 'setup' && isLanSetup())) { lanBack(); return; }
+  if (currentScreen() === 'story' && storyBack()) return;          // طور القصة: خطوة داخل شاشته
   if (currentScreen() !== 'main') { showScreen('main'); return; }   // الإعداد والإعدادات والإحصائيات
   openExitDialog();                                     // القائمة الرئيسية
 });

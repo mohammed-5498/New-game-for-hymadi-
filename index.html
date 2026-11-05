@@ -86,6 +86,8 @@
       <div class="panel">
         <h1 id="endTitle"></h1>
         <p id="endReason"></p>
+        <!-- طور القصة: حوار ما بعد المرحلة ومكافأتها -->
+        <div id="endStory" class="end-story" hidden></div>
         <ul id="endStats" class="stat-cards"></ul>
         <button id="btnRestart" class="wide gold">مباراة جديدة</button>
         <button id="btnEndToMain" class="wide ghost">القائمة الرئيسية</button>
@@ -107,6 +109,8 @@
           <span id="continueInfo" class="hint"></span>
         </button>
         <button id="btnPlay" class="wide gold">لعب</button>
+        <!-- طور القصة (القسم 17): حملة من خمس مراحل لكل عصابة -->
+        <button id="btnStory" class="wide">القصة</button>
         <!-- مع الأصحاب على نفس الشبكة (القسم 16): في تطبيق أندرويد -->
         <button id="btnLan" class="wide">لعب محلي</button>
         <button id="btnStore" class="wide">المتجر</button>
@@ -251,6 +255,13 @@
 
       <p id="lanStatus" class="hint lan-status" hidden></p>
       <button id="btnLanBack" class="wide ghost">رجوع</button>
+    </div>
+  </div>
+
+  <!-- طور القصة (القسم 17، js/ui/storyScreen.js): العصابات ثم مراحل الحملة ثم القصة قبل المعركة -->
+  <div id="screenStory" class="screen" hidden>
+    <div class="menu story">
+      <div id="storyBody" class="story-body"></div>
     </div>
   </div>
 

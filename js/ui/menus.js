@@ -16,6 +16,7 @@ import { showMenuScene, hideMenuScene } from './menuScene.js';
 import { setupBattleScreen } from './battleScreen.js';
 import { updateCityThumb, drawCardThumb, shownCity, stopCard } from './cityThumb.js';
 import { setupPicker, openPicker, isPickerOpen, refreshPicker } from './picker.js';
+import { openStory } from './storyScreen.js';
 import { CITY_GROUPS, SIDE_GROUPS, regionOf } from './regions.js';
 import { drawModeIcon, drawSizeIcon, drawUnitsIcon, drawWeatherIcon } from './icons.js';
 import { showStore } from './storeScreen.js';
@@ -88,6 +89,7 @@ export function setupMenus(handlers) {
   // القائمة الرئيسية (القسم 12.1)
   onTap('btnContinue', continuePressed);
   onTap('btnPlay', () => showScreen('setup'));
+  onTap('btnStory', () => { showScreen('story'); openStory({ view: 'gangs' }); });   // طور القصة (القسم 17)
   onTap('btnStore', () => showScreen('store'));
   onTap('btnSettings', () => showScreen('settings'));
   onTap('btnStats', () => showScreen('stats'));
@@ -121,7 +123,7 @@ export function setupMenus(handlers) {
 // --- تبديل الشاشات بتلاشٍ قصير (القسم 12.0) ---
 const SCREENS = {
   main: 'screenMain', setup: 'screenSetup', store: 'screenStore', settings: 'screenSettings',
-  stats: 'screenStats', game: 'screenGame', battle: 'screenBattle', lan: 'screenLan'
+  stats: 'screenStats', game: 'screenGame', battle: 'screenBattle', lan: 'screenLan', story: 'screenStory'
 };
 
 let screen = 'main';

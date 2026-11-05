@@ -1186,3 +1186,47 @@ input[type=range].muted { opacity: .4; }
   white-space: nowrap;
   pointer-events: none;
 }
+
+/* ===== طور القصة (القسم 17، js/ui/storyScreen.js) ===== */
+.menu.story { max-width: 760px; text-align: right; }
+.story-note { text-align: center; margin: -6px 0 12px; }
+.story-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.story-card {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 8px 6px 10px; border-radius: 14px; border: 1px solid var(--line); background: var(--btn);
+  color: var(--text); font: inherit; cursor: pointer;
+}
+.story-card b { font-size: 15px; }
+.story-card.soon { opacity: .5; cursor: default; }
+.story-thumb { width: 100%; height: 84px; display: block; }
+.story-badge {
+  position: absolute; top: 6px; left: 6px; font-size: 12px; padding: 1px 7px; border-radius: 9px;
+  background: rgba(0, 0, 0, .35); color: var(--gold);
+}
+.story-pitch { margin: -6px 0 4px; line-height: 1.6; text-align: center; }
+.story-levels { display: flex; flex-direction: column; gap: 8px; margin: 12px 0 14px; }
+.story-level {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 3px; text-align: right;
+  padding: 10px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--btn);
+  color: var(--text); font: inherit; font-size: 16px; cursor: pointer;
+}
+.story-level.done { border-color: var(--gold); }
+.story-level.locked { opacity: .5; cursor: default; }
+.story-ending { color: var(--gold); text-align: center; font-weight: 700; }
+.story-section { margin: 10px 0; }
+.story-section h3 { margin: 0 0 4px; font-size: 16px; color: var(--gold); }
+.story-section p { margin: 0 0 4px; line-height: 1.7; }
+.story-dialogue {
+  margin: 8px 0; padding: 8px 12px; border-right: 3px solid var(--gold); border-radius: 6px;
+  background: rgba(0, 0, 0, .2); line-height: 1.7;
+}
+.story-dialogue p { margin: 2px 0; }
+.story-dialogue b { color: var(--gold); }
+.story-steps { margin: 0; padding-right: 22px; display: flex; flex-direction: column; gap: 6px; }
+.story-steps li { line-height: 1.5; }
+.story-steps b { margin-left: 6px; }
+.story-steps .hint { display: block; }
+.story-type { font-size: 12px; padding: 0 7px; border-radius: 8px; background: rgba(224, 176, 74, .18); color: var(--gold); }
+.story-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+.end-story { text-align: right; margin: 0 0 10px; }
+.end-story .story-reward { color: var(--gold); font-weight: 700; text-align: center; margin: 6px 0 0; }

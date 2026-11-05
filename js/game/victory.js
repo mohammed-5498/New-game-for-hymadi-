@@ -21,6 +21,12 @@ export function updateVictory(state) {
   // الصمود ضد الشرطة: لا خصوم من العصابات، ونهايته ورقمه القياسي في modes.js
   if (state.mode === 'survival') return;
 
+  // طور القصة (القسم 17): الفوز بإكمال آخر مهمة (story.js)، والخسارة هنا بخسارة كل جنودك وأحيائك
+  if (state.story) {
+    if (state.humanId >= 0 && !isPlayerAlive(state, state.humanId)) finish(state, false, 'خسرت كل جنودك وأحيائك');
+    return;
+  }
+
   // الشرطة المحايدة خارج حساب الفوز والخسارة
   const alivePlayers = state.players.filter(p => !p.neutral && isPlayerAlive(state, p.id));
   const sides = new Set(alivePlayers.map(sideKey));

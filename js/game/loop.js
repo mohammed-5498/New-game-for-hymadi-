@@ -15,6 +15,7 @@ import { updateAlerts } from './alerts.js';
 import { updateArena } from './arena.js';
 import { updateMode, updateFades } from './modes.js';
 import { updateFeatures } from './features.js';
+import { updateStory } from './story.js';
 
 export function updateMatch(state) {
   state.time += TICK_SEC;
@@ -36,6 +37,7 @@ export function updateMatch(state) {
     updateBots(state);
     updateMode(state);        // عدّادات الطور ونقاطه وشروط فوزه (القسم 9.5)
     updateFades(state);       // تلاشي وحدات من سقط زعيمه
+    updateStory(state);       // مهام طور القصة ونهايتها (القسم 17)
     updateVictory(state);
   }
   updateNotice(state);
