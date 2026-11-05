@@ -125,7 +125,7 @@ function bestTech(state, pid, owned, hqs, plain, enemyDist) {
   const byLevel = (d) => Math.min(...E.buildings.hq.upgrades.order.map(key => (d.blv && d.blv[key]) || 0));
   for (const list of [[...hqs].sort((a, b) => byLevel(a) - byLevel(b)), [...towers].sort((a, b) => enemyDist(a) - enemyDist(b)), hospitals]) {
     for (const d of list) {
-      const keys = E.buildings[d.building].upgrades.order.map(key => ({ key, next: nextBuildingUpgrade(d, key) })).filter(u => u.next);
+      const keys = E.buildings[d.building].upgrades.order.map(key => ({ key, next: nextBuildingUpgrade(d, key, state) })).filter(u => u.next);
       if (!keys.length) continue;
       const low = Math.min(...keys.map(u => u.next.level));
       const up = keys.find(u => u.next.level === low);

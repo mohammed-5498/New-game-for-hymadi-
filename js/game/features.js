@@ -32,6 +32,17 @@
 // - خان القوافل (صحراء اليمامة): كل تاجر يخرج سالماً يعطي مالكه نقاطاً
 // - ورشة البارود (الصينية): صاروخ على حي بدائرة الألعاب النارية نفسها، لا يضر إلا أعداء مالكها (launchRocket، أمر rocket)
 // - بيت صيادي الترول (النرويجية): جنود مالكه يضربون الترول بضعف الضرر (combat.js)
+// ومدن المباني صار لها حدث معه (12و، CITY_FEATURES.events، cityEvent، وحالته state.cityEvent):
+// - سيل الوادي (شبام): شريط يعبر المدينة، من فيه أبطأ ويجرفه الماء (eventSpeedMul وpushFlood)
+// - كنز الفرعون (القاهرة): صندوق في شارع لمن يبقى عنده بلا عدو
+// - موسم التجارة (العربية): دخل مضاعف للجميع (eventIncomeMul)
+// - عاصفة البرق (غوندر): صواعق قرب الجنود بدوائر تحذير
+// - فيضان النيل (مروي): أحياء الضفة (d.bank) أبطأ ثم دخلها مضاعف
+// - (12ز) الزلزال (إيدو)، وسوق الليل (كايفنغ: eventCostMul)، والإعصار (هونغ كونغ: ريح ومدى أقصر)، ومهرجان الألوان
+//   (جايبور: لا قتال في السحب، holiTruce في combat.js)، وجولة الحارس الليلي (روتنبورغ: دورية شرطة)، وصافرة المصانع
+//   (برمنغهام: eventProductionMul)، والفارس الأسود (الأوروبية: طرف محايد بفارس في الوسط)
+// - (12ح) رماد البركان (تينوتشتيتلان)، والكرنفال (ريو: موكب مسالم يسرّع من يمشي معه)، وجمهور الديربي (لا بوكا: مشجعون
+//   مسالمون يسدّون الوسط)، وحمى الفضة (المكسيكية: قطع لأول من يصلها)، والحريق الكبير (شيكاغو: حي يحترق وينتقل)
 // الحي يحمل ميزته (district.feature، من مولّد الخريطة)، والمباراة ميزة مدينتها (state.feature).
 // الأرقام كلها في CITY_FEATURES داخل config.js
 import { TICK_SEC, CITY_FEATURES as F, EMPIRE as E, COMBAT, SPAWN, nations, DISTRICT_SIZES as DS } from '../config.js';
@@ -39,7 +50,7 @@ import { sizeOf } from '../map/sizes.js';
 import { createUnit, commandMove, commandAttackMove } from './units.js';
 import { applyUpgrades, heroFor, tileOf, spend } from './empire.js';
 import { isEnemyId, applyDamage } from './combat.js';
-import { addPop, addUltFx } from './realism.js';
+import { addPop, addUltFx, knockDown } from './realism.js';
 import { forEachNearby } from './spatialHash.js';
 import { findFreeTiles } from '../map/pathfinding.js';
 import { sound, soundAt } from '../audio/sound.js';
@@ -59,8 +70,10 @@ export const cityFeature = (city) => F.cities[city] || null;
 // troll: ترول الجبل
 const RAIDERS = ['bandits', 'coups', 'cartel'];      // أطراف تستولي على الأحياء
 export function createFeaturePlayer(players, feature, city) {
-  const cfg = ['villages', 'dojo', 'fortress', 'bandits', 'coups', 'cartel', 'caravan', 'fireworks', 'troll'].includes(feature)
-    ? F[feature] : null;
+  // الفارس الأسود (الأوروبية، 12ز) والكرنفال (ريو) وجمهور الديربي (لا بوكا، 12ح): مبانيها بلا طرف، فطرفها لحدثها
+  if (feature && ['knight', 'carnival', 'derby'].includes(F.events[city])) feature = F.events[city];
+  const cfg = ['villages', 'dojo', 'fortress', 'bandits', 'coups', 'cartel', 'caravan', 'fireworks', 'troll', 'knight', 'carnival', 'derby']
+    .includes(feature) ? F[feature] : null;
   if (!cfg) return null;
   const nation = feature === 'bandits' ? cityNation(city) : cfg.nation;
   if (!nation || !nations[nation]) return null;
@@ -73,10 +86,10 @@ export function createFeaturePlayer(players, feature, city) {
     color: cfg.color,
     isHuman: false,
     neutral: true,                     // خارج حساب الفوز والخسارة والبوتات كالشرطة
-    passive: feature === 'villages',   // لا يهاجم ولا يُهاجَم ولا يُحسب جانباً في الاستيلاء (combat.js وcapture.js)
+    passive: ['villages', 'carnival', 'derby'].includes(feature),   // لا يهاجم ولا يُهاجَم ولا يُحسب جانباً في الاستيلاء (combat.js وcapture.js)
     captures: RAIDERS.includes(feature),   // يستولي على الأحياء (capture.js)
     // القافلة والترول والشرطة لا تتقاتل: هي للعصابات وحدها، غنيمة أو خصماً (friendOf في isEnemyId)
-    friendOf: feature === 'caravan' || feature === 'troll' ? players.find(p => p.gang === 'police').id : -1,
+    friendOf: feature === 'caravan' || feature === 'troll' || feature === 'knight' ? players.find(p => p.gang === 'police').id : -1,
     ownOnly: feature === 'cartel',     // عصابة المجمع تحرس أحياءها الأربعة فقط: لا تستولي على غيرها
     feature,
     team: 0,
@@ -120,6 +133,7 @@ export function initFeatures(state) {
   if (state.feature === 'villages') initVillages(state);
   if (state.feature === 'cartel') initCartel(state);
   if (state.feature === 'fireworks') state.fireworks = [];
+  if (F.events[state.map.city] === 'nile') markBanks(state.map);
   for (const d of state.map.districts) {
     if (!d.capture || d.featureTile === undefined) continue;
     d.cool = 0;
@@ -146,7 +160,11 @@ export function updateFeatures(state) {
   } else if (state.featureHinted && !state.buildingHinted && !state.notice && F.buildings[state.map.city]) {
     state.buildingHinted = true;                        // ومبنى مدينة الأحداث بعدها (12هـ)
     state.notice = { text: 'مبنى المدينة — ' + F.desc[F.buildings[state.map.city]], mine: true, t: F.hintSeconds };
+  } else if (state.featureHinted && !state.eventHinted && !state.notice && cityEvent(state)) {
+    state.eventHinted = true;                           // وحدث مدينة المباني (12و)
+    state.notice = { text: 'حدث المدينة — ' + F.desc[cityEvent(state)], mine: true, t: F.hintSeconds };
   }
+  updateCityEvent(state);
   switch (state.feature) {
     case 'storm': stormNotices(state); break;
     case 'villages': joinVillagers(state); break;
@@ -169,12 +187,14 @@ export function updateFeatures(state) {
 
 // ================= العاصفة الرملية (الدرعية) =================
 // العاصفة رقم n تبدأ عند first + n × every وتدوم duration. يعيد { on, left } (left: ما بقي منها أو حتى التالية)
-export function stormAt(time) {
-  const S = F.storm;
-  const n = Math.floor((time - S.first) / S.every);
-  const start = S.first + n * S.every;
-  if (n >= 0 && time - start < S.duration) return { on: true, left: start + S.duration - time, since: time - start };
-  return { on: false, left: (n < 0 ? S.first : start + S.every) - time, since: 0 };
+export const stormAt = (time) => windowAt(time, F.storm.first, F.storm.every, F.storm.duration);
+
+// نافذة حدث يتكرر بزمن المباراة وحده: رقم n يبدأ عند first + n × every ويدوم duration
+function windowAt(time, first, every, duration) {
+  const n = Math.floor((time - first) / every);
+  const start = first + n * every;
+  if (n >= 0 && time - start < duration) return { on: true, left: start + duration - time, since: time - start };
+  return { on: false, left: (n < 0 ? first : start + every) - time, since: 0 };
 }
 
 export const stormActive = (state) => state.feature === 'storm' && stormAt(state.time).on;
@@ -184,7 +204,8 @@ const stormHits = (state, pid) => stormActive(state) && !(pid >= 0 && buildingOw
 
 // مدى رماة اللاعب وأبراجه الآن: العاصفة تقصّره، ومرصد تشومسونغداي يطيله لمالكه (12هـ)
 export const rangeMul = (state, pid) => (stormHits(state, pid) ? F.storm.rangeMul : 1) *
-  (pid >= 0 && buildingOwner(state, 'observatory') === pid ? F.observatory.rangeMul : 1);
+  (pid >= 0 && buildingOwner(state, 'observatory') === pid ? F.observatory.rangeMul : 1) *
+  (cityEvent(state) === 'typhoon' && eventWindow('typhoon', state.time).on ? F.typhoon.rangeMul : 1);   // الإعصار (12ز)
 
 // ضرر النار وضربات الأبطال الآن (1 بلا عاصفة): أضعف بقدر احتمال الخطأ
 export const stormDamageMul = (state, pid) => stormHits(state, pid) ? 1 - F.storm.miss : 1;
@@ -213,6 +234,8 @@ const clock = (seconds) => {
 // سطر شريط الطور: العاصفة الجارية أو القادمة حين تقترب، وموجة قطاع الطرق أو الانقلاب أو القافلة أو الألعاب النارية
 // القادمة، والجارية منها (null بعيداً عنها)
 export function featureBar(state) {
+  const ev = cityEvent(state);
+  if (ev) { const bar = eventBar(state, ev); if (bar) return bar; }
   if (state.feature === 'storm') {
     const now = stormAt(state.time);
     if (now.on) return { text: 'عاصفة رملية ' + clock(now.left), alarm: true };
@@ -891,8 +914,8 @@ function markFireworks(state, at) {
 
 // البوتات تُخرج جنودها من الدائرة بفرصة لكل بوت حسب صعوبته (dodgeChance): كل جندي إلى نقطة خارجها
 // في اتجاهه من مركزها
-function dodgeFireworks(state, x, y) {
-  const W = F.fireworks, r = W.radius + 0.3, out = W.radius + W.dodge;
+function dodgeFireworks(state, x, y, radius = F.fireworks.radius) {
+  const W = F.fireworks, r = radius + 0.3, out = radius + W.dodge;
   const movers = [], decided = new Map();
   forEachNearby(state, x, y, r, (u) => {
     const p = state.players[u.playerId];
@@ -918,6 +941,519 @@ function burstFireworks(state, f) {
   });
   for (const u of hit) applyDamage(state, by, u, rocket ? F.powder.damage : W.damage);
   soundAt(state, 'fire', f.x, f.y);
+}
+
+// ================= أحداث مدن المباني (12و، القسم 3.13) =================
+// حدث المدينة التي لها مبنى فقط، وnull بلا اقتصاد وفي الصمود ولغيرها
+export const cityEvent = (state) => state.feature && state.mode !== 'survival' ? F.events[state.map.city] || null : null;
+
+export const eventWindow = (ev, time) => windowAt(time, F[ev].first, F[ev].every, ev === 'nile' ? F.nile.flood + F.nile.silt : F[ev].duration);
+// فيضان النيل: 'flood' ثم 'silt' في نافذته، وnull بينهما
+export const nilePhase = (time) => { const w = eventWindow('nile', time); return !w.on ? null : w.since < F.nile.flood ? 'flood' : 'silt'; };
+
+// الحي الذي فيه الوحدة الآن (مربعاته والشوارع الأقرب إليه)
+function areaDistrict(map, unit) {
+  const i = Math.round(unit.x), j = Math.round(unit.y);
+  if (!map.areaAt || !map.inBounds(i, j)) return null;
+  return map.districts[map.areaAt[map.idx(i, j)]] || null;
+}
+
+// مضاعف دخل الحي الآن (empire.js): موسم التجارة للجميع، وطمي النيل لأحياء الضفة
+export function eventIncomeMul(state, d) {
+  const ev = cityEvent(state);
+  if (ev === 'season') return eventWindow('season', state.time).on ? F.season.incomeMul : 1;
+  if (ev === 'nile' && d.bank) return nilePhase(state.time) === 'silt' ? F.nile.incomeMul : 1;
+  return 1;
+}
+
+// مضاعف سرعة الوحدة الآن (weather.js): في مجرى السيل، وفي أحياء الضفة والنيل يفيض
+export function eventSpeedMul(state, unit) {
+  const ev = cityEvent(state);
+  if (ev === 'flood') { const b = state.cityEvent && state.cityEvent.band; return b && b.on && inBand(b, unit) ? 1 - F.flood.slow : 1; }
+  if (ev === 'nile' && nilePhase(state.time) === 'flood') { const d = areaDistrict(state.map, unit); return d && d.bank ? 1 - F.nile.slow : 1; }
+  const ce = state.cityEvent;
+  if (!ce || state.players[unit.playerId].passive) return 1;
+  if (ev === 'ash' && ce.ash && ce.ash.on) return inCloud(ce.ash.list, unit) ? 1 - F.ash.slow : 1;
+  if (ev === 'derby' && ce.derby && ce.derby.on) return (unit.x - ce.derby.x) ** 2 + (unit.y - ce.derby.y) ** 2 <= F.derby.radius ** 2 ? 1 - F.derby.jam : 1;
+  if (ev === 'carnival' && ce.dancers) {
+    const r2 = F.carnival.radius ** 2;
+    return ce.dancers.some(([x, y]) => (unit.x - x) ** 2 + (unit.y - y) ** 2 <= r2) ? 1 + F.carnival.boost : 1;
+  }
+  return 1;
+}
+
+// أحياء ضفة النيل (مروي): حتى bankTiles مربعاً من أول عمود ماء
+function markBanks(map) {
+  const land = map.land || map.n;
+  for (const d of map.districts) if (d.capture && d.tiles.some(([i]) => i >= land - F.nile.bankTiles)) d.bank = true;
+}
+
+const EVENT_TEXT = {
+  flood: { name: 'سيل الوادي', warn: 'سيل الوادي بعد ثوانٍ! ابتعد عن الشريط الأزرق', start: 'سيل الوادي! من في مجراه أبطأ ويجرفه الماء',
+           end: 'انحسر السيل' },
+  season: { name: 'موسم التجارة', warn: 'موسم التجارة بعد ثوانٍ', start: 'موسم التجارة! دخل كل الأحياء مضاعف', end: 'انتهى موسم التجارة' },
+  lightning: { name: 'عاصفة البرق', warn: 'عاصفة برق قادمة!', start: 'عاصفة البرق! ابتعد عن الدوائر الزرقاء', end: 'انتهت عاصفة البرق' },
+  nile: { name: 'فيضان النيل', warn: 'النيل يفيض بعد ثوانٍ!', start: 'فيضان النيل! أحياء الضفة أبطأ', end: 'انتهى موسم الطمي',
+          silt: 'انحسر النيل: دخل أحياء الضفة مضاعف دقيقة' },
+  quake: { name: 'الزلزال', warn: 'زلزال قادم! اخرج من الدائرة الحمراء', start: 'زلزال! سقط الجنود أرضاً', end: 'هدأت الأرض' },
+  market: { name: 'سوق الليل', warn: 'سوق الليل يفتح بعد ثوانٍ', start: 'سوق الليل! كل شيء أرخص 25%', end: 'أغلق سوق الليل' },
+  typhoon: { name: 'الإعصار', warn: 'إعصار قادم!', start: 'الإعصار! الريح تدفع الجنود ومدى الرماة أقصر', end: 'هدأ الإعصار' },
+  holi: { name: 'مهرجان الألوان', warn: 'مهرجان الألوان بعد ثوانٍ', start: 'مهرجان الألوان! لا قتال داخل السحب الملونة', end: 'انتهى مهرجان الألوان' },
+  whistle: { name: 'صافرة المصانع', warn: 'صافرة المصانع بعد ثوانٍ', start: 'صافرة المصانع! إنتاج الجنود أسرع 50%', end: 'انتهت الوردية' },
+  ash: { name: 'رماد البركان', warn: 'البركان يقذف رماده! ابتعد عن الدوائر', start: 'رماد البركان! من تحته أبطأ ويحترق', end: 'توقف الرماد' },
+  derby: { name: 'جمهور الديربي', warn: 'الديربي بعد ثوانٍ! الجمهور سيملأ الوسط', start: 'جمهور الديربي يسدّ شوارع الوسط!', end: 'انصرف الجمهور' },
+  fire: { name: 'الحريق الكبير', warn: 'رائحة دخان... حريق قريب!', start: 'الحريق الكبير! ابتعد عن الحي المحترق', end: 'أُخمد الحريق' }
+};
+
+// مضاعف كل الأسعار الآن (empire.js): سوق الليل للجميع
+export const eventCostMul = (state) => cityEvent(state) === 'market' && eventWindow('market', state.time).on ? F.market.costMul : 1;
+// مضاعف زمن إنتاج الجنود الآن (empire.js): صافرة المصانع للجميع
+export const eventProductionMul = (state) => cityEvent(state) === 'whistle' && eventWindow('whistle', state.time).on ? 1 / F.whistle.speed : 1;
+// هدنة مهرجان الألوان (combat.js): لا يقاتل من كان داخل سحابة، ولا يُقاتَل
+const inCloud = (clouds, u) => clouds.some(c => (u.x - c.x) ** 2 + (u.y - c.y) ** 2 <= c.r * c.r);
+export function holiTruce(state, a, b) {
+  const ce = state.cityEvent, cl = ce && ce.clouds;
+  return !!cl && cl.on && (inCloud(cl.list, a) || inCloud(cl.list, b));
+}
+
+function updateCityEvent(state) {
+  const ev = cityEvent(state);
+  if (!ev) return;
+  if (!state.cityEvent) state.cityEvent = { band: null, chest: null, bolts: [] };
+  if (ev === 'treasure') { updateTreasure(state); return; }
+  if (ev === 'watch') { updateWatch(state); return; }
+  if (ev === 'knight') { updateKnight(state); return; }
+  if (ev === 'silver') { updateSilver(state); return; }
+  if (ev === 'carnival') { updateCarnival(state); return; }
+  const C = F[ev], X = EVENT_TEXT[ev], now = eventWindow(ev, state.time), before = eventWindow(ev, state.time - TICK_SEC);
+  const ce = state.cityEvent;
+  if (!now.on && now.left <= C.warn && before.left > C.warn) {
+    if (ev === 'flood') pickBand(state);
+    if (ev === 'quake') ce.quake = pickQuake(state);
+    if (ev === 'typhoon') ce.wind = pickWind();
+    if (ev === 'holi') ce.clouds = pickClouds(state);
+    if (ev === 'ash') ce.ash = pickClouds(state, F.ash);
+    state.notice = { text: X.warn, mine: false, t: 3 };
+    sound('alert');
+  } else if (now.on && !before.on) {
+    if (ev === 'flood') { if (!ce.band) pickBand(state); ce.band.on = true; }
+    if (ev === 'quake') { if (!ce.quake) ce.quake = pickQuake(state); if (ce.quake) { ce.quake.on = true; quakeHit(state, ce.quake); } }
+    if (ev === 'typhoon') { if (!ce.wind) ce.wind = pickWind(); ce.wind.on = true; }
+    if (ev === 'holi') { if (!ce.clouds) ce.clouds = pickClouds(state); ce.clouds.on = true; }
+    if (ev === 'ash') { if (!ce.ash) ce.ash = pickClouds(state, F.ash); ce.ash.on = true; }
+    if (ev === 'derby') startDerby(state);
+    if (ev === 'fire') startFire(state);
+    state.notice = { text: X.start, mine: false, t: 4 };
+  } else if (!now.on && before.on) {
+    if (ev === 'flood') ce.band = null;
+    if (ev === 'quake') ce.quake = null;
+    if (ev === 'typhoon') ce.wind = null;
+    if (ev === 'holi') ce.clouds = null;
+    if (ev === 'ash') ce.ash = null;
+    if (ev === 'derby') endDerby(state);
+    if (ev === 'fire') ce.fire = null;
+    state.notice = { text: X.end, mine: false, t: 3 };
+  } else if (ev === 'nile' && nilePhase(state.time) === 'silt' && nilePhase(state.time - TICK_SEC) === 'flood') {
+    state.notice = { text: X.silt, mine: false, t: 4 };
+  }
+  if (ev === 'flood' && now.on) pushFlood(state);
+  if (ev === 'typhoon' && now.on && ce.wind) pushWind(state, ce.wind);
+  if (ev === 'ash' && now.on && ce.ash) burnIn(state, (u) => inCloud(ce.ash.list, u), F.ash.dps);
+  if (ev === 'fire' && now.on && ce.fire) updateFire(state, ce.fire, now);
+  if (ev === 'quake' && now.on && Math.round(now.since / TICK_SEC) % ticks(0.4) === 0) state.shakeAt = state.time;   // الأرض تهتز طوال الزلزال (رسم)
+  if (ev === 'lightning') updateLightning(state, now);
+}
+
+function eventBar(state, ev) {
+  if (ev === 'treasure') {
+    const c = state.cityEvent && state.cityEvent.chest, T = F.treasure;
+    if (c) return { text: 'كنز الفرعون في المدينة ' + clock(c.until - state.time), alarm: false };
+    const left = state.time < T.first ? T.first - state.time : T.every - ((state.time - T.first) % T.every);
+    return left <= 30 ? { text: 'كنز الفرعون بعد ' + clock(left), alarm: false } : null;
+  }
+  if (ev === 'silver') {
+    const ps = state.cityEvent && state.cityEvent.silver, S = F.silver;
+    if (ps && ps.pieces.length) return { text: 'حمى الفضة: ' + ps.pieces.length + ' قطع في الشوارع ' + clock(ps.until - state.time), alarm: false };
+    const left = state.time < S.first ? S.first - state.time : S.every - ((state.time - S.first) % S.every);
+    return left <= 30 ? { text: 'حمى الفضة بعد ' + clock(left), alarm: false } : null;
+  }
+  if (ev === 'carnival') {
+    const C = F.carnival;
+    if (state.cityEvent && state.cityEvent.dancers && state.cityEvent.dancers.length) return { text: 'الكرنفال يعبر المدينة: امشِ معه أسرع', alarm: false };
+    const left = state.time < C.first ? C.first - state.time : C.every - ((state.time - C.first) % C.every);
+    return left <= 30 ? { text: 'الكرنفال بعد ' + clock(left), alarm: false } : null;
+  }
+  if (ev === 'watch' || ev === 'knight') {
+    const C = F[ev], alive = state.units.some(u => isAlive(u) && (ev === 'watch' ? u.patrol : u.blackKnight));
+    if (alive) return { text: ev === 'watch' ? 'دورية الحارس الليلي في المدينة' : 'الفارس الأسود في وسط المدينة', alarm: ev === 'watch' };
+    const left = state.time < C.first ? C.first - state.time : C.every - ((state.time - C.first) % C.every);
+    return left <= 30 ? { text: (ev === 'watch' ? 'جولة الحارس الليلي' : 'الفارس الأسود') + ' بعد ' + clock(left), alarm: false } : null;
+  }
+  const w = eventWindow(ev, state.time), name = EVENT_TEXT[ev].name;
+  if (w.on && ev === 'nile') {
+    return nilePhase(state.time) === 'flood' ? { text: 'فيضان النيل ' + clock(F.nile.flood - w.since), alarm: true }
+                                            : { text: 'طمي النيل: دخل الضفة مضاعف ' + clock(w.left), alarm: false };
+  }
+  if (w.on) return { text: name + ' ' + clock(w.left), alarm: ev !== 'season' };
+  return w.left <= 30 ? { text: name + ' بعد ' + clock(w.left), alarm: w.left <= F[ev].warn } : null;
+}
+
+// --- سيل الوادي (شبام): شريط بعرض width على محور عشوائي، والتيار على طوله في اتجاه عشوائي ---
+function pickBand(state) {
+  const map = state.map, axis = random() < 0.5 ? 'i' : 'j', span = axis === 'i' ? (map.land || map.n) : map.n;
+  state.cityEvent.band = { axis, c: 3 + random() * Math.max(1, span - 6), dir: random() < 0.5 ? -1 : 1, on: false };
+}
+export const inBand = (b, u) => Math.abs((b.axis === 'i' ? u.x : u.y) - b.c) <= F.flood.width / 2;
+
+// الماء يجرف من في مجراه مع التيار، إلى مربع يُمشى عليه فقط (والمخلوقات أثقل من أن تُجرف)
+function pushFlood(state) {
+  const b = state.cityEvent.band, map = state.map;
+  if (!b) return;
+  const step = F.flood.push * TICK_SEC * b.dir;
+  for (const u of state.units) {
+    if (!isAlive(u) || u.creature || !inBand(b, u)) continue;
+    const nx = b.axis === 'i' ? u.x : u.x + step, ny = b.axis === 'i' ? u.y + step : u.y;
+    if (map.isConnected(Math.round(nx), Math.round(ny))) { u.x = nx; u.y = ny; }
+  }
+}
+
+// --- كنز الفرعون (القاهرة) ---
+function updateTreasure(state) {
+  const T = F.treasure, ev = state.cityEvent, tick = tickOf(state), first = ticks(T.first), every = ticks(T.every);
+  if (tick >= first && (tick - first) % every === 0) spawnChest(state);
+  const c = ev.chest;
+  if (!c) return;
+  if (state.time >= c.until) {
+    ev.chest = null;
+    state.notice = { text: 'اختفى كنز الفرعون', mine: false, t: 2.5 };
+    return;
+  }
+  const r2 = T.radius * T.radius;
+  let who = -1, contested = false;
+  forEachNearby(state, c.i, c.j, T.radius, (u) => {
+    if (!soldier(state, u) || (u.x - c.i) ** 2 + (u.y - c.j) ** 2 > r2) return;
+    if (who < 0) who = u.playerId;
+    else if (u.playerId !== who && isEnemyId(state, who, u.playerId)) contested = true;
+  });
+  if (who < 0 || contested) { c.holder = -1; c.since = 0; return; }
+  if (c.holder !== who) { c.holder = who; c.since = 0; }
+  c.since += TICK_SEC;
+  if (c.since + 1e-6 < T.hold) return;
+  const ms = state.modeState;
+  ms.points[who] += T.points;
+  ms.earned[who] += T.points;
+  soundAt(state, 'capture_done', c.i, c.j);
+  state.notice = who === state.humanId
+    ? { text: 'أخذت كنز الفرعون: +' + T.points + ' نقطة', mine: true, t: 3 }
+    : { text: state.players[who].gangName + ' أخذوا كنز الفرعون', mine: false, t: 3 };
+  ev.chest = null;
+}
+
+// الصندوق في شارع عشوائي موصول، والبوتات ترسل إليه أقرب جنودها
+function spawnChest(state) {
+  const map = state.map, roads = [];
+  for (let j = 0; j < map.n; j++) for (let i = 0; i < map.n; i++) if (map.road[map.idx(i, j)] && map.isConnected(i, j)) roads.push([i, j]);
+  if (!roads.length) return;
+  const [i, j] = roads[Math.floor(random() * roads.length)];
+  state.cityEvent.chest = { i, j, until: state.time + F.treasure.life, holder: -1, since: 0 };
+  state.notice = { text: 'ظهر كنز الفرعون! ابقَ عنده ' + F.treasure.hold + ' ثوانٍ بلا عدو: ' + F.treasure.points + ' نقطة', mine: false, t: 4 };
+  sound('alert');
+  for (const p of state.players) {
+    if (p.isHuman || p.neutral) continue;
+    const near = state.units.filter(u => u.playerId === p.id && isAlive(u) && !u.creature && u.state !== 'attacking')
+      .sort((a, b) => hypot(a.x - i, a.y - j) - hypot(b.x - i, b.y - j)).slice(0, F.treasure.botUnits);
+    if (near.length) commandAttackMove(state, i, j, near, false);
+  }
+}
+
+// --- عاصفة البرق (غوندر): صاعقة كل boltEvery قرب جندي عشوائي، تنفجر بعد delay ---
+function updateLightning(state, now) {
+  const L = F.lightning, ev = state.cityEvent, tick = tickOf(state);
+  if (now.on && Math.round(now.since / TICK_SEC) % ticks(L.boltEvery) === 0) markBolt(state, tick);
+  if (!ev.bolts.length) return;
+  for (const b of ev.bolts) if (!b.done && tick >= b.at) burstBolt(state, b);
+  if (ev.bolts.some(b => b.done && tick - b.at >= ticks(L.fade))) ev.bolts = ev.bolts.filter(b => !b.done || tick - b.at < ticks(L.fade));
+}
+
+function markBolt(state, tick) {
+  const L = F.lightning, n = state.map.n;
+  const soldiers = state.units.filter(u => soldier(state, u) && !state.players[u.playerId].passive);
+  if (!soldiers.length) return;
+  const u = soldiers[Math.floor(random() * soldiers.length)];
+  const x = Math.max(0, Math.min(n - 1, u.x + (random() * 2 - 1) * L.jitter));
+  const y = Math.max(0, Math.min(n - 1, u.y + (random() * 2 - 1) * L.jitter));
+  state.cityEvent.bolts.push({ x, y, at: tick + ticks(L.delay), done: false });
+  dodgeFireworks(state, x, y, L.radius);
+}
+
+// الصاعقة تضر كل من في دائرتها، وصاحب ضررها طرف الميزة المحايد (أو الشرطة): لا مكافأة لأحد
+function burstBolt(state, b) {
+  const L = F.lightning, r2 = L.radius * L.radius, hit = [];
+  b.done = true;
+  const by = featurePlayer(state) || state.players.find(p => p.gang === 'police');
+  if (!by) return;
+  forEachNearby(state, b.x, b.y, L.radius, (u) => {
+    if (isAlive(u) && (u.x - b.x) ** 2 + (u.y - b.y) ** 2 <= r2) hit.push(u);
+  });
+  for (const u of hit) applyDamage(state, { playerId: by.id }, u, L.damage);
+  soundAt(state, 'fire', b.x, b.y);
+}
+
+// --- الزلزال (إيدو): المركز جندي عشوائي، ومن في الدائرة عند البداية يسقط ويتضرر ---
+function pickQuake(state) {
+  const soldiers = state.units.filter(u => soldier(state, u) && !state.players[u.playerId].passive);
+  if (!soldiers.length) return null;
+  const u = soldiers[Math.floor(random() * soldiers.length)];
+  return { x: u.x, y: u.y, on: false };
+}
+
+function quakeHit(state, q) {
+  const Q = F.quake, r2 = Q.radius * Q.radius, hit = [];
+  const by = featurePlayer(state) || state.players.find(p => p.gang === 'police');
+  forEachNearby(state, q.x, q.y, Q.radius, (u) => {
+    if (isAlive(u) && (u.x - q.x) ** 2 + (u.y - q.y) ** 2 <= r2) hit.push(u);
+  });
+  for (const u of hit) {
+    knockDown(state, u, q.x, q.y, Q.knock);
+    if (by) applyDamage(state, { playerId: by.id }, u, Q.damage);
+  }
+  state.shakeAt = state.time;
+  soundAt(state, 'hit_heavy', q.x, q.y);
+}
+
+// --- الإعصار (هونغ كونغ): اتجاه الريح أحد المحورين الأربعة، ويدفع الجنود إلى مربع يُمشى عليه ---
+const WINDS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+const pickWind = () => { const [dx, dy] = WINDS[Math.floor(random() * 4)]; return { dx, dy, on: false }; };
+function pushWind(state, w) {
+  const map = state.map, step = F.typhoon.push * TICK_SEC;
+  for (const u of state.units) {
+    if (!isAlive(u) || u.creature) continue;
+    const nx = u.x + w.dx * step, ny = u.y + w.dy * step;
+    if (map.isConnected(Math.round(nx), Math.round(ny))) { u.x = nx; u.y = ny; }
+  }
+}
+
+// --- مهرجان الألوان (جايبور): سحب حول جنود عشوائيين متباعدين ---
+function pickClouds(state, H = F.holi) {
+  const list = [];
+  const soldiers = state.units.filter(u => soldier(state, u) && !state.players[u.playerId].passive);
+  for (let tries = 0; tries < 12 && list.length < H.count && soldiers.length; tries++) {
+    const u = soldiers[Math.floor(random() * soldiers.length)];
+    if (list.every(c => hypot(c.x - u.x, c.y - u.y) >= H.apart)) list.push({ x: u.x, y: u.y, r: H.radius, hue: list.length });
+  }
+  return { list, on: false };
+}
+
+// --- جولة الحارس الليلي (روتنبورغ): دورية شرطة من حافة المدينة تجول بين الأحياء ثم تختفي ---
+function updateWatch(state) {
+  const W = F.watch, tick = tickOf(state), first = ticks(W.first), every = ticks(W.every);
+  if (tick >= first && (tick - first) % every === 0) spawnWatch(state);
+  expireTriads(state);                                  // من انتهى وقته من الدورية يختفي كمقاتلي الترياد
+  if (tick % ticks(W.think) !== 0) return;
+  const patrol = state.units.filter(u => u.patrol && isAlive(u) && u.state === 'idle');
+  if (!patrol.length) return;
+  const stops = state.map.districts.filter(d => d.capture);
+  const d = stops[Math.floor(random() * stops.length)];
+  if (d) commandAttackMove(state, d.capture.i, d.capture.j, patrol, false);
+}
+
+function spawnWatch(state) {
+  const W = F.watch, police = state.players.find(p => p.gang === 'police'), map = state.map;
+  if (!police || state.units.some(u => u.patrol && isAlive(u))) return;
+  const edge = [];
+  for (let j = 0; j < map.n; j++) if (map.isConnected(0, j)) edge.push(j);
+  if (!edge.length) return;
+  const j0 = edge[Math.floor(random() * edge.length)];
+  findFreeTiles(map, 0, j0, W.count).forEach(([i, j], k) => {
+    const unit = createUnit(state, police, i, j, k === 0 ? 'captain' : null);
+    dressMainPolice(unit, k === 0);
+    boost(unit, null, W.boost);
+    unit.patrol = true;
+    unit.expireAt = state.time + W.life;
+    state.units.push(unit);
+  });
+  state.notice = { text: 'دورية الحارس الليلي تجول في المدينة! تهاجم كل عصابة إلا صاحب المركز الرئيسي', mine: false, t: 4 };
+  sound('alert');
+}
+
+// --- الفارس الأسود (الأوروبية): يحرس وسط المدينة، ومكافأته لمن يسقطه ---
+function updateKnight(state) {
+  const K = F.knight, tick = tickOf(state), first = ticks(K.first), every = ticks(K.every);
+  if (tick >= first && (tick - first) % every === 0) spawnKnight(state);
+  const ms = state.modeState;
+  for (const u of state.units) {
+    if (!u.blackKnight || u.state !== 'dead') continue;
+    u.blackKnight = false;
+    const killer = u.lastHitBy;
+    if (killer < 0 || !state.players[killer] || state.players[killer].neutral) continue;
+    ms.points[killer] += K.reward;
+    ms.earned[killer] += K.reward;
+    addPop(state, u, '+' + K.reward, 'loot');
+    soundAt(state, 'capture_done', u.x, u.y);
+    state.notice = killer === state.humanId
+      ? { text: 'أسقطت الفارس الأسود: +' + K.reward + ' نقطة', mine: true, t: 3 }
+      : { text: state.players[killer].gangName + ' أسقطوا الفارس الأسود', mine: false, t: 3 };
+  }
+}
+
+function spawnKnight(state) {
+  const K = F.knight, player = featurePlayer(state), map = state.map;
+  if (!player || state.units.some(u => u.blackKnight && isAlive(u))) return;
+  const ci = Math.round(((map.land || map.n) - 1) / 2), cj = Math.round((map.n - 1) / 2);
+  const spot = findFreeTiles(map, ci, cj, 1)[0];
+  if (!spot) return;
+  const unit = createUnit(state, player, spot[0], spot[1], K.hero);
+  boost(unit, K.stats);
+  unit.name = K.name;
+  unit.blackKnight = true;
+  unit.homePost = { x: spot[0], y: spot[1] };
+  unit.leash = K.chase;
+  state.units.push(unit);
+  addUltFx(state, 'dust', spot[0], spot[1]);
+  state.notice = { text: 'ظهر الفارس الأسود في وسط المدينة! من يسقطه يأخذ ' + K.reward + ' نقطة', mine: false, t: 4 };
+  sound('alert');
+}
+
+// ضرر مستمر لكل من يحقق where (رماد البركان والحريق)، وصاحبه طرف الميزة المحايد أو الشرطة: لا مكافأة لأحد
+function burnIn(state, where, dps) {
+  const by = featurePlayer(state) || state.players.find(p => p.gang === 'police');
+  if (!by) return;
+  const hit = state.units.filter(u => isAlive(u) && !state.players[u.playerId].passive && where(u));
+  for (const u of hit) applyDamage(state, { playerId: by.id }, u, dps * TICK_SEC);
+}
+
+// --- حمى الفضة (المكسيكية): قطع في شوارع عشوائية لأول جندي يصلها ---
+function updateSilver(state) {
+  const S = F.silver, ce = state.cityEvent, tick = tickOf(state), first = ticks(S.first), every = ticks(S.every);
+  if (tick >= first && (tick - first) % every === 0) spawnSilver(state);
+  const ps = ce.silver;
+  if (!ps || !ps.pieces.length) return;
+  if (state.time >= ps.until) { ce.silver = null; return; }
+  const ms = state.modeState;
+  ps.pieces = ps.pieces.filter(p => {
+    let who = null;
+    forEachNearby(state, p.i, p.j, S.pick, (u) => {
+      if (!who && soldier(state, u) && !state.players[u.playerId].passive && (u.x - p.i) ** 2 + (u.y - p.j) ** 2 <= S.pick * S.pick) who = u;
+    });
+    if (!who) return true;
+    ms.points[who.playerId] += S.points;
+    ms.earned[who.playerId] += S.points;
+    addPop(state, who, '+' + S.points, 'loot');
+    soundAt(state, 'capture_done', p.i, p.j);
+    if (who.playerId === state.humanId) state.notice = { text: 'التقطت قطعة فضة: +' + S.points + ' نقطة', mine: true, t: 2 };
+    return false;
+  });
+}
+
+function spawnSilver(state) {
+  const S = F.silver, map = state.map, roads = [], pieces = [];
+  for (let j = 0; j < map.n; j++) for (let i = 0; i < map.n; i++) if (map.road[map.idx(i, j)] && map.isConnected(i, j)) roads.push([i, j]);
+  for (let k = 0; k < S.count && roads.length; k++) {
+    const [i, j] = roads.splice(Math.floor(random() * roads.length), 1)[0];
+    pieces.push({ i, j });
+  }
+  if (!pieces.length) return;
+  state.cityEvent.silver = { pieces, until: state.time + S.life };
+  state.notice = { text: 'حمى الفضة! ' + pieces.length + ' قطع في الشوارع، كل قطعة ' + S.points + ' نقطة لأول من يصلها', mine: false, t: 4 };
+  sound('alert');
+  for (const p of state.players) {                      // كل بوت يرسل أقرب جندي حر إلى كل قطعة
+    if (p.isHuman || p.neutral) continue;
+    const free = state.units.filter(u => u.playerId === p.id && isAlive(u) && !u.creature && u.state !== 'attacking');
+    for (const piece of pieces) {
+      if (!free.length) break;
+      let best = 0;
+      for (let k = 1; k < free.length; k++) if (hypot(free[k].x - piece.i, free[k].y - piece.j) < hypot(free[best].x - piece.i, free[best].y - piece.j)) best = k;
+      commandMove(state, piece.i, piece.j, [free.splice(best, 1)[0]], false);
+    }
+  }
+}
+
+// --- الكرنفال (ريو): موكب مسالم من حافة إلى المقابلة، ومواقع راقصيه في ce.dancers كل تحديث ---
+function updateCarnival(state) {
+  const C = F.carnival, ce = state.cityEvent, tick = tickOf(state), first = ticks(C.first), every = ticks(C.every);
+  if (tick >= first && (tick - first) % every === 0) spawnCarnival(state);
+  const dancers = state.units.filter(u => u.dancer && isAlive(u));
+  ce.dancers = dancers.map(u => [u.x, u.y]);
+  if (!dancers.length || tick % ticks(C.think) !== 0) return;
+  const gone = new Set();
+  for (const u of dancers) {
+    const x = u.dancer;
+    if (state.time < x.until && hypot(u.x - x.i, u.y - x.j) > C.exitRadius) continue;
+    u.hp = 0; u.state = 'dead'; u.deathTimer = 0; u.path = []; u.target = null;
+    gone.add(u);
+  }
+  if (gone.size) state.units = state.units.filter(u => !gone.has(u));
+  const idle = dancers.filter(u => !gone.has(u) && u.state === 'idle');
+  if (idle.length) commandMove(state, idle[0].dancer.i, idle[0].dancer.j, idle, false);
+}
+
+function spawnCarnival(state) {
+  const C = F.carnival, player = featurePlayer(state), map = state.map, land = map.land || map.n;
+  if (!player || state.units.some(u => u.dancer && isAlive(u))) return;
+  const edge = [];
+  for (let j = 0; j < map.n; j++) if (map.isConnected(0, j)) edge.push(j);
+  if (!edge.length) return;
+  const j0 = edge[Math.floor(random() * edge.length)];
+  let exit = null, best = Infinity;                     // المخرج: أقرب مربع موصول على الحافة المقابلة
+  for (let j = 0; j < map.n; j++) for (let i = land - 1; i >= land - 3; i--) {
+    if (!map.isConnected(i, j)) continue;
+    const off = Math.abs(j - j0);
+    if (off < best) { best = off; exit = { i, j, until: state.time + C.life }; }
+  }
+  if (!exit) return;
+  findFreeTiles(map, 0, j0, C.count).forEach(([i, j]) => {
+    const unit = createUnit(state, player, i, j);
+    boost(unit, C.stats);
+    unit.name = C.name;
+    unit.dancer = exit;
+    state.units.push(unit);
+  });
+  state.notice = { text: 'الكرنفال يعبر المدينة! جنودك قرب الراقصين أسرع 30%', mine: false, t: 4 };
+  sound('alert');
+}
+
+// --- جمهور الديربي (لا بوكا): مشجعون مسالمون على شوارع الوسط حتى نهاية الحدث ---
+function startDerby(state) {
+  const D = F.derby, player = featurePlayer(state), map = state.map;
+  const x = ((map.land || map.n) - 1) / 2, y = (map.n - 1) / 2;
+  state.cityEvent.derby = { x, y, on: true };
+  if (!player) return;
+  const spots = [];
+  for (let j = 0; j < map.n; j++) for (let i = 0; i < map.n; i++) {
+    if (map.road[map.idx(i, j)] && map.isConnected(i, j) && (i - x) ** 2 + (j - y) ** 2 <= D.radius * D.radius) spots.push([i, j]);
+  }
+  for (let k = 0; k < D.count && spots.length; k++) {
+    const [i, j] = spots.splice(Math.floor(random() * spots.length), 1)[0];
+    const unit = createUnit(state, player, i, j);
+    unit.name = D.name;
+    unit.fan = true;
+    state.units.push(unit);
+  }
+}
+
+function endDerby(state) {
+  state.cityEvent.derby = null;
+  const gone = state.units.filter(u => u.fan);
+  for (const u of gone) { u.hp = 0; u.state = 'dead'; u.deathTimer = 0; }
+  if (gone.length) state.units = state.units.filter(u => !u.fan);
+}
+
+// --- الحريق الكبير (شيكاغو): يبدأ في حي عشوائي، وكل spread ثانية يشعل كل حي محترق جاراً له ---
+function startFire(state) {
+  const ds = state.map.districts.filter(d => d.capture);
+  if (!ds.length) return;
+  state.cityEvent.fire = { burning: [ds[Math.floor(random() * ds.length)].id] };
+}
+
+function updateFire(state, fire, now) {
+  const step = Math.round(now.since / TICK_SEC);
+  if (step > 0 && step % ticks(F.fire.spread) === 0) {
+    for (const id of fire.burning.slice()) {
+      const next = (state.map.districts[id].adj || []).filter(a => !fire.burning.includes(a) && state.map.districts[a].capture);
+      if (next.length) fire.burning.push(next[Math.floor(random() * next.length)]);
+    }
+  }
+  burnIn(state, (u) => { const d = areaDistrict(state.map, u); return !!d && fire.burning.includes(d.id); }, F.fire.dps);
 }
 
 // ================= المخلوقات: الفيل الحربي وترول الجبل =================

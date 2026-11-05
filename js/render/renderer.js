@@ -17,7 +17,7 @@ import { shadedCount } from '../pacing.js';
 import { viewDpr, gfxLevel } from '../graphics.js';
 import { drawEmpireShots, drawEmpireMarks, drawEmpireHalos, drawEmpireBadges } from './empireArt.js';
 import { drawFeatureBadges, drawStorm, featureHaloEntry, drawFeatureHalo, drawFireworksMarks, drawFireworksBursts,
-         fireworksLights, drawBells, drawVault } from './featureArt.js';
+         fireworksLights, drawBells, drawVault, drawEventGround, drawEventSky, drawEventOverlay } from './featureArt.js';
 
 export function resizeCanvas(canvas, state) {
   const view = state.view;
@@ -91,6 +91,7 @@ export function render(ctx, state, alpha, cityBudgetMs = CITY_CACHE.frameBudgetM
   }
   for (const zone of state.zones) drawZone(ctx, zone, state.time);   // الراية المغروسة (القسم 3.10)
   drawFireworksMarks(ctx, state, visible);          // دوائر الألعاب النارية قبل انفجارها (القسم 3.11)
+  drawEventGround(ctx, state, visible);             // السيل والنيل والكنز ودوائر الصواعق (12و)
   if (state.weather === 'night') fireworksLights(state, lights);
   drawEmpireHalos(ctx, state, visible);             // هالة ذهبية حول القواعد الرئيسية (طور الإمبراطورية)
   drawUnitsLayer(ctx, state, alpha, visible);
@@ -106,6 +107,7 @@ export function render(ctx, state, alpha, cityBudgetMs = CITY_CACHE.frameBudgetM
   drawOverlay(ctx, state.weather, view);
   if (state.weather === 'night') drawLights(ctx, lights, camera, view);
   drawStorm(ctx, state, view);                      // غبار العاصفة الرملية (القسم 3.11)
+  drawEventOverlay(ctx, state, view);               // سماء عاصفة البرق (12و)
 
   // الهالات ودوائر التحديد وعلامة الحركة فوق طبقة الليل حتى تبقى واضحة
   worldTransform(ctx, state);
@@ -121,6 +123,7 @@ export function render(ctx, state, alpha, cityBudgetMs = CITY_CACHE.frameBudgetM
   drawEmpireBadges(ctx, state, visible);            // تاج القاعدة وقوس البرج وصليب المستشفى
   drawFeatureBadges(ctx, state, visible);           // شارة الهرم وشارة القرية التي ينتظر أهلها (القسم 3.11)
   drawFireworksBursts(ctx, state, visible);         // انفجارات الألعاب النارية في السماء
+  drawEventSky(ctx, state, visible);                // الصواعق النازلة، و×2 في موسم التجارة وطمي النيل (12و)
   drawBells(ctx, state, visible);                   // حلقات أجراس الكاتدرائية حين تُقرع
   drawVault(ctx, state, visible);                   // ما في خزنة البنك
   drawEmpireMarks(ctx, state, visible, state.empireOpen);   // شريط الإنتاج ودائرة مدى المبنى المفتوح

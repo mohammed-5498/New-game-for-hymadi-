@@ -17,7 +17,7 @@ import { findFreeTiles } from '../map/pathfinding.js';
 import { soundAt } from '../audio/sound.js';
 import { hypot } from './hypot.js';
 import { random } from './random.js';   // عشوائية المنطق: مشتركة بين الأجهزة في اللعب المحلي
-import { featureIncome, rangeMul, stormMiss, buildingOwner, launchRocket, recruitsAt, spawnRecruit, featureCostMul, featureIncomeMul, featureProductionMul,
+import { featureIncome, rangeMul, stormMiss, buildingOwner, launchRocket, eventIncomeMul, eventCostMul, eventProductionMul, recruitsAt, spawnRecruit, featureCostMul, featureIncomeMul, featureProductionMul,
          payTax, callTriads, ringBells } from './features.js';
 
 const isAlive = (unit) => unit && unit.state !== 'dead' && unit.hp > 0;
@@ -91,7 +91,7 @@ function collectIncome(state, ms) {
   const mul = (ms.incomeMul || 1) * TICK_SEC;
   for (const d of state.map.districts) {
     if (d.owner === null || !d.capture || state.players[d.owner].neutral) continue;
-    const gain = districtIncome(d) * mul * botIncome(state.players[d.owner]) * featureIncomeMul(state, d.owner);
+    const gain = districtIncome(d) * mul * botIncome(state.players[d.owner]) * featureIncomeMul(state, d.owner) * eventIncomeMul(state, d);
     ms.points[d.owner] += gain;
     ms.earned[d.owner] += gain;
   }
@@ -136,13 +136,16 @@ export function productionTime(state, district, kind) {
   const owner = state.players[district.owner];
   const horde = owner && owner.gang === 'scorpions' && E.units[kind] ? 1 + STYLE_PERKS.horde.production : 1;
   return unitCost(kind).seconds * E.buildings.hq.upgrades.production.times[level] * DS.production[sizeOf(district)] *
-    (owner ? botFactor(owner) * featureProductionMul(state, owner.id) : 1) / horde;
+    (owner ? botFactor(owner) * featureProductionMul(state, owner.id) : 1) * eventProductionMul(state) / horde;   // وصافرة المصانع (12ز)
 }
 
 // كلفة الطلب وزمنه: جنود القاعدة، أو المجنَّدون في المباني المميزة (CITY_FEATURES.recruits، القسم 3.11)
 const unitCost = (kind) => E.units[kind] || CITY_FEATURES.recruits[kind];
 // سعره لهذا اللاعب: أحياء عصابة المجمع التي يملكها تخفضه (تينوتشتيتلان)
-export const unitPrice = (state, playerId, kind) => Math.round(unitCost(kind).cost * featureCostMul(state, playerId));
+export const unitPrice = (state, playerId, kind) => Math.round(unitCost(kind).cost * featureCostMul(state, playerId) * eventCostMul(state));
+// سعر بعد سوق الليل (كايفنغ، 12ز): كل الأسعار أرخص للجميع وقته (بلا state: السعر الأصلي)
+const priced = (state, cost) => state ? Math.round(cost * eventCostMul(state)) : cost;
+export const buildCost = (state, type) => priced(state, E.buildings[type].cost);
 
 // هل يُنتج هذا الطلب في هذا الحي؟ جنود القاعدة في القاعدة الرئيسية، والمجنَّدون في مبناهم المميز
 const producesAt = (district, kind) => E.units[kind] ? district.building === 'hq' : (recruitsAt(district) || []).includes(kind);
@@ -343,7 +346,7 @@ export function queueUnit(state, playerId, districtId, kind) {
 export function nextUpgrade(state, playerId, key) {
   const level = state.modeState.levels[playerId][key];
   const costs = E.upgrades[key].costs;
-  return level < costs.length ? { level: level + 1, cost: costs[level] } : null;
+  return level < costs.length ? { level: level + 1, cost: priced(state, costs[level]) } : null;
 }
 
 export function canUpgrade(state, playerId, key) {
@@ -391,7 +394,7 @@ export function canBuild(state, playerId, district, type) {
   if (district.hill) return fail('التلة لا يُبنى فيها');         // ملك الحي: يبقى معلمها وتاجها
   if (district.featureTile !== undefined) return fail('معلم المدينة');   // مبنى ميزة المدينة (القسم 3.11)
   if (buildSpot(state.map, district) < 0) return fail('لا مكان للبناء');
-  if (pointsOf(state, playerId) < E.buildings[type].cost) return fail('النقاط لا تكفي');
+  if (pointsOf(state, playerId) < buildCost(state, type)) return fail('النقاط لا تكفي');
   return OK;
 }
 
@@ -400,7 +403,7 @@ export function buildDistrict(state, playerId, districtId, type) {
   const check = canBuild(state, playerId, district, type);
   if (!check.ok) return check;
   const k = buildSpot(state.map, district);
-  spend(state, playerId, E.buildings[type].cost);
+  spend(state, playerId, buildCost(state, type));
   district.building = type;
   district.buildTile = k;
   district.blv = {};
@@ -412,16 +415,16 @@ export function buildDistrict(state, playerId, districtId, type) {
 }
 
 // ترقية البرج أو المستشفى: مستويان لكل خانة
-export function nextBuildingUpgrade(district, key) {
+export function nextBuildingUpgrade(district, key, state = null) {
   const U = E.buildings[district.building] && E.buildings[district.building].upgrades;
   if (!U || !U[key]) return null;
   const level = (district.blv && district.blv[key]) || 0;
-  return level < U[key].costs.length ? { level: level + 1, cost: U[key].costs[level] } : null;
+  return level < U[key].costs.length ? { level: level + 1, cost: priced(state, U[key].costs[level]) } : null;
 }
 
 export function canUpgradeBuilding(state, playerId, district, key) {
   if (!owns(state, playerId, district)) return fail('ليس حيك');
-  const next = nextBuildingUpgrade(district, key);
+  const next = nextBuildingUpgrade(district, key, state);
   if (!next) return fail('أعلى مستوى');
   if (pointsOf(state, playerId) < next.cost) return fail('النقاط لا تكفي');
   return OK;
@@ -431,7 +434,7 @@ export function upgradeBuilding(state, playerId, districtId, key) {
   const district = state.map.districts[districtId];
   const check = canUpgradeBuilding(state, playerId, district, key);
   if (!check.ok) return check;
-  const next = nextBuildingUpgrade(district, key);
+  const next = nextBuildingUpgrade(district, key, state);
   spend(state, playerId, next.cost);
   district.blv = { ...district.blv, [key]: next.level };
   return OK;
@@ -443,7 +446,7 @@ export function nextFort(district, state = null, pid = -1) {
   const level = (district && district.fort) || 0, C = E.fortify.costs;
   if (level >= C.length) return null;
   const half = state && pid >= 0 && buildingOwner(state, 'kanoGate') === pid;
-  return { level: level + 1, cost: half ? Math.round(C[level] * CITY_FEATURES.kanoGate.fortifyMul) : C[level] };
+  return { level: level + 1, cost: priced(state, half ? Math.round(C[level] * CITY_FEATURES.kanoGate.fortifyMul) : C[level]) };
 }
 
 export function canFortify(state, playerId, district) {
@@ -487,7 +490,7 @@ export function incomeOf(state, playerId) {
   let total = 0;
   for (const d of state.map.districts) {
     if (d.owner !== playerId || !d.capture) continue;
-    total += districtIncome(d);
+    total += districtIncome(d) * eventIncomeMul(state, d);       // موسم التجارة وطمي النيل (12و)
   }
   return total * (state.modeState.incomeMul || 1) * featureIncomeMul(state, playerId);
 }
