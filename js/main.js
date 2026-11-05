@@ -1,7 +1,7 @@
 // نقطة البداية: القوائم، دورة حياة المباراة، وحلقة اللعبة
 // منطق اللعبة بخطوة زمنية ثابتة (20 تحديثاً/ث)، والرسم كل إطار مع تنعيم المواقع
 import { MATCH_DEFAULTS, TICK_MS, CITY_CACHE, GRAPHICS } from './config.js';
-import { viewDpr, gfxLevel } from './graphics.js';
+import { viewDpr, gfxLevel, markActive } from './graphics.js';
 import { paceFrame, paceWork } from './pacing.js';
 import { createMatch, resetMatch } from './state.js';
 import { updateMatch } from './game/loop.js';
@@ -144,7 +144,15 @@ let accumulator = 0;
 let warmedMap = null;      // آخر خريطة بدأ تجهيز مدينتها
 let warmUntil = 0;         // أقصى وقت لتجهيز المدينة قبل أن تبدأ المباراة على أي حال
 
+const lastCam = { x: 0, y: 0, z: 0 };
+
 function loop(now) {
+  // الكاميرا تحركت أو مربع التحديد يُرسم: الإيقاع الكامل (calmFps في GRAPHICS، تخفيف المعالج 2)
+  const cam = state.camera;
+  if (cam.x !== lastCam.x || cam.y !== lastCam.y || cam.z !== lastCam.z || state.selectionBox) {
+    lastCam.x = cam.x; lastCam.y = cam.y; lastCam.z = cam.z;
+    markActive(now);
+  }
   // إيقاع الإطارات (js/pacing.js): الإطار المتخطى لا يحدّث ولا يرسم، ووقته يُحسب في الإطار التالي
   if (!paceFrame(now, state.running && !state.paused && !state.matchResult && !warmUntil)) {
     requestAnimationFrame(loop);

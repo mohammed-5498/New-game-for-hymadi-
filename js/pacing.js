@@ -39,30 +39,33 @@ export function paceFrame(now, active) {
   }
   pace.skipped = false;
 
-  const lo = minDiv();
+  const lo = minDiv(now);
   if ((!P.enabled && lo === 1) || !active) {
     pace.div = 1; pace.probing = 0; pace.hold = P.holdMs;
     pace.shown = now; pace.frames = pace.late = 0; pace.windowAt = now; pace.work.length = 0;
     return true;
   }
-  if (pace.div < lo) pace.div = lo;            // سقف الإطارات (جودة الرسم أو توفير البطارية)
+  // سقف الإطارات (جودة الرسم، والكاميرا الساكنة، وتوفير البطارية) فوق ما يقدر عليه الجهاز (pace.div)،
+  // ولا يُحفظ فيه: حين يرتفع السقف (تحركت الكاميرا) يعود الإيقاع الأسرع في الإطار نفسه
+  const div = Math.max(pace.div, lo);
   const shownMs = now - pace.shown;
   // قبل موعد الإيقاع (مع نصف إطار شاشة للتذبذب): تخطَّ. بعده: ارسم فوراً مهما تأخر
-  if (pace.div > 1 && shownMs < pace.vsync * (pace.div - 0.5)) { pace.skipped = true; return false; }
+  if (div > 1 && shownMs < pace.vsync * (div - 0.5)) { pace.skipped = true; return false; }
   pace.shown = now;
   if (shownMs < 250) {                       // بعد العودة من الخلفية: فاصل طويل لا يُحسب
     pace.frames++;
     // متأخر: فاته إطار شاشة كامل بعد موعده، وبقدر يُرى (إطار 16 على شاشة 120 لا يُلحظ)
-    if (shownMs > pace.vsync * (pace.div + P.lateExtra) && shownMs > P.minLateMs) pace.late++;
+    if (shownMs > pace.vsync * (div + P.lateExtra) && shownMs > P.minLateMs) pace.late++;
   }
   if (P.enabled && now - pace.windowAt >= P.windowMs) judge(now);
   return true;
 }
 
-// أقل div يحقق سقف الإطارات (graphics.js): 30 إطاراً/ث = كل إطار ثانٍ على شاشة 60، ورابع على 120
-function minDiv() {
-  const cap = fpsCap();
-  return cap ? Math.max(1, Math.round(1000 / cap / pace.vsync)) : 1;
+// أقل div يحقق سقف الإطارات (graphics.js): 30 إطاراً/ث = كل إطار ثانٍ على شاشة 60، ورابع على 120.
+// لا ينزل عن السقف إلا بتذبذب قياس الشاشة (0.25): سقف 60 على شاشة 90 يبقى 90 لا 45
+function minDiv(now) {
+  const cap = fpsCap(now);
+  return cap ? Math.max(1, Math.floor(1000 / cap / pace.vsync + 0.25)) : 1;
 }
 
 function quantile(list, q) {
@@ -102,11 +105,12 @@ function judge(now) {
     pace.holdUntil = now + pace.hold;
     pace.probing = 0;
   } else if (lateShare > P.enterLate) {
-    if (pace.vsync * (pace.div + 1) <= P.maxFrameMs) {
-      pace.div++;
+    const div = Math.max(pace.div, minDiv(now));       // تأخرت تحت السقف: الجهاز لا يلحق بهذا الإيقاع
+    if (pace.vsync * (div + 1) <= P.maxFrameMs) {
+      pace.div = div + 1;
       pace.holdUntil = now + pace.hold;
     }
-  } else if (pace.div > minDiv() && now >= pace.holdUntil) {
+  } else if (pace.div > minDiv(now) && now >= pace.holdUntil) {
     // نجرّب الإيقاع الأسرع نافذة واحدة، فقط إن كان عمل أغلب الإطارات يتسع له بوضوح؛
     // وإلا ننتظر مدة أخرى بلا تجربة (التجربة الفاشلة نفسها نافذة متقطعة)
     const typical = pace.work.length ? quantile(pace.work, 0.75) : Infinity;
@@ -139,7 +143,7 @@ function judgeShaded(now, lateShare) {
   if (!pace.work.length) return;
   // سقف الإطارات ليس بطئاً، لكن الوقت الذي يوفره لا يُصرف على النمط المظلَّل (توفير البطارية يبقى توفيراً)
   const target = Math.max(pace.vsync, 1000 / 60), work = quantile(pace.work, 0.75);
-  const slow = pace.vsync * pace.div > Math.max(target, pace.vsync * minDiv()) * 1.05;
+  const slow = pace.vsync * pace.div > Math.max(target, pace.vsync * minDiv(now)) * 1.05;
   if (lateShare > SH.lateShare || slow || work > target * SH.workShrink) {
     if (lateShare > SH.lateShare && shade.count > SH.min) {   // لا يعود قريباً إلى العدد الذي أبطأ الإطارات
       shade.cap = Math.max(SH.min, shade.count - SH.growStep);

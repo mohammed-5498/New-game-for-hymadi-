@@ -1361,15 +1361,19 @@ export const PERFORMANCE = {
 // في الإعدادات: تلقائي (الافتراضي) أو أحد المستويات. التلقائي: منخفضة لجوال بذاكرة أو أنوية قليلة
 // (auto، من navigator.deviceMemory وhardwareConcurrency)، ومتوسطة لغيره. العالية باختيار اللاعب وحده.
 // maxDpr: أقصى دقة للوحة (أكبر وفر: البكسلات المرسومة)، fps: سقف إطارات المباراة (0 بلا سقف)،
+// calmFps: سقفها والكاميرا ساكنة (تخفيف المعالج 2: المحاكاة 20 تحديثاً/ث فلا يُرى فرق في حركة الجنود، والإيقاع
+// الكامل يعود فوراً مع سحب الكاميرا أو تقريبها أو مربع التحديد ويبقى activeMs بعدها)، 0 بلا سقف خاص،
 // menuFps: رسم خلفية القوائم (0 صورة ثابتة)، detail: تفاصيل المباني (CITY_DETAIL)، shaded: النمط المظلَّل،
 // lights وparticles: نسبة إضاءات الليل وجزيئات الطقس، voices: مؤثرات القتال معاً، maxUnits: حد الوحدات الافتراضي
 // وتوفير البطارية: 30 إطاراً/ث في المباراة بأي مستوى. والإيقاف وشاشة النهاية يُرسمان idleFps فقط (المشهد ثابت)
+// السقف 60 حتى في العالية: شاشات 90 و120 كانت تُرسم بإيقاعها كله بلا فائدة (رسالة "العناية بالجهاز" عند المستخدم)
 export const GRAPHICS = {
   levels: {
-    high:   { name: 'عالية',   maxDpr: 4,   fps: 0,  menuFps: 30, detail: true,  shaded: true,  lights: 1,   particles: 1,   voices: 20 },
-    medium: { name: 'متوسطة',  maxDpr: 2,   fps: 0,  menuFps: 20, detail: true,  shaded: true,  lights: 1,   particles: 1,   voices: 20 },
-    low:    { name: 'منخفضة',  maxDpr: 1.5, fps: 30, menuFps: 0,  detail: false, shaded: false, lights: 0.5, particles: 0.5, voices: 10, maxUnits: 50 }
+    high:   { name: 'عالية',   maxDpr: 4,   fps: 60, calmFps: 0,  menuFps: 30, detail: true,  shaded: true,  lights: 1,   particles: 1,   voices: 20 },
+    medium: { name: 'متوسطة',  maxDpr: 2,   fps: 60, calmFps: 30, menuFps: 15, detail: true,  shaded: true,  lights: 1,   particles: 1,   voices: 20 },
+    low:    { name: 'منخفضة',  maxDpr: 1.5, fps: 30, calmFps: 0,  menuFps: 0,  detail: false, shaded: false, lights: 0.5, particles: 0.5, voices: 10, maxUnits: 50 }
   },
+  activeMs: 1200,
   order: ['auto', 'high', 'medium', 'low'],   // ترتيب زر الإعدادات
   auto: { lowMemory: 3, lowCores: 4 },        // ذاكرة (غيغابايت) أو أنوية بهذا أو أقل: منخفضة
   batteryFps: 30,
