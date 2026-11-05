@@ -47,9 +47,14 @@ function applyVolumes() {
 // حتى يعمل فعلاً: بعض المتصفحات لا تسمح به في pointerdown وتسمح في touchend أو click
 export function initSound() {
   loadAudioSettings();
+  GameAudio.setContextOptions({ latencyHint: AUDIO.latencyHint });
   applyVolumes();
   armUnlock();
   document.addEventListener('visibilitychange', onVisibility);
+  window.addEventListener('gangcity:audioroute', reroute);              // التطبيق: MainActivity
+  if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
+    navigator.mediaDevices.addEventListener('devicechange', reroute);    // المتصفح
+  }
   if (isNativeApp()) tryUnlock();       // التطبيق يسمح بالصوت قبل أي لمسة: صوت التشغيل ثم لحن القوائم
 }
 
@@ -119,6 +124,20 @@ function onVisibility() {
   cityMusicHold(document.visibilityState === 'hidden');
   if (document.visibilityState === 'hidden') { ctx.suspend().catch(() => {}); return; }
   ctx.resume().then(() => { if (ctx.state !== 'running') armUnlock(); }, armUnlock);
+}
+
+// جهاز الصوت تغيّر (سماعات بلوتوث أو سلكية وُصلت أو فُصلت): مخرج السياق يُغلق ويُفتح من جديد فيتبع الجهاز
+// الحالي (بطلب المستخدم: الصوت بقي على سماعة الجوال). الأحداث تتتابع عند الاتصال، فواحد فقط بعد rerouteMs
+let rerouteTimer = 0;
+function reroute() {
+  clearTimeout(rerouteTimer);
+  rerouteTimer = setTimeout(() => {
+    const ctx = GameAudio.context;
+    if (!ctx || ctx.state !== 'running' || document.visibilityState === 'hidden') return;
+    ctx.suspend()
+      .then(() => ctx.resume())
+      .then(() => { if (ctx.state !== 'running') armUnlock(); }, armUnlock);
+  }, AUDIO.rerouteMs);
 }
 
 // الموسيقى لا تبدأ قبل أول لمسة ولا داخل القوائم
