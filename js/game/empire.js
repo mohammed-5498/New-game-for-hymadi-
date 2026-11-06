@@ -7,7 +7,7 @@
 //   مبناه بترقياته كما هي، ولا تعود نقاط لأحد (وطلبات الجنود في طابور القاعدة الساقطة تضيع)
 // الحالة كلها بيانات بسيطة في state.modeState وحقول الأحياء (building وbuildTile وblv)، فتُحفظ مع المباراة.
 // الأرقام كلها في EMPIRE داخل config.js
-import { TICK_SEC, EMPIRE as E, SPAWN, GANGS, ai, CITY_FEATURES, STYLE_PERKS, DISTRICT_SIZES as DS } from '../config.js';
+import { TICK_SEC, EMPIRE as E, SPAWN, GANGS, ai, CITY_FEATURES, STYLE_PERKS, DISTRICT_SIZES as DS, STORY } from '../config.js';
 import { sizeOf } from '../map/sizes.js';
 import { createUnit } from './units.js';
 import { spawnChampion, championOf, countUnits } from './spawn.js';
@@ -130,19 +130,23 @@ function botIncome(player) {
 }
 
 // سرعة الإنتاج ترقية القاعدة نفسها (district.blv.production)، ومالك برج الساعة أسرع (القسم 3.11)،
-// وجنود الحشد في القاعدة أسرع (القسم 3.12)
+// وجنود الحشد في القاعدة أسرع (القسم 3.12)، وعدو طور القصة أبطأ في مراحله الأخيرة (STORY.enemyProduction)
 export function productionTime(state, district, kind) {
   const level = (district.blv && district.blv.production) || 0;
   const owner = state.players[district.owner];
   const horde = owner && owner.gang === 'scorpions' && E.units[kind] ? 1 + STYLE_PERKS.horde.production : 1;
   return unitCost(kind).seconds * E.buildings.hq.upgrades.production.times[level] * DS.production[sizeOf(district)] *
-    (owner ? botFactor(owner) * featureProductionMul(state, owner.id) : 1) * eventProductionMul(state) / horde;   // وصافرة المصانع (12ز)
+    (owner ? botFactor(owner) * featureProductionMul(state, owner.id) : 1) * eventProductionMul(state) / horde *   // وصافرة المصانع (12ز)
+    (state.story && owner && owner.team === 2 ? STORY.enemyProduction[state.story.level] : 1);
 }
 
 // كلفة الطلب وزمنه: جنود القاعدة، أو المجنَّدون في المباني المميزة (CITY_FEATURES.recruits، القسم 3.11)
 const unitCost = (kind) => E.units[kind] || CITY_FEATURES.recruits[kind];
 // سعره لهذا اللاعب: أحياء عصابة المجمع التي يملكها تخفضه (تينوتشتيتلان)
-export const unitPrice = (state, playerId, kind) => Math.round(unitCost(kind).cost * featureCostMul(state, playerId) * eventCostMul(state));
+// وفئة النمط (STYLE_PERKS.classes): الصامد أغلى والحشد أرخص، لجنود القاعدة وحدهم
+export const unitPrice = (state, playerId, kind) => Math.round(unitCost(kind).cost * classPrice(state.players[playerId], kind) *
+  featureCostMul(state, playerId) * eventCostMul(state));
+const classPrice = (player, kind) => { const c = E.units[kind] && STYLE_PERKS.classes[player.gang]; return (c && c.price) || 1; };
 // سعر بعد سوق الليل (كايفنغ، 12ز): كل الأسعار أرخص للجميع وقته (بلا state: السعر الأصلي)
 const priced = (state, cost) => state ? Math.round(cost * eventCostMul(state)) : cost;
 export const buildCost = (state, type) => priced(state, E.buildings[type].cost);
