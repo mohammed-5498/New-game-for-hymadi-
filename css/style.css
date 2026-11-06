@@ -704,8 +704,6 @@ button.wide.ghost { background: transparent; color: var(--text-dim); }
 .slots-head .label { margin: 0; }
 
 .hint { font-size: 14px; color: var(--text-dim); }
-/* وصف الأمة المختارة تحت خانات اللاعبين (القسم 3.10) */
-.side-desc { margin: 2px 2px 8px; line-height: 1.5; }
 
 .slot, .slot-cols {
   display: flex;
@@ -773,6 +771,36 @@ button.wide.ghost { background: transparent; color: var(--text-dim); }
 .footer-row button.wide { margin-top: 0; }
 .footer-row #btnStart { flex: 2 1 0; }
 .footer-row #btnBackToMain { flex: 1 1 0; }
+
+/* قائمة الإعداد بملء الشاشة وعناصرها أصغر (بطلب المستخدم، 2026-11-06): تتسع الخيارات والخانات معاً */
+#screenSetup:not([hidden]) { padding: 0; }
+#screenSetup .menu.setup {
+  max-width: none;
+  min-height: 100%;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  padding: max(8px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) 0 max(14px, env(safe-area-inset-left));
+}
+#screenSetup h2 { font-size: 19px; margin-bottom: 6px; }
+#screenSetup .label { font-size: 14px; margin-bottom: 4px; }
+#screenSetup .pick-btn { min-height: 48px; margin-bottom: 6px; padding: 3px 8px 3px 6px; }
+#screenSetup .pick-icon { width: 48px; height: 32px; }
+#screenSetup #cityThumb { width: 112px; height: 56px; }
+#screenSetup .pick-label, #screenSetup .pick-text .hint { font-size: 12px; }
+#screenSetup .pick-text b { font-size: 16px; }
+#screenSetup .pick-tiles { margin-bottom: 8px; }
+#screenSetup .pick-tile { padding: 3px 4px 4px; }
+#screenSetup .tile-icon { width: 44px; height: 28px; margin-bottom: 0; }
+#screenSetup .pick-tile b { font-size: 14px; }
+#screenSetup .opt { min-height: 42px; font-size: 14px; }
+#screenSetup .slots-head { margin: 8px 0 4px; }
+#screenSetup .slot { margin-bottom: 4px; }
+#screenSetup .slot .cell { min-height: 40px; font-size: 14px; border-radius: 9px; }
+#screenSetup .slot .cell.num { line-height: 40px; }
+#screenSetup .slot-cols .cell { font-size: 12px; }
+#screenSetup button.wide { min-height: 44px; }
 
 .error {
   color: var(--danger);
