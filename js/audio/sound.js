@@ -5,7 +5,7 @@
 // الكبيرة إلى ضجيج (المرحلة 5ب)
 import { AUDIO, TILE_HALF_W, TILE_HALF_H, TICK_SEC } from '../config.js';
 import { GameAudio } from './audio.js';
-import { initSamples, setSampleVolumes, playSample, playTrack, themeOn, stopSamples, cityMusicOn, cityMusicOff, cityMusicHold } from './samples.js';
+import { initSamples, setSampleVolumes, playSample, playTrack, fadeTrack, themeOn, stopSamples, cityMusicOn, cityMusicOff, cityMusicHold } from './samples.js';
 import { isNativeApp } from '../platform.js';
 
 let settings = { sfx: AUDIO.sfxVolume, music: AUDIO.musicVolume, muted: AUDIO.muted };
@@ -111,8 +111,9 @@ export function matchSilence(on) {
     queue.length = 0;
     playTrack('match_start');
     playTrack('loading', AUDIO.tracks.loadingDelay);
-  } else if (wantMusic && unlocked && !settings.muted && settings.music) {
-    matchMusic();
+  } else {
+    fadeTrack('loading', AUDIO.tracks.loadingFade);   // ارتفعت شاشة التحميل قبل أن ينتهي صوتها
+    if (wantMusic && unlocked && !settings.muted && settings.music) matchMusic();
   }
   refreshTheme();
 }

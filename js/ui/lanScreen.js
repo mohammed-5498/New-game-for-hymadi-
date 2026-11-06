@@ -54,7 +54,7 @@ export function setupLanScreen(state) {
         state.running = true;
         showScreen('game');
         startMusic();
-      });
+      }, true);
     },
     // انقطع المنضم عن المضيف (أو أغلق المضيف الجلسة)
     leftSession: (reason, inGame) => {

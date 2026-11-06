@@ -45,7 +45,7 @@ export function clampCamera(state) {
 
 // بداية المباراة (أو إعادتها أو متابعتها): قطع المدينة الظاهرة تُرسم على دفعات كبيرة في الإطارات الأولى
 // (أثناء التلاشي، والمباراة لا تتقدم) بدقة أقل سريعة، ثم ترتفع دقتها تدريجياً بلا تعليق.
-// يعيد true حين تكتمل كل القطع الظاهرة
+// يعيد عدد القطع الظاهرة التي لم تكتمل بعد (0: اكتملت كلها)
 export function warmCity(ctx, state, budgetMs) {
   const { camera, view } = state;
   worldTransform(ctx, state);
@@ -53,7 +53,7 @@ export function warmCity(ctx, state, budgetMs) {
   return drawCityLayer(ctx, state, {
     x0: camera.x - view.w / 2 / z - 40, x1: camera.x + view.w / 2 / z + 40,
     y0: camera.y - view.h / 2 / z - 30, y1: camera.y + view.h / 2 / z + 70
-  }, budgetMs, CITY_CACHE.warmScale) === 0;
+  }, budgetMs, CITY_CACHE.warmScale);
 }
 
 // cityBudgetMs: وقت رسم قطع المدينة في هذا الإطار (صفر أثناء تجهيز البداية: warmCity وحدها ترسم)

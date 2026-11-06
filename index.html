@@ -401,8 +401,15 @@
   </div>
 
 </div>
-<!-- الشاشة السوداء (js/ui/blackout.js): ظاهرة من أول رسم عند تشغيل اللعبة، ثم 4 ث عند بدء كل مباراة -->
-<div id="blackout" class="on"></div>
+<!-- الشاشة السوداء (js/ui/blackout.js): ظاهرة من أول رسم عند تشغيل اللعبة، وشاشة التحميل بشريطها عند بدء كل مباراة -->
+<div id="blackout" class="on">
+  <div class="loading-box">
+    <b class="loading-title">جارٍ التحميل</b>
+    <div class="loading-bar"><i id="loadFill"></i></div>
+    <span id="loadPct" class="loading-pct">0%</span>
+    <p id="loadTip" class="loading-tip"></p>
+  </div>
+</div>
 <script type="module" src="js/main.js"></script>
 </body>
 </html>

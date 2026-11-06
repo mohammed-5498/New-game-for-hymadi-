@@ -7,6 +7,8 @@ import { gfx } from '../graphics.js';
 let ctx = null, sfxIn = null, sfxOut = null, musicOut = null;
 const buffers = {};
 const live = new Set();       // كل ما يُسمع الآن من الملفات: يُسكت كله عند الشاشة السوداء
+const tracksOn = {};          // اللحن القصير الجاري لكل اسم (fadeTrack)
+let total = 0, left = 0;      // الملفات كلها، وما لم يكتمل تحميله منها
 let combat = 0;               // مؤثرات القتال المسموعة الآن
 const lastPick = {}, lastAt = {};
 // عشوائية خاصة بالصوت: لا تستهلك Math.random ولا عشوائية المباراة
@@ -31,7 +33,7 @@ export function initSamples(context, onLoaded) {
   sfxIn = soft;
 
   const names = [...AUDIO.files.sfx, ...AUDIO.files.music];
-  let left = names.length;
+  total = left = names.length;
   for (const name of names) {
     fetch(AUDIO.files.dir + name + '.mp3')
       .then(r => r.arrayBuffer())
@@ -100,11 +102,27 @@ export function playTrack(name, delay = 0, done = null) {
   const buf = buffers[name];
   if (!buf || !ctx) return 0;
   setTimeout(() => {
-    const { src } = start(buf, musicOut, AUDIO.tracks[name] ?? 1, 1, 0, false);
-    if (done) src.addEventListener('ended', done);
+    const node = start(buf, musicOut, AUDIO.tracks[name] ?? 1, 1, 0, false);
+    tracksOn[name] = node;
+    node.src.addEventListener('ended', () => { if (tracksOn[name] === node) delete tracksOn[name]; });
+    if (done) node.src.addEventListener('ended', done);
   }, delay * 1000);
   return buf.duration;
 }
+
+// لحن قصير يخفت ويتوقف قبل نهايته (صوت التحميل حين ترتفع شاشته مبكراً)
+export function fadeTrack(name, seconds) {
+  const node = tracksOn[name];
+  if (!node) return;
+  delete tracksOn[name];
+  const now = ctx.currentTime;
+  node.g.gain.setValueAtTime(node.g.gain.value, now);
+  node.g.gain.exponentialRampToValueAtTime(0.0001, now + seconds);
+  node.src.stop(now + seconds);
+}
+
+// ما حُمِّل من الأصوات من 0 إلى 1 (شاشة التحميل)، و1 إن لم يبدأ تحميلها (لا سياق صوت بعد)
+export const samplesProgress = () => total ? 1 - left / total : 1;
 
 // لحن القوائم يدور بلا توقف، ويظهر ويختفي بتلاشٍ
 let theme = null;

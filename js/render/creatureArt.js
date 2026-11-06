@@ -162,7 +162,7 @@ const GAIT = {
   elephant: { pace: 6.5, stride: 60, lift: 30, bob: 12, hip: [688, 690] }
 };
 const CLUB_REST = 0.75;                         // ميل الهراوة في قبضة الترول واقفاً (راديان تحت الأفق، للأمام)
-const atlases = {}, waiting = {}, painted = new Map();
+const atlases = {}, waiting = {}, painted = new Map(), failedKinds = {};
 
 // صورة المخلوق بعد تحميلها (null قبله، ثم then)
 function load(kind, then) {
@@ -171,6 +171,7 @@ function load(kind, then) {
     waiting[kind] = [];
     const im = new Image();
     im.onload = () => { atlases[kind] = im; for (const fn of waiting[kind].splice(0)) fn(); };
+    im.onerror = () => { failedKinds[kind] = true; };
     im.src = CS[kind].src;
   }
   if (then) waiting[kind].push(then);
@@ -182,6 +183,8 @@ const OF_FEATURE = { troll: 'troll', elephants: 'elephant' };
 export function preloadCreature(feature) {
   if (OF_FEATURE[feature]) load(OF_FEATURE[feature]);
 }
+// وشاشة التحميل تنتظرها (true بلا مخلوق، أو بعد تحميلها أو تعذّره)
+export const creatureReady = (feature) => !OF_FEATURE[feature] || failedKinds[OF_FEATURE[feature]] || !!load(OF_FEATURE[feature]);
 
 // أطلس المخلوق للرسم، والفيل مصبوغ بلون مالكه مرة لكل لون
 function sheetOf(kind, color, then) {
