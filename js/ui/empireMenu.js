@@ -8,7 +8,7 @@ import { EMPIRE as E, TILE_HALF_W, TILE_HALF_H, CITY_FEATURES as F, DISTRICT_SIZ
 import { sizeOf } from '../map/sizes.js';
 import {
   canQueue, unitPrice, heroFor, productionTime, nextUpgrade, canUpgrade, canBuild, nextBuildingUpgrade, canUpgradeBuilding,
-  empireCommand, towerStats, hospitalStats, incomeOf, tileOf, nextFort, canFortify, buildCost
+  empireCommand, towerStats, hospitalStats, incomeOf, tileOf, nextFort, canFortify, buildCost, canRally
 } from '../game/empire.js';
 import { lanCommand } from '../net/session.js';
 import { recruitsAt, featureTowerStats, featureCostMul, canCallTriads, canRingBells, canRocket, clinicStats } from '../game/features.js';
@@ -178,14 +178,20 @@ function districtSections(state, district) {
 // ترقيات المبنى نفسه (سرعة إنتاج القاعدة، وخانتا البرج والمستشفى): مستوياتها في district.blv
 function buildingSlots(state, pid, district) {
   const U = E.buildings[district.building].upgrades;
-  return U.order.map(key => ({
+  // مكان الإنتاج للقاعدة (بطلب المستخدم): لمسة على الخريطة بعد الخانة، ولمسة على القاعدة نفسها تلغيه
+  const rally = district.building !== 'hq' ? [] : [{
+    name: 'مكان الإنتاج', label: () => district.rally && district.rally.owner === pid ? 'محدد' : 'غير محدد',
+    cost: () => 0, check: () => canRally(state, pid, district),
+    cmd: { a: 'rally', d: district.id }, pick: { text: 'المس مكان تجمع الجنود الجدد، أو القاعدة نفسها لإلغائه' }
+  }];
+  return [...rally, ...U.order.map(key => ({
     name: U[key].name, max: U[key].costs.length,
     perks: () => upgradePerks(district.building, key, nextLevel((district.blv && district.blv[key]) || 0, U[key].costs.length)),
     level: () => (district.blv && district.blv[key]) || 0,
     cost: () => (nextBuildingUpgrade(district, key, state) || {}).cost,
     check: () => canUpgradeBuilding(state, pid, district, key),
     cmd: { a: 'improve', d: district.id, x: key }
-  }));
+  }))];
 }
 
 const TITLES = { hq: E.buildings.hq.name, tower: E.buildings.tower.name, hospital: E.buildings.hospital.name };
@@ -440,13 +446,14 @@ function refresh(state) {
   for (const entry of open.slots) {
     const { slot } = entry;
     const check = slot.check(), cost = slot.cost(), level = slot.level ? slot.level() : 0;
+    const label = slot.label ? slot.label() : null;      // خانة بلا كلفة: حالتها مكان الكلفة
     const maxed = cost === undefined;
-    const sig = check.ok + '|' + check.reason + '|' + cost + '|' + level;
+    const sig = check.ok + '|' + check.reason + '|' + cost + '|' + level + '|' + label;
     if (sig === entry.sig) continue;          // لا نلمس DOM إلا حين يتغير شيء
     entry.sig = sig;
     entry.button.classList.toggle('off', !check.ok);
-    entry.button.classList.toggle('max', maxed);
-    entry.cost.textContent = maxed ? 'أعلى مستوى' : String(cost);
+    entry.button.classList.toggle('max', maxed || !!label);   // بلا رمز النقاط
+    entry.cost.textContent = label || (maxed ? 'أعلى مستوى' : String(cost));
     entry.why.textContent = check.ok || maxed ? '' : check.reason;
     if (entry.pips) [...entry.pips.children].forEach((pip, k) => pip.classList.toggle('on', k < level));
     if (entry.perks) chips(entry.perks, entry.slot.perks());      // قيمة المستوى التالي
@@ -473,19 +480,33 @@ function refresh(state) {
   }
 }
 
-// الحي تحت القائمة: الكاميرا تنزلق حتى يظهر فوقها
-function revealDistrict(state, district) {
+// الحي تحت القائمة: الكاميرا تنزلق حتى يظهر فوقها. center: تنتقل إليه أفقياً أيضاً (زر القاعدة)
+function revealDistrict(state, district, center = false) {
   const k = district.buildTile !== undefined && district.buildTile >= 0 ? district.buildTile : null;
   const at = k !== null ? tileOf(state.map, k) : district.capture;
   if (!at) return;
   const x = (at.i - at.j) * TILE_HALF_W, y = (at.i + at.j) * TILE_HALF_H;
   const top = el('empireMenu').getBoundingClientRect().top - el('game').getBoundingClientRect().top;
   const screen = worldToScreen(x, y, state.camera, state.view);
-  if (screen.y < top - 24) return;            // ظاهر فوقها
+  if (!center && screen.y < top - 24) return;            // ظاهر فوقها
   const want = top * E.menu.revealAt;
   state.cameraTween = {
     fromX: state.camera.x, fromY: state.camera.y,
-    toX: state.camera.x, toY: state.camera.y + (screen.y - want) / state.camera.z,
+    toX: center ? x : state.camera.x, toY: state.camera.y + (screen.y - want) / state.camera.z,
     t: 0
   };
+}
+
+// زر القاعدة (بطلب المستخدم، 2026-11-06): يفتح قائمة إنتاج قاعدتك وينقل الكاميرا إليها، وكل ضغطة بعدها
+// إلى قاعدتك التالية (القاعدة المنزلية أولاً)
+export function nextHq(state) {
+  const home = state.players[state.humanId].homeDistrictId;
+  const hqs = state.map.districts.filter(d => d.building === 'hq' && d.owner === state.humanId)
+    .sort((a, b) => (b.id === home) - (a.id === home) || a.id - b.id);
+  if (!hqs.length) { state.notice = { text: 'لا قاعدة لك الآن', mine: true, t: 2 }; return false; }
+  const at = open ? hqs.findIndex(d => d.id === open.id) : -1;
+  const district = hqs[(at + 1) % hqs.length];
+  openEmpireMenu(state, district.id);
+  revealDistrict(state, district, true);
+  return true;
 }

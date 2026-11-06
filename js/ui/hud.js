@@ -11,6 +11,7 @@ import { modeBar, pointsBar, modeExtras } from '../game/modes.js';
 import { pacingState } from '../pacing.js';
 import { lanPause, lanBackToLobby, leaveLan, lanStatus } from '../net/session.js';
 import { storyEnd, storyAgain, storyMenuOf, dialogue, openStory } from './storyScreen.js';
+import { nextHq } from './empireMenu.js';
 
 const el = (id) => document.getElementById(id);
 
@@ -57,6 +58,8 @@ export function setupHud(state) {
 
   el('btnAll').addEventListener('click', () => { sound('select'); selectAllUnitsOf(state, state.humanId); });
   el('btnClear').addEventListener('click', () => { sound('ui_tap'); clearSelection(state); });
+  // زر القاعدة: قائمة إنتاج قاعدتك، وكل ضغطة بعدها للقاعدة التالية (بطلب المستخدم، 2026-11-06)
+  el('btnHq').addEventListener('click', () => { sound('ui_tap'); clearSelection(state); nextHq(state); });
 
   // --- قائمة الإيقاف: اللعبة تتوقف بالكامل أثناء فتحها ---
   el('btnPause').addEventListener('click', () => openPause(state));
@@ -271,7 +274,7 @@ function updateEndScreen(state) {
 }
 
 // تحديث شريط المعلومات (بدون لمس DOM إلا عند تغير القيم)
-const last = { units: -1, max: -1, districts: -1, points: '', notice: '', result: null, modeBar: null, lan: '' };
+const last = { units: -1, max: -1, districts: -1, points: '', notice: '', result: null, modeBar: null, lan: '', economy: null };
 
 export function updateHud(state) {
   let playerUnitCount = 0;
@@ -288,6 +291,8 @@ export function updateHud(state) {
     last.districts = districts;
     el('infoDistricts').textContent = 'أحياء: ' + districts;
   }
+  // زر القاعدة في المباريات على الاقتصاد وحدها (لا في ساحة التجربة)
+  if (!!state.economy !== last.economy) { last.economy = !!state.economy; el('btnHq').hidden = !state.economy; }
   // نقاطك ودخلك في الثانية بجانب شريط المعلومات (الاقتصاد)
   const points = pointsBar(state) || '';
   if (points !== last.points) {

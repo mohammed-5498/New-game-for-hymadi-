@@ -102,6 +102,9 @@ button:active { transform: scale(.96); filter: brightness(.8); }
 }
 
 .btn.on { background: var(--gold); border-color: var(--gold); color: var(--gold-dark); }
+#topRight { position: absolute; top: 10px; right: 10px; display: flex; gap: 8px; }
+#topRight .btn { position: static; }
+#topRight .btn[hidden] { display: none; }
 
 /* أعلى اليسار: شريط المعلومات في الزاوية، ونقاطك بجانبه */
 #topLeft {
@@ -1264,6 +1267,8 @@ input[type=range].muted { opacity: .4; }
 }
 .story-pitch { margin: -6px 0 4px; line-height: 1.6; text-align: center; }
 .story-levels { display: flex; flex-direction: column; gap: 8px; margin: 12px 0 14px; }
+.story-difficulty { margin: 10px 0 0; }
+.story-difficulty .opt { min-height: 42px; font-size: 15px; flex: 1 1 20%; }
 .story-level {
   display: flex; flex-direction: column; align-items: flex-start; gap: 3px; text-align: right;
   padding: 10px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--btn);

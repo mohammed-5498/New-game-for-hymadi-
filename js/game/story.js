@@ -25,11 +25,18 @@ export const storyLevelOf = (settings) => {
 };
 
 // --- قبل المباراة: لاعبو المرحلة كما تأخذهم createMatch (أنت ثم العدو الرئيسي وحلفاؤه) ---
-export function storyPlayers(campaignId, levelIndex) {
+// صعوبة العدو الرئيسي في المرحلة: تصميمها (botLevel) مزاحاً بصعوبة اللاعب المختارة (STORY.difficulty)
+const ORDER = ['easy', 'medium', 'hard', 'insane'];
+export function storyBotLevel(levelIndex, difficulty = S.defaultDifficulty) {
+  const k = ORDER.indexOf(S.botLevel[levelIndex]) + (S.difficulty[difficulty] || 0);
+  return ORDER[Math.max(0, Math.min(ORDER.length - 1, k))];
+}
+
+export function storyPlayers(campaignId, levelIndex, difficulty) {
   const camp = CAMPAIGNS[campaignId], level = camp.levels[levelIndex], nation = nations[camp.nation];
   // حلفاء العدو بصعوبة أقل منه بمستوى (عصابتان بالقوة نفسها أكثر مما يحتمله لاعب وحده)
-  const order = ['easy', 'medium', 'hard', 'insane'], main = S.botLevel[levelIndex];
-  const weaker = order[Math.max(0, order.indexOf(main) - 1)];
+  const main = storyBotLevel(levelIndex, difficulty);
+  const weaker = ORDER[Math.max(0, ORDER.indexOf(main) - 1)];
   const bot = (side, difficulty) => ({ name: side.name, gangName: side.name, gang: side.gang, nation: side.nation || null,
     color: side.color, isHuman: false, team: 2, difficulty });
   return [

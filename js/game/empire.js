@@ -9,7 +9,7 @@
 // الأرقام كلها في EMPIRE داخل config.js
 import { TICK_SEC, EMPIRE as E, SPAWN, GANGS, ai, CITY_FEATURES, STYLE_PERKS, DISTRICT_SIZES as DS, STORY } from '../config.js';
 import { sizeOf } from '../map/sizes.js';
-import { createUnit } from './units.js';
+import { createUnit, commandAttackMove } from './units.js';
 import { spawnChampion, championOf, countUnits } from './spawn.js';
 import { applyDamage, isEnemyId } from './combat.js';
 import { forEachNearby } from './spatialHash.js';
@@ -185,7 +185,7 @@ function produce(state, player, district, kind) {
   if (!E.units[kind]) return spawnRecruit(state, player, district, kind);   // مجنَّد مبنى مميز (features.js)
   if (kind === 'leader') {
     const leader = spawnChampion(state, player, district);
-    if (leader) applyUpgrades(state, leader);
+    if (leader) { applyUpgrades(state, leader); toRally(state, district, leader); }
     return !!leader;
   }
   const spots = findFreeTiles(state.map, district.capture.i, district.capture.j, SPAWN.spotSearchTiles);
@@ -194,8 +194,30 @@ function produce(state, player, district, kind) {
   const unit = createUnit(state, player, i, j, heroFor(player, kind));
   state.units.push(unit);
   applyUpgrades(state, unit);
+  toRally(state, district, unit);
   soundAt(state, 'spawn', i, j);
   return true;
+}
+
+// --- مكان الإنتاج (بطلب المستخدم، 2026-11-06): الجنود الجدد من القاعدة يتقدمون إليه بأمر هجوم متحرك ---
+// district.rally = { k رقم المربع، owner من حدده }، ولا يعمل لمن يحتل القاعدة بعده حتى يحدد مكانه
+function toRally(state, district, unit) {
+  const r = district.rally;
+  if (!r || r.owner !== district.owner) return;
+  const t = tileOf(state.map, r.k);
+  commandAttackMove(state, t.i, t.j, [unit], false);
+}
+export function canRally(state, playerId, district) {
+  if (!district || district.building !== 'hq' || district.owner !== playerId) return fail('ليست قاعدتك');
+  return OK;
+}
+// x رقم المربع، أو −1 لإلغائه
+export function setRally(state, playerId, d, x) {
+  const district = state.map.districts[d], check = canRally(state, playerId, district);
+  if (!check.ok) return check;
+  const k = Math.round(+x), n = state.map.n;
+  district.rally = k >= 0 && k < n * n ? { k, owner: playerId } : null;
+  return OK;
 }
 
 // --- ترقيات العصابة على الوحدة: الدم هنا، والضرر والدفاع في abilities.js، وسرعة المشي في weather.js ---
@@ -473,7 +495,8 @@ export function fortifyDistrict(state, playerId, districtId) {
 }
 
 // أمر واحد باسمه (القائمة، واللعب المحلي حيث يصل من جهاز آخر فتُفحص قيمه قبل تنفيذه):
-// a: queue (x نوع الجندي) | upgrade (x ترقية العصابة) | build (x نوع المبنى) | improve (x ترقية المبنى) | fortify، d رقم الحي
+// a: queue (x نوع الجندي) | upgrade (x ترقية العصابة) | build (x نوع المبنى) | improve (x ترقية المبنى) | fortify
+// | rally (x رقم المربع أو −1)، d رقم الحي
 export function empireCommand(state, playerId, a, d, x) {
   const district = state.map.districts[d];
   if (a === 'queue' && (E.units.order.includes(x) || Object.hasOwn(CITY_FEATURES.recruits, x))) return queueUnit(state, playerId, d, x);
@@ -482,6 +505,7 @@ export function empireCommand(state, playerId, a, d, x) {
   if (a === 'bells') return ringBells(state, playerId, d);              // أجراس الكاتدرائية
   if (a === 'rocket') return launchRocket(state, playerId, d, x);       // ورشة البارود: x رقم الحي المستهدف (12هـ)
   if (a === 'fortify') return fortifyDistrict(state, playerId, d);      // تحصين الحي (القسم 3.12)
+  if (a === 'rally') return setRally(state, playerId, d, x);            // مكان إنتاج القاعدة: x رقم المربع
   if (a === 'build' && E.buildings.order.includes(x)) return buildDistrict(state, playerId, d, x);
   if (a === 'improve' && district && district.building && E.buildings[district.building].upgrades.order.includes(x)) {
     return upgradeBuilding(state, playerId, d, x);

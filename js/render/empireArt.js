@@ -189,11 +189,12 @@ export function drawEmpireMarks(ctx, state, visible, openDistrict) {
     ctx.fillRect(x - w / 2 - 0.6, top - 0.6, w + 1.2, h + 1.2);
     ctx.fillStyle = '#e8c45a';
     ctx.fillRect(x - w / 2, top, w * done, h);
-    // نقطة لكل طلب في الطابور
+    // نقطة لكل طلب في الطابور، خمس في كل صف (حتى 10 طلبات: صفان)
     const r = Math.max(1.2, 1.6 / z * 1.4);
     for (let k = 0; k < queue.length; k++) {
+      const row = Math.floor(k / 5), inRow = Math.min(5, queue.length - row * 5);
       ctx.beginPath();
-      ctx.arc(x - (queue.length - 1) * r * 1.4 + k * r * 2.8, top - r * 2, r, 0, 6.2832);
+      ctx.arc(x - (inRow - 1) * r * 1.4 + (k % 5) * r * 2.8, top - r * 2 - row * r * 2.6, r, 0, 6.2832);
       ctx.fillStyle = k ? 'rgba(232,196,90,0.55)' : '#e8c45a';
       ctx.fill();
     }
@@ -211,6 +212,48 @@ export function drawEmpireMarks(ctx, state, visible, openDistrict) {
     ctx.stroke();
     ctx.setLineDash([]);
   }
+  // مكان إنتاج قواعدك: راية بلونك دائماً، وخط متقطع إليها من القاعدة المفتوحة قائمتها
+  for (const d of map.districts) {
+    const rally = d.building === 'hq' && d.owner === state.humanId && d.rally && d.rally.owner === state.humanId ? d.rally : null;
+    if (!rally) continue;
+    const b = tileOf(map, rally.k), to = worldOf(b.i, b.j);
+    if (d === open && d.buildTile >= 0) {
+      const a = tileOf(map, d.buildTile), from = worldOf(a.i, a.j);
+      ctx.beginPath();
+      ctx.moveTo(from.x, from.y);
+      ctx.lineTo(to.x, to.y);
+      ctx.strokeStyle = 'rgba(232,196,90,0.8)';
+      ctx.lineWidth = 1.4 / z * 1.6;
+      ctx.setLineDash([3, 3]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    if (visible(to.x, to.y)) rallyFlag(ctx, to, Math.max(1, 1.6 / z), state.players[state.humanId].color);
+  }
+}
+
+// راية مكان الإنتاج: ظل وسارية وعلم مثلث
+function rallyFlag(ctx, at, s, color) {
+  ctx.beginPath();
+  ctx.ellipse(at.x, at.y, 5 * s, 2.5 * s, 0, 0, 6.2832);
+  ctx.fillStyle = 'rgba(20,14,8,0.45)';
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(at.x, at.y);
+  ctx.lineTo(at.x, at.y - 16 * s);
+  ctx.strokeStyle = '#3a2a1a';
+  ctx.lineWidth = 1.4 * s;
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(at.x, at.y - 16 * s);
+  ctx.lineTo(at.x + 9 * s, at.y - 13 * s);
+  ctx.lineTo(at.x, at.y - 10 * s);
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+  ctx.lineWidth = 0.8 * s;
+  ctx.stroke();
 }
 
 // دائرة المدى للمبنى المفتوحة قائمته: { i, j, r, shoots }، أو null لما لا مدى له
