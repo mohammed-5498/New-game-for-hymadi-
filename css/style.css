@@ -176,6 +176,37 @@ button:active { transform: scale(.96); filter: brightness(.8); }
 }
 #blackout.on { opacity: 1; pointer-events: auto; transition-timing-function: ease-in; }
 
+/* شاشة التحميل عند بدء المباراة (بطلب المستخدم، 2026-11-06): عنوان وشريط تقدم ونسبته ونصيحة في الوسط */
+.loading-box { display: none; }
+#blackout.loading .loading-box {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 0 max(24px, env(safe-area-inset-right)) 0 max(24px, env(safe-area-inset-left));
+  background: radial-gradient(ellipse at center, #2b221b 0%, #120e0b 70%);
+  text-align: center;
+}
+.loading-title { font-size: 22px; color: var(--gold); }
+.loading-bar {
+  width: min(70vw, 460px);
+  height: 12px;
+  border-radius: 6px;
+  background: rgba(243, 236, 224, .12);
+  border: 1px solid var(--line);
+  overflow: hidden;
+  direction: ltr;                       /* الامتلاء من اليمين إلى اليسار كالكتابة */
+  display: flex;
+  justify-content: flex-end;
+}
+.loading-bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #c8912c, var(--gold)); transition: width .2s ease-out; }
+.loading-pct { font-size: 14px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.loading-tip { max-width: 560px; margin: 14px 0 0; font-size: 15px; line-height: 1.6; color: var(--text); }
+.loading-tip::before { content: 'نصيحة: '; color: var(--gold); font-weight: 700; }
+
 /* --- شريط الطور (القسم 9.5): تحت زر الإيقاف في أعلى الوسط --- */
 #modeBar {
   position: absolute;
@@ -704,8 +735,6 @@ button.wide.ghost { background: transparent; color: var(--text-dim); }
 .slots-head .label { margin: 0; }
 
 .hint { font-size: 14px; color: var(--text-dim); }
-/* وصف الأمة المختارة تحت خانات اللاعبين (القسم 3.10) */
-.side-desc { margin: 2px 2px 8px; line-height: 1.5; }
 
 .slot, .slot-cols {
   display: flex;
@@ -773,6 +802,36 @@ button.wide.ghost { background: transparent; color: var(--text-dim); }
 .footer-row button.wide { margin-top: 0; }
 .footer-row #btnStart { flex: 2 1 0; }
 .footer-row #btnBackToMain { flex: 1 1 0; }
+
+/* قائمة الإعداد بملء الشاشة وعناصرها أصغر (بطلب المستخدم، 2026-11-06): تتسع الخيارات والخانات معاً */
+#screenSetup:not([hidden]) { padding: 0; }
+#screenSetup .menu.setup {
+  max-width: none;
+  min-height: 100%;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  padding: max(8px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) 0 max(14px, env(safe-area-inset-left));
+}
+#screenSetup h2 { font-size: 19px; margin-bottom: 6px; }
+#screenSetup .label { font-size: 14px; margin-bottom: 4px; }
+#screenSetup .pick-btn { min-height: 48px; margin-bottom: 6px; padding: 3px 8px 3px 6px; }
+#screenSetup .pick-icon { width: 48px; height: 32px; }
+#screenSetup #cityThumb { width: 112px; height: 56px; }
+#screenSetup .pick-label, #screenSetup .pick-text .hint { font-size: 12px; }
+#screenSetup .pick-text b { font-size: 16px; }
+#screenSetup .pick-tiles { margin-bottom: 8px; }
+#screenSetup .pick-tile { padding: 3px 4px 4px; }
+#screenSetup .tile-icon { width: 44px; height: 28px; margin-bottom: 0; }
+#screenSetup .pick-tile b { font-size: 14px; }
+#screenSetup .opt { min-height: 42px; font-size: 14px; }
+#screenSetup .slots-head { margin: 8px 0 4px; }
+#screenSetup .slot { margin-bottom: 4px; }
+#screenSetup .slot .cell { min-height: 40px; font-size: 14px; border-radius: 9px; }
+#screenSetup .slot .cell.num { line-height: 40px; }
+#screenSetup .slot-cols .cell { font-size: 12px; }
+#screenSetup button.wide { min-height: 44px; }
 
 .error {
   color: var(--danger);
@@ -1186,3 +1245,47 @@ input[type=range].muted { opacity: .4; }
   white-space: nowrap;
   pointer-events: none;
 }
+
+/* ===== طور القصة (القسم 17، js/ui/storyScreen.js) ===== */
+.menu.story { max-width: 760px; text-align: right; }
+.story-note { text-align: center; margin: -6px 0 12px; }
+.story-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.story-card {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 8px 6px 10px; border-radius: 14px; border: 1px solid var(--line); background: var(--btn);
+  color: var(--text); font: inherit; cursor: pointer;
+}
+.story-card b { font-size: 15px; }
+.story-card.soon { opacity: .5; cursor: default; }
+.story-thumb { width: 100%; height: 84px; display: block; }
+.story-badge {
+  position: absolute; top: 6px; left: 6px; font-size: 12px; padding: 1px 7px; border-radius: 9px;
+  background: rgba(0, 0, 0, .35); color: var(--gold);
+}
+.story-pitch { margin: -6px 0 4px; line-height: 1.6; text-align: center; }
+.story-levels { display: flex; flex-direction: column; gap: 8px; margin: 12px 0 14px; }
+.story-level {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 3px; text-align: right;
+  padding: 10px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--btn);
+  color: var(--text); font: inherit; font-size: 16px; cursor: pointer;
+}
+.story-level.done { border-color: var(--gold); }
+.story-level.locked { opacity: .5; cursor: default; }
+.story-ending { color: var(--gold); text-align: center; font-weight: 700; }
+.story-section { margin: 10px 0; }
+.story-section h3 { margin: 0 0 4px; font-size: 16px; color: var(--gold); }
+.story-section p { margin: 0 0 4px; line-height: 1.7; }
+.story-dialogue {
+  margin: 8px 0; padding: 8px 12px; border-right: 3px solid var(--gold); border-radius: 6px;
+  background: rgba(0, 0, 0, .2); line-height: 1.7;
+}
+.story-dialogue p { margin: 2px 0; }
+.story-dialogue b { color: var(--gold); }
+.story-steps { margin: 0; padding-right: 22px; display: flex; flex-direction: column; gap: 6px; }
+.story-steps li { line-height: 1.5; }
+.story-steps b { margin-left: 6px; }
+.story-steps .hint { display: block; }
+.story-type { font-size: 12px; padding: 0 7px; border-radius: 8px; background: rgba(224, 176, 74, .18); color: var(--gold); }
+.story-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+.end-story { text-align: right; margin: 0 0 10px; }
+.end-story .story-reward { color: var(--gold); font-weight: 700; text-align: center; margin: 6px 0 0; }

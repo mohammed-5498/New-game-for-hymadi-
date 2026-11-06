@@ -13,6 +13,7 @@ import { sound } from '../audio/sound.js';
 import { hypot } from './hypot.js';
 import { initEmpire, updateEmpire, incomeOf } from './empire.js';
 import { featureBar } from './features.js';
+import { storyBar, storyExtras } from './story.js';
 import { random } from './random.js';   // عشوائية المنطق: مشتركة بين الأجهزة في اللعب المحلي
 
 export const modeOf = (state) => (state.mode && GM[state.mode]) ? state.mode : 'conquest';
@@ -619,6 +620,7 @@ export function modeBar(state) {
 }
 
 function modeOnlyBar(state) {
+  if (state.story) return storyBar(state);          // طور القصة: المهمة الحالية (القسم 17)
   if (state.mode === 'points') {
     return { text: clock(pointsRemaining(state)), alarm: isFinalMinute(state) };
   }
@@ -705,6 +707,7 @@ export function modeExtras(state) {
 }
 
 function modeOnlyExtras(state) {
+  if (state.story) return storyExtras(state);       // طور القصة (القسم 17)
   if (state.mode === 'points') {
     const human = state.players[state.humanId];
     const mine = human ? sideTotals(state).find(s => s.key === sideKey(human)) : null;

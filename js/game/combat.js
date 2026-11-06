@@ -1,5 +1,5 @@
 // الهجوم التلقائي، أمر الهجوم، المقذوفات، الضرر والموت
-import { TICK_SEC, COMBAT, COMBAT_REALISM as CR, UNITS, UNIT_ART, POLICE, AUDIO, CITY_FEATURES, STYLE_PERKS } from '../config.js';
+import { TICK_SEC, COMBAT, COMBAT_REALISM as CR, UNITS, UNIT_ART, POLICE, AUDIO, CITY_FEATURES, STYLE_PERKS, EMPIRE } from '../config.js';
 import { findPath } from '../map/pathfinding.js';
 import { facingFromAngle } from './units.js';
 import {
@@ -644,6 +644,9 @@ function strike(state, attacker, target, amount, shot = false) {
 export function applyDamage(state, attacker, target, amount, shot = false) {
   if (!isAlive(target)) return false;
   if (target.invulnUntil > state.time) return false;     // تصلّب: لا يتلقى ضرراً ولا يترنّح ولا يُدفع
+  // ترقية سرعة المشي: فرصة تجنب الضربة كلها (والكلمة لضربات الوحدات وحدها، لا لكل تحديث من النار)
+  const evade = state.economy ? state.modeState.levels[target.playerId].speed * EMPIRE.upgrades.speed.evade : 0;
+  if (evade && random() < evade) { if (attacker.stats) addPop(state, target, 'تفادى!', 'dodge'); return false; }
   retaliateIfCloser(state, attacker, target);
   // الأنماط الأربعة (القسم 3.12): الغالب أقوى على من يغلبه، والخاطف يتجاوز بعض درع الصامد، والصامد أقل تأثراً بالمقذوفات
   const P = STYLE_PERKS, beats = !attacker.creature && !target.creature && P.beats[attacker.gang] === target.gang;

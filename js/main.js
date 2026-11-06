@@ -1,7 +1,7 @@
 // نقطة البداية: القوائم، دورة حياة المباراة، وحلقة اللعبة
 // منطق اللعبة بخطوة زمنية ثابتة (20 تحديثاً/ث)، والرسم كل إطار مع تنعيم المواقع
-import { MATCH_DEFAULTS, TICK_MS, CITY_CACHE, GRAPHICS } from './config.js';
-import { viewDpr, gfxLevel } from './graphics.js';
+import { MATCH_DEFAULTS, TICK_MS, CITY_CACHE, GRAPHICS, UI } from './config.js';
+import { viewDpr, gfxLevel, markActive } from './graphics.js';
 import { paceFrame, paceWork } from './pacing.js';
 import { createMatch, resetMatch } from './state.js';
 import { updateMatch } from './game/loop.js';
@@ -19,12 +19,14 @@ import {
   openExitDialog, closeExitDialog, isExitDialogOpen, closeGameSettings
 } from './ui/menus.js';
 import { setupLanScreen, lanBack } from './ui/lanScreen.js';
+import { setupStoryScreen, storyBack } from './ui/storyScreen.js';
 import { lanActive, lanFrame, startLanHost } from './net/session.js';
 import { setupMenuScene, menuSceneFrame } from './ui/menuScene.js';
 import { isPickerOpen, closePicker } from './ui/picker.js';
 import { setupEmpireMenu, updateEmpireMenu, isEmpireMenuOpen, closeEmpireMenu } from './ui/empireMenu.js';
 import { initSound, startMusic, setMusicCity } from './audio/sound.js';
-import { matchBlackout, introBlackout, blackoutHolds } from './ui/blackout.js';
+import { matchBlackout, introBlackout, blackoutHolds, loadingStep, loadingCovers } from './ui/blackout.js';
+import { preloadStep } from './render/preload.js';
 import { saveMatch, loadMatch, clearSavedMatch, canSaveMatch } from './matchSave.js';
 import { onBackButton, keepScreenAwake } from './platform.js';
 
@@ -65,7 +67,7 @@ setupMenus({
       startLanHost(state, peerOfPlayer);
       state.running = true;
       showScreen('game');
-    });
+    }, true);
   },
   leaveLanSetup: lanBack,
   // "متابعة المباراة": تعود من حيث توقفت (false إن كان الحفظ تالفاً)
@@ -89,6 +91,19 @@ setupMenus({
 });
 
 setupLanScreen(state);
+// طور القصة (القسم 17): «ابدأ المعركة» كـ«ابدأ» في قائمة الإعداد
+setupStoryScreen({
+  start(settings) {
+    matchBlackout(() => {
+      clearSavedMatch();
+      resetMatch(state, settings);
+      state.running = true;
+      showScreen('game');
+    });
+    startMusic();
+  },
+  back() { showScreen('main'); }
+});
 
 showScreen('main');
 introBlackout();          // تشغيل اللعبة: شاشة سوداء قصيرة (مكان مقدمة التطبيق لاحقاً)
@@ -126,6 +141,7 @@ onBackButton(() => {
 
   // اللعب المحلي: شاشته وقائمة إعداد المضيف ترجعان خطوة (وتوقفان الاستضافة أو الانضمام)
   if (currentScreen() === 'lan' || (currentScreen() === 'setup' && isLanSetup())) { lanBack(); return; }
+  if (currentScreen() === 'story' && storyBack()) return;          // طور القصة: خطوة داخل شاشته
   if (currentScreen() !== 'main') { showScreen('main'); return; }   // الإعداد والإعدادات والإحصائيات
   openExitDialog();                                     // القائمة الرئيسية
 });
@@ -143,8 +159,17 @@ let cityPending = 0;       // قطع المدينة الظاهرة الناقص�
 let accumulator = 0;
 let warmedMap = null;      // آخر خريطة بدأ تجهيز مدينتها
 let warmUntil = 0;         // أقصى وقت لتجهيز المدينة قبل أن تبدأ المباراة على أي حال
+let warmTotal = 0;         // أكثر ما بقي من قطع المدينة الظاهرة منذ بدأ تجهيزها (لشريط التحميل)
+
+const lastCam = { x: 0, y: 0, z: 0 };
 
 function loop(now) {
+  // الكاميرا تحركت أو مربع التحديد يُرسم: الإيقاع الكامل (calmFps في GRAPHICS، تخفيف المعالج 2)
+  const cam = state.camera;
+  if (cam.x !== lastCam.x || cam.y !== lastCam.y || cam.z !== lastCam.z || state.selectionBox) {
+    lastCam.x = cam.x; lastCam.y = cam.y; lastCam.z = cam.z;
+    markActive(now);
+  }
   // إيقاع الإطارات (js/pacing.js): الإطار المتخطى لا يحدّث ولا يرسم، ووقته يُحسب في الإطار التالي
   if (!paceFrame(now, state.running && !state.paused && !state.matchResult && !warmUntil)) {
     requestAnimationFrame(loop);
@@ -175,15 +200,29 @@ function loop(now) {
   if (now - hudMeasuredAt > 500) { state.hudAvoid = hudRects(); hudMeasuredAt = now; }
 
   // خريطة جديدة (بداية أو إعادة أو متابعة): المدينة الظاهرة تُجهَّز على دفعات في الإطارات الأولى
-  // والمباراة لا تتقدم حتى تكتمل (أو حتى الحد الأقصى) وحتى ترتفع الشاشة السوداء، ولا يُعوَّض الانتظار لعباً
+  // والمباراة لا تتقدم حتى تكتمل (أو حتى الحد الأقصى) وحتى ترتفع شاشة التحميل، ولا يُعوَّض الانتظار لعباً.
+  // خلف شاشة التحميل حدها الأقصى حدُّها، وبلا شاشة (إعادة مزامنة اللعب المحلي) warmMaxMs
   if (state.map !== warmedMap && state.view.w) {
     warmedMap = state.map;
-    warmUntil = now + CITY_CACHE.warmMaxMs;
+    warmUntil = now + (blackoutHolds(now) ? UI.blackout.maxSeconds * 1000 : CITY_CACHE.warmMaxMs);
+    warmTotal = 0;
   }
   if (warmUntil || blackoutHolds(now)) {
-    if (warmUntil && (warmCity(ctx, state, CITY_CACHE.warmBudgetMs) || performance.now() > warmUntil)) warmUntil = 0;
-    render(ctx, state, 0, 0);
-    updateHud(state);
+    const covered = loadingCovers();      // شاشة التحميل فوق المباراة: لا رسم خلفها، ووقت أطول للمدينة
+    let city = 1;
+    if (warmUntil) {
+      const pending = warmCity(ctx, state, covered ? UI.blackout.warmBudgetMs : CITY_CACHE.warmBudgetMs);
+      warmTotal = Math.max(warmTotal, pending);
+      city = warmTotal ? 1 - pending / warmTotal : 1;
+      if (!pending || performance.now() > warmUntil) { warmUntil = 0; city = 1; }
+    }
+    if (!covered) {
+      render(ctx, state, 0, 0);
+      updateHud(state);
+    }
+    // شريط التحميل: المدينة الظاهرة أغلبه (cityShare)، ثم الصور بألوان اللاعبين والأصوات
+    const assets = preloadStep(state), S = UI.blackout.cityShare;
+    loadingStep(performance.now(), city >= 1 && assets >= 1 ? 1 : city * S + assets * (1 - S));
     lastTime = performance.now();
     accumulator = 0;
     requestAnimationFrame(loop);

@@ -1,4 +1,5 @@
 // الكاميرا وترتيب الرسم الكامل لإطار واحد
+import { drawStoryMarks } from './storyArt.js';
 import { TILE_HALF_W, TILE_HALF_H, TICK_SEC, CAMERA, CAPTURE, PERFORMANCE, ALERTS, COMBAT_REALISM, UNIT_ART, CITIES, CITY_CACHE, FIGHT, gameModes as GM, nations } from '../config.js';
 import { enemyLeaders } from '../game/modes.js';
 import { onScreen } from '../game/alerts.js';
@@ -44,7 +45,7 @@ export function clampCamera(state) {
 
 // بداية المباراة (أو إعادتها أو متابعتها): قطع المدينة الظاهرة تُرسم على دفعات كبيرة في الإطارات الأولى
 // (أثناء التلاشي، والمباراة لا تتقدم) بدقة أقل سريعة، ثم ترتفع دقتها تدريجياً بلا تعليق.
-// يعيد true حين تكتمل كل القطع الظاهرة
+// يعيد عدد القطع الظاهرة التي لم تكتمل بعد (0: اكتملت كلها)
 export function warmCity(ctx, state, budgetMs) {
   const { camera, view } = state;
   worldTransform(ctx, state);
@@ -52,7 +53,7 @@ export function warmCity(ctx, state, budgetMs) {
   return drawCityLayer(ctx, state, {
     x0: camera.x - view.w / 2 / z - 40, x1: camera.x + view.w / 2 / z + 40,
     y0: camera.y - view.h / 2 / z - 30, y1: camera.y + view.h / 2 / z + 70
-  }, budgetMs, CITY_CACHE.warmScale) === 0;
+  }, budgetMs, CITY_CACHE.warmScale);
 }
 
 // cityBudgetMs: وقت رسم قطع المدينة في هذا الإطار (صفر أثناء تجهيز البداية: warmCity وحدها ترسم)
@@ -120,6 +121,7 @@ export function render(ctx, state, alpha, cityBudgetMs = CITY_CACHE.frameBudgetM
   }
   drawMoveMarker(ctx, state);
   drawFlagArrows(ctx, state, visible);
+  drawStoryMarks(ctx, state, alpha, visible);       // مكان مهمة القصة والزعيم والرسل (القسم 17)
   drawEmpireBadges(ctx, state, visible);            // تاج القاعدة وقوس البرج وصليب المستشفى
   drawFeatureBadges(ctx, state, visible);           // شارة الهرم وشارة القرية التي ينتظر أهلها (القسم 3.11)
   drawFireworksBursts(ctx, state, visible);         // انفجارات الألعاب النارية في السماء
@@ -274,7 +276,7 @@ function drawEdgeAlerts(ctx, state) {
     // سهم زعيمك أوضح نبضاً من غيره (القسم 9.5.3)
     const leader = alert.kind === 'leader';
     const pulse = leader ? 0.8 + 0.3 * Math.sin(state.time * 11) : 0.85 + 0.15 * Math.sin(state.time * 7);
-    const color = alert.kind === 'capture' ? ALERTS.captureColor : ALERTS.attackColor;
+    const color = alert.kind === 'capture' ? ALERTS.captureColor : alert.kind === 'story' ? ALERTS.storyColor : ALERTS.attackColor;
     drawArrow(ctx, x, y, angle, ALERTS.size * pulse, color, UI_LIGHT, fade);
   }
 }

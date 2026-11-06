@@ -2,6 +2,9 @@ package com.hymadi.gangcity;
 
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
+import android.media.AudioDeviceCallback;
+import android.media.AudioDeviceInfo;
+import android.media.AudioManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -17,11 +20,52 @@ import com.getcapacitor.BridgeActivity;
  */
 public class MainActivity extends BridgeActivity {
 
+    private AudioManager audio;
+    private AudioDeviceCallback audioRoute;
+
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(LanPlugin.class);   // اللعب المحلي (القسم 16): قبل إنشاء الجسر
         super.onCreate(savedInstanceState);
         hideSystemBars();
+        setupAudio();
+    }
+
+    // مخرج الصوت (بطلب المستخدم: صوت اللعبة كان يخرج من سماعة الجوال وسماعات البلوتوث متصلة):
+    // أزرار الصوت تتحكم في صوت الوسائط، وكل جهاز صوت يُوصل أو يُفصل يُخبر اللعبة فتفتح مخرجها من جديد
+    // على الجهاز الحالي (js/audio/sound.js: reroute)
+    private void setupAudio() {
+        setVolumeControlStream(AudioManager.STREAM_MUSIC);
+        audio = (AudioManager) getSystemService(AUDIO_SERVICE);
+        if (audio == null) return;
+        audioRoute = new AudioDeviceCallback() {
+            @Override
+            public void onAudioDevicesAdded(AudioDeviceInfo[] added) { audioRouteChanged(); }
+
+            @Override
+            public void onAudioDevicesRemoved(AudioDeviceInfo[] removed) { audioRouteChanged(); }
+        };
+        audio.registerAudioDeviceCallback(audioRoute, null);
+    }
+
+    private void audioRouteChanged() {
+        if (bridge == null || bridge.getWebView() == null) return;
+        bridge.getWebView().post(() ->
+            bridge.getWebView().evaluateJavascript("window.dispatchEvent(new Event('gangcity:audioroute'))", null));
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        // وضع المكالمات يحوّل الصوت إلى سماعة الجوال: اللعبة لا تستعمله أبداً، فإن بقي من غيرها نعيده عادياً
+        if (audio != null && audio.getMode() == AudioManager.MODE_IN_COMMUNICATION) audio.setMode(AudioManager.MODE_NORMAL);
+        audioRouteChanged();
+    }
+
+    @Override
+    public void onDestroy() {
+        if (audio != null && audioRoute != null) audio.unregisterAudioDeviceCallback(audioRoute);
+        super.onDestroy();
     }
 
     @Override

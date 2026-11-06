@@ -10,6 +10,7 @@ import { rot, add, ik2, wdir, limb, flame } from './anim.js';
 const UPP = SPRITES.upp;           // وحدة رسم لكل بكسل من الأطلس
 const loaded = {};                 // الأطلس ← صورته بعد اكتمال التحميل
 const waiting = {};                // الأطلس ← دوال تنتظر تحميله (صور المتجر)
+const failed = {};                 // الأطلس ← تعذّر تحميله (يُرسم بالكود، ولا تنتظره شاشة التحميل)
 const painted = new Map();         // 'أطلس|لون' ← أطلس مصبوغ بلون اللاعب
 
 function load(gang) {
@@ -21,6 +22,7 @@ function load(gang) {
     for (const fn of waiting[gang]) fn();
     waiting[gang].length = 0;
   };
+  img.onerror = () => { failed[gang] = true; };
   img.src = SPRITES.gangs[gang].src;
 }
 // الكلاسيكية والشرطة في كل مباراة فتُحمَّل فوراً، والأمم عند أول حاجة إليها؛ وحتى يكتمل التحميل تُرسم بالكود
@@ -83,6 +85,16 @@ function sheet(gang, color) {
     painted.set(id, S = paint(gang, color));
   }
   return S;
+}
+
+// شاشة التحميل: أطلس اللاعب مصبوغاً بلونه قبل أن تبدأ المباراة (الصبغ أثقل ما في أول رسم للوحدة).
+// 0 لم يجهز بعد (يُحمَّل الآن)، و1 جاهز (أو لا أطلس له أو تعذّر تحميله)، و2 صُبغ الآن. paintNow: يُسمح بالصبغ
+export function warmSheet(atlas, color, paintNow) {
+  if (!SPRITES.gangs[atlas] || failed[atlas] || painted.has(atlas + '|' + color)) return 1;
+  if (!loaded[atlas]) { load(atlas); return 0; }
+  if (!paintNow) return 0;
+  sheet(atlas, color);
+  return 2;
 }
 
 // --- جزء من الأطلس: مفصله الأول عند (x,y) ومحوره باتجاه الزاوية ang (k مقياس السلاح) ---

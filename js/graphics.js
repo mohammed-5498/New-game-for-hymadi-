@@ -20,4 +20,11 @@ refreshGraphics();
 export const gfxLevel = () => level;
 export const gfx = () => G.levels[level];
 export const viewDpr = () => Math.min(globalThis.devicePixelRatio || 1, gfx().maxDpr);
-export const fpsCap = () => getPref('battery') ? G.batteryFps : gfx().fps;
+// الكاميرا تتحرك أو يُرسم مربع التحديد (main.js): الإيقاع الكامل activeMs، وإلا calmFps إن كان للمستوى
+let activeUntil = 0;
+export const markActive = (now) => { activeUntil = now + G.activeMs; };
+export function fpsCap(now = performance.now()) {
+  if (getPref('battery')) return G.batteryFps;
+  const L = gfx();
+  return L.calmFps && now >= activeUntil ? L.calmFps : L.fps;
+}

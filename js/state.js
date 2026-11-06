@@ -12,6 +12,7 @@ import { buildArena } from './game/arena.js';
 import { initMode, prepareModeUnits, economyOf } from './game/modes.js';
 import { nationOf, sideName, buildTerritory, traitNotice } from './game/nations.js';
 import { cityFeature, createFeaturePlayer, initFeatures } from './game/features.js';
+import { createStoryPlayers, initStory } from './game/story.js';
 
 export function createMatch(settings) {
   const players = settings.players.map((p, index) => ({
@@ -19,7 +20,7 @@ export function createMatch(settings) {
     name: p.name,
     gang: p.gang,                      // النمط القتالي (القسم 3.10)
     nation: nationOf(p.nation) ? p.nation : null,   // الأمة، أو null للعصابة الكلاسيكية
-    gangName: sideName(p.gang, p.nation),
+    gangName: p.gangName || sideName(p.gang, p.nation),   // طور القصة: اسم العدو (القسم 17)
     color: (PLAYER_COLORS.find(c => c.id === p.color) || PLAYER_COLORS[index]).hex,
     isHuman: !!p.isHuman,
     team: p.team || 0,
@@ -38,6 +39,7 @@ export function createMatch(settings) {
   players.push(createPolicePlayer(players));
   const featurePlayer = createFeaturePlayer(players, feature, map.city);
   if (featurePlayer) players.push(featurePlayer);
+  players.push(...createStoryPlayers(settings, players));   // طور القصة: قوات العدو والزعماء والأسرى (القسم 17)
 
   const state = {
     settings,
@@ -97,6 +99,7 @@ export function createMatch(settings) {
   initSpawnTimers(state);
   initPolice(state);
   initFeatures(state);           // أهل القرى (القسم 3.11)
+  initStory(state);              // طور القصة: أماكن المهام وحراسها ومكافآت الحملة (القسم 17)
   initBots(state);
   centerCameraOnHome(state);
   state.notice = traitNotice(players[state.humanId]) || state.notice;   // سمة أمتك (القسم 3.10)
@@ -215,6 +218,7 @@ export function resetMatch(state, settings = state.settings) {
   state.buildingHinted = false;              // وإشعار مبنى مدينة الأحداث (12هـ) وحدث مدينة المباني (12و)
   state.eventHinted = false;
   state.cityEvent = fresh.cityEvent;
+  state.story = fresh.story || null;        // طور القصة (القسم 17)
   // اللعب المحلي (القسم 16): مباراة بعد مباراة شبكية لا ترث كاميرات اللاعبين (مستويات التفصيل منها) ولا عدّادها
   state.netCams = null;
   state.netTick = 0;

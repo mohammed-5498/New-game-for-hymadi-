@@ -10,6 +10,7 @@ import { saveMatch, clearSavedMatch } from '../matchSave.js';
 import { modeBar, pointsBar, modeExtras } from '../game/modes.js';
 import { pacingState } from '../pacing.js';
 import { lanPause, lanBackToLobby, leaveLan, lanStatus } from '../net/session.js';
+import { storyEnd, storyAgain, storyMenuOf, dialogue, openStory } from './storyScreen.js';
 
 const el = (id) => document.getElementById(id);
 
@@ -83,6 +84,17 @@ export function setupHud(state) {
   // (اللعب المحلي: المضيف يرجع بالجميع إلى الغرفة، ومنها يبدأ مباراة أخرى)
   el('btnRestart').addEventListener('click', () => {
     sound('ui_tap');
+    if (state.settings.story) {                 // طور القصة: المرحلة التالية أو إعادتها (القسم 17)
+      const next = storyAgain(state);
+      if (!next) { leaveToMain(state, 'story'); return; }
+      matchBlackout(() => {
+        clearSavedMatch();
+        resetMatch(state, next);
+        startMusic();
+        closeOverlays();
+      });
+      return;
+    }
     if (state.lanRole === 'host') {
       lanBackToLobby();
       backToLobby(state, 'setup');
@@ -96,7 +108,10 @@ export function setupHud(state) {
     });
   });
 
-  el('btnEndToMain').addEventListener('click', () => leaveToMain(state));
+  el('btnEndToMain').addEventListener('click', () => {
+    if (state.settings.story) { storyMenuOf(state); leaveToMain(state, 'story'); return; }   // قائمة مراحل الحملة
+    leaveToMain(state);
+  });
 }
 
 // فتح وإغلاق قائمة الإيقاف: يستعملهما الزر وزر الرجوع في أندرويد (القسم 2.1)
@@ -139,7 +154,7 @@ function closeOverlays() {
   last.result = null;
 }
 
-export function leaveToMain(state) {
+export function leaveToMain(state, screen = 'main') {
   sound('ui_tap');
   // اللعب المحلي: المغادرة نهائية (جيش المنضم يقوده بوت عند الباقين، وخروج المضيف ينهيها عند الجميع)
   if (state.lanRole) leaveLan();
@@ -148,7 +163,8 @@ export function leaveToMain(state) {
   state.running = false;
   state.paused = false;
   closeOverlays();
-  showScreen('main');
+  showScreen(screen);
+  if (screen === 'story') openStory();
 }
 
 // اللعب المحلي بعد النهاية: المضيف إلى قائمة الإعداد، والمنضمون إلى غرفة الانتظار
@@ -216,7 +232,23 @@ function updateEndScreen(state) {
 
   const minutes = Math.floor(result.duration / 60);
   const seconds = Math.floor(result.duration % 60);
-  el('endTitle').textContent = result.won ? 'فزت' : 'خسرت';
+  const story = state.settings.story ? storyEnd(state) : null;   // طور القصة: نتيجة المرحلة وحوارها (القسم 17)
+  el('endTitle').textContent = story ? story.title : result.won ? 'فزت' : 'خسرت';
+  const box = el('endStory');
+  box.textContent = '';
+  box.hidden = !story || (!story.lines.length && !story.reward);
+  if (story) {
+    box.append(dialogue(story.lines));
+    for (const line of [story.reward, story.ending]) {
+      if (!line) continue;
+      const p = document.createElement('p');
+      p.className = 'story-reward';
+      p.textContent = line;
+      box.append(p);
+    }
+  }
+  el('btnRestart').textContent = story ? story.next : 'مباراة جديدة';
+  el('btnEndToMain').textContent = story ? 'قائمة القصة' : 'القائمة الرئيسية';
   el('endReason').textContent = (result.reason || '') +      // سبب النهاية (القسم 9.5.0)
     (state.lanRole === 'client' ? ' • المضيف يبدأ المباراة التالية' : '');
   screen.classList.toggle('won', result.won);
@@ -235,7 +267,7 @@ function updateEndScreen(state) {
   // تُضاف للإحصائيات الدائمة مرة واحدة لكل مباراة (ساحة التجربة لا تُحسب)
   const human = state.players[state.humanId];
   // (والصمود ضد الشرطة له رقمه القياسي الخاص: لا يُحسب خسارة في الإحصائيات)
-  if (human && !state.settings.arena && state.mode !== 'survival') recordMatch(result, human.nation || human.gang);
+  if (human && !state.settings.arena && !state.settings.story && state.mode !== 'survival') recordMatch(result, human.nation || human.gang);
 }
 
 // تحديث شريط المعلومات (بدون لمس DOM إلا عند تغير القيم)

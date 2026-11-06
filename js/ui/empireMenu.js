@@ -150,7 +150,10 @@ function districtSections(state, district) {
       })), ...buildingSlots(state, pid, district)] },
       { title: 'ترقيات العصابة', slots: E.upgrades.order.map(key => ({
         name: E.upgrades[key].name, max: E.upgrades[key].costs.length,
-        perks: () => [[GANG_ICON[key], '+' + pct(E.upgrades[key].per * nextLevel(levels[key], E.upgrades[key].costs.length))]],
+        perks: () => {
+          const U = E.upgrades[key], lv = nextLevel(levels[key], U.costs.length);
+          return [[GANG_ICON[key], '+' + pct(U.per * lv)], ...(U.evade ? [['shield', pct(U.evade * lv) + ' تفادٍ']] : [])];
+        },
         level: () => levels[key],
         cost: () => (nextUpgrade(state, pid, key) || {}).cost,
         check: () => canUpgrade(state, pid, key),

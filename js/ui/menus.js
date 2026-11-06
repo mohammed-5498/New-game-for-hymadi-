@@ -16,6 +16,7 @@ import { showMenuScene, hideMenuScene } from './menuScene.js';
 import { setupBattleScreen } from './battleScreen.js';
 import { updateCityThumb, drawCardThumb, shownCity, stopCard } from './cityThumb.js';
 import { setupPicker, openPicker, isPickerOpen, refreshPicker } from './picker.js';
+import { openStory } from './storyScreen.js';
 import { CITY_GROUPS, SIDE_GROUPS, regionOf } from './regions.js';
 import { drawModeIcon, drawSizeIcon, drawUnitsIcon, drawWeatherIcon } from './icons.js';
 import { showStore } from './storeScreen.js';
@@ -88,6 +89,7 @@ export function setupMenus(handlers) {
   // القائمة الرئيسية (القسم 12.1)
   onTap('btnContinue', continuePressed);
   onTap('btnPlay', () => showScreen('setup'));
+  onTap('btnStory', () => { showScreen('story'); openStory({ view: 'gangs' }); });   // طور القصة (القسم 17)
   onTap('btnStore', () => showScreen('store'));
   onTap('btnSettings', () => showScreen('settings'));
   onTap('btnStats', () => showScreen('stats'));
@@ -121,7 +123,7 @@ export function setupMenus(handlers) {
 // --- تبديل الشاشات بتلاشٍ قصير (القسم 12.0) ---
 const SCREENS = {
   main: 'screenMain', setup: 'screenSetup', store: 'screenStore', settings: 'screenSettings',
-  stats: 'screenStats', game: 'screenGame', battle: 'screenBattle', lan: 'screenLan'
+  stats: 'screenStats', game: 'screenGame', battle: 'screenBattle', lan: 'screenLan', story: 'screenStory'
 };
 
 let screen = 'main';
@@ -192,7 +194,6 @@ function openSidePicker(index) {
   const slot = setup.slots[index];
   pickSide('اختر الأمة — الخانة ' + (index + 1) + (index === 0 ? ' (أنت)' : ''), () => slot.side, (side) => {
     slot.side = side;
-    descSlot = index;
     refresh();
     if (index === 0 && setup.city === 'host') showCity();
   }, showCity);                          // صورة المدينة "عشوائي" تعود للتبدل بعد الإغلاق
@@ -652,11 +653,10 @@ function buildSlots() {
       return true;
     };
 
-    // الأمة (القسم 3.10): لوحة مرتبة حسب المنطقة (العصابات العربية...) ثم الكلاسيكية، وسطر يصف المختارة تحت الخانات
+    // الأمة (القسم 3.10): لوحة مرتبة حسب المنطقة (العصابات العربية...) ثم الكلاسيكية، ووصف المختارة داخلها
     row.appendChild(cell('gang', '', () => {
-      descSlot = index;
       if (openIfClosed()) return;
-      if (slot.type === 'net') { refresh(); return; }   // الصديق يختار أمته بنفسه: اللمس يعرض وصفها فقط
+      if (slot.type === 'net') return;   // الصديق يختار أمته بنفسه
       openSidePicker(index);
     }));
 
@@ -695,8 +695,6 @@ function cell(className, text, onClick) {
 const next = (list, current) => list[(list.indexOf(current) + 1) % list.length];
 
 // الخانة التي يصفها سطر الأمة: آخر خانة لمس اللاعب أمتها (الافتراضي خانته)
-let descSlot = 0;
-
 // اسم الخيار في الخانة، وسطر صغير تحته: اسم عصابة الأمة، أو "كلاسيكية"
 export function sideLabel(side) {
   const nation = nationOf(side);
@@ -705,15 +703,10 @@ export function sideLabel(side) {
   return { text: 'عشوائي', note: '' };
 }
 
-// وصف الخيار: النمط القتالي، والسمة وضربة البطل للأمة
+// وصف الخيار في لوحة الأمم: ميزة الأمة وحدها، ووصف النمط للعصابات الكلاسيكية وحدها (بطلب المستخدم، 2026-11-06)
 export function sideDesc(side) {
   const nation = nationOf(side);
-  if (nation) {
-    const style = NATIONS.styles[nation.style];
-    return nation.name + ' «' + nation.gangName + '» — نمط ' + style.name + ': ' + style.desc +
-      ' • السمة «' + nation.trait.name + '»: ' + nation.trait.desc +
-      ' • البطل ' + nation.names.champion + ': «' + nation.ult.name + '» ' + nation.ult.desc;
-  }
+  if (nation) return nation.name + ' «' + nation.gangName + '» — «' + nation.trait.name + '»: ' + nation.trait.desc;
   if (GANGS[side]) {
     const style = NATIONS.styles[side];
     return GANGS[side].name + ' (' + NATIONS.classicNote + ') — نمط ' + style.name + ': ' + style.desc;
@@ -804,8 +797,6 @@ function refresh() {
     colorCell.title = color.name;
   }
 
-  const described = setup.slots[descSlot] && setup.slots[descSlot].type !== 'closed' ? descSlot : 0;
-  el('sideDesc').textContent = (described ? 'الخانة ' + (described + 1) + ': ' : '') + sideDesc(setup.slots[described].side);
   el('setupError').hidden = true;
   if (lanSetup) broadcastLobby(lobbyView());
 }

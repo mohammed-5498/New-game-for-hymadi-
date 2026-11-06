@@ -1,6 +1,6 @@
 /* منسوخ كما هو من docs/audio.js (المرجع الإلزامي للقسم 13.5).
    لا تُعدّل مؤثراته هنا؛ عدّل المرجع ثم أعد النسخ. المختلف: تصدير ES في السطر الأخير، وopt.gain في play
-   (ارتفاع الحدث من قرب الكاميرا، js/audio/sound.js). والمؤثرات التي لها ملفات (assets/audio/) تُسمع منها،
+   (ارتفاع الحدث من قرب الكاميرا، js/audio/sound.js)، وsetContextOptions (خيارات إنشاء السياق: AUDIO.latencyHint). والمؤثرات التي لها ملفات (assets/audio/) تُسمع منها،
    وهذه للأحداث الباقية. */
 /* ====== صوت اللعبة: كل المؤثرات مولَّدة بالكود (Web Audio) بلا أي ملفات ======
    الاستعمال:
@@ -12,14 +12,15 @@
 const GameAudio = (function(){
   let ctx=null, master=null, sfxGain=null, musGain=null, ready=false;
   let vol={sfx:0.7, music:0.35}, muted=false;
-  let noiseBuf=null;
+  let noiseBuf=null, ctxOptions=undefined;
   const lastPlay={}, VOICE_CAP=18; let voices=0;
 
+  function setContextOptions(o){ ctxOptions=o; }
   function init(){
     if(ctx)return true;
     const AC=window.AudioContext||window.webkitAudioContext;
     if(!AC)return false;
-    ctx=new AC();
+    try{ ctx=new AC(ctxOptions); }catch(e){ ctx=new AC(); }   // متصفح قديم لا يقبل الخيارات
     master=ctx.createGain(); master.gain.value=muted?0:1; master.connect(ctx.destination);
     sfxGain=ctx.createGain(); sfxGain.gain.value=vol.sfx; sfxGain.connect(master);
     musGain=ctx.createGain(); musGain.gain.value=vol.music; musGain.connect(master);
@@ -203,7 +204,7 @@ const GameAudio = (function(){
     };
   })();
 
-  return {init,unlock,play,playAt,setVolume,setMuted,music,
+  return {init,unlock,setContextOptions,play,playAt,setVolume,setMuted,music,
           get context(){return ctx;}, names:Object.keys(SFX)};
 })();
 export { GameAudio };

@@ -1,5 +1,5 @@
 // إنشاء الوحدات وحركتها على المسار
-import { UNIT_BASE, GANGS, HEROES, CHAMPIONS, POLICE, UNITS, TICK_SEC, PERFORMANCE } from '../config.js';
+import { UNIT_BASE, GANGS, HEROES, CHAMPIONS, POLICE, UNITS, TICK_SEC, PERFORMANCE, STYLE_PERKS } from '../config.js';
 import { findPath, findFreeTiles, nearestWalkable, buildFlowField, flowStep } from '../map/pathfinding.js';
 import { clearCombatOrders } from './combat.js';
 import { moveSpeed } from './weather.js';
@@ -13,10 +13,21 @@ import { random } from './random.js';   // عشوائية المنطق: مشتر
 // nationId: أمة اللاعب (القسم 3.10): نمطها هو العصابة gangId بقواعدها، ثم سمتها وضربة بطلها
 export function unitStats(gangId, heroId, champion = false, nationId = null) {
   if (gangId === 'police') return { ...UNIT_BASE, ...POLICE[heroId === 'captain' ? 'captain' : 'common'] };
-  if (champion) return nationStats({ ...UNIT_BASE, ...CHAMPIONS[gangId].stats }, nationId, true);
-  if (heroId) return nationStats({ ...UNIT_BASE, ...HEROES[heroId].stats }, nationId, false, heroId);
+  if (champion) return classStats(nationStats({ ...UNIT_BASE, ...CHAMPIONS[gangId].stats }, nationId, true), gangId);
+  if (heroId) return classStats(nationStats({ ...UNIT_BASE, ...HEROES[heroId].stats }, nationId, false, heroId), gangId);
   const gang = GANGS[gangId];
-  return nationStats({ ...UNIT_BASE, ...(gang && gang.unit ? gang.unit : {}) }, nationId, false);
+  return classStats(nationStats({ ...UNIT_BASE, ...(gang && gang.unit ? gang.unit : {}) }, nationId, false), gangId);
+}
+
+// فئة النمط (STYLE_PERKS.classes): دم وضرر ومشي ومدى رمي
+function classStats(stats, gangId) {
+  const c = STYLE_PERKS.classes[gangId];
+  if (!c) return stats;
+  if (c.hp) stats.hp *= c.hp;
+  if (c.damage) { stats.damage *= c.damage; if (stats.meleeDamage) stats.meleeDamage *= c.damage; }
+  if (c.speed) stats.speed *= c.speed;
+  if (c.range && stats.projectile) { stats.attackRange += c.range; stats.visionRange += c.range; }
+  return stats;
 }
 
 // اسم الوحدة كما يظهر للاعب (وحدات الأمة بأسماء أمتها)
@@ -295,7 +306,8 @@ export function updateUnits(state) {
 
 function moveAlongPath(state, unit) {
   // مجموعة كبيرة تتبع حقل التدفق: نأخذ المربع التالي كلما فرغ المسار
-  if (!unit.path.length && unit.flow) {
+  // (إلا المشتبكة: تقاتل من مكانها أو تتقدم نحو هدفها وحده، وإلا جرّ الحقل الرماةَ إلى قلب العدو)
+  if (!unit.path.length && unit.flow && unit.state !== 'attacking') {
     const step = flowStep(state.map, unit.flow, Math.round(unit.x), Math.round(unit.y));
     if (step) unit.path = [step];
     else { unit.flow = null; unit.state = 'idle'; return; }   // وصلت الهدف
