@@ -13,6 +13,7 @@ import 'alerts.dart';
 import 'combat.dart';
 import 'empire.dart';
 import 'features.dart';
+import 'story.dart';
 import 'police.dart';
 import 'spawn.dart';
 import 'state.dart';
@@ -602,6 +603,7 @@ ModeBar? modeBar(MatchState state) {
 }
 
 ModeBar? _modeOnlyBar(MatchState state) {
+  if (state.story != null) { final b = storyBar(state); return b == null ? null : ModeBar(b.$1, b.$2); }
   if (state.mode == 'points') return ModeBar(modeClock(pointsRemaining(state)), isFinalMinute(state));
   if (state.mode == 'king') {
     final ms = modeOf(state);
@@ -665,6 +667,7 @@ List<(String, String)> modeExtras(MatchState state) {
 }
 
 List<(String, String)> _modeOnlyExtras(MatchState state) {
+  if (state.story != null) return storyExtras(state);
   if (state.mode == 'points') {
     final human = state.humanId >= 0 ? state.players[state.humanId] : null;
     final mine = human == null ? null : sideTotals(state).where((s) => s.key == sideKey(human)).firstOrNull;

@@ -74,6 +74,15 @@ for (const [k, v] of Object.entries(CONFIG)) {
 }
 fs.writeFileSync(path.join(OUT, 'lib/data/js_config.dart'), cfg);
 
+// --- 1ج) حملات طور القصة (js/story/campaigns.js): النصوص والمهام (ن9) ---
+const { CAMPAIGNS } = await import(path.join(ROOT, 'js/story/campaigns.js'));
+fs.writeFileSync(path.join(OUT, 'lib/data/campaigns.dart'), `// مولّد من js/story/campaigns.js بـ scripts/export_flutter_data.mjs: لا تعدّله باليد
+// ignore_for_file: constant_identifier_names
+import '../core/cfg.dart';
+
+const J CAMPAIGNS = ${lit(CAMPAIGNS)};
+`);
+
 // --- 2) بصمات الخرائط ---
 // مولّد mulberry32 كما في js/game/random.js
 function seeded(seed) {

@@ -290,3 +290,13 @@ void drawFeatureOver(TriBatch b, MatchState s, double time) {
     }
   }
 }
+
+// علامة مكان مهمة القصة (storyArt.js): حلقة ذهبية نابضة وسهم فوقها
+void drawStoryMarker(TriBatch b, double i, double j, double r, double time) {
+  final (x, y) = _iso(i, j);
+  final k = 1 + 0.06 * math.sin(time * 3);
+  b.ring(x, y, r * TILE_HALF_W * k, r * TILE_HALF_H * k, 1.6, 0xffd34d, 0.85, 40, 0, 2 * math.pi, 1);
+  final yy = y - 30 + math.sin(time * 4) * 2;
+  b.tri(x - 4, yy - 6, x + 4, yy - 6, x, yy, 0xffd34d);
+  b.quad(x - 1.5, yy - 12, x + 1.5, yy - 12, x + 1.5, yy - 6, x - 1.5, yy - 6, 0xffd34d);
+}

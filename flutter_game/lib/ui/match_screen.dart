@@ -16,6 +16,7 @@ import '../game/match.dart';
 import '../game/modes.dart';
 import '../game/state.dart';
 import '../game/save.dart';
+import '../game/story.dart';
 import '../game/units.dart';
 import '../map/generator.dart';
 import '../render/batch.dart';
@@ -27,6 +28,7 @@ import '../render/unit_atlas.dart';
 import 'hud.dart';
 import 'menus.dart';
 import 'prefs.dart';
+import 'story_screen.dart';
 import 'widgets.dart';
 
 class MatchScreen extends StatefulWidget {
@@ -43,6 +45,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
   double loadProgress = 0;
   String tip = '';
   bool _recorded = false;
+  ({String title, List<(String, String)> lines, String reward, String ending, String next})? storyResult;
   late bool _resumePending = widget.resume;
   Duration _lastDraw = Duration.zero;
   int _activeUntil = 0;
@@ -138,7 +141,16 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     _ticker.start();
   }
 
+  // زر نهاية مرحلة القصة: التالية أو إعادتها، أو العودة إلى قائمة القصة بعد آخرها
+  void storyNext() {
+    final next = storyAgain(settings, state?.matchResult?.won ?? false);
+    if (next == null) { Navigator.of(context).pop(); return; }
+    settings = next;
+    restart();
+  }
+
   void restart() {
+    storyResult = null;
     _ticker.stop();
     layer?.dispose();
     art?.dispose();
@@ -192,6 +204,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     clearSavedMatch();
     final r = s.matchResult!;
     final human = s.humanId >= 0 ? s.players[s.humanId] : null;
+    if (settings['story'] != null) storyResult = storyEnd(settings, r.won);
     if (human != null && s.mode != 'survival' && settings['story'] == null) {
       Stats.record(won: r.won, duration: r.duration, kills: r.kills, losses: r.losses, maxDistricts: r.maxDistricts, gang: human.nation ?? human.gang);
     }
@@ -523,6 +536,10 @@ class _MatchPainter extends CustomPainter {
     for (final cl in s.clashes) { drawClash(b, (cl.x - cl.y) * TILE_HALF_W, (cl.x + cl.y) * TILE_HALF_H - 8, cl.t); }
     for (final fx in s.ultFx) { drawUltFx(b, fx); }
     if (s.feature != null) drawFeatureOver(b, s, time);
+    if (s.story != null) {
+      final tp = targetPoint(s);
+      if (tp != null) drawStoryMarker(b, tp.$1, tp.$2, tp.$3, time);
+    }
     for (final u in s.units) { if (u.selected && u.state != 'dead') drawSelectionRing(b, u, alpha); }
     if (s.moveMarker != null) drawMoveMarker(b, s.moveMarker!);
     b.flush(canvas, img);

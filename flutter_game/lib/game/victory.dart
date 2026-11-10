@@ -23,6 +23,11 @@ void updateVictory(MatchState state) {
     if (owned > state.stats.maxDistricts) state.stats.maxDistricts = owned;
   }
   if (state.mode == 'survival') return;
+  // طور القصة: الفوز بإكمال آخر مهمة (story.dart)، والخسارة هنا بخسارة كل جنودك وأحيائك
+  if (state.story != null) {
+    if (state.humanId >= 0 && !isPlayerAlive(state, state.humanId)) finish(state, false, 'خسرت كل جنودك وأحيائك');
+    return;
+  }
   final alivePlayers = state.players.where((p) => !p.neutral && isPlayerAlive(state, p.id)).toList();
   final sides = {for (final p in alivePlayers) sideKey(p)};
   final regicide = state.mode == 'regicide';

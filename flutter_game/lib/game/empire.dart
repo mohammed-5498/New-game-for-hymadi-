@@ -147,7 +147,8 @@ double productionTime(MatchState state, District district, String kind) {
   final horde = owner != null && owner.gang == 'scorpions' && E.m('units').has(kind) ? 1 + STYLE_PERKS.m('horde').d('production') : 1;
   return _unitCost(kind).d('seconds') * (E.m('buildings').m('hq').m('upgrades').m('production').l('times')[level] as num) *
       _DS.m('production').d(sizeOf(district)) *
-      (owner != null ? _botFactor(owner) * featureProductionMul(state, owner.id) : 1) * eventProductionMul(state) / horde;
+      (owner != null ? _botFactor(owner) * featureProductionMul(state, owner.id) : 1) * eventProductionMul(state) / horde *
+      (state.story != null && owner != null && owner.team == 2 ? (STORY.l('enemyProduction')[state.story!.level] as num) : 1);
 }
 
 J _unitCost(String kind) => E.m('units').mm(kind) ?? CITY_FEATURES.m('recruits').m(kind);

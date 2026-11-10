@@ -14,6 +14,7 @@ import 'nations.dart';
 import 'police.dart';
 import 'spatial.dart';
 import 'spawn.dart';
+import 'story.dart';
 import 'state.dart';
 import 'units.dart';
 import 'victory.dart';
@@ -41,6 +42,7 @@ MatchState createMatch(J settings) {
   players.add(createPolicePlayer(players));
   final featurePlayer = createFeaturePlayer(players, feature, map.city);
   if (featurePlayer != null) players.add(featurePlayer);
+  players.addAll(createStoryPlayers(settings, players));
   final weather = settings.ss('weather');
   final state = MatchState(settings: settings, map: map, players: players,
       humanId: players.indexWhere((p) => p.isHuman),
@@ -59,6 +61,7 @@ MatchState createMatch(J settings) {
   initSpawnTimers(state);
   initPolice(state);
   initFeatures(state);
+  initStory(state);
   initBots(state);
   centerCameraOnHome(state);
   return state;
@@ -104,6 +107,7 @@ void updateMatch(MatchState state) {
   updateBots(state);
   updateMode(state);
   updateFades(state);
+  updateStory(state);
   updateVictory(state);
   updateNotice(state);
   updateAlerts(state);

@@ -14,6 +14,7 @@ import '../render/city_art.dart';
 import '../render/city_layer.dart';
 import 'match_screen.dart';
 import 'prefs.dart';
+import 'story_screen.dart';
 import 'widgets.dart';
 
 // ===================== إعداد المباراة =====================
@@ -179,7 +180,7 @@ class _MainMenuState extends State<MainMenu> {
       if (saved != null) WideButton('متابعة المباراة', () => _go(const MatchScreen(resume: true)), primary: true,
           note: '${cityShort('${saved['city']}')} • ${clock((saved['time'] as num).toDouble())}'),
       WideButton('لعب', () => _go(const SetupScreen()), primary: saved == null),
-      const WideButton('القصة', null, note: 'قريباً في هذه النسخة'),
+      WideButton('القصة', () => _go(const StoryScreen()), note: 'حملة أبناء سبأ'),
       const WideButton('لعب محلي', null, note: 'في مرحلة لاحقة من النقل'),
       Row(mainAxisSize: MainAxisSize.min, children: [
         WideButton('المتجر', () => _go(const StoreScreen()), width: 124),

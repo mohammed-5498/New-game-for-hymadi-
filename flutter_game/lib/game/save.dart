@@ -13,6 +13,7 @@ import 'modes.dart';
 import 'police.dart';
 import 'realism.dart';
 import 'state.dart';
+import 'story.dart';
 
 typedef _F<T> = (T Function(Unit), void Function(Unit, T));
 
@@ -119,13 +120,14 @@ Map<String, Object?> _unit(Unit u) => {
   'phases': u.cPhases == null ? null : [u.cPhases!.wind, u.cPhases!.strike, u.cPhases!.hold, u.cPhases!.rec, u.cPhases!.total],
   'traits': [u.traits.aggr, u.traits.skill, u.traits.react, u.traits.spd, u.traits.size],
   'feat': [u.patrol, u.blackKnight, u.fan, _exit(u.dancer), _exit(u.lair), _exit(u.caravanExit)],
+  'story': u.story == null ? null : [u.story!.role, u.story!.step, u.storyBoss],
   'task': u.botTask == null ? null : [u.botTask!.type, u.botTask!.squadId, u.botTask!.districtId, u.botTask!.until,
     u.botTask!.leader?.id, u.botTask!.point?.x, u.botTask!.point?.y],
 };
 
 // --- الحفظ ---
 // ارفعه إذا تغيّر شكل الحفظ (كـ UI.matchVersion في اللعبة الحالية)
-const saveVersion = 3;
+const saveVersion = 4;
 String encodeMatch(MatchState s) {
   final e = s.empire;
   return jsonEncode({
@@ -139,7 +141,7 @@ String encodeMatch(MatchState s) {
     'districts': [for (final d in s.map.districts) {
       'o': d.owner, 'p': d.progress, 'po': d.progressOwner, 'tc': d.tintColor, 'tm': d.tintMix, 'f': d.fort, 'b': d.building,
       'bt': d.buildTile, 'blv': d.blv, 'cool': d.cool, 'rally': d.rally == null ? null : [d.rally!.k, d.rally!.owner],
-      'pd': d.policeDisabled,
+      'pd': d.policeDisabled, 'st': d.storyTile,
       'fx': [d.taxed, d.readyAt, d.mineSince, d.mineRate, d.vault, d.nextAt, d.rangAt, d.mineOwner, d.bankOwner, d.produced,
         d.villageJoined, d.garrisonOff, d.cool],
     }],
@@ -164,6 +166,7 @@ String encodeMatch(MatchState s) {
     'hints': [s.featureHinted, s.buildingHinted, s.eventHinted],
     'fireworks': [for (final f in s.fireworks) [f.x, f.y, f.at, f.done, f.owner]],
     'event': _eventJson(s.cityEvent),
+    'story': _storyJson(s.story),
     'brains': {for (final b in s.botBrains.entries) '${b.key}': {
       'n': b.value.nextId, 'r': b.value.rallyId,
       's': [for (final q in b.value.squads) {'id': q.id, 'ty': q.type, 'u': q.units, 't': q.targetId, 'p': q.power, 'ph': q.phase,
@@ -208,12 +211,15 @@ MatchState decodeMatch(String text) {
   final dl = j['districts'] as List;
   for (var k = 0; k < s.map.districts.length; k++) {
     final d = s.map.districts[k], x = (dl[k] as Map).cast<String, Object?>();
+    final storyTower = d.storyTile != null ? (d.buildTile, d.storyTile) : null;   // برج القصة من initStory
     d.owner = x['o'] as int?; d.progress = _n(x['p'])!; d.progressOwner = x['po'] as int?;
     d.tintColor = x['tc'] as String?; d.tintMix = _n(x['tm'])!; d.fort = x['f'] as int; d.building = x['b'] as String?;
     d.buildTile = x['bt'] as int?; d.blv = (x['blv'] as Map).cast<String, int>(); d.cool = _n(x['cool'])!;
     final r = x['rally'] as List?;
     d.rally = r == null ? null : (k: r[0] as int, owner: r[1] as int);
     d.policeDisabled = x['pd'] == true;
+    if (storyTower != null && d.building != 'tower' && storyTower.$1 != null) s.map.type[storyTower.$1!] = storyTower.$2!;
+    d.storyTile = x['st'] as int?;
     final fx = x['fx'] as List;
     d..taxed = _n(fx[0])!..readyAt = _n(fx[1])!..mineSince = _n(fx[2])!..mineRate = _n(fx[3])!..vault = _n(fx[4])!..nextAt = _n(fx[5])!
       ..rangAt = _n(fx[6])!..mineOwner = (fx[7] as int?)..bankOwner = (fx[8] as int?)..produced = fx[9] as int..villageJoined = fx[10] == true
@@ -250,6 +256,8 @@ MatchState decodeMatch(String text) {
     final ft = x['feat'] as List;
     u..patrol = ft[0] == true..blackKnight = ft[1] == true..fan = ft[2] == true..dancer = _exitBack(ft[3])..lair = _exitBack(ft[4])
       ..caravanExit = _exitBack(ft[5]);
+    final sg = x['story'] as List?;
+    if (sg != null) { u.story = StoryTag(sg[0] as String, sg[1] as int); u.storyBoss = sg[2] == true; }
     if (u.riot) { final st = u.style; u.style = FightStyleInfo(st.turn, st.flank, st.moves, true, st.primary); }
     byId[u.id] = u;
     raw[u] = x;
@@ -312,6 +320,7 @@ MatchState decodeMatch(String text) {
   s..featureHinted = h[0] == true..buildingHinted = h[1] == true..eventHinted = h[2] == true;
   s.fireworks = [for (final f in j['fireworks'] as List) Firework(_n((f as List)[0])!, _n(f[1])!, f[2] as int, f[4] as int?)..done = f[3] == true];
   s.cityEvent = _eventBack(j['event'] as Map?);
+  _storyBack(s.story, j['story'] as Map?);
   s.mapVersion++;
   return s;
 }
@@ -370,4 +379,26 @@ CityEventState? _eventBack(Map? j) {
   final f = j['fire'] as List?;
   if (f != null) e.fire = CityFire([for (final x in f) x as int]);
   return e;
+}
+
+Map<String, Object?>? _storyJson(StoryState? st) {
+  if (st == null) return null;
+  final c = st.cur;
+  return {
+    'step': st.step, 'nextAt': st.nextAt, 'done': st.done, 'won': st.won, 'exit': st.exitAt == null ? null : [st.exitAt!.$1, st.exitAt!.$2],
+    'cur': c == null ? null : [c.t0, c.end, c.nextWave, c.thinkAt, c.since, c.waves, c.arrived, c.count, c.spawned,
+      c.dest == null ? null : [c.dest!.$1, c.dest!.$2]],
+  };
+}
+
+void _storyBack(StoryState? st, Map? j) {
+  if (st == null || j == null) return;
+  st..step = j['step'] as int..nextAt = _n(j['nextAt'])!..done = j['done'] == true..won = j['won'] == true;
+  final ex = j['exit'] as List?;
+  st.exitAt = ex == null ? null : (_n(ex[0])!, _n(ex[1])!);
+  final c = j['cur'] as List?;
+  if (c == null) { st.cur = null; return; }
+  final dest = c[9] as List?;
+  st.cur = StoryCur(_n(c[0])!)..end = _n(c[1])!..nextWave = _n(c[2])!..thinkAt = _n(c[3])!..since = _n(c[4])!..waves = c[5] as int
+    ..arrived = c[6] as int..count = c[7] as int..spawned = c[8] == true..dest = dest == null ? null : (_n(dest[0])!, _n(dest[1])!);
 }

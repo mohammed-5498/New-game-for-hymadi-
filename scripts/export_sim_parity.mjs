@@ -56,6 +56,15 @@ for (const [k, city] of CFG.CITIES.order.entries()) {
   MODE_CASES.push({ mode: 'conquest', mapSize: 'small', city,
     players: [NATIONS[k % 15], 'crows', NATIONS[(k + 7) % 15]].map((n, q) => player(q, n, 0, ['medium', 'hard', 'insane'][(k + q) % 3])) });
 }
+// طور القصة (ن9): مراحل حملة اليمن الخمس كما تبنيها شاشة القصة (اللاعب لا يتحرك، والبوتات وقوات القصة تلعب)
+const { storyPlayers } = await import(repo + 'js/game/story.js');
+const { CAMPAIGNS } = await import(repo + 'js/story/campaigns.js');
+for (let k = 0; k < CFG.STORY.levels; k++) {
+  const camp = CAMPAIGNS.yemen;
+  MODE_CASES.push({ mode: 'conquest', modeOptions: {}, city: camp.city, mapSize: CFG.STORY.mapSize[k], maxUnits: CFG.STORY.maxUnits,
+    weather: camp.levels[k].weather || 'day', story: { campaign: 'yemen', level: k, bonus: k > 1 ? { points: CFG.STORY.rewards.points, district: true } : {} },
+    players: storyPlayers('yemen', k, CFG.STORY.defaultDifficulty) });
+}
 const matches = Number(process.argv[2] || CASES.length);
 const out = [];
 for (let k = 0; k < matches; k++) {
@@ -80,7 +89,7 @@ for (let k = 0; k < MODE_CASES.length; k++) {
   const c = MODE_CASES[k];
   const seed = (3000 + k) * 7919 + 12345 >>> 0;
   seedState = seed;
-  const settings = { maxUnits: 100, weather: 'day', city: 'random', ...c };
+  const settings = JSON.parse(JSON.stringify({ maxUnits: 100, weather: 'day', city: 'random', ...c }));
   delete settings.full;
   const state = createMatch(settings);
   state.running = true;

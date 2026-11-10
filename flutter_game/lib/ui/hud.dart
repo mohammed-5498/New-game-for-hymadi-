@@ -9,6 +9,7 @@ import '../data/js_config.dart';
 import '../game/empire.dart';
 import '../game/features.dart';
 import '../game/modes.dart';
+import '../game/story.dart';
 import '../game/spawn.dart';
 import '../game/state.dart';
 import '../game/victory.dart';
@@ -45,7 +46,7 @@ class MatchHud extends StatelessWidget {
         // شريط الطور أعلى الوسط (modeBar)، والإشعار تحته
         if (modeBar(s) case final bar?) Positioned(top: 8, left: 0, right: 0, child: Center(child: _ModeBarBox(bar))),
         // أسهم الحافة: زعماء الأعداء ذهبية، وزعيمك حين يُضرب حمراء (حماية الزعيم)
-        if (s.mode == 'regicide') Positioned.fill(child: IgnorePointer(child: CustomPaint(painter: _EdgeArrows(screen)))),
+        if (s.mode == 'regicide' || s.story != null) Positioned.fill(child: IgnorePointer(child: CustomPaint(painter: _EdgeArrows(screen)))),
         if (s.notice != null) Positioned(top: 52, left: 0, right: 0, child: Center(child: _Box(
             child: Text(s.notice!.text, style: TextStyle(color: s.notice!.mine ? gold : ink, fontSize: 14, fontWeight: FontWeight.w600))))),
         // شريط القوة يساراً
@@ -176,6 +177,7 @@ class _EdgeArrows extends CustomPainter {
     final targets = <(double, double, Color)>[
       for (final (u, c) in enemyLeaders(s)) (u.x, u.y, colorOf(c)),
       for (final a in s.alerts) if (a.kind == 'leader') (a.i.toDouble(), a.j.toDouble(), danger),
+      if (targetPoint(s) case final tp?) (tp.$1, tp.$2, gold),   // مكان مهمة القصة
     ];
     const m = 26.0;
     for (final (i, j, c) in targets) {
@@ -360,9 +362,16 @@ class _End extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(color: const Color(0xAA000000), child: Center(child: SingleChildScrollView(child: Panel(
       padding: const EdgeInsets.all(14), child: Column(mainAxisSize: MainAxisSize.min, children: [
-    Text(r.won ? 'انتصار!' : 'هزيمة', style: TextStyle(color: r.won ? gold : danger, fontSize: 26, fontWeight: FontWeight.w800)),
+    Text(screen.storyResult?.title ?? (r.won ? 'انتصار!' : 'هزيمة'), style: TextStyle(color: r.won ? gold : danger, fontSize: 26, fontWeight: FontWeight.w800)),
     const SizedBox(height: 4),
     Text(r.reason, style: const TextStyle(color: ink, fontSize: 14)),
+    if (screen.storyResult case final sr?) ...[
+      for (final (who, line) in sr.lines) SizedBox(width: 520, child: Text.rich(TextSpan(children: [
+        TextSpan(text: '$who: ', style: const TextStyle(color: gold, fontWeight: FontWeight.w700)), TextSpan(text: line)]),
+          style: const TextStyle(color: ink, fontSize: 12.5))),
+      if (sr.reward.isNotEmpty) Text(sr.reward, style: const TextStyle(color: gold, fontSize: 13)),
+      if (sr.ending.isNotEmpty) SizedBox(width: 520, child: Text(sr.ending, style: const TextStyle(color: gold, fontSize: 13))),
+    ],
     const SizedBox(height: 8),
     SizedBox(width: 560, child: Wrap(spacing: 8, runSpacing: 8, alignment: WrapAlignment.center, children: [
       StatCard('مدة المباراة', clock(r.duration)),
@@ -372,8 +381,9 @@ class _End extends StatelessWidget {
       for (final (l, v) in modeExtras(screen.state!)) StatCard(l, v),
     ])),
     const SizedBox(height: 8),
-    WideButton('مباراة جديدة', screen.restart, primary: true),
-    WideButton('القائمة الرئيسية', () => Navigator.of(context).pop()),
+    if (screen.storyResult case final sr?) WideButton(sr.next, screen.storyNext, primary: true)
+    else WideButton('مباراة جديدة', screen.restart, primary: true),
+    WideButton(screen.storyResult != null ? 'قائمة القصة' : 'القائمة الرئيسية', () => Navigator.of(context).pop()),
   ])))));
 }
 

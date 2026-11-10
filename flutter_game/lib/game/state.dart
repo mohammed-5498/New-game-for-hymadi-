@@ -6,6 +6,7 @@ import '../ai/squads.dart' show Brain;
 import '../core/cfg.dart';
 import '../core/fmath.dart';
 import '../map/generator.dart';
+import 'story.dart' show StoryTag, StoryState;
 import '../map/pathfinding.dart';
 import 'empire.dart' show EmpireState;
 import 'victory.dart' show MatchResult;
@@ -29,6 +30,7 @@ class Player extends MapPlayer {
   bool captures = false, ownOnly = false;   // أطراف المزايا التي تستولي (ن8)
   int? friendOf;             // الشرطة صديقة لصاحب مركزها الرئيسي
   String? feature;           // طرف ميزة المدينة
+  String? storyRole;         // طور القصة: forces | boss:<نمط> | captives
   String? battleSide;        // معركة البوتات: 'a' أو 'b'
   Player({required this.id, required this.name, required String gang, this.nation, required this.gangName,
       required this.color, this.isHuman = false, int team = 0, this.difficulty = 'medium'})
@@ -162,7 +164,8 @@ class Unit {
   double auraSpeed = 0;
   bool harmless = false, cargo = false;
   Exit? caravanExit, dancer, lair;   // القافلة والكرنفال: المخرج، والترول: جبله
-  bool patrol = false, blackKnight = false, fan = false;
+  bool patrol = false, blackKnight = false, fan = false, storyBoss = false;
+  StoryTag? story;                   // طور القصة: دور الوحدة ومهمتها
   String? creature;
   double barY = 0, expireAt = -1, trampleAt = 0;
   Point2? homePost;
@@ -331,6 +334,7 @@ class MatchState {
   String weather;
   String? feature;
   CityEventState? cityEvent;
+  StoryState? story;
   List<Firework> fireworks = [];
   bool featureHinted = false, buildingHinted = false, eventHinted = false;
   int maxUnits;
