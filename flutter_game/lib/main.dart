@@ -13,8 +13,12 @@ import 'data/cities.dart';
 import 'map/generator.dart';
 import 'render/city_art.dart';
 import 'render/city_layer.dart';
+import 'ui/match_screen.dart';
 
 const _gold = Color(0xFFE2B55A), _panel = Color(0xE6261E17), _ink = Color(0xFFF2E6CF);
+const _gangs = {'crows': 'الغربان', 'hammers': 'المطارق', 'vipers': 'الأفاعي', 'scorpions': 'العقارب'};
+const _levels = {'easy': 'سهل', 'medium': 'متوسط', 'hard': 'صعب', 'insane': 'مجنون'};
+const _colors = ['blue', 'red', 'green', 'yellow', 'cyan', 'purple', 'gray', 'orange'];
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -25,7 +29,7 @@ void main() {
     title: 'مدينة العصابات',
     theme: ThemeData(brightness: Brightness.dark, colorSchemeSeed: _gold, scaffoldBackgroundColor: const Color(0xFF15110D)),
     builder: (context, child) => Directionality(textDirection: TextDirection.rtl, child: child!),
-    home: const CityViewer(),
+    home: const StartScreen(),
   ));
 }
 
@@ -240,4 +244,80 @@ class _CityPicker extends StatelessWidget {
       ]),
     ),
   );
+}
+
+// إعداد مباراة سريعة (قائمة اللعب الكاملة في ن6): المدينة والحجم وعصابتك وعدد البوتات وصعوبتها
+class StartScreen extends StatefulWidget {
+  const StartScreen({super.key});
+  @override
+  State<StartScreen> createState() => _StartScreenState();
+}
+
+class _StartScreenState extends State<StartScreen> {
+  String city = 'random', sizeKey = 'medium', gang = 'crows', level = 'medium';
+  int bots = 3;
+
+  @override
+  void initState() {
+    super.initState();
+    // للفحص في المتصفح: ?match=1&city=hk&size=small&bots=3&ff=60&watch=1&spectate=1&zoom=3
+    final q = Uri.base.queryParameters;
+    if (CITY_THEMES.containsKey(q['city'])) city = q['city']!;
+    if (MAP_SIZES.containsKey(q['size'])) sizeKey = q['size']!;
+    bots = int.tryParse(q['bots'] ?? '') ?? bots;
+    if (q['match'] == '1') WidgetsBinding.instance.addPostFrameCallback((_) => _play(test: q));
+  }
+
+  Future<void> _pickCity() async {
+    final picked = await showModalBottomSheet<String>(context: context, backgroundColor: _panel, isScrollControlled: true,
+        builder: (context) => _CityPicker(current: city));
+    if (picked != null) setState(() => city = picked);
+  }
+
+  void _play({Map<String, String>? test}) {
+    final ids = ['crows', 'hammers', 'vipers', 'scorpions'];
+    final players = <Map<String, Object?>>[
+      {'name': 'أنت', 'gang': gang, 'color': _colors[0], 'isHuman': test?['spectate'] != '1', 'team': 0, 'difficulty': level},
+      for (var k = 0; k < bots; k++)
+        {'name': 'بوت ${k + 1}', 'gang': ids[(ids.indexOf(gang) + 1 + k) % 4], 'color': _colors[k + 1], 'isHuman': false, 'team': 0, 'difficulty': level},
+    ];
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => MatchScreen(settings: {
+      'mapSize': sizeKey, 'city': city, 'weather': 'day', 'mode': 'conquest', 'maxUnits': 100, 'players': players,
+      if (test != null) 'ff': double.tryParse(test['ff'] ?? '') ?? 0,
+      if (test != null) 'watch': test['watch'] == '1',
+      if (test != null) 'zoom': double.tryParse(test['zoom'] ?? ''),
+    })));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final maxBots = MAP_SIZES[sizeKey]!.maxPlayers - 1;
+    if (bots > maxBots) bots = maxBots;
+    Widget row(String label, List<Widget> chips) => Padding(padding: const EdgeInsets.symmetric(vertical: 6), child: Row(children: [
+      SizedBox(width: 90, child: Text(label, style: const TextStyle(color: _ink, fontSize: 15))),
+      Expanded(child: Wrap(spacing: 6, runSpacing: 6, children: chips)),
+    ]));
+    return Scaffold(body: SafeArea(child: Center(child: SingleChildScrollView(child: Container(
+      constraints: const BoxConstraints(maxWidth: 640),
+      padding: const EdgeInsets.all(16),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        const Text('مدينة العصابات', textAlign: TextAlign.center, style: TextStyle(color: _gold, fontSize: 28, fontWeight: FontWeight.w800)),
+        const Text('النسخة الجديدة • السيطرة الكاملة', textAlign: TextAlign.center, style: TextStyle(color: _ink, fontSize: 13)),
+        const SizedBox(height: 12),
+        row('المدينة', [_Chip(label: city == 'random' ? 'عشوائية' : CITY_THEMES[city]?.name ?? city, icon: Icons.location_city, onTap: _pickCity),
+          if (city != 'random') _Chip(label: 'عشوائية', onTap: () => setState(() => city = 'random'))]),
+        row('الحجم', [for (final k in ['small', 'medium', 'large'])
+          _Chip(label: MAP_SIZES[k]!.name, selected: k == sizeKey, onTap: () => setState(() => sizeKey = k))]),
+        row('عصابتك', [for (final e in _gangs.entries) _Chip(label: e.value, selected: e.key == gang, onTap: () => setState(() => gang = e.key))]),
+        row('البوتات', [for (var n = 1; n <= maxBots; n++) _Chip(label: '$n', selected: n == bots, onTap: () => setState(() => bots = n))]),
+        row('الصعوبة', [for (final e in _levels.entries) _Chip(label: e.value, selected: e.key == level, onTap: () => setState(() => level = e.key))]),
+        const SizedBox(height: 14),
+        SizedBox(height: 54, child: FilledButton(style: FilledButton.styleFrom(backgroundColor: _gold, foregroundColor: Colors.black),
+            onPressed: _play, child: const Text('ابدأ المباراة', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)))),
+        const SizedBox(height: 8),
+        TextButton(onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CityViewer())),
+            child: const Text('عرض المدن', style: TextStyle(color: _gold))),
+      ]),
+    )))));
+  }
 }

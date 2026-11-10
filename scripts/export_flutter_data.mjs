@@ -70,7 +70,7 @@ import '../core/cfg.dart';
 
 `;
 for (const [k, v] of Object.entries(CONFIG)) {
-  cfg += v !== null && typeof v === 'object' && !Array.isArray(v) ? `const J ${k} = ${lit(v)};\n` : `const ${k} = ${lit(v)};\n`;
+  cfg += v !== null && typeof v === 'object' && !Array.isArray(v) ? `const J ${k} = ${lit(v)};\n` : typeof v === 'number' ? `const double ${k} = ${num(v)};\n` : `const ${k} = ${lit(v)};\n`;
 }
 fs.writeFileSync(path.join(OUT, 'lib/data/js_config.dart'), cfg);
 

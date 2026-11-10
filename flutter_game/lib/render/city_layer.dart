@@ -74,6 +74,10 @@ int groundColor(GameMap map, CityArt art, int i, int j) {
     final s = art.economy('police', 'medium');
     return s == null ? null : (s, 1, 0);
   }
+  if (type == 0x54 || type == 0x4D) {                              // برج الرماية والمستشفى (BUILDING_TILE في empire.js)
+    final s = art.economy(type == 0x54 ? 'tower' : 'hospital', district == null ? 'medium' : sizeOf(district));
+    return s == null ? null : (s, 1, 0);
+  }
   if (type == tF && district?.feature != null) {
     final s = art.find('feature', district!.feature!);
     if (s == null) return null;
@@ -94,20 +98,26 @@ String? _firstBuilding(String city, CityArt art) {
 // الطبقة صفوف بالعمق (d = i + j): لكل صف زينته القائمة (شبكة مثلثات) ثم صوره (من الأطلس)، فيقف عمود الإنارة
 // أمام المبنى الذي خلفه ووراء الذي أمامه، كما يرسم cityRender.js كل مربع بزينته بترتيبه. والصف خارج الشاشة لا يُرسل
 class CityLayer {
-  final ui.Vertices ground;
+  ui.Vertices ground;
   final ui.Vertices? marks;          // خطوط الشوارع والأرصفة وممرات المشاة ورصف الممرات وحلقة الدوار
   final List<ui.Vertices?> rows;     // زينة كل صف
   final Int32List rowStart;          // أول صورة لكل صف في xf وrects (والأخير = العدد)
   final Float32List xf, rects;       // لكل صورة: التحويل (scos, ssin, tx, ty) ومستطيلها في الأطلس
-  CityLayer._(this.ground, this.marks, this.rows, this.rowStart, this.xf, this.rects);
+  // صبغ المالك (القسم 8): لون أرض كل مربع قبل الصبغ وحيّه، وحي كل صورة ولونها (أبيض بلا صبغ)
+  final Float32List _pos;
+  final Int32List _baseCol, _col, _tileDistrict, _spriteDistrict, spriteCol;
+  final _applied = <int, (String?, double)>{};
+  bool tinted = false;
+  CityLayer._(this.ground, this.marks, this.rows, this.rowStart, this.xf, this.rects, this._pos, this._baseCol, this._col,
+      this._tileDistrict, this._spriteDistrict, this.spriteCol);
 
   // ما يرتفع فوق قاعدته (CITY_CACHE.reach.up) وما ينزل تحتها
   static const _up = 120.0, _down = 20.0;
 
   factory CityLayer(GameMap map, CityArt art) {
     final n = map.n, depths = 2 * n - 1;
-    final pos = Float32List(n * n * 12), col = Int32List(n * n * 6);
-    final items = <(int, int, Sprite, double, double, double)>[];
+    final pos = Float32List(n * n * 12), col = Int32List(n * n * 6), base = Int32List(n * n), tileD = Int32List(n * n);
+    final items = <(int, int, Sprite, double, double, double, int)>[];
     final decor = Decor(map), markVec = Vec(), rowVecs = List.generate(depths, (_) => Vec());
     decor.groundMarks(markVec);
     for (var j = 0; j < n; j++) {
@@ -116,17 +126,21 @@ class CityLayer {
         final x = (i - j) * TILE_HALF_W, y = (i + j) * TILE_HALF_H;
         pos.setAll(k * 12, [x, y - TILE_HALF_H, x + TILE_HALF_W, y, x, y + TILE_HALF_H,
                             x, y - TILE_HALF_H, x, y + TILE_HALF_H, x - TILE_HALF_W, y]);
-        col.fillRange(k * 6, k * 6 + 6, groundColor(map, art, i, j).toSigned(32));
+        base[k] = groundColor(map, art, i, j).toSigned(32);
+        col.fillRange(k * 6, k * 6 + 6, base[k]);
+        tileD[k] = map.road[k] == 1 || map.type[k] == tWater || map.type[k] == tY ? -1 : map.districtAt[k];
         final s = tileSprite(map, art, i, j);
-        if (s != null) items.add((i + j, i, s.$1, x, y + s.$3, s.$2));
+        if (s != null) items.add((i + j, i, s.$1, x, y + s.$3, s.$2, map.road[k] == 1 ? -1 : map.districtAt[k]));
         decor.tileDecor(rowVecs[i + j], i, j);
       }
     }
     items.sort((a, b) => a.$1 != b.$1 ? a.$1 - b.$1 : a.$2 - b.$2);
     final xf = Float32List(items.length * 4), rects = Float32List(items.length * 4), rowStart = Int32List(depths + 1);
+    final spriteD = Int32List(items.length), spriteCol = Int32List(items.length)..fillRange(0, items.length, -1);
     var d = 0;
     for (var m = 0; m < items.length; m++) {
-      final (depth, _, s, x, y, scale) = items[m];
+      final (depth, _, s, x, y, scale, did) = items[m];
+      spriteD[m] = did;
       while (d <= depth) { rowStart[d++] = m; }
       final unit = scale / art.px, o = m * 4;
       xf[o] = unit; xf[o + 1] = 0; xf[o + 2] = x - unit * s.ax; xf[o + 3] = y - unit * s.ay;
@@ -134,26 +148,59 @@ class CityLayer {
     }
     while (d <= depths) { rowStart[d++] = items.length; }
     return CityLayer._(ui.Vertices.raw(ui.VertexMode.triangles, pos, colors: col), markVec.build(),
-        [for (final v in rowVecs) v.build()], rowStart, xf, rects);
+        [for (final v in rowVecs) v.build()], rowStart, xf, rects, pos, base, col, tileD, spriteD, spriteCol);
+  }
+
+  // صبغ الأحياء بلون مالكها (tintAmount في capture.js و tint في colors.js): الأرض والصور، ولا يُعاد إلا ما تغيّر
+  // amount: (لون المالك أو null، ونسبة الصبغ المدرّجة) لكل حي
+  void retint(List<(String?, double)> amount, double groundAlpha, double groundChroma, double spriteAlpha, double chroma) {
+    final changed = <int>{};
+    for (var id = 0; id < amount.length; id++) {
+      if (_applied[id] != amount[id]) { _applied[id] = amount[id]; changed.add(id); }
+    }
+    if (changed.isEmpty) return;
+    for (var k = 0; k < _baseCol.length; k++) {
+      final id = _tileDistrict[k];
+      if (id < 0 || !changed.contains(id)) continue;
+      final (owner, a) = amount[id];
+      final c = owner == null || a <= 0 ? _baseCol[k] : oklabTint(_baseCol[k], hex(owner), a * groundAlpha, groundChroma).toSigned(32);
+      _col.fillRange(k * 6, k * 6 + 6, c);
+    }
+    ground.dispose();
+    ground = ui.Vertices.raw(ui.VertexMode.triangles, _pos, colors: _col);
+    tinted = false;
+    for (var m = 0; m < spriteCol.length; m++) {
+      final id = _spriteDistrict[m];
+      if (id < 0) continue;
+      final (owner, a) = amount[id];
+      if (changed.contains(id)) {
+        spriteCol[m] = owner == null || a <= 0 ? -1 : oklabTint(0xFFFFFFFF, hex(owner), a * spriteAlpha, chroma).toSigned(32);
+      }
+      if (spriteCol[m] != -1) tinted = true;
+    }
   }
 
   static final _paint = ui.Paint();
   static final _atlasPaint = ui.Paint()..filterQuality = ui.FilterQuality.medium;   // بمستويات التصغير
 
-  // top وbottom: حدا الشاشة بوحدات العالم
-  void paint(ui.Canvas canvas, ui.Image atlas, double top, double bottom) {
+  // top وbottom: حدا الشاشة بوحدات العالم. onGround بعد الأرض (الظلال والحدود والنار)، وafterRow(d) بعد كل صف
+  // (الجنود الواقفون فيه: يغطيهم ما أمامهم من مبانٍ ولا يغطيهم ما خلفهم)
+  void paint(ui.Canvas canvas, ui.Image atlas, double top, double bottom,
+      {void Function()? onGround, void Function(int d)? afterRow}) {
     canvas.drawVertices(ground, ui.BlendMode.dst, _paint);
     if (marks != null) canvas.drawVertices(marks!, ui.BlendMode.dst, _paint);
+    onGround?.call();
     for (var d = 0; d < rows.length; d++) {
       final y = d * TILE_HALF_H;
-      if (y < top - _down || y - _up > bottom) continue;
+      if (y < top - _down || y - _up > bottom) { if (afterRow != null && y >= top - 60 && y - 60 <= bottom) afterRow(d); continue; }
       final row = rows[d];
       if (row != null) canvas.drawVertices(row, ui.BlendMode.dst, _paint);
       final a = rowStart[d], b = rowStart[d + 1];
       if (b > a) {
         canvas.drawRawAtlas(atlas, Float32List.sublistView(xf, a * 4, b * 4), Float32List.sublistView(rects, a * 4, b * 4),
-            null, null, null, _atlasPaint);
+            tinted ? Int32List.sublistView(spriteCol, a, b) : null, tinted ? ui.BlendMode.modulate : null, null, _atlasPaint);
       }
+      afterRow?.call(d);
     }
   }
 

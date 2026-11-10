@@ -57,6 +57,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/map/atlas/   # أطلس كل مدينة (scripts/pack_atlases.py)؛ صور الحزمة المفردة لا تدخل التطبيق
+    - assets/units/       # صور الشخصيات مقطّعة (scripts/slice_units.py): أجزاؤها في lib/data/unit_sprites.dart
 
   # To add assets to your application, add an assets section, like this:
   # assets:
