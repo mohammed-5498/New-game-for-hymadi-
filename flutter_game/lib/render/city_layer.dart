@@ -10,6 +10,8 @@ import '../map/generator.dart';
 import '../map/sizes.dart';
 import 'city_art.dart';
 import 'colors.dart';
+import 'decor.dart';
+import 'vec.dart';
 
 // أرض الحي المميز وحي الشرطة وحي الميزة تميل لألوانها قبل الاستيلاء (REGION_HINT في cityRender.js)
 final _regionHint = <String, (int, double)>{
@@ -89,16 +91,25 @@ String? _firstBuilding(String city, CityArt art) {
   return null;
 }
 
+// الطبقة صفوف بالعمق (d = i + j): لكل صف زينته القائمة (شبكة مثلثات) ثم صوره (من الأطلس)، فيقف عمود الإنارة
+// أمام المبنى الذي خلفه ووراء الذي أمامه، كما يرسم cityRender.js كل مربع بزينته بترتيبه. والصف خارج الشاشة لا يُرسل
 class CityLayer {
   final ui.Vertices ground;
-  final Float32List xf, rects;   // لكل صورة: التحويل (scos, ssin, tx, ty) ومستطيلها في الأطلس
-  final int count;
-  CityLayer._(this.ground, this.xf, this.rects, this.count);
+  final ui.Vertices? marks;          // خطوط الشوارع والأرصفة وممرات المشاة ورصف الممرات وحلقة الدوار
+  final List<ui.Vertices?> rows;     // زينة كل صف
+  final Int32List rowStart;          // أول صورة لكل صف في xf وrects (والأخير = العدد)
+  final Float32List xf, rects;       // لكل صورة: التحويل (scos, ssin, tx, ty) ومستطيلها في الأطلس
+  CityLayer._(this.ground, this.marks, this.rows, this.rowStart, this.xf, this.rects);
+
+  // ما يرتفع فوق قاعدته (CITY_CACHE.reach.up) وما ينزل تحتها
+  static const _up = 120.0, _down = 20.0;
 
   factory CityLayer(GameMap map, CityArt art) {
-    final n = map.n;
+    final n = map.n, depths = 2 * n - 1;
     final pos = Float32List(n * n * 12), col = Int32List(n * n * 6);
     final items = <(int, int, Sprite, double, double, double)>[];
+    final decor = Decor(map), markVec = Vec(), rowVecs = List.generate(depths, (_) => Vec());
+    decor.groundMarks(markVec);
     for (var j = 0; j < n; j++) {
       for (var i = 0; i < n; i++) {
         final k = map.idx(i, j);
@@ -108,26 +119,47 @@ class CityLayer {
         col.fillRange(k * 6, k * 6 + 6, groundColor(map, art, i, j).toSigned(32));
         final s = tileSprite(map, art, i, j);
         if (s != null) items.add((i + j, i, s.$1, x, y + s.$3, s.$2));
+        decor.tileDecor(rowVecs[i + j], i, j);
       }
     }
     items.sort((a, b) => a.$1 != b.$1 ? a.$1 - b.$1 : a.$2 - b.$2);
-    final xf = Float32List(items.length * 4), rects = Float32List(items.length * 4);
+    final xf = Float32List(items.length * 4), rects = Float32List(items.length * 4), rowStart = Int32List(depths + 1);
+    var d = 0;
     for (var m = 0; m < items.length; m++) {
-      final (_, _, s, x, y, scale) = items[m];
+      final (depth, _, s, x, y, scale) = items[m];
+      while (d <= depth) { rowStart[d++] = m; }
       final unit = scale / art.px, o = m * 4;
       xf[o] = unit; xf[o + 1] = 0; xf[o + 2] = x - unit * s.ax; xf[o + 3] = y - unit * s.ay;
       rects[o] = s.x; rects[o + 1] = s.y; rects[o + 2] = s.x + s.w; rects[o + 3] = s.y + s.h;
     }
-    return CityLayer._(ui.Vertices.raw(ui.VertexMode.triangles, pos, colors: col), xf, rects, items.length);
+    while (d <= depths) { rowStart[d++] = items.length; }
+    return CityLayer._(ui.Vertices.raw(ui.VertexMode.triangles, pos, colors: col), markVec.build(),
+        [for (final v in rowVecs) v.build()], rowStart, xf, rects);
   }
 
-  static final _groundPaint = ui.Paint();
+  static final _paint = ui.Paint();
   static final _atlasPaint = ui.Paint()..filterQuality = ui.FilterQuality.medium;   // بمستويات التصغير
 
-  void paint(ui.Canvas canvas, ui.Image atlas) {
-    canvas.drawVertices(ground, ui.BlendMode.dst, _groundPaint);
-    canvas.drawRawAtlas(atlas, xf, rects, null, null, null, _atlasPaint);
+  // top وbottom: حدا الشاشة بوحدات العالم
+  void paint(ui.Canvas canvas, ui.Image atlas, double top, double bottom) {
+    canvas.drawVertices(ground, ui.BlendMode.dst, _paint);
+    if (marks != null) canvas.drawVertices(marks!, ui.BlendMode.dst, _paint);
+    for (var d = 0; d < rows.length; d++) {
+      final y = d * TILE_HALF_H;
+      if (y < top - _down || y - _up > bottom) continue;
+      final row = rows[d];
+      if (row != null) canvas.drawVertices(row, ui.BlendMode.dst, _paint);
+      final a = rowStart[d], b = rowStart[d + 1];
+      if (b > a) {
+        canvas.drawRawAtlas(atlas, Float32List.sublistView(xf, a * 4, b * 4), Float32List.sublistView(rects, a * 4, b * 4),
+            null, null, null, _atlasPaint);
+      }
+    }
   }
 
-  void dispose() => ground.dispose();
+  void dispose() {
+    ground.dispose();
+    marks?.dispose();
+    for (final r in rows) { r?.dispose(); }
+  }
 }

@@ -177,7 +177,8 @@ class _CityPainter extends CustomPainter {
     canvas.translate(size.width / 2, size.height / 2);
     canvas.scale(c.zoom);
     canvas.translate(-c.x, -c.y);
-    layer.paint(canvas, art.image);
+    final halfH = size.height / 2 / c.zoom;
+    layer.paint(canvas, art.image, c.y - halfH, c.y + halfH);
     canvas.restore();
   }
 

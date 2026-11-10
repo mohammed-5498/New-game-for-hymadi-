@@ -29,7 +29,10 @@ class CityTheme {
   final Pool? smallPool;
   final String? tree;
   final bool monument;
-  const CityTheme({required this.name, required this.pool, this.styles, this.smallPool, this.tree, this.monument = false});
+  final List<String>? car;   // ألوان السيارة المحطمة في الشوارع (streetDebris)
+  final String? debris;      // لون الركام
+  const CityTheme({required this.name, required this.pool, this.styles, this.smallPool, this.tree, this.monument = false,
+      this.car, this.debris});
 }
 
 const CITY_THEMES = <String, CityTheme>{
@@ -42,6 +45,8 @@ for (const key of CITIES.order) {
   if (T.smallPool) parts.push(`smallPool: ${pool(T.smallPool)}`);
   if (tree != null) parts.push(`tree: ${str(tree)}`);
   if (typeof T.draw.monument === 'function') parts.push('monument: true');
+  if (T.car) parts.push(`car: [${T.car.map(str).join(', ')}]`);
+  if (T.debris) parts.push(`debris: ${str(T.debris)}`);
   dart += `  '${key}': CityTheme(${parts.join(', ')}),\n`;
 }
 dart += '};\n';
