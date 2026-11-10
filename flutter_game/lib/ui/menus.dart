@@ -30,9 +30,14 @@ class Slot {
   Map<String, Object?> toJson() => {'type': type, 'side': side, 'color': color, 'team': team, 'difficulty': difficulty};
 }
 
+final J _GM = gameModes;
+
 class SetupModel {
-  String mode = 'conquest', city = CITIES.s('defaultCity'), mapSize = MATCH_DEFAULTS.s('mapSize'), weather = 'day';
+  String mode = _GM.s('defaultMode'), city = CITIES.s('defaultCity'), mapSize = MATCH_DEFAULTS.s('mapSize'), weather = 'day';
   int maxUnits = UNITS.i('maxUnitsDefault');
+  int pointsMinutes = _GM.m('points').i('defaultMinutes'), kingMinutes = _GM.m('king').i('defaultHoldMinutes');
+  int allies = _GM.m('survival').i('defaultAllies');
+  String survivalLevel = _GM.m('survival').s('defaultLevel');
   List<Slot> slots = [
     for (var k = 0; k < _maxSlots; k++)
       Slot(k == 0 ? 'human' : k < 4 ? 'bot' : 'closed', _gangIds[k % 4], _colorIds[k], 0, 'medium'),
@@ -41,7 +46,12 @@ class SetupModel {
   static SetupModel load() {
     final m = SetupModel(), j = Prefs.read(UI.s('setupKey'));
     if (j == null) return m;
-    if (CITIES.l('order').contains(j['city']) || j['city'] == 'random') m.city = j['city'] as String;
+    if (_GM.l('order').contains(j['mode'])) m.mode = j['mode'] as String;
+    if (_GM.m('points').l('minutes').contains(j['pointsMinutes'])) m.pointsMinutes = j['pointsMinutes'] as int;
+    if (_GM.m('king').l('holdMinutes').contains(j['kingMinutes'])) m.kingMinutes = j['kingMinutes'] as int;
+    if (_GM.m('survival').l('allies').contains(j['allies'])) m.allies = j['allies'] as int;
+    if (_GM.m('survival').l('levels').contains(j['survivalLevel'])) m.survivalLevel = j['survivalLevel'] as String;
+    if (CITIES.l('order').contains(j['city']) || j['city'] == 'random' || j['city'] == 'host') m.city = j['city'] as String;
     if (MAP_SIZES.has('${j['mapSize']}')) m.mapSize = j['mapSize'] as String;
     if (UNITS.l('maxUnitsChoices').contains(j['maxUnits'])) m.maxUnits = j['maxUnits'] as int;
     final sl = j['slots'];
@@ -60,13 +70,21 @@ class SetupModel {
     return m;
   }
 
-  void save() => Prefs.write(UI.s('setupKey'), {'city': city, 'mapSize': mapSize, 'maxUnits': maxUnits, 'slots': [for (final s in slots) s.toJson()]});
+  void save() => Prefs.write(UI.s('setupKey'), {'mode': mode, 'pointsMinutes': pointsMinutes, 'kingMinutes': kingMinutes, 'allies': allies,
+    'survivalLevel': survivalLevel, 'city': city, 'mapSize': mapSize, 'maxUnits': maxUnits, 'slots': [for (final s in slots) s.toJson()]});
 
   int get limit => MAP_SIZES.m(mapSize).i('maxPlayers');
-  List<Slot> get active => slots.where((s) => s.type != 'closed').toList();
+  bool get survival => mode == 'survival';
+  // الصمود: خانتك ثم الحلفاء من الخانات التالية بعددهم
+  List<Slot> get active => survival ? slots.sublist(0, 1 + allies) : slots.where((s) => s.type != 'closed').toList();
 
   String? validate() {
     final a = active, size = MAP_SIZES.m(mapSize).s('name');
+    if (survival) {
+      if (1 + allies > limit) return 'أنت و$allies حلفاء أكثر من حد الخريطة $size ($limit). قلّل الحلفاء أو كبّر الخريطة.';
+      if ({for (final s in a) s.color}.length != a.length) return 'لا يمكن أن يتكرر اللون بين لاعبين.';
+      return null;
+    }
     if (a.length < 2) return 'تحتاج لاعبَين على الأقل: افتح خانة بوت واحدة على الأقل.';
     if (a.length > limit) return 'عدد اللاعبين ${a.length} أكبر من حد الخريطة $size ($limit). أغلق خانة أو كبّر الخريطة.';
     final sides = {for (var k = 0; k < a.length; k++) a[k].team == 0 ? 'solo$k' : 'team${a[k].team}'};
@@ -76,31 +94,60 @@ class SetupModel {
   }
 
   J build() {
-    final rnd = math.Random();
     final a = active;
+    final players = [
+      for (var k = 0; k < a.length; k++)
+        {'name': k == 0 ? 'أنت' : 'بوت $k', ...resolveSide(a[k].side), 'color': a[k].color, 'isHuman': k == 0,
+          'team': survival ? 1 : a[k].team, 'difficulty': a[k].difficulty},
+    ];
     return {
-      'mode': mode, 'mapSize': mapSize, 'city': city, 'maxUnits': maxUnits, 'weather': weather,
-      'players': [
-        for (var k = 0; k < a.length; k++)
-          {'name': k == 0 ? 'أنت' : 'بوت $k', 'gang': a[k].side == 'random' ? _gangIds[rnd.nextInt(4)] : a[k].side,
-            'color': a[k].color, 'isHuman': k == 0, 'team': a[k].team, 'difficulty': a[k].difficulty},
-      ],
+      'mode': mode,
+      'modeOptions': {'minutes': pointsMinutes, 'holdMinutes': kingMinutes, 'allies': allies, 'level': survivalLevel},
+      'mapSize': mapSize,
+      // مدينة المضيف: مدينة أمة اللاعب الأول بعد حسم العشوائي، أو عشوائي للعصابة الكلاسيكية
+      'city': city == 'host' ? hostCity(players[0]['nation'] as String?) : city,
+      'maxUnits': maxUnits, 'weather': weather, 'players': players,
     };
   }
 }
 
-// ponytail: العصابات الكلاسيكية الأربع وحدها حتى الأمم (ن7)
-List<String> get _sides => [..._gangIds, 'random'];
-String sideName(String side) => side == 'random' ? 'عشوائي' : GANGS.m(side).s('name');
-String sideNote(String side) => side == 'random' ? '' : nations.s('classicNote');
+// الأمة ← نمطها القتالي، والعشوائي من كل الخيارات (resolveSide في nations.js)
+Map<String, Object?> resolveSide(String choice) {
+  if (choice == 'random') choice = _sides[math.Random().nextInt(_sides.length - 1)];
+  final nation = nations.mm(choice);
+  if (nation != null && nations.l('order').contains(choice)) return {'gang': nation.s('style'), 'nation': choice};
+  return {'gang': _gangIds.contains(choice) ? choice : _gangIds[0], 'nation': null};
+}
+
+String hostCity(String? side) {
+  final n = side != null && nations.l('order').contains(side) ? nations.m(side) : null;
+  return n != null && CITIES.l('order').contains(n['city']) ? n.s('city') : 'random';
+}
+
+// الأمم الـ15 ثم العصابات الكلاسيكية الأربع ثم العشوائي (SIDE_CHOICES)
+List<String> get _nationIds => nations.l('order').cast<String>();
+List<String> get _sides => [..._nationIds, ..._gangIds, 'random'];
+bool _isNation(String side) => _nationIds.contains(side);
+String sideName(String side) => side == 'random' ? 'عشوائي' : _isNation(side) ? nations.m(side).s('name') : GANGS.m(side).s('name');
+String sideNote(String side) => side == 'random' ? '' : _isNation(side) ? nations.m(side).s('gangName') : nations.s('classicNote');
 String sideDesc(String side) {
-  if (side == 'random') return 'عشوائي: عصابة تُختار عند بدء المباراة';
+  if (side == 'random') return 'عشوائي: أمة أو عصابة كلاسيكية تُختار عند بدء المباراة';
+  if (_isNation(side)) {
+    final n = nations.m(side);
+    return '${n.s('name')} «${n.s('gangName')}» — «${n.m('trait').s('name')}»: ${n.m('trait').s('desc')}';
+  }
   final st = nations.m('styles').m(side);
   return '${GANGS.m(side).s('name')} (${nations.s('classicNote')}) — نمط ${st.s('name')}: ${st.s('desc')}';
 }
 
-String cityName(String city) => city == 'random' ? 'عشوائي' : CITY_THEMES[city]?.name ?? city;
-String cityShort(String city) => city == 'random' ? 'عشوائي' : CITIES.m('short').ss(city) ?? city;
+// لوحة العصابات: تبويب لكل منطقة بأممها، ثم الكلاسيكية (SIDE_GROUPS)
+List<(String, List<String>)> get sideGroups => [
+  for (final r in REGIONS.l('order').cast<String>()) (REGIONS.m(r).s('name'), REGIONS.m(r).l('nations').cast<String>()),
+  (REGIONS.m('classic').s('name'), _gangIds),
+];
+
+String cityName(String city) => city == 'random' ? 'عشوائي' : city == 'host' ? 'مدينة أمة اللاعب الأول' : CITY_THEMES[city]?.name ?? city;
+String cityShort(String city) => city == 'random' ? 'عشوائي' : city == 'host' ? 'مدينة المضيف' : CITIES.m('short').ss(city) ?? city;
 String? regionOfCity(String city) {
   for (final r in REGIONS.l('order').cast<String>()) { if (REGIONS.m(r).l('cities').contains(city)) return r; }
   return null;
@@ -261,17 +308,63 @@ class _SetupScreenState extends State<SetupScreen> {
             PickCard(title: cityShort(c), note: cityName(c), image: 'assets/thumbs/city_$c.webp', selected: m.city == c,
                 onTap: () => Navigator.pop(context, c)),
         ]),
-    ], footer: [WideButton('عشوائي', () => Navigator.pop(context, 'random'), width: 160)]));
+    ], footer: [WideButton('عشوائي', () => Navigator.pop(context, 'random'), width: 160),
+      WideButton('مدينة المضيف', () => Navigator.pop(context, 'host'), width: 160, note: 'مدينة أمة اللاعب الأول')]));
     if (pick != null) setState(() => m.city = pick);
   }
 
+  // طور اللعب: الأطوار الخمسة، وتحتها خيارات المختار (MODE_OPTIONS في menus.js)
+  Future<void> _pickMode() async {
+    await _sheet<void>(StatefulBuilder(builder: (context, set) {
+      Widget opts<T>(String label, List<T> values, String Function(T) text, T current, void Function(T) pick) => Padding(
+        padding: const EdgeInsets.only(top: 6),
+        child: Row(children: [
+          SizedBox(width: 190, child: Text(label, style: const TextStyle(color: ink, fontSize: 13))),
+          Expanded(child: Wrap(spacing: 6, children: [
+            for (final v in values) ChoiceChip(label: Text(text(v)), selected: v == current, onSelected: (_) { pick(v); set(() {}); setState(() {}); }),
+          ])),
+        ]));
+      final S = _GM.m('survival');
+      return SafeArea(child: SingleChildScrollView(padding: const EdgeInsets.all(12), child: Column(mainAxisSize: MainAxisSize.min, children: [
+        const Text('اختر طور اللعب', style: TextStyle(color: gold, fontSize: 17, fontWeight: FontWeight.w800)),
+        const SizedBox(height: 8),
+        Wrap(spacing: 8, runSpacing: 8, alignment: WrapAlignment.center, children: [
+          for (final k in _GM.l('order').cast<String>())
+            SizedBox(width: 190, child: PickCard(title: _GM.m(k).s('name'), note: _GM.m(k).s('short'), selected: m.mode == k,
+                onTap: () { m.mode = k; set(() {}); setState(() {}); })),
+        ]),
+        const SizedBox(height: 6),
+        Text(_GM.m(m.mode).s('desc'), style: const TextStyle(color: dim, fontSize: 12.5), textAlign: TextAlign.center),
+        if (m.mode == 'points') opts<int>('مدة المباراة (دقيقة)', _GM.m('points').l('minutes').cast<int>(), (v) => '$v', m.pointsMinutes, (v) => m.pointsMinutes = v),
+        if (m.mode == 'king') opts<int>('زمن السيطرة على التلة للفوز (دقيقة)', _GM.m('king').l('holdMinutes').cast<int>(), (v) => '$v', m.kingMinutes, (v) => m.kingMinutes = v),
+        if (m.mode == 'survival') ...[
+          opts<int>('عدد الحلفاء من البوتات', S.l('allies').cast<int>(), (v) => '$v', m.allies, (v) => m.allies = v),
+          opts<String>('صعوبة الشرطة', S.l('levels').cast<String>(), (v) => BOT.m(v).s('name'), m.survivalLevel, (v) => m.survivalLevel = v),
+        ],
+        const SizedBox(height: 8),
+        WideButton('تم', () => Navigator.pop(context), primary: true, width: 160),
+      ])));
+    }));
+    setState(() {});
+  }
+
+  String _modeNote() {
+    String minutes(int n) => n == 1 ? 'دقيقة' : n == 2 ? 'دقيقتان' : n <= 10 ? '$n دقائق' : '$n دقيقة';
+    if (m.mode == 'points') return 'مدة المباراة: ${minutes(m.pointsMinutes)}';
+    if (m.mode == 'king') return 'السيطرة على التلة: ${minutes(m.kingMinutes)}';
+    if (m.mode == 'survival') return 'الحلفاء: ${m.allies} • صعوبة الشرطة: ${BOT.m(m.survivalLevel).s('name')}';
+    return _GM.m(m.mode).s('desc');
+  }
+
   Future<void> _pickSide(int k) async {
-    final pick = await _sheet<String>(PickerSheet(title: 'العصابة', groups: [
-      ('الكلاسيكية', [
-        for (final g in _gangIds)
-          PickCard(title: sideName(g), note: nations.m('styles').m(g).s('name'), image: 'assets/thumbs/side_$g.webp', aspect: 2.5,
-              selected: m.slots[k].side == g, onTap: () => Navigator.pop(context, g)),
-      ]),
+    final pick = await _sheet<String>(PickerSheet(title: 'الأمة أو العصابة', groups: [
+      for (final (name, list) in sideGroups)
+        (name, [
+          for (final g in list)
+            PickCard(title: sideName(g), note: _isNation(g) ? '${sideNote(g)} • ${nations.m('styles').m(nations.m(g).s('style')).s('name')}'
+                : nations.m('styles').m(g).s('name'), image: 'assets/thumbs/side_$g.webp', aspect: 2.5,
+                selected: m.slots[k].side == g, onTap: () => Navigator.pop(context, g)),
+        ]),
     ], footer: [WideButton('عشوائي', () => Navigator.pop(context, 'random'), width: 160)]));
     if (pick != null) setState(() => m.slots[k].side = pick);
   }
@@ -311,13 +404,16 @@ class _SetupScreenState extends State<SetupScreen> {
       child: InkWell(borderRadius: BorderRadius.circular(7), onTap: onTap, child: Center(child: child))));
 
   Widget _row(int k) {
-    final s = m.slots[k], closed = s.type == 'closed';
-    bool openIfClosed() { if (!closed) return false; setState(() => s.type = 'bot'); return true; }
+    final s = m.slots[k], surv = m.survival;
+    // الصمود: خانتك ثم الحلفاء بعددهم، والجميع فريق واحد ضد الشرطة
+    final closed = surv ? k > m.allies : s.type == 'closed';
+    bool openIfClosed() { if (!closed || surv) return closed; setState(() => s.type = 'bot'); return true; }
     const st = TextStyle(color: ink, fontSize: 13);
-    final level = s.type == 'bot' ? BOT.m(s.difficulty) : null;
+    final level = k > 0 && !closed ? BOT.m(s.difficulty) : null;
     return Opacity(opacity: closed ? 0.45 : 1, child: Padding(padding: const EdgeInsets.symmetric(vertical: 2), child: Row(children: [
       SizedBox(width: 18, child: Text('${k + 1}', style: const TextStyle(color: dim, fontSize: 12))),
-      _cell(64, Text(_slotTypes[s.type]!, style: st), () { if (k > 0) setState(() => s.type = s.type == 'bot' ? 'closed' : 'bot'); }),
+      _cell(64, Text(surv ? (k == 0 ? 'أنت' : closed ? 'مغلقة' : 'حليف') : _slotTypes[s.type]!, style: st),
+          () { if (k > 0 && !surv) setState(() => s.type = s.type == 'bot' ? 'closed' : 'bot'); }),
       const SizedBox(width: 4),
       _cell(120, Column(mainAxisSize: MainAxisSize.min, children: [
         Text(sideName(s.side), style: st),
@@ -327,13 +423,14 @@ class _SetupScreenState extends State<SetupScreen> {
       _cell(40, Container(width: 22, height: 22, decoration: BoxDecoration(color: colorOf(colorHex(s.color)), shape: BoxShape.circle)),
           () { if (!openIfClosed()) setState(() => s.color = _nextColor(k)); }),
       const SizedBox(width: 4),
-      _cell(64, Text(s.team == 0 ? 'بدون' : 'فريق ${s.team}', style: st), () { if (!openIfClosed()) setState(() => s.team = (s.team + 1) % 5); }),
+      _cell(64, Text(surv ? 'فريق 1' : s.team == 0 ? 'بدون' : 'فريق ${s.team}', style: st),
+          () { if (!openIfClosed() && !surv) setState(() => s.team = (s.team + 1) % 5); }),
       const SizedBox(width: 4),
       _cell(82, Column(mainAxisSize: MainAxisSize.min, children: [
         Text(level?.s('name') ?? '—', style: st),
         if (level?.ss('note') != null) Text(level!.s('note'), style: const TextStyle(color: dim, fontSize: 9)),
       ]), () {
-        if (openIfClosed() || s.type != 'bot') return;
+        if (openIfClosed() || level == null) return;
         setState(() => s.difficulty = BOT_LEVELS[(BOT_LEVELS.indexOf(s.difficulty) + 1) % BOT_LEVELS.length] as String);
       }),
     ])));
@@ -345,11 +442,10 @@ class _SetupScreenState extends State<SetupScreen> {
     return Scaffold(body: SafeArea(child: Column(children: [
       Expanded(child: SingleChildScrollView(padding: const EdgeInsets.all(10), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Column(children: [
-          PickTile(title: 'طور اللعب', value: gameModes.m('conquest').s('name'), icon: Icons.flag, width: 300,
-              note: 'الأطوار الأخرى في المرحلة التالية'),
+          PickTile(title: 'طور اللعب', value: _GM.m(m.mode).s('name'), icon: Icons.flag, width: 300, note: _modeNote(), onTap: _pickMode),
           const SizedBox(height: 6),
           PickTile(title: 'المدينة', value: cityShort(m.city), note: m.city == 'random' ? 'تُختار عند البدء' : cityName(m.city),
-              image: m.city == 'random' ? null : 'assets/thumbs/city_${m.city}.webp', icon: Icons.location_city, width: 300, onTap: _pickCity),
+              image: m.city == 'random' || m.city == 'host' ? null : 'assets/thumbs/city_${m.city}.webp', icon: Icons.location_city, width: 300, onTap: _pickCity),
           const SizedBox(height: 6),
           Row(children: [
             PickTile(title: 'الخريطة', value: size.s('name'), note: 'حتى ${size.i('maxPlayers')} لاعبين', icon: Icons.map, width: 96,
@@ -363,7 +459,8 @@ class _SetupScreenState extends State<SetupScreen> {
         ]),
         const SizedBox(width: 12),
         Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('الخانة الأولى أنت • الحد على هذه الخريطة ${m.limit} لاعبين', style: const TextStyle(color: dim, fontSize: 12)),
+          Text(m.survival ? 'أنت و${m.allies} حلفاء ضد موجات الشرطة • الحد ${m.limit} لاعبين'
+              : 'الخانة الأولى أنت • الحد على هذه الخريطة ${m.limit} لاعبين', style: const TextStyle(color: dim, fontSize: 12)),
           const SizedBox(height: 4),
           for (var k = 0; k < _maxSlots; k++) _row(k),
           const SizedBox(height: 4),
@@ -468,10 +565,13 @@ class _StoreScreenState extends State<StoreScreen> {
       return _asideBox(Image.asset('assets/thumbs/city_$c.webp', fit: BoxFit.cover), cityName(c), free, lines,
           WideButton('عرض المدينة', () => Navigator.push(context, MaterialPageRoute(builder: (_) => CityPreview(city: c))), width: 200));
     }
-    final s = chosenSide, st = nations.m('styles').m(s);
-    final names = [ 'الفرد العادي', for (final h in GANGS.m(s).l('heroes').cast<String>()) HEROES.m(h).s('name'), CHAMPIONS.m(s).s('name')];
-    return _asideBox(Image.asset('assets/thumbs/side_$s.webp', fit: BoxFit.contain), GANGS.m(s).s('name'), true,
-        [names.join(' • '), 'نمط ${st.s('name')}: ${st.s('desc')}'], null);
+    final s = chosenSide, nation = _isNation(s) ? nations.m(s) : null, style = nation?.s('style') ?? s, st = nations.m('styles').m(style);
+    final names = nation != null
+        ? [nation.m('names').s('common'), for (final h in GANGS.m(style).l('heroes').cast<String>()) nation.m('names').s(h), nation.m('names').s('champion')]
+        : ['الفرد العادي', for (final h in GANGS.m(s).l('heroes').cast<String>()) HEROES.m(h).s('name'), CHAMPIONS.m(s).s('name')];
+    final free = _gangIds.contains(s);
+    return _asideBox(Image.asset('assets/thumbs/side_$s.webp', fit: BoxFit.contain), nation != null ? '${nation.s('gangName')} — ${nation.s('name')}' : GANGS.m(s).s('name'), free,
+        [names.join(' • '), if (nation != null) '«${nation.m('trait').s('name')}»: ${nation.m('trait').s('desc')}', 'نمط ${st.s('name')}: ${st.s('desc')}'], null);
   }
 
   Widget _asideBox(Widget image, String title, bool free, List<String> lines, Widget? action) => SizedBox(width: 280, child: Column(
@@ -490,13 +590,13 @@ class _StoreScreenState extends State<StoreScreen> {
   Widget build(BuildContext context) {
     final groups = section == 'maps'
         ? [for (final r in REGIONS.l('order').cast<String>()) (REGIONS.m(r).s('name'), REGIONS.m(r).l('cities').cast<String>())]
-        : [('الكلاسيكية', _gangIds)];
+        : sideGroups;
     if (region >= groups.length) region = 0;
     final items = groups[region].$2;
     return Scaffold(body: SafeArea(child: Padding(padding: const EdgeInsets.all(10), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Column(children: [
         const Text('المتجر', style: TextStyle(color: gold, fontSize: 20, fontWeight: FontWeight.w800)),
-        for (final (k, label, n) in [('maps', 'الخرائط', 24), ('sides', 'العصابات', 4), ('skins', 'المظاهر', 0)])
+        for (final (k, label, n) in [('maps', 'الخرائط', 24), ('sides', 'العصابات', _sides.length - 1), ('skins', 'المظاهر', 0)])
           Padding(padding: const EdgeInsets.only(top: 6), child: SizedBox(width: 150, child: ChoiceChip(
               label: Text('$label ($n)'), selected: section == k, onSelected: k == 'skins' ? null : (_) => setState(() { section = k; region = 0; })))),
         const Spacer(),
@@ -514,8 +614,8 @@ class _StoreScreenState extends State<StoreScreen> {
             section == 'maps'
                 ? PickCard(title: cityShort(it), note: cityName(it), image: 'assets/thumbs/city_$it.webp', selected: it == chosenMap,
                     badge: _freeCity(it) ? 'مجانية' : 'السعر لاحقاً', onTap: () => setState(() => chosenMap = it))
-                : PickCard(title: sideName(it), note: CHAMPIONS.m(it).s('name'), image: 'assets/thumbs/side_$it.webp', aspect: 2.5,
-                    selected: it == chosenSide, badge: 'مجانية', onTap: () => setState(() => chosenSide = it)),
+                : PickCard(title: sideName(it), note: sideNote(it), image: 'assets/thumbs/side_$it.webp', aspect: 2.5,
+                    selected: it == chosenSide, badge: _gangIds.contains(it) ? 'مجانية' : 'السعر لاحقاً', onTap: () => setState(() => chosenSide = it)),
         ])),
       ])),
       const SizedBox(width: 10),

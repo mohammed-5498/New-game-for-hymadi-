@@ -7,6 +7,7 @@ import '../core/cfg.dart';
 import '../data/cities.dart';
 import '../data/js_config.dart';
 import '../game/empire.dart';
+import '../game/modes.dart';
 import '../game/spawn.dart';
 import '../game/state.dart';
 import '../game/victory.dart';
@@ -40,8 +41,11 @@ class MatchHud extends StatelessWidget {
           ],
           if (selected > 0) ...[const SizedBox(width: 6), _Box(child: Text('المحدد: $selected', style: const TextStyle(color: ink, fontSize: 13)))],
         ])),
-        // الإشعار أعلى الوسط
-        if (s.notice != null) Positioned(top: 48, left: 0, right: 0, child: Center(child: _Box(
+        // شريط الطور أعلى الوسط (modeBar)، والإشعار تحته
+        if (modeBar(s) case final bar?) Positioned(top: 8, left: 0, right: 0, child: Center(child: _ModeBarBox(bar))),
+        // أسهم الحافة: زعماء الأعداء ذهبية، وزعيمك حين يُضرب حمراء (حماية الزعيم)
+        if (s.mode == 'regicide') Positioned.fill(child: IgnorePointer(child: CustomPaint(painter: _EdgeArrows(screen)))),
+        if (s.notice != null) Positioned(top: 52, left: 0, right: 0, child: Center(child: _Box(
             child: Text(s.notice!.text, style: TextStyle(color: s.notice!.mine ? gold : ink, fontSize: 14, fontWeight: FontWeight.w600))))),
         // شريط القوة يساراً
         Positioned(top: 48, left: 8, child: _Power(s)),
@@ -103,27 +107,93 @@ class _Btn extends StatelessWidget {
   );
 }
 
-// شريط القوة: لكل عصابة لونها وأحياؤها وجنودها ونقاطها
+// شريط القوة: لكل عصابة لونها وأحياؤها وجنودها، وعمود الطور (النقاط، الزمن على التلة، دم الزعيم)
 class _Power extends StatelessWidget {
   final MatchState s;
   const _Power(this.s);
   @override
-  Widget build(BuildContext context) => _Box(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-    for (final p in s.players) if (!p.neutral) Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Opacity(opacity: isPlayerAlive(s, p.id) ? 1 : 0.4, child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Container(width: 10, height: 10, decoration: BoxDecoration(color: colorOf(p.color), shape: BoxShape.circle)),
-        const SizedBox(width: 6),
-        SizedBox(width: 88, child: Text(p.isHuman ? 'أنت' : p.gangName, overflow: TextOverflow.ellipsis,
-            style: TextStyle(color: p.isHuman ? gold : ink, fontSize: 12))),
-        Text('${ownedDistricts(s, p.id).length}', style: const TextStyle(color: ink, fontSize: 12)),
-        const Icon(Icons.flag, size: 12, color: dim),
-        const SizedBox(width: 6),
-        Text('${countUnits(s, p.id)}', style: const TextStyle(color: ink, fontSize: 12)),
-        const Icon(Icons.person, size: 12, color: dim),
-      ])),
-    ),
-  ]));
+  Widget build(BuildContext context) {
+    final col = powerColumn(s);
+    if (col != null && col.summary.isNotEmpty) {
+      return _Box(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        for (final (l, v) in col.summary) Text('$l: $v', style: const TextStyle(color: ink, fontSize: 12.5)),
+      ]));
+    }
+    return _Box(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      for (final p in s.players) if (!p.neutral) Padding(
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        child: Opacity(opacity: isPlayerAlive(s, p.id) ? 1 : 0.4, child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Container(width: 10, height: 10, decoration: BoxDecoration(color: colorOf(p.color), shape: BoxShape.circle)),
+          const SizedBox(width: 6),
+          SizedBox(width: 88, child: Text(p.isHuman ? 'أنت' : p.gangName, overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: p.isHuman ? gold : ink, fontSize: 12))),
+          Text('${ownedDistricts(s, p.id).length}', style: const TextStyle(color: ink, fontSize: 12)),
+          const Icon(Icons.flag, size: 12, color: dim),
+          const SizedBox(width: 6),
+          Text('${countUnits(s, p.id)}', style: const TextStyle(color: ink, fontSize: 12)),
+          const Icon(Icons.person, size: 12, color: dim),
+          if (col != null && s.mode != 'regicide') ...[
+            const SizedBox(width: 6),
+            Text(col.show(col.value(p.id)), style: const TextStyle(color: gold, fontSize: 12)),
+          ],
+          if (col?.bar case final bar?) ...[
+            const SizedBox(width: 6),
+            SizedBox(width: 34, height: 5, child: LinearProgressIndicator(value: bar(p.id).clamp(0.0, 1.0), color: const Color(0xFFE07060),
+                backgroundColor: const Color(0x55000000))),
+          ],
+        ])),
+      ),
+    ]));
+  }
+}
+
+// شريط الطور: النص، وأشرطة تقدم الجوانب في ملك الحي
+class _ModeBarBox extends StatelessWidget {
+  final ModeBar bar;
+  const _ModeBarBox(this.bar);
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+    decoration: BoxDecoration(color: bar.alarm ? const Color(0xE6501A14) : panel, borderRadius: BorderRadius.circular(9),
+        border: Border.all(color: bar.alarm ? danger : const Color(0x55E2B55A))),
+    child: Column(mainAxisSize: MainAxisSize.min, children: [
+      Text(bar.text, style: TextStyle(color: bar.alarm ? const Color(0xFFFFC0B0) : gold, fontSize: 14, fontWeight: FontWeight.w700)),
+      for (final (c, r, me) in bar.bars) Padding(padding: const EdgeInsets.only(top: 2), child: SizedBox(width: 150, height: me ? 5 : 3,
+          child: LinearProgressIndicator(value: r.clamp(0.0, 1.0), color: colorOf(c), backgroundColor: const Color(0x55000000)))),
+    ]),
+  );
+}
+
+// أسهم على حافة الشاشة نحو من هو خارجها (alerts.js وenemyLeaders)
+class _EdgeArrows extends CustomPainter {
+  final MatchScreenState v;
+  _EdgeArrows(this.v) : super(repaint: v.frame);
+  @override
+  void paint(Canvas canvas, Size size) {
+    final s = v.state;
+    if (s == null) return;
+    final targets = <(double, double, Color)>[
+      for (final (u, c) in enemyLeaders(s)) (u.x, u.y, colorOf(c)),
+      for (final a in s.alerts) if (a.kind == 'leader') (a.i.toDouble(), a.j.toDouble(), danger),
+    ];
+    const m = 26.0;
+    for (final (i, j, c) in targets) {
+      final p = v.toScreen(s, (i - j) * TILE_HALF_W, (i + j) * TILE_HALF_H, size);
+      if (p.dx > 0 && p.dy > 0 && p.dx < size.width && p.dy < size.height) continue;
+      final cx = size.width / 2, cy = size.height / 2, dx = p.dx - cx, dy = p.dy - cy;
+      final k = [(cx - m) / dx.abs(), (cy - m) / dy.abs()].reduce((a, b) => a < b ? a : b);
+      final x = cx + dx * k, y = cy + dy * k, an = Offset(dx, dy).direction;
+      canvas.save();
+      canvas.translate(x, y);
+      canvas.rotate(an);
+      final path = Path()..moveTo(12, 0)..lineTo(-8, -9)..lineTo(-4, 0)..lineTo(-8, 9)..close();
+      canvas.drawPath(path, Paint()..color = const Color(0xCC000000)..style = PaintingStyle.stroke..strokeWidth = 3);
+      canvas.drawPath(path, Paint()..color = c);
+      canvas.restore();
+    }
+  }
+  @override
+  bool shouldRepaint(_EdgeArrows old) => true;
 }
 
 // مجموعة تحكم: ضغطة مطوّلة تحفظ المحدد، ولمسة تحدده، ولمستان تنقلان الكاميرا إليه
@@ -276,7 +346,7 @@ class _End extends StatelessWidget {
       StatCard('أكبر عدد أحياء', '${r.maxDistricts}'),
       StatCard('أعداء قتلتهم', '${r.kills}'),
       StatCard('وحداتك التي ماتت', '${r.losses}'),
-      for (final (l, v) in endExtras(screen.state!)) StatCard(l, v),
+      for (final (l, v) in modeExtras(screen.state!)) StatCard(l, v),
     ])),
     const SizedBox(height: 8),
     WideButton('مباراة جديدة', screen.restart, primary: true),
@@ -284,12 +354,3 @@ class _End extends StatelessWidget {
   ])))));
 }
 
-// بطاقات النهاية الإضافية (modeExtras في hud.js): ما جُمع من النقاط والزعماء
-List<(String, String)> endExtras(MatchState s) {
-  final e = s.empire;
-  if (e == null || s.humanId < 0) return const [];
-  return [
-    ('نقاط جمعتها', '${e.earned[s.humanId].floor()}'),
-    if (e.bounties[s.humanId] > 0) ('زعماء أسقطتهم', '${e.bounties[s.humanId]}'),
-  ];
-}

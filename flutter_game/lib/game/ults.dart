@@ -334,7 +334,7 @@ void _fireArrows(MatchState state, Unit unit, J ult, Unit? target) {
   });
   for (var k = 0; k < arrows; k++) {
     final offset = (k - (arrows - 1) / 2) * COMBAT.d('multiShotSpread');
-    spawnProjectile(state, unit, k < targets.length ? targets[k] : target, _ultDamage(state, unit, ult.d('damage')), offset, ult.m('fire'), false);
+    spawnProjectile(state, unit, k < targets.length ? targets[k] : target, _ultDamage(state, unit, ult.d('damage')), offset, ult.mm('fire'), false);
   }
 }
 

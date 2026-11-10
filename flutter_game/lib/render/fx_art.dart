@@ -173,3 +173,29 @@ void drawUltFx(TriBatch b, Fx fx) {
     }
   }
 }
+
+// الراية المغروسة (drawZone في units.js): دائرة متقطعة بلون صاحبها وسارية براية تتموج
+void drawZone(TriBatch b, Zone zone, double time) {
+  final x = (zone.x - zone.y) * TILE_HALF_W, y = (zone.x + zone.y) * TILE_HALF_H;
+  final fade = (zone.until - time).clamp(0.0, 1.0);
+  if (fade <= 0) return;
+  final col = hexRgb(zone.color);
+  b.ring(x, y, zone.radius * TILE_HALF_W, zone.radius * TILE_HALF_H, 1.2, col, 0.85 * fade, 40, 0, 2 * math.pi, 1);
+  b.line(x, y, x, y - 30, 1.2, 0x5a4632, fade);
+  for (var k = 0; k < 5; k++) {
+    final y0 = y - 29 + k * 2.4, wv = math.sin(time * 4 + k * 0.9) * 0.9;
+    b.quad(x, y0, x - 13, y0 + wv, x - 13, y0 + 2.4 + wv, x, y0 + 2.4, k.isOdd ? 0xd9a83a : col, fade);
+  }
+  b.ellipse(x, y - 30, 1, 1, 0xc9a04a, fade, 6);
+}
+
+// تاج التلة في ملك الحي فوق علمها (ponytail: علامة بدل معلم التلة في الطبقة الثابتة، والمعلم مع التلميع في ن12)
+void drawHillCrown(TriBatch b, double x, double y, double time, bool blocked) {
+  final bob = math.sin(time * 2.2) * 0.8, yy = y - 34 + bob;
+  b.ring(x, y, 16, 8, 1.4, blocked ? 0xe07060 : 0xffd34d, 0.75, 32, 0, 2 * math.pi, 1);
+  b.quad(x - 6, yy, x + 6, yy, x + 6, yy - 3, x - 6, yy - 3, 0xf0c04a);
+  b.tri(x - 6, yy - 3, x - 4, yy - 8, x - 2, yy - 3, 0xf0c04a);
+  b.tri(x - 2, yy - 3, x, yy - 9.5, x + 2, yy - 3, 0xffd34d);
+  b.tri(x + 2, yy - 3, x + 4, yy - 8, x + 6, yy - 3, 0xf0c04a);
+  b.ellipse(x, yy - 1.5, 1, 1, 0xe05050, 1, 6);
+}

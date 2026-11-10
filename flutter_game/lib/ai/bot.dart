@@ -1,5 +1,5 @@
-// البوتات (js/ai/bot.js وjs/ai/tactics.js): السهل أفراد بلا فرق، والمتوسط فما فوق فرق (squads.dart) وتكتيك لكل اشتباك.
-// ما يخص الأطوار الأخرى (حماية الزعيم وملك الحي والوقت بالنقاط والصمود) مع الأطوار في ن7
+// البوتات (js/ai/bot.js وjs/ai/tactics.js): السهل أفراد بلا فرق، والمتوسط فما فوق فرق (squads.dart) وتكتيك لكل اشتباك،
+// وأولويات كل طور (حماية الزعيم وملك الحي والوقت بالنقاط والصمود)
 import 'dart:math' as math;
 
 import '../core/cfg.dart';
@@ -7,6 +7,7 @@ import '../core/fmath.dart';
 import '../data/js_config.dart';
 import '../game/combat.dart';
 import '../game/empire.dart';
+import '../game/modes.dart';
 import '../game/spatial.dart';
 import '../game/spawn.dart';
 import '../game/state.dart';
@@ -38,9 +39,23 @@ void updateBots(MatchState state) {
     if (state.botTimers[player.id] > 0) continue;
     state.botTimers[player.id] = config.d('decisionInterval');
     if (state.economy) empireEconomy(state, player);
-    _decide(state, player, config);
+    _decide(state, player, _modeConfig(state, config));
   }
   _updateTactics(state);
+}
+
+// أولويات البوت حسب الطور (القسم 9.5)
+J _modeConfig(MatchState state, J config) {
+  if (state.mode == 'points') {
+    final P = gameModes.m('points');
+    return {...config, 'expandGroup': math.min(config.d('groupSize'), P.d('botExpandGroup')),
+      'defenseFactor': config.d('defenseFactor') * P.d('botDefenseBoost'),
+      'attackArmy': (config.d('attackArmy') * P.d('botAttackArmyFactor')).ceil()};
+  }
+  if (state.mode == 'survival') {
+    return {...config, 'attackArmy': (config.d('attackArmy') * gameModes.m('survival').d('botAttackArmyFactor')).ceil()};
+  }
+  return config;
 }
 
 void _decide(MatchState state, Player player, J config) {
@@ -58,12 +73,18 @@ void _decide(MatchState state, Player player, J config) {
     return;
   }
   final pool = free;
+  if (state.mode == 'regicide') _regicidePlan(state, player, config, pool, units);
   if (config.b('retreatWounded')) _retreatWounded(state, player, config, pool, owned);
+  if (state.mode == 'king') _kingPlan(state, player, config, pool, units.length);
   if (levelOf(player).b('squads')) {
+    if (state.mode == 'survival') _helpAllies(state, player, config, pool);
+    if (isFinalMinute(state)) _strikeLeader(state, player, config, pool);
     decideSquads(state, player, config, pool, units, owned, strongestPlayer);
     return;
   }
   _defend(state, player, config, pool, owned);
+  if (state.mode == 'survival') _helpAllies(state, player, config, pool);
+  if (isFinalMinute(state)) _strikeLeader(state, player, config, pool);
   _expand(state, player, config, pool);
   _attack(state, player, config, pool, units.length);
 }
@@ -73,6 +94,8 @@ bool _taskStillValid(MatchState state, Unit unit) {
   if (task == null) return false;
   if (task.type == 'squad') return squadOf(state, unit) != null;
   if (task.type == 'regroup') return state.time < task.until;
+  if (task.type == 'hunt') return state.mode == 'regicide' && _alive(task.leader);
+  if (task.type == 'leader') return state.mode == 'regicide';
   if (task.districtId < 0 || task.districtId >= state.map.districts.length) return false;
   final district = state.map.districts[task.districtId];
   switch (task.type) {
@@ -80,8 +103,131 @@ bool _taskStillValid(MatchState state, Unit unit) {
     case 'expand': return district.owner == null;
     case 'attack': return district.owner != null && district.owner != unit.playerId && _enemyOfPlayer(state, unit, district.owner!);
     case 'heal': return unit.hp < unit.maxHp && district.owner == unit.playerId;
+    case 'hill': return state.mode == 'king';
+    case 'guard': return district.owner == unit.playerId;
+    case 'help':
+      return district.owner != null && district.owner != unit.playerId &&
+          !_enemyOfPlayer(state, unit, district.owner!) && _districtThreat(state, district, district.owner!) > 0;
   }
   return false;
+}
+
+// --- الصمود: أقرب مجموعة صغيرة إلى حي حليف تهاجمه الشرطة ---
+void _helpAllies(MatchState state, Player player, J config, List<Unit> pool) {
+  final threatened = [
+    for (final d in state.map.districts)
+      if (d.capture != null && d.owner != null && d.owner != player.id && !state.players[d.owner!].neutral && !isEnemyId(state, player.id, d.owner!))
+        (d, _districtThreat(state, d, d.owner!)),
+  ].where((e) => e.$2 > 0).toList();
+  stableSort<(District, int)>(threatened, (a, b) => b.$2 - a.$2);
+  final size = gameModes.m('survival').i('botHelpGroup');
+  for (final (district, _) in threatened) {
+    if (pool.length < size) return;
+    final group = _takeNearest(pool, district, size, config, false);
+    if (group.isNotEmpty) _sendGroup(state, group, district, config, 'help');
+  }
+}
+
+// --- حماية الزعيم: الزعيم خلف جيشه نحو حيه، والصيد حين يظهر زعيم عدو ضعيف أو معزول ---
+void _regicidePlan(MatchState state, Player player, J config, List<Unit> pool, List<Unit> units) {
+  final R = gameModes.m('regicide');
+  final leader = units.where((u) => u.champion).firstOrNull;
+  if (leader != null) {
+    final at = pool.indexOf(leader);
+    if (at >= 0) pool.removeAt(at);
+    if (leader.state != 'attacking') _guardLeader(state, player, leader, units, R);
+  }
+  _huntLeaders(state, player, config, pool, units, R);
+}
+
+void _guardLeader(MatchState state, Player player, Unit leader, List<Unit> units, J R) {
+  final ds = state.map.districts;
+  final home = player.homeDistrictId >= 0 && player.homeDistrictId < ds.length ? ds[player.homeDistrictId] : null;
+  final homeOwned = home != null && home.capture != null && home.owner == player.id;
+  final army = units.where((u) => u != leader).toList();
+  double ti, tj;
+  if (homeOwned && (leader.hp < leader.maxHp * 0.5 || army.isEmpty)) {
+    ti = home.capture!.i.toDouble(); tj = home.capture!.j.toDouble();
+  } else if (army.isNotEmpty) {
+    final c = _groupCenter(army);
+    final bi = homeOwned ? home.capture!.i.toDouble() : leader.x, bj = homeOwned ? home.capture!.j.toDouble() : leader.y;
+    final dx = bi - c.x, dy = bj - c.y, len = hypot(dx, dy);
+    final g = R.d('botGuardDistance');
+    ti = len > 0.01 ? c.x + dx / len * math.min(g, len) : c.x;
+    tj = len > 0.01 ? c.y + dy / len * math.min(g, len) : c.y;
+  } else {
+    return;
+  }
+  final last = leader.botTask?.point;
+  if (last != null && hypot(last.x - ti, last.y - tj) < 1.5) return;
+  leader.botTask = BotTask('leader', point: Point2(ti, tj));
+  commandMove(state, ti, tj, [leader], false);
+}
+
+void _huntLeaders(MatchState state, Player player, J config, List<Unit> pool, List<Unit> units, J R) {
+  if (pool.isEmpty || units.isEmpty) return;
+  for (final other in state.players) {
+    if (other.neutral || other.fallen || other.id == player.id) continue;
+    if (!isEnemyId(state, player.id, other.id)) continue;
+    final target = championOf(state, other.id);
+    if (target == null) continue;
+    if (!units.any((u) => hypot(u.x - target.x, u.y - target.y) <= R.d('botHuntRange'))) continue;
+    var guards = 0;
+    forEachNearby(state, target.x, target.y, 3, (u) { if (u != target && u.playerId == other.id && _alive(u)) guards++; });
+    final weak = target.hp < target.maxHp * R.d('botHuntHpRatio');
+    if (!weak && guards >= R.d('botHuntIsolation')) continue;
+    final group = _takeNearestAt(pool, target.x, target.y, math.max(config.i('groupSize'), 4), config, true);
+    if (group.isEmpty) return;
+    for (final unit in group) { unit.botTask = BotTask('hunt', leader: target); }
+    commandAttack(state, group, target);
+  }
+}
+
+// --- ملك الحي: حرس صغير للحي المنزلي، وأغلب الباقين إلى التلة بهجوم متحرك ---
+void _kingPlan(MatchState state, Player player, J config, List<Unit> pool, int armySize) {
+  final hill = hillOf(state);
+  if (hill == null || pool.isEmpty) return;
+  final K = gameModes.m('king');
+  final ds = state.map.districts;
+  final home = player.homeDistrictId >= 0 && player.homeDistrictId < ds.length ? ds[player.homeDistrictId] : null;
+  final wanted = math.min(K.d('botHomeGuard'), (armySize * K.d('botHomeGuardShare')).floorToDouble()).toInt();
+  final guarding = state.units.where((u) => u.playerId == player.id && u.state != 'dead' && u.botTask?.type == 'guard').length;
+  if (home != null && home.owner == player.id && guarding < wanted) {
+    final guards = _takeNearest(pool, home, wanted - guarding, config, false);
+    for (final unit in guards) { unit.botTask = BotTask('guard', districtId: home.id); }
+    if (guards.isNotEmpty) commandMove(state, home.capture!.i.toDouble(), home.capture!.j.toDouble(), guards, false);
+  }
+  final count = (pool.length * K.d('botHillShare')).ceil();
+  final group = _takeNearest(pool, hill, count, config, true);
+  if (group.isEmpty) return;
+  for (final unit in group) { unit.botTask = BotTask('hill', districtId: hill.id); }
+  commandAttackMove(state, hill.capture!.i.toDouble(), hill.capture!.j.toDouble(), group, false);
+}
+
+// --- الدقيقة الأخيرة في الوقت بالنقاط: أضعف حي يملكه المتصدر (أقل مدافعين) ---
+void _strikeLeader(MatchState state, Player player, J config, List<Unit> pool) {
+  if (pool.isEmpty) return;
+  final mySide = sideKey(player);
+  final sides = sideTotals(state).where((s) => s.alive && s.key != mySide).toList();
+  stableSort<SideTotal>(sides, (a, b) => byNum(b.points, a.points));
+  if (sides.isEmpty) return;
+  final ids = {for (final p in sides[0].players) p.id};
+  District? best;
+  var fewest = double.infinity;
+  for (final district in state.map.districts) {
+    if (district.capture == null || !ids.contains(district.owner)) continue;
+    var defenders = 0;
+    forEachNearby(state, district.capture!.i.toDouble(), district.capture!.j.toDouble(), MAP_GEN.d('captureRadius') * 2, (unit) {
+      if (ids.contains(unit.playerId) && _alive(unit)) defenders++;
+    });
+    if (defenders < fewest) { fewest = defenders.toDouble(); best = district; }
+  }
+  if (best == null) return;
+  while (pool.isNotEmpty) {
+    final group = _takeNearest(pool, best, config.i('groupSize'), config, true);
+    if (group.isEmpty) break;
+    _sendGroup(state, group, best, config, 'attack');
+  }
 }
 
 int _districtThreat(MatchState state, District district, int playerId) {
@@ -173,9 +319,12 @@ void _retreatWounded(MatchState state, Player player, J config, List<Unit> pool,
   }
 }
 
-List<Unit> _takeNearest(List<Unit> pool, District district, int count, J config, bool isAttack) {
+List<Unit> _takeNearest(List<Unit> pool, District district, int count, J config, bool isAttack) =>
+    _takeNearestAt(pool, district.capture!.i.toDouble(), district.capture!.j.toDouble(), count, config, isAttack);
+
+List<Unit> _takeNearestAt(List<Unit> pool, double ci, double cj, int count, J config, bool isAttack) {
   final candidates = pool.where((u) => !(isAttack && truthy(u.stats['aura']) && count < config.d('bossMinGroup'))).toList();
-  stableSort<Unit>(candidates, (a, b) => byNum(_distTo(a, district), _distTo(b, district)));
+  stableSort<Unit>(candidates, (a, b) => byNum(hypot(a.x - ci, a.y - cj), hypot(b.x - ci, b.y - cj)));
   final group = candidates.take(count).toList();
   for (final unit in group) { pool.removeAt(pool.indexOf(unit)); }
   return group;

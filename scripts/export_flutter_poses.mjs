@@ -57,21 +57,34 @@ ${out.join('\n')}
 `;
 writeFileSync(repo + 'flutter_game/lib/data/poses.dart', body);
 
-// أجزاء صور الشخصيات (js/render/unitSpritesData.js من scripts/slice_units.py): الكلاسيكية الأربع والشرطة (والأمم في ن7)
+// أجزاء صور الشخصيات (js/render/unitSpritesData.js من scripts/slice_units.py): الكلاسيكية الأربع والأمم الـ15 والشرطة،
+// ومقاسات مظاهر الأمم من BODIES (nationArt.js) لكل مفتاح: [sx, sy, عرض الخط, طول السلاح, باليدين, عرض الظل, زينة القدمين]
+globalThis.document ??= { createElement: () => ({ getContext: () => ({}) }) };
 const { SPRITES } = await import(repo + 'js/render/unitSpritesData.js');
+const { BODIES } = await import(repo + 'js/render/bodies.js');
+for (const f of ['Arab', 'Asia', 'Europe', 'Africa', 'Latin']) await import(repo + `js/render/nations${f}.js`);
 const dart = (v) => Array.isArray(v) ? '[' + v.map(dart).join(', ') + ']'
-  : v && typeof v === 'object' ? '{' + Object.entries(v).map(([k, x]) => `'${k}': ${dart(x)}`).join(', ') + '}'
+  : v && typeof v === 'object' ? '<String, Object?>{' + Object.entries(v).map(([k, x]) => `'${k}': ${dart(x)}`).join(', ') + '}'
   : typeof v === 'string' ? `'${v}'` : String(v);
-const gangs = {};
-for (const g of ['crows', 'hammers', 'vipers', 'scorpions', 'police']) {
-  const G = SPRITES.gangs[g];
-  gangs[g] = { src: G.src, h: G.h, sat: G.sat, val: G.val, units: G.units };
+const gangs = {}, bodies = {};
+const ground = { heroRing: 'r', auraRing: 'boss', auraHealRings: 'medic' };
+for (const [g, G] of Object.entries(SPRITES.gangs)) {
+  gangs[g] = { src: G.src.replace(/^\.\.\//, ''), h: G.h, sat: G.sat, val: G.val, units: G.units };
+  for (const key of Object.keys(G.units)) {
+    if (!G.units[key]._) continue;
+    for (const k of [key, key + '_away']) {
+      const b = BODIES[k];
+      if (b) bodies[k] = [b.sx || 1, b.sy || 1, b.lw || 3, b.wlen || 4, !!b.twoH, b.shadowW || 0, (b.ground && ground[b.ground.name]) || ''];
+    }
+  }
 }
-writeFileSync(repo + 'flutter_game/lib/data/unit_sprites.dart', `// مولّد بـ scripts/export_flutter_poses.mjs من js/render/unitSpritesData.js: لا تعدّله باليد
+writeFileSync(repo + 'flutter_game/lib/data/unit_sprites.dart', `// مولّد بـ scripts/export_flutter_poses.mjs من js/render/unitSpritesData.js وBODIES: لا تعدّله باليد
 // كل جزء: [x, y, عرض, ارتفاع, مفصلX, مفصلY, زاوية محوره في الصورة، ثم للسلاح: مقياسه, بُعد طرفه, مؤخرته] (والإزار: بُعد حاشيته)
+// و'_' في وحدات الأمم والشرطة: طريقة حمل كل قطعة (uses) وعدد السهام والنار والسلاح الثاني
 // ignore_for_file: constant_identifier_names
 const double SPRITE_UPP = ${SPRITES.upp};
 const Map<String, Object?> SPRITE_GANGS = ${dart(gangs)};
+const Map<String, Object?> NATION_BODIES = ${dart(bodies)};
 `);
 console.log('unit_sprites.dart written');
 console.log('poses.dart:', poses.length, 'poses');

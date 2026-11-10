@@ -35,7 +35,7 @@ Widget? _testMatch() {
     'maxUnits': 100, 'ff': double.tryParse(q['ff'] ?? '') ?? 0, 'watch': q['watch'] == '1', 'zoom': double.tryParse(q['zoom'] ?? ''),
     'players': [
       for (var k = 0; k <= bots; k++)
-        {'name': k == 0 ? 'أنت' : 'بوت $k', 'gang': q['side$k'] ?? gangs[k % 4], 'color': colors[k], 'isHuman': k == 0 && q['spectate'] != '1',
+        {'name': k == 0 ? 'أنت' : 'بوت $k', ...resolveSide(q['side$k'] ?? gangs[k % 4]), 'color': colors[k], 'isHuman': k == 0 && q['spectate'] != '1',
           'team': 0, 'difficulty': q['level'] ?? 'medium'},
     ],
   });

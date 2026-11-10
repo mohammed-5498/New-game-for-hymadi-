@@ -12,6 +12,7 @@ import '../data/js_config.dart';
 import '../game/capture.dart';
 import '../game/combat.dart';
 import '../game/match.dart';
+import '../game/modes.dart';
 import '../game/state.dart';
 import '../game/save.dart';
 import '../game/units.dart';
@@ -112,7 +113,10 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     setState(() => loadProgress = 0.3);
     final a = await CityArt.load(s.map.city);
     if (mounted) setState(() => loadProgress = 0.7);
-    final pairs = [for (final p in s.players) if (!p.passive) (p.gang, p.gang == 'police' ? UNIT_ART.s('policeColor') : p.color)];
+    final pairs = [
+      for (final p in s.players) if (!p.passive) (spriteGang(p.gang, p.nation), p.gang == 'police' ? UNIT_ART.s('policeColor') : p.color),
+      if (s.mode == 'survival') ('police', gameModes.m('survival').m('riot').s('color')),   // وحدات التدخل بلونها
+    ];
     final u = await buildUnitAtlas(pairs);
     batch.whiteU = 1.5; batch.whiteV = 1.5;
     if (!mounted) return;
@@ -473,10 +477,15 @@ class _MatchPainter extends CustomPainter {
     layer.paint(canvas, art.image, c.y - halfH, c.y + halfH, onGround: () {
       _borders(b, s);
       for (final f in s.fires) { drawFire(b, f, time); }
+      for (final z in s.zones) { drawZone(b, z, time); }
       for (final u in s.units) { if (u.state != 'dead' && truthy(u.stats['aura']) && u.playerId == s.humanId) drawAura(b, u, alpha); }
       b.flush(canvas, img);
     }, afterRow: (d) {
-      for (final fl in _flagsAt(s, d)) { _flag(b, s, fl, time); }
+      for (final fl in _flagsAt(s, d)) {
+        _flag(b, s, fl, time);
+        if (fl.hill) drawHillCrown(b, (fl.capture!.i - fl.capture!.j) * TILE_HALF_W, (fl.capture!.i + fl.capture!.j) * TILE_HALF_H, time,
+            (s.modeState as ModeState?)?.blocked ?? false);
+      }
       final row = _rows[d];
       if (row.isNotEmpty) {
         row.sort((p, q) => (p.x + p.y).compareTo(q.x + q.y));

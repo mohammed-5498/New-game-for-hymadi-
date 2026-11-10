@@ -9,6 +9,7 @@ import '../core/fmath.dart';
 import '../map/pathfinding.dart';
 import 'empire.dart';
 import 'match.dart';
+import 'modes.dart';
 import 'police.dart';
 import 'realism.dart';
 import 'state.dart';
@@ -117,12 +118,13 @@ Map<String, Object?> _unit(Unit u) => {
   'flurry': u.flurry == null ? null : [u.flurry!.target?.id, u.flurry!.left, u.flurry!.damage, u.flurry!.interval, u.flurry!.next, u.flurry!.radius],
   'phases': u.cPhases == null ? null : [u.cPhases!.wind, u.cPhases!.strike, u.cPhases!.hold, u.cPhases!.rec, u.cPhases!.total],
   'traits': [u.traits.aggr, u.traits.skill, u.traits.react, u.traits.spd, u.traits.size],
-  'task': u.botTask == null ? null : [u.botTask!.type, u.botTask!.squadId, u.botTask!.districtId, u.botTask!.until],
+  'task': u.botTask == null ? null : [u.botTask!.type, u.botTask!.squadId, u.botTask!.districtId, u.botTask!.until,
+    u.botTask!.leader?.id, u.botTask!.point?.x, u.botTask!.point?.y],
 };
 
 // --- الحفظ ---
 // ارفعه إذا تغيّر شكل الحفظ (كـ UI.matchVersion في اللعبة الحالية)
-const saveVersion = 1;
+const saveVersion = 2;
 String encodeMatch(MatchState s) {
   final e = s.empire;
   return jsonEncode({
@@ -155,6 +157,7 @@ String encodeMatch(MatchState s) {
       'incomeMul': e.incomeMul,
       'memo': {for (final m in botMemos(e).entries) '${m.key}': [m.value.turn, m.value.units, m.value.tech]},
     },
+    'mode': _modeJson(modeOf(s)),
     'brains': {for (final b in s.botBrains.entries) '${b.key}': {
       'n': b.value.nextId, 'r': b.value.rallyId,
       's': [for (final q in b.value.squads) {'id': q.id, 'ty': q.type, 'u': q.units, 't': q.targetId, 'p': q.power, 'ph': q.phase,
@@ -234,8 +237,7 @@ MatchState decodeMatch(String text) {
     u.cPhases = ph == null ? null : Phases(_n(ph[0])!, _n(ph[1])!, _n(ph[2])!, _n(ph[3])!, _n(ph[4])!);
     final t = x['traits'] as List;
     restoreRealism(s, u, Traits(_n(t[0])!, _n(t[1])!, _n(t[2])!, _n(t[3])!, _n(t[4])!));
-    final task = x['task'] as List?;
-    u.botTask = task == null ? null : BotTask(task[0] as String, squadId: task[1] as int, districtId: task[2] as int, until: _n(task[3])!);
+    if (u.riot) { final st = u.style; u.style = FightStyleInfo(st.turn, st.flank, st.moves, true, st.primary); }
     byId[u.id] = u;
     raw[u] = x;
     s.units.add(u);
@@ -252,6 +254,9 @@ MatchState decodeMatch(String text) {
     }
     final pu = x['pendingUlt'] as Map?;
     if (pu != null && byId[pu['t']] != null) u.pendingUlt = PendingUlt(byId[pu['t']]!, _n(pu['a'])!);
+    final task = x['task'] as List?;
+    u.botTask = task == null ? null : BotTask(task[0] as String, squadId: task[1] as int, districtId: task[2] as int, until: _n(task[3])!,
+        leader: task.length > 4 ? byId[task[4]] : null, point: task.length > 6 && task[5] != null ? Point2(_n(task[5])!, _n(task[6])!) : null);
     final f = x['flurry'] as List?;
     if (f != null) u.flurry = Flurry(byId[f[0]], f[1] as int, _n(f[2])!, _n(f[3])!, _n(f[4])!, _n(f[5])!);
   }
@@ -289,6 +294,19 @@ MatchState decodeMatch(String text) {
       ..power = _n(q['p'])!..phase = (q['ph'] as String?)..stage = _p(q['st'])..stagedAt = _n(q['sa'])!];
     s.botBrains[b.playerId] = b;
   });
+  _modeBack(modeOf(s), (j['mode'] as Map).cast<String, Object?>());
   s.mapVersion++;
   return s;
+}
+
+Map<String, Object?> _modeJson(ModeState m) => {
+  'du': m.duration, 'fa': m.finalAnnounced, 'hi': m.hillId, 'ta': m.target, 'he': m.held, 'wa': m.warned.toList(), 'bl': m.blocked,
+  'lk': m.leaderKills, 'lh': m.lastHp, 'aa': m.alertAt, 'lv': m.level, 'wv': m.wave, 'nw': m.nextWaveAt, 'rt': m.retargetAt,
+};
+
+void _modeBack(ModeState m, Map<String, Object?> j) {
+  m..duration = _n(j['du'])!..finalAnnounced = j['fa'] == true..hillId = j['hi'] as int..target = _n(j['ta'])!
+    ..held = [for (final v in j['he'] as List) _n(v)!]..warned = {for (final v in j['wa'] as List) v as String}..blocked = j['bl'] == true
+    ..leaderKills = j['lk'] as int..lastHp = _n(j['lh'])..alertAt = _n(j['aa'])!..level = j['lv'] as String..wave = j['wv'] as int
+    ..nextWaveAt = _n(j['nw'])!..retargetAt = _n(j['rt'])!;
 }

@@ -48,9 +48,9 @@ class _Desc {
   final bool twoH, shoots, weapon;
   final String ground;
   final _Hook held;
-  final _Hook? back, front;
+  final _Hook? back, front, mid;
   _Desc(this.key, this.gang, this.parts, this.size, this.lw, this.wlen, this.shadowW, this.tipLen, this.butt, this.twoH, this.shoots,
-      this.weapon, this.ground, this.held, this.back, this.front);
+      this.weapon, this.ground, this.held, this.back, this.front, [this.mid]);
 }
 
 // سياق رسم وحدة واحدة: الدفعة وأجزاؤها ومفاصلها
@@ -130,36 +130,109 @@ final _art = <String, (_Hook, _Hook?, _Hook?, bool, bool)>{   // held, back, fro
       (k, p) { if (p.blocking) _shieldAt(k, k.part('shield'), k.hbX + 0.8, k.hbY - 3.5); }, false, false),
 };
 
+// --- الأمم والشرطة: طريقة حمل كل قطعة من بيانات الأداة (USES في unitSprites.js) ---
+void _still(_Ctx k, List<double> w, double x, double y) => _part(k, w, x, y, w[6], w[7]);
+_Hook _inBack(String n) => (k, p) { final w = k.part(n); _part(k, w, k.hbX, k.hbY, _angleOf(k.sbX, k.sbY, k.hbX, k.hbY) - 0.9, w[7]); };
+final _saudiBow = _bow(3, false);
+J? _saudiSniper;
+
+// (held, back, front, mid) من uses
+(_Hook, _Hook?, _Hook?, _Hook?) _nationArt(String key, J a, bool away) {
+  final held = <_Hook>[], back = <_Hook>[], front = <_Hook>[], mid = <_Hook>[];
+  for (final e in a.m('uses').entries) {
+    final n = e.key, use = e.value as String;
+    if (away && use == 'falcon') continue;
+    switch (use) {
+      case 'bow': held.add(_bow(a.has('arrows') ? a.i('arrows') : 1, a.b('fire'), n));
+      case 'hand':
+        held.add(_inHand(n));
+        if (a.b('pair')) back.add(_inBack(n));
+      case 'pair': back.add(_inBack(n));
+      case 'shield': front.add((k, p) => _shieldAt(k, k.part(n), k.hfX + 1.2, k.hfY));
+      case 'side':
+        back.add((k, p) { if (!p.blocking) _shieldAt(k, k.part(n), k.hbX + 0.8, k.hbY - 3.5); });
+        front.add((k, p) { if (p.blocking) _shieldAt(k, k.part(n), k.hbX + 0.8, k.hbY - 3.5); });
+      case 'hang': held.add((k, p) => _still(k, k.part(n), k.hfX, k.hfY));
+      case 'upright': held.add((k, p) => _still(k, k.part(n), k.hfX, k.hfY - 0.3));
+      case 'fist': front.add((k, p) { final w = k.part(n); _part(k, w, k.hfX, k.hfY, _angleOf(k.efX, k.efY, k.hfX, k.hfY), w[7]); });
+      case 'falcon': front.add((k, p) => _still(k, k.part(n), k.hfX, k.hfY));
+      case 'back': back.add((k, p) => _quiver(k, p, n));
+      case 'belt': mid.add((k, p) { final (rx, ry) = _rot(2.2, -0.6, k.pl); _still(k, k.part(n), k.hipX + rx, k.hipY + ry); });
+    }
+  }
+  if (key == 'saudi_champion') {
+    // الصقّار: القوس في يده أثناء الرمي فقط (قوس القوّاس من الأطلس نفسه)
+    _saudiSniper ??= (SPRITE_GANGS['saudi'] as J).m('units').m('saudi_sniper');
+    final bow = [for (final x in _saudiSniper!.l('bow')) (x as num).toDouble()];
+    held.add((k, p) {
+      if (p.pull.isNaN) return;
+      final had = k.parts['bow'];
+      k.parts['bow'] = bow;
+      _saudiBow(k, p);
+      if (had == null) { k.parts.remove('bow'); } else { k.parts['bow'] = had; }
+    });
+  }
+  _Hook? all(List<_Hook> l) => l.isEmpty ? null : l.length == 1 ? l[0] : (k, p) { for (final f in l) { f(k, p); } };
+  return (all(held) ?? (k, p) {}, all(back), all(front), all(mid));
+}
+
 final _descs = <String, _Desc?>{};
 _Desc? describe(String key) {
   if (_descs.containsKey(key)) return _descs[key];
+  final away = key.endsWith('_away'), base = away ? key.substring(0, key.length - 5) : key;
   String? gang;
   J? parts;
   for (final e in SPRITE_GANGS.entries) {
     final units = (e.value as J).m('units');
-    if (units.has(key)) { gang = e.key; parts = units.m(key); break; }
+    if (units.has(base)) { gang = e.key; parts = units.m(base); break; }
   }
-  final body = _bodies[key], art = _art[key] ?? (key.startsWith('police') ? _art['police_common'] : null);
-  if (gang == null || parts == null || body == null || art == null) return _descs[key] = null;
-  List<num>? weapon;
-  for (final v in parts.values) {
-    if (v is List && v.length > 8 && (v[8] as num) > 0) { weapon = v.cast<num>(); break; }
-  }
-  final (lw, wlen, twoH, shadowW, ground) = body;
+  if (gang == null || parts == null) return _descs[key] = null;
   // الأجزاء أرقاماً مرة واحدة (لا قوائم جديدة في كل إطار)
   final pt = <String, List<double>>{
     for (final e in parts.entries) if (e.value is List) e.key: [for (final x in e.value as List) (x as num).toDouble()]
   };
+  final a = parts.mm('_');
+  if (a != null && !_bodies.containsKey(base)) {
+    // الأمم: الحجم كأكبر بُعدي مظهر الكود، وطرف السلاح من القطعة المحمولة باليد
+    final nb = (NATION_BODIES[key] ?? NATION_BODIES[base]) as List?;
+    if (nb == null) return _descs[key] = null;
+    final (held, back, front, mid) = _nationArt(base, a, away);
+    String? hand;
+    for (final e in a.m('uses').entries) { if (e.value == 'hand') { hand = e.key; break; } }
+    final w = hand != null ? pt[hand] : null;
+    final size = math.max((nb[0] as num).toDouble(), (nb[1] as num).toDouble());
+    return _descs[key] = _Desc(key, gang, pt, size, (nb[2] as num).toDouble(), (nb[3] as num).toDouble(), (nb[5] as num).toDouble(),
+        w != null && w.length > 8 ? w[8] : 0, w != null && w.length > 9 && w[9] > 0 ? w[9] : 0, a.b('twoH'), false, true,
+        nb[6] as String, held, back, front, mid);
+  }
+  final body = _bodies[key], art = _art[key] ?? (key.startsWith('police') ? _art['police_common'] : null);
+  if (body == null || art == null) return _descs[key] = null;
+  List<double>? weapon;
+  for (final v in pt.values) {
+    if (v.length > 8 && v[8] > 0) { weapon = v; break; }
+  }
+  final (lw, wlen, twoH, shadowW, ground) = body;
   return _descs[key] = _Desc(key, gang, pt, key == 'hammer_hero' ? 1.1 : 1, lw, wlen, shadowW,
-      weapon != null ? weapon[8].toDouble() : 0, weapon != null && weapon[9] > 0 ? weapon[9].toDouble() : 0,
+      weapon != null ? weapon[8] : 0, weapon != null && weapon[9] > 0 ? weapon[9] : 0,
       art.$4 || twoH, art.$5, true, ground, art.$1, art.$2, art.$3);
 }
 
-String artKey(Unit unit) {
+String artKey(Unit unit, [double time = 0]) {
   final kind = unit.champion ? 'champion' : (unit.lookKind ?? unit.hero ?? 'common');
+  final nation = unit.nation;
+  if (nation != null) {
+    // nationArtKey: الصقّار وصقره في انقضاضه (unit.awayUntil)، وما لا صورة له بنوعه العادي
+    final key = '${nation}_$kind';
+    if (unit.awayUntil > time && NATION_BODIES.containsKey('${key}_away')) return '${key}_away';
+    if (describe(key) != null) return key;
+    return '${nation}_common';
+  }
   final gang = ART_KEYS[unit.gang] ?? ART_KEYS['crows']!;
   return gang[kind] ?? gang['common']!;
 }
+
+// أطلس كل وحدة: أمتها، وإلا عصابتها
+String spriteGang(String gang, String? nation) => nation != null && SPRITE_GANGS.containsKey(nation) ? nation : gang;
 
 double artScale(Unit unit) => _ART.d('scale') * (unit.champion ? _ART.d('championScale') : unit.hero != null ? _ART.d('heroScale') : 1) *
     unit.traits.size * (unit.artScale ?? 1);
@@ -329,6 +402,7 @@ void _spriteBody(_Ctx k, Pose p, _Desc ud) {
   ud.back?.call(k, p);
   if (ud.parts.containsKey('skirt')) _skirt(k, p, ud);
   _part(k, k.part('torso'), hx, hy, _angleOf(hx, hy, cx, cy));
+  ud.mid?.call(k, p);
   final head = k.part('head');
   _part(k, head, headX, headY, ha + head[6]);
   final (fjx, fjy, fex, fey) = _ik2(k.sfX, k.sfY, p[FHX], p[FHY], 3.7, 3.7);
@@ -554,7 +628,7 @@ void drawUnit(TriBatch b, UnitAtlas atlas, Unit unit, double alpha, double zoom,
     b.rect(x - size / 2, y - size, size, size, _hexCache[color] ??= _hex(color));
     return;
   }
-  final key = artKey(unit), scale = artScale(unit), walking = isWalking(unit);
+  final key = artKey(unit, time), scale = artScale(unit), walking = isWalking(unit);
   final full = unit.lod == 'full';
   final sub = alpha * TICK_SEC;
   if (!dead) {
