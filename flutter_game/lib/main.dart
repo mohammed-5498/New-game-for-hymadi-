@@ -7,6 +7,7 @@ import 'core/cfg.dart';
 import 'data/js_config.dart';
 import 'ui/match_screen.dart';
 import 'ui/menus.dart';
+import 'ui/migrate.dart';
 import 'ui/prefs.dart';
 import 'ui/widgets.dart';
 
@@ -15,6 +16,7 @@ Future<void> main() async {
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
   SystemChrome.setPreferredOrientations([DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]);
   await Prefs.init();
+  await migrateOldSave();     // أول تشغيل فوق اللعبة القديمة: إحصائياتها وتقدمها وإعداداتها (ui/migrate.dart)
   Settings.load();
   await GameSound.init();
   GameSound.intro();

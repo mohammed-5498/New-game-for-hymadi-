@@ -18,6 +18,7 @@ import '../game/match.dart';
 import '../game/state.dart';
 import '../net/session.dart';
 import 'lan_screen.dart';
+import 'migrate.dart' show migrated;
 import 'match_screen.dart';
 import 'prefs.dart';
 import 'story_screen.dart';
@@ -63,6 +64,7 @@ class SetupModel {
     if (CITIES.l('order').contains(j['city']) || j['city'] == 'random' || j['city'] == 'host') m.city = j['city'] as String;
     if (MAP_SIZES.has('${j['mapSize']}')) m.mapSize = j['mapSize'] as String;
     if (UNITS.l('maxUnitsChoices').contains(j['maxUnits'])) m.maxUnits = j['maxUnits'] as int;
+    if (WEATHER_KEYS.contains(j['weather']) || j['weather'] == 'random') m.weather = j['weather'] as String;
     final sl = j['slots'];
     if (sl is List && sl.length == _maxSlots) {
       for (var k = 0; k < _maxSlots; k++) {
@@ -80,7 +82,7 @@ class SetupModel {
   }
 
   void save() => Prefs.write(UI.s('setupKey'), {'mode': mode, 'pointsMinutes': pointsMinutes, 'kingMinutes': kingMinutes, 'allies': allies,
-    'survivalLevel': survivalLevel, 'city': city, 'mapSize': mapSize, 'maxUnits': maxUnits, 'slots': [for (final s in slots) s.toJson()]});
+    'survivalLevel': survivalLevel, 'city': city, 'mapSize': mapSize, 'maxUnits': maxUnits, 'weather': weather, 'slots': [for (final s in slots) s.toJson()]});
 
   int get limit => MAP_SIZES.m(mapSize).i('maxPlayers');
   bool get survival => mode == 'survival';
@@ -116,7 +118,8 @@ class SetupModel {
       'mapSize': mapSize,
       // مدينة المضيف: مدينة أمة اللاعب الأول بعد حسم العشوائي، أو عشوائي للعصابة الكلاسيكية
       'city': city == 'host' ? hostCity(players[0]['nation'] as String?) : city,
-      'maxUnits': maxUnits, 'weather': weather, 'players': players,
+      'maxUnits': maxUnits, 'players': players,
+      'weather': weather == 'random' ? WEATHER_KEYS[math.Random().nextInt(WEATHER_KEYS.length)] : weather,
     };
   }
 }
@@ -198,6 +201,7 @@ class _MainMenuState extends State<MainMenu> {
     Center(child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
       const Text('مدينة العصابات', style: TextStyle(color: gold, fontSize: 30, fontWeight: FontWeight.w900,
           shadows: [Shadow(blurRadius: 8, color: Colors.black)])),
+      if (migrated > 0) const Text('نُقلت إحصائياتك وتقدمك وإعداداتك من النسخة السابقة', style: TextStyle(color: dim, fontSize: 12.5)),
       const SizedBox(height: 6),
       if (saved != null) WideButton('متابعة المباراة', () => _go(const MatchScreen(resume: true)), primary: true,
           note: '${cityShort('${saved['city']}')} • ${clock((saved['time'] as num).toDouble())}'),
@@ -533,7 +537,11 @@ class _SetupScreenState extends State<SetupScreen> {
             PickTile(title: 'الخريطة', value: size.s('name'), note: 'حتى ${size.i('maxPlayers')} لاعبين', icon: Icons.map, width: 96,
                 onTap: () => _choose<String>('حجم الخريطة', ['small', 'medium', 'large'], (k) => MAP_SIZES.m(k).s('name'), m.mapSize, (v) => m.mapSize = v)),
             const SizedBox(width: 6),
-            PickTile(title: 'الطقس', value: WEATHER.m('day').s('name'), note: 'البقية لاحقاً', icon: Icons.wb_sunny, width: 96),
+            PickTile(title: 'الطقس', value: m.weather == 'random' ? 'عشوائي' : WEATHER.m(m.weather).s('name'),
+                note: m.weather == 'night' ? 'رؤية أقل' : m.weather == 'snow' ? 'مشي أبطأ' : m.weather == 'rain' ? 'رمي أضعف' : null,
+                icon: m.weather == 'night' ? Icons.nightlight : m.weather == 'snow' ? Icons.ac_unit : m.weather == 'rain' ? Icons.water_drop : Icons.wb_sunny,
+                width: 96, onTap: () => _choose<String>('الطقس', [for (final w in WEATHER_KEYS) w as String, 'random'],
+                    (k) => k == 'random' ? 'عشوائي' : WEATHER.m(k).s('name'), m.weather, (v) => m.weather = v)),
             const SizedBox(width: 6),
             PickTile(title: 'الحد', value: '${m.maxUnits} وحدة', note: 'لكل لاعب', icon: Icons.groups, width: 96,
                 onTap: () => _choose<int>('الحد الأقصى للوحدات', [for (final v in UNITS.l('maxUnitsChoices')) v as int], (v) => '$v', m.maxUnits, (v) => m.maxUnits = v)),

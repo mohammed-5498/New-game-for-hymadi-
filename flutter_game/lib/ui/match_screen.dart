@@ -28,6 +28,7 @@ import '../render/city_layer.dart';
 import '../render/fx_art.dart';
 import '../render/unit_art.dart';
 import '../render/unit_atlas.dart';
+import '../render/weather_art.dart';
 import 'hud.dart';
 import 'menus.dart';
 import 'prefs.dart';
@@ -71,6 +72,8 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
   Unit? _lastTapUnit;
   int _lastTapAt = 0, _lastDistrictTapAt = 0, _lastDistrictTap = -1;
   final batch = TriBatch();
+  final weather = WeatherFx();
+  double frameDt = 0;                 // زمن الإطار للطقس (صفر في الإيقاف)
 
   @override
   void initState() {
@@ -138,6 +141,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
       if (s.mode == 'survival') ('police', gameModes.m('survival').m('riot').s('color')),   // وحدات التدخل بلونها
     ];
     final u = await buildUnitAtlas(pairs);
+    await WeatherFx.init();
     batch.whiteU = 1.5; batch.whiteV = 1.5;
     if (!mounted) return;
     final z = (settings['zoom'] as num?)?.toDouble();
@@ -151,7 +155,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
       state = s;
       art = a;
       units = u;
-      layer = CityLayer(s.map, a);
+      layer = CityLayer(s.map, a, s.weather);
       _mapVersion = s.mapVersion;
     });
     GameSound.matchSilence(false, s.map.city);
@@ -164,7 +168,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     if (e == 'resynced' && Lan.L != null && state != null) {
       final s = Lan.L!.state;
       layer?.dispose();
-      setState(() { state = s; layer = CityLayer(s.map, art!); _mapVersion = s.mapVersion; });
+      setState(() { state = s; layer = CityLayer(s.map, art!, s.weather); _mapVersion = s.mapVersion; });
     } else if ((e == 'back' || e == 'left') && lanRole == 'client') {
       Navigator.of(context).pop();
     }
@@ -299,6 +303,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     if (s == null) return;
     var dt = _last == Duration.zero ? 0.0 : (now - _last).inMicroseconds / 1e6;
     _last = now;
+    frameDt = paused && s.lanRole != 'client' ? 0 : math.min(dt, 0.1);
     if (s.lanRole != null && Lan.L != null) {
       // اللعب المحلي: التحديثات حسب أدوار المضيف، والمضيف يوقفها عند الجميع
       if (s.lanRole == 'host') s.paused = paused;
@@ -321,7 +326,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     if (s.mapVersion != _mapVersion) {
       _mapVersion = s.mapVersion;
       layer?.dispose();
-      layer = CityLayer(s.map, art!);
+      layer = CityLayer(s.map, art!, s.weather);
     }
     if (!_shouldDraw(now, s)) return;
     _retint(s);
@@ -590,6 +595,7 @@ class _MatchPainter extends CustomPainter {
       for (final f in s.fires) { drawFire(b, f, time); }
       for (final z in s.zones) { drawZone(b, z, time); }
       if (s.feature != null) drawFeatureGround(b, s, time);
+      drawFeatureHalos(b, s, time);
       for (final u in s.units) { if (u.state != 'dead' && truthy(u.stats['aura']) && u.playerId == s.humanId) drawAura(b, u, alpha); }
       b.flush(canvas, img);
     }, afterRow: (d) {
@@ -601,7 +607,13 @@ class _MatchPainter extends CustomPainter {
       final row = _rows[d];
       if (row.isNotEmpty) {
         row.sort((p, q) => (p.x + p.y).compareTo(q.x + q.y));
-        for (final u in row) { drawUnit(b, atlas, u, alpha, c.z, time, crowded); }
+        for (final u in row) {
+          drawUnit(b, atlas, u, alpha, c.z, time, crowded);
+          if (u.cargo && u.state != 'dead') {
+            final i = u.prevX + (u.x - u.prevX) * alpha, j = u.prevY + (u.y - u.prevY) * alpha;
+            drawCargo(b, (i - j) * TILE_HALF_W, (i + j) * TILE_HALF_H);
+          }
+        }
       }
       b.flush(canvas, img);
     });
@@ -622,6 +634,7 @@ class _MatchPainter extends CustomPainter {
     b.flush(canvas, img);
     if (Settings.pops) _drawPops(canvas, s);
     canvas.restore();
+    v.weather.paint(canvas, size, s, layer.lights, v.frameDt, Settings.gfx);   // الطقس والإضاءة فوق المشهد
     final bs = v.boxStart, be = v.boxEnd;
     if (bs != null && be != null) {
       final r = Rect.fromPoints(bs, be);

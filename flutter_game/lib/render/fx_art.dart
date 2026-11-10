@@ -201,7 +201,7 @@ void drawHillCrown(TriBatch b, double x, double y, double time, bool blocked) {
 }
 
 // --- أحداث المدن ومزاياها (featureArt.js، مبسّطة): ما على الأرض تحت الجنود، وما فوقهم ---
-// ponytail: علامات بأشكال بسيطة بدل رسم featureArt.js كله (المخلوقات بشكل جندي مكبّر)، والتلميع في ن12
+// ponytail: علامات بأشكال بسيطة بدل رسم featureArt.js كله، والمخلوقات بشكل جندي مكبّر حتى تصل صورها المتحركة
 const _cloudHues = [0xff4fa3, 0xffc23a, 0x4fd3ff, 0x8cff5a, 0xb36bff];
 (double, double) _iso(double i, double j) => ((i - j) * TILE_HALF_W, (i + j) * TILE_HALF_H);
 
@@ -299,4 +299,38 @@ void drawStoryMarker(TriBatch b, double i, double j, double r, double time) {
   final yy = y - 30 + math.sin(time * 4) * 2;
   b.tri(x - 4, yy - 6, x + 4, yy - 6, x, yy, 0xffd34d);
   b.quad(x - 1.5, yy - 12, x + 1.5, yy - 12, x + 1.5, yy - 6, x - 1.5, yy - 6, 0xffd34d);
+}
+
+// هالة المبنى المميز بلون ميزته ونجوم تدور عليها (drawFeatureHalo في featureArt.js)، على الأرض تحت المبنى فيغطي
+// المبنى ما خلفه منها
+void drawFeatureHalos(TriBatch b, MatchState s, double time) {
+  final F = CITY_FEATURES, H = F.m('halo'), n = s.map.n;
+  for (final d in s.map.districts) {
+    final t = d.featureTile, f = d.feature;
+    if (t == null || f == null) continue;
+    final col = F.m('colors').ss(f);
+    if (col == null) continue;
+    final p = col.split(',').map(int.parse).toList(), rgb = (p[0] << 16) | (p[1] << 8) | p[2];
+    final (x, y0) = _iso((t % n).toDouble(), (t ~/ n).toDouble());
+    final k = d.featureBig ? 1.0 : 0.55, y = d.featureBig ? y0 - TILE_HALF_H : y0;
+    final rx = H.d('radius') * TILE_HALF_W * k, ry = H.d('radius') * TILE_HALF_H * k;
+    final pulse = 1 - H.d('pulse') + H.d('pulse') * (0.5 + 0.5 * math.sin(time * H.d('speed') + d.id));
+    b.ellipse(x, y, rx, ry, rgb, 0.08 * pulse, 32);
+    b.ring(x, y, rx, ry, H.d('glow'), rgb, H.d('glowAlpha') * pulse, 40);
+    b.ring(x, y, rx, ry, H.d('width'), rgb, H.d('alpha') * pulse, 40);
+    final r = H.d('sparkleR');
+    for (var m = 0; m < H.i('sparkles'); m++) {
+      final a = time * H.d('sparkleSpeed') + m * 2 * math.pi / H.i('sparkles') + d.id;
+      final sx = x + math.cos(a) * rx, sy = y + math.sin(a) * ry;
+      b.quad(sx, sy - r * 2, sx + r * 0.5, sy, sx, sy + r * 2, sx - r * 0.5, sy, 0xfff8e1, 0.6 + 0.4 * pulse);
+      b.quad(sx - r * 2, sy, sx, sy - r * 0.5, sx + r * 2, sy, sx, sy + r * 0.5, 0xfff8e1, 0.6 + 0.4 * pulse);
+    }
+  }
+}
+
+// صرة التاجر فوق رأسه (cargo في featureArt.js): قماش مربوط بحبل
+void drawCargo(TriBatch b, double x, double y) {
+  b.ellipse(x, y - 25, 4.2, 3.2, 0xb88a4a, 1, 14);
+  b.ellipse(x - 1, y - 26, 2.4, 1.6, 0xd4a868, 1, 10);
+  b.line(x - 1.2, y - 28.5, x + 1.2, y - 28.5, 1, 0x6a4a2e);
 }

@@ -9,6 +9,7 @@ import '../data/cities.dart';
 import '../map/generator.dart';
 import 'colors.dart';
 import 'vec.dart';
+import 'weather_art.dart' show Light;
 
 const _tau = 6.2831853;
 
@@ -28,6 +29,8 @@ class Decor {
         region = REGIONS.order.firstWhere((r) => REGIONS.cities[r]!.contains(map.city), orElse: () => 'arabic');
 
   double h(int i, int j, int k) => hsh(i, j, k, map.seed);
+  // إضاءة الليل الثابتة (collectStatics في chunkCache.js): برميل النار، وأعمدة الممرات، وأضواء الدوار
+  final lights = <Light>[];
   bool _isLane(int k) => map.type[k] == tDot && (map.kind[k] == 'lane_i' || map.kind[k] == 'lane_j');
 
   // --- الأرض: طبقة chunkCache.drawGround ---
@@ -147,13 +150,27 @@ class Decor {
       }
       return;
     }
-    if (type == tY && _roundaboutAnchor(i, j)) _roundaboutIsland(v, x, y);
+    if (type == tY && _roundaboutAnchor(i, j)) {
+      _roundaboutIsland(v, x, y);
+      final cy = y - 9;
+      if (city == 'paris') {
+        for (final an in const [-0.62, -2.52, 0.3, math.pi - 0.3]) {   // PARIS_LAMPS
+          lights.add(Light(x + math.cos(an) * 22.5, cy + math.sin(an) * 11.2 - 13, 22, 0xffdc96, 0.45));
+        }
+        lights.add(Light(x, cy - 34, 16, 0xffd778, 0.3));
+      } else if (city == 'rothenburg') {
+        lights..add(Light(x - 13, cy - 19, 22, 0xffdc96, 0.45))..add(Light(x + 13, cy - 19, 22, 0xffdc96, 0.45))..add(Light(x, cy - 4, 26, 0xffcd8c, 0.25));
+      } else {
+        lights..add(Light(x, y - 39, 46, 0xff6ebe, 0.45))..add(Light(x, y - 12, 34, 0x78dcff, 0.3));
+      }
+    }
     if (type == tWater) _water(v, i, j, x, y);
   }
 
   // حطام الشارع (streetDebris): سيارة محطمة أو برميل نار أو بقعة أو ركام أو أكياس رمل
   void _streetDebris(Vec v, double x, double y, int i, int j) {
     final r = h(i, j, 20);
+    if (r >= 0.07 && r < 0.12) lights.add(Light(x, y - 7, 34, 0xff963c, 0.65));   // برميل النار (debrisLight)
     if (r < 0.07) {
       if (city == 'yamamah') return;                       // عربة اليمامة صورة (لاحقاً)
       final car = theme.car ?? const ['#6b4f3a', '#85624a', '#57402f'];
@@ -241,6 +258,7 @@ class Decor {
     final px = p[0], py = p[1];
     switch (kind) {
       case 'lamp':
+        lights.add(Light(px, py - 15, 24, city == 'hk' ? 0x7fe8ff : 0xffdc96, 0.5));
         v.ln(px, py, px, py - 14, '#2b2825', 0.9);
         v.poly([[px - 1.7, py - 14], [px, py - 17.2], [px + 1.7, py - 14], [px, py - 13]], '#2b2825');
         v.rc(px - 0.9, py - 15.8, 1.8, 1.7, _lampGlow[city] ?? '#f2d58a');

@@ -45,8 +45,8 @@ class MatchHud extends StatelessWidget {
         ])),
         // شريط الطور أعلى الوسط (modeBar)، والإشعار تحته
         if (modeBar(s) case final bar?) Positioned(top: 8, left: 0, right: 0, child: Center(child: _ModeBarBox(bar))),
-        // أسهم الحافة: زعماء الأعداء ذهبية، وزعيمك حين يُضرب حمراء (حماية الزعيم)
-        if (s.mode == 'regicide' || s.story != null) Positioned.fill(child: IgnorePointer(child: CustomPaint(painter: _EdgeArrows(screen)))),
+        // أسهم الحافة: زعماء الأعداء ذهبية، والتنبيهات حمراء (جنودك يُضربون خارج الشاشة، وزعيمك)
+        Positioned.fill(child: IgnorePointer(child: CustomPaint(painter: _EdgeArrows(screen)))),
         // اللعب المحلي: المضيف أوقف المباراة، أو لا يصل دور جديد منه
         if (screen.lanText case final t?) Positioned(top: 92, left: 0, right: 0, child: Center(child: _Box(
             child: Text(t, style: const TextStyle(color: gold, fontSize: 14, fontWeight: FontWeight.w700))))),
@@ -179,7 +179,7 @@ class _EdgeArrows extends CustomPainter {
     if (s == null) return;
     final targets = <(double, double, Color)>[
       for (final (u, c) in enemyLeaders(s)) (u.x, u.y, colorOf(c)),
-      for (final a in s.alerts) if (a.kind == 'leader') (a.i.toDouble(), a.j.toDouble(), danger),
+      for (final a in s.alerts) (a.i.toDouble(), a.j.toDouble(), danger),   // جنودك يُضربون خارج الشاشة، أو زعيمك
       if (targetPoint(s) case final tp?) (tp.$1, tp.$2, gold),   // مكان مهمة القصة
     ];
     const m = 26.0;

@@ -1,5 +1,7 @@
 name: Build Android APK
 
+# التطبيق بـ Flutter (flutter_game/، القسم 18): ملف APK للجوالات بمعالج 64 بت، موقَّع بمفتاح التجربة
+# (gangcity-debug.keystore) فيُثبَّت فوق النسخ السابقة ويبقى الحفظ
 on:
   push:
     branches: [main]
@@ -11,41 +13,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'   # Capacitor 8 CLI يتطلب NodeJS 22 أو أحدث
-          cache: npm
-
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
 
-      # v3 يفشل لأن حزمة "tools" حُذفت من مستودع أندرويد؛ v4 يثبّت platform-tools فقط
-      - uses: android-actions/setup-android@v4
+      - uses: subosito/flutter-action@v2
         with:
-          packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
-          log-accepted-android-sdk-licenses: false
+          channel: stable
+          flutter-version: '3.47.9'
+          cache: true
 
-      - name: Install Capacitor
-        run: npm ci
+      - name: Tests
+        working-directory: flutter_game
+        run: flutter test
 
-      # نسخ ملفات اللعبة إلى www/ بنفس السكربت المستعمل محلياً (مصدر واحد للحقيقة)
-      - name: Prepare web assets
-        run: npm run build:web
-
-      - name: Sync Capacitor
-        run: npx cap sync android
-
-      - name: Build debug APK
-        run: |
-          cd android
-          chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+      - name: Build APK
+        working-directory: flutter_game
+        run: flutter build apk --release --target-platform android-arm64
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: GangCity-apk
-          path: android/app/build/outputs/apk/debug/*.apk
+          path: flutter_game/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error

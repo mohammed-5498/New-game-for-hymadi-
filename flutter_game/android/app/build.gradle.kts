@@ -16,7 +16,7 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.gangcity.port"   // بجانب اللعبة الحالية أثناء النقل (القسم 18.1)
+        applicationId = "com.hymadi.gangcity"   // معرّف اللعبة: يُثبَّت فوق نسخة Capacitor ويرث بياناتها (القسم 18، ن12)
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
@@ -29,10 +29,10 @@ android {
         versionName = flutter.versionName
     }
 
-    // مفتاح التجربة نفسه في اللعبة الحالية (android/app/gangcity-debug.keystore): تُثبَّت النسخ فوق بعضها ويبقى الحفظ
+    // مفتاح التجربة نفسه الذي وقّع نسخة Capacitor: تُثبَّت فوقها وفوق بعضها ويبقى الحفظ (للتجربة فقط، لا للمتجر)
     signingConfigs {
         create("shared") {
-            storeFile = file("../../../android/app/gangcity-debug.keystore")
+            storeFile = file("gangcity-debug.keystore")
             storePassword = "android"
             keyAlias = "androiddebugkey"
             keyPassword = "android"

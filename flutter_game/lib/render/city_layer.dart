@@ -12,6 +12,7 @@ import 'city_art.dart';
 import 'colors.dart';
 import 'decor.dart';
 import 'vec.dart';
+import 'weather_art.dart';
 
 // أرض الحي المميز وحي الشرطة وحي الميزة تميل لألوانها قبل الاستيلاء (REGION_HINT في cityRender.js)
 final _regionHint = <String, (int, double)>{
@@ -21,9 +22,17 @@ final _regionHint = <String, (int, double)>{
 };
 const _featureSmall = 0.55;   // المبنى المميز في حي ضيق (مربع واحد): الرسم نفسه مصغّراً (SMALL في featureArt.js)
 
-int groundColor(GameMap map, CityArt art, int i, int j) {
+// الطقس قبل صبغ المالك (الثلج لا يخفي لونه)
+int groundColor(GameMap map, CityArt art, int i, int j, [String weather = 'day']) {
   final k = map.idx(i, j), type = map.type[k], c = art.colors;
-  if (type == tWater) return hex(c['water'] ?? '#34566e');
+  if (type == tWater) return weather == 'snow' ? mix(hex(c['water'] ?? '#34566e'), hex('#dfe8ee'), 0.3) : hex(c['water'] ?? '#34566e');
+  final w = _groundOf(map, art, i, j, k, type, c);
+  if (weather == 'snow') return mix(w, hex('#eef2f5'), map.road[k] == 1 ? 0.45 : 0.72);
+  if (weather == 'rain') return mix(w, hex('#2a2f36'), 0.2);
+  return w;
+}
+
+int _groundOf(GameMap map, CityArt art, int i, int j, int k, int type, Map<String, String?> c) {
   if (map.road[k] == 1 || type == tY) return hex((i + j) % 2 == 1 ? c['road']! : c['road2']!);
   if (type == tP) return hex(c['plaza']!);
   var color = hex(c['ground']!);
@@ -108,13 +117,14 @@ class CityLayer {
   final Int32List _baseCol, _col, _tileDistrict, _spriteDistrict, spriteCol;
   final _applied = <int, (String?, double)>{};
   bool tinted = false;
+  final List<Light> lights;          // إضاءة الليل الثابتة (weather_art.dart)
   CityLayer._(this.ground, this.marks, this.rows, this.rowStart, this.xf, this.rects, this._pos, this._baseCol, this._col,
-      this._tileDistrict, this._spriteDistrict, this.spriteCol);
+      this._tileDistrict, this._spriteDistrict, this.spriteCol, this.lights);
 
   // ما يرتفع فوق قاعدته (CITY_CACHE.reach.up) وما ينزل تحتها
   static const _up = 120.0, _down = 20.0;
 
-  factory CityLayer(GameMap map, CityArt art) {
+  factory CityLayer(GameMap map, CityArt art, [String weather = 'day']) {
     final n = map.n, depths = 2 * n - 1;
     final pos = Float32List(n * n * 12), col = Int32List(n * n * 6), base = Int32List(n * n), tileD = Int32List(n * n);
     final items = <(int, int, Sprite, double, double, double, int)>[];
@@ -126,7 +136,7 @@ class CityLayer {
         final x = (i - j) * TILE_HALF_W, y = (i + j) * TILE_HALF_H;
         pos.setAll(k * 12, [x, y - TILE_HALF_H, x + TILE_HALF_W, y, x, y + TILE_HALF_H,
                             x, y - TILE_HALF_H, x, y + TILE_HALF_H, x - TILE_HALF_W, y]);
-        base[k] = groundColor(map, art, i, j).toSigned(32);
+        base[k] = groundColor(map, art, i, j, weather).toSigned(32);
         col.fillRange(k * 6, k * 6 + 6, base[k]);
         tileD[k] = map.road[k] == 1 || map.type[k] == tWater || map.type[k] == tY ? -1 : map.districtAt[k];
         final s = tileSprite(map, art, i, j);
@@ -148,7 +158,7 @@ class CityLayer {
     }
     while (d <= depths) { rowStart[d++] = items.length; }
     return CityLayer._(ui.Vertices.raw(ui.VertexMode.triangles, pos, colors: col), markVec.build(),
-        [for (final v in rowVecs) v.build()], rowStart, xf, rects, pos, base, col, tileD, spriteD, spriteCol);
+        [for (final v in rowVecs) v.build()], rowStart, xf, rects, pos, base, col, tileD, spriteD, spriteCol, mapLights(map, decor.lights));
   }
 
   // صبغ الأحياء بلون مالكها (tintAmount في capture.js و tint في colors.js): الأرض والصور، ولا يُعاد إلا ما تغيّر
