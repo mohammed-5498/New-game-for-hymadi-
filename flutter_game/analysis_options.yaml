@@ -1,0 +1,13 @@
+analyzer:
+  exclude:
+    - build/**
+    - android/**
+    - web/**
+include: package:flutter_lints/flutter.yaml
+
+linter:
+  rules:
+    # الأسماء كما في js/config.js والمولّد (MAP_GEN وD4...) ليسهل النقل والمقارنة
+    constant_identifier_names: false
+    non_constant_identifier_names: false
+    curly_braces_in_flow_control_structures: false

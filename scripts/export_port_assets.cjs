@@ -1,6 +1,6 @@
 // صور الخريطة للمحرك الجديد (Flutter، القسم 6 في docs/PROGRESS.md): كل ما ترسمه المدينة بالكود صورةً شفافة
 // بنقطة ارتكاز، وأقنعة الصبغ، وmanifest.json يصف كل صورة. لا تمس اللعبة الحالية: ترسم بدوال الرسم نفسها.
-//   node scripts/export_port_assets.cjs [outdir=port/assets] [ONLY=arab,cairo]
+//   node scripts/export_port_assets.cjs [outdir=flutter_game/assets/map] [ONLY=arab,cairo]
 // الدقة 5.4 بكسل لكل وحدة عالم (أعلى دقة لقطع المدينة في اللعبة، ودقة صور اليمامة). المربع 36×18 وحدة = 194×97 بكسل.
 // نقطة الارتكاز (ax, ay): وسط قاعدة المربع (وللمبنى المميز 2×2 وسط مربعه الأمامي)، بالبكسل داخل الصورة.
 // الأقنعة: -roof.png أبيض حيث يُصبغ السطح بلون مالك الحي (والجدران تُصبغ أخف: wallTint/roofTint في manifest)،
@@ -11,7 +11,7 @@ const path = require('path');
 const http = require('http');
 
 const ROOT = path.resolve(__dirname, '..');
-const OUT = path.resolve(ROOT, process.argv[2] || 'port/assets');
+const OUT = path.resolve(ROOT, process.argv[2] || 'flutter_game/assets/map');
 const ONLY = process.env.ONLY ? process.env.ONLY.split(',') : null;
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.webp': 'image/webp', '.json': 'application/json', '.mp3': 'audio/mpeg' };
 
@@ -114,8 +114,12 @@ function cityShots({ city, FEAT }) {
   const add = (file, meta, shot) => { if (shot) out.push({ file, ...meta, ...shot }); };
   const VARIANTS = [[3, 3], [3, 4], [3, 5]];       // (i+j) % 3 = 0، 1، 2: درجات الارتفاع الثلاث في رسم المباني
   const dedupe = (list) => list.filter((s, k) => s && list.findIndex(t => t && t.img === s.img) === k);
-  const pool = [...new Set((T.pool || []).map(p => p[0]))].filter(k => k !== '.' && k !== 'ruin' && typeof T.draw[k] === 'function');
-  if (typeof T.draw.rorbu === 'function' && !pool.includes('rorbu')) pool.push('rorbu');   // بيوت الصيد على الماء (النرويجية)
+  // كل نوع قد يضعه المولّد: pool وأنماط الأحياء والأحياء الصغيرة وشجرتها، وسور اليمامة وبواباته (على الشارع)، وأكواخ الماء
+  const tree = typeof T.draw.tree === 'function' ? 'tree' : T.draw.tree;
+  const walls = C.CITIES.walls[city] ? ['wallI', 'wallJ', 'wallTower', 'brokenI', 'brokenJ', 'brokenTower', 'gateI', 'gateJ', 'archI', 'archJ'] : [];
+  const pool = [...new Set([...(T.pool || []), ...(T.styles || []).flatMap(st => st.pool), ...(T.smallPool || [])].map(p => p[0])
+    .concat(tree ? [tree] : [], walls, ['rorbu']))]
+    .filter(k => k !== '.' && k !== 'ruin' && typeof T.draw[k] === 'function');
 
   // 1) المباني العادية (بتفاصيل 12ج) والأشجار والزينة، بثلاث نسخ
   for (const kind of pool) {
