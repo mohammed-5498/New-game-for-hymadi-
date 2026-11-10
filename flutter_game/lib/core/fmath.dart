@@ -143,3 +143,76 @@ void stableSort<T>(List<T> list, int Function(T a, T b) compare) {
 
 // مقارنة بفرق رقمين كـ (a, b) => ka - kb في JavaScript
 int byNum(double a, double b) => a < b ? -1 : a > b ? 1 : 0;
+
+// --- atan وatan2 بخوارزمية fdlibm (Math.atan2 في V8) ---
+const _atanhi = [4.63647609000806093515e-01, 7.85398163397448278999e-01, 9.82793723247329054082e-01, 1.57079632679489655800e+00];
+const _atanlo = [2.26987774529616870924e-17, 3.06161699786838301793e-17, 1.39033110312309984516e-17, 6.12323399573676603587e-17];
+const _aT = [3.33333333333329318027e-01, -1.99999999998764832476e-01, 1.42857142725034663711e-01, -1.11111104054623557880e-01,
+  9.09088713343650656196e-02, -7.69187620504482999495e-02, 6.66107313738753120669e-02, -5.83357013379057348645e-02,
+  4.97687799461593236017e-02, -3.65315727442169155270e-02, 1.62858201153657823623e-02];
+
+int _lo(double x) { _b.setFloat64(0, x); return _b.getUint32(4); }
+
+double fatan(double x) {
+  final hx = _hi(x), ix = hx & 0x7fffffff;
+  int id;
+  if (ix >= 0x44100000) {
+    if (ix > 0x7ff00000 || (ix == 0x7ff00000 && _lo(x) != 0)) return x + x;
+    return hx > 0 ? _atanhi[3] + _atanlo[3] : -_atanhi[3] - _atanlo[3];
+  }
+  if (ix < 0x3fdc0000) {
+    if (ix < 0x3e200000) return x;
+    id = -1;
+  } else {
+    x = x.abs();
+    if (ix < 0x3ff30000) {
+      if (ix < 0x3fe60000) { id = 0; x = (2.0 * x - 1.0) / (2.0 + x); }
+      else { id = 1; x = (x - 1.0) / (x + 1.0); }
+    } else {
+      if (ix < 0x40038000) { id = 2; x = (x - 1.5) / (1.0 + 1.5 * x); }
+      else { id = 3; x = -1.0 / x; }
+    }
+  }
+  final z = x * x, w = z * z;
+  final s1 = z * (_aT[0] + w * (_aT[2] + w * (_aT[4] + w * (_aT[6] + w * (_aT[8] + w * _aT[10])))));
+  final s2 = w * (_aT[1] + w * (_aT[3] + w * (_aT[5] + w * (_aT[7] + w * _aT[9]))));
+  if (id < 0) return x - x * (s1 + s2);
+  final r = _atanhi[id] - ((x * (s1 + s2) - _atanlo[id]) - x);
+  return hx < 0 ? -r : r;
+}
+
+const _piO4 = 7.8539816339744827900E-01, _piO2 = 1.5707963267948965580E+00,
+    _pi = 3.1415926535897931160E+00, _piLo = 1.2246467991473531772E-16;
+
+double fatan2(double y, double x) {
+  if (x.isNaN || y.isNaN) return x + y;
+  final hx = _hi(x), ix = hx & 0x7fffffff, lx = _lo(x), hy = _hi(y), iy = hy & 0x7fffffff, ly = _lo(y);
+  if (hx == 0x3ff00000 && lx == 0) return fatan(y);
+  final m = ((hy >> 31) & 1) | ((hx >> 30) & 2);
+  if ((iy | ly) == 0) {
+    switch (m) { case 0: case 1: return y; case 2: return _pi; default: return -_pi; }
+  }
+  if ((ix | lx) == 0) return hy < 0 ? -_piO2 : _piO2;
+  if (ix == 0x7ff00000) {
+    if (iy == 0x7ff00000) {
+      switch (m) { case 0: return _piO4; case 1: return -_piO4; case 2: return 3.0 * _piO4; default: return -3.0 * _piO4; }
+    }
+    switch (m) { case 0: return 0.0; case 1: return -0.0; case 2: return _pi; default: return -_pi; }
+  }
+  if (iy == 0x7ff00000) return hy < 0 ? -_piO2 : _piO2;
+  final k = (iy - ix) >> 20;
+  double z;
+  var mm = m;
+  if (k > 60) { z = _piO2 + 0.5 * _piLo; mm &= 1; }
+  else if (hx < 0 && k < -60) { z = 0.0; }
+  else { z = fatan((y / x).abs()); }
+  switch (mm) {
+    case 0: return z;
+    case 1: return -z;
+    case 2: return _pi - (z - _piLo);
+    default: return (z - _piLo) - _pi;
+  }
+}
+
+// Math.round لموقع وحدة إلى رقم مربع
+int jsRoundD(double x) => jsRound(x);

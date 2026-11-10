@@ -42,6 +42,19 @@ class District {
   int? progressOwner;
   int? featureTile;
   bool featureBig = false;
+  List<int> adj = [];          // الأحياء المجاورة (منطقة الحي، nations.dart)
+  // ما تضيفه المباراة (capture.js وempire.js...)
+  String? tintColor;
+  double tintMix = 0, tickAt = -99;
+  int fort = 0;
+  String? building;
+  List<int> zone = [];         // مربعات منطقة الاستيلاء (capture.dart)
+  bool contested = false;
+  int? buildTile;              // مربع مبنى الاقتصاد (empire.dart)
+  Map<String, int> blv = {};   // مستويات ترقيات المبنى
+  double cool = 0;             // البرج: حتى سهمه التالي
+  ({int k, int owner})? rally; // مكان إنتاج القاعدة
+  bool hill = false;           // ملك الحي (ن7)
   District(this.id);
 }
 
@@ -58,6 +71,8 @@ class GameMap {
   final Int32List districtAt;
   List<District> districts = [];
   Uint8List? connected;
+  Int32List? areaAt;
+  final zoneAt = <int, List<int>>{};   // المربع ← أحياء منطقة استيلائه (capture.dart)            // منطقة كل مربع: الحي الأقرب (buildTerritory في nations.dart)
 
   GameMap(this.size)
       : n = size.n,

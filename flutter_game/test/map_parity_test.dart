@@ -50,7 +50,7 @@ void main() {
     expect(hypot(3, 4), 5);
   });
 
-  test('fsin وfcos مطابقان لـ V8 بالبت', () {
+  test('fsin وfcos وfatan2 مطابقة لـ V8 بالبت', () {
     final rows = (jsonDecode(File('test/fmath_parity.json').readAsStringSync()) as List).cast<List<dynamic>>();
     final b = ByteData(8);
     double f(String hex) {
@@ -61,7 +61,7 @@ void main() {
     var bad = 0;
     for (final r in rows) {
       final x = f(r[0]);
-      if (fsin(x) != f(r[1]) || fcos(x) != f(r[2])) bad++;
+      if (fsin(x) != f(r[1]) || fcos(x) != f(r[2]) || fatan2(f(r[3]), x) != f(r[4])) bad++;
     }
     expect(bad, 0);
   });
