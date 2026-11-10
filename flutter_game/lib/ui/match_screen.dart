@@ -124,7 +124,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
       }
       settings = s.settings;
     } else {
-      final seed = DateTime.now().microsecondsSinceEpoch & 0x7FFFFFFF;
+      final seed = (settings['seed'] as int?) ?? DateTime.now().microsecondsSinceEpoch & 0x7FFFFFFF;   // seed: للفحص
       simRng = Rng(seed);
       s = createMatch(settings)..seed = seed;
       // للفحص في المتصفح (?ff=ثوانٍ): تقديم المباراة قبل عرضها
@@ -529,9 +529,10 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
             onScaleEnd: (_) => _onScaleEnd(size),
             onTapUp: (d) => _onTap(d, size),
             onLongPressStart: (d) => _onLongPress(d, size),
-            child: CustomPaint(painter: _MatchPainter(this), isComplex: true),
+            // طبقتان منفصلتان: المشهد يُرسم كل إطار، والواجهة حين تتغير فقط
+            child: RepaintBoundary(child: CustomPaint(painter: _MatchPainter(this))),
           )),
-          Positioned.fill(child: MatchHud(screen: this)),
+          Positioned.fill(child: RepaintBoundary(child: MatchHud(screen: this))),
         ]),
       ),
     );
@@ -556,12 +557,22 @@ class LoadingScreen extends StatelessWidget {
   ])));
 }
 
+// قياس أقسام الإطار (للفحص فقط: test/perf_test.dart)
+Map<String, int>? perfProbe;
+final _sw = Stopwatch();
+void _mark(String k) {
+  final p = perfProbe;
+  if (p == null) return;
+  p[k] = (p[k] ?? 0) + _sw.elapsedMicroseconds;
+  _sw..reset()..start();
+}
+
 class _MatchPainter extends CustomPainter {
   final MatchScreenState v;
   _MatchPainter(this.v) : super(repaint: v.frame);
 
   final _rows = <List<Unit>>[];
-  static final _pops = <String, ui.Paragraph>{};
+  static final _pops = <String, ui.Image>{};
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -570,6 +581,7 @@ class _MatchPainter extends CustomPainter {
     if (s == null || layer == null || art == null || atlas == null) return;
     final c = s.camera, b = v.batch, alpha = v.alpha, img = atlas.image;
     final time = s.time + alpha * TICK_SEC;
+    if (perfProbe != null) _sw..reset()..start();
     canvas.save();
     canvas.translate(size.width / 2, size.height / 2);
     canvas.scale(c.z);
@@ -590,6 +602,7 @@ class _MatchPainter extends CustomPainter {
     }
     final crowded = visible > COMBAT_REALISM.m('lod').i('fullUnits');
     b.reset();
+    _mark('sortUnits');
     layer.paint(canvas, art.image, c.y - halfH, c.y + halfH, onGround: () {
       _borders(b, s);
       for (final f in s.fires) { drawFire(b, f, time); }
@@ -607,6 +620,7 @@ class _MatchPainter extends CustomPainter {
       final row = _rows[d];
       if (row.isNotEmpty) {
         row.sort((p, q) => (p.x + p.y).compareTo(q.x + q.y));
+        _mark('city+flags');
         for (final u in row) {
           drawUnit(b, atlas, u, alpha, c.z, time, crowded);
           if (u.cargo && u.state != 'dead') {
@@ -615,7 +629,9 @@ class _MatchPainter extends CustomPainter {
           }
         }
       }
+      _mark('units');
       b.flush(canvas, img);
+      _mark('flush');
     });
     for (final shot in s.projectiles) { drawProjectile(b, shot, alpha); }
     for (final fx in s.fx) {
@@ -632,9 +648,12 @@ class _MatchPainter extends CustomPainter {
     for (final u in s.units) { if (u.selected && u.state != 'dead') drawSelectionRing(b, u, alpha); }
     if (s.moveMarker != null) drawMoveMarker(b, s.moveMarker!);
     b.flush(canvas, img);
+    _mark('fx');
     if (Settings.pops) _drawPops(canvas, s);
+    _mark('pops');
     canvas.restore();
     v.weather.paint(canvas, size, s, layer.lights, v.frameDt, Settings.gfx);   // الطقس والإضاءة فوق المشهد
+    _mark('weather');
     final bs = v.boxStart, be = v.boxEnd;
     if (bs != null && be != null) {
       final r = Rect.fromPoints(bs, be);
@@ -718,22 +737,28 @@ class _MatchPainter extends CustomPainter {
     }
   }
 
-  // الكلمات الطائرة: تفادى! صدّ! من الخلف!
+  // الكلمات الطائرة: تفادى! صدّ! من الخلف! كل كلمة بلونها صورة صغيرة مرة واحدة (بدقة الشاشة)، وتُرسم بشفافيتها
+  // بلا طبقة خارج الشاشة لكل كلمة
+  static const _popScale = 4.0;
+  final _popPaint = Paint()..filterQuality = FilterQuality.medium;
   void _drawPops(Canvas canvas, MatchState s) {
     final secs = COMBAT_REALISM.m('pops').d('seconds');
     for (final p in s.pops) {
       final g = p.t / secs;
-      final para = _pops['${p.text}|${p.color}'] ??= () {
-        final pb = ui.ParagraphBuilder(ui.ParagraphStyle(textAlign: TextAlign.center, textDirection: TextDirection.rtl, fontSize: 5.5,
+      final img = _pops['${p.text}|${p.color}'] ??= () {
+        final pb = ui.ParagraphBuilder(ui.ParagraphStyle(textAlign: TextAlign.center, textDirection: TextDirection.rtl, fontSize: 5.5 * _popScale,
             fontWeight: FontWeight.w800))
-          ..pushStyle(ui.TextStyle(color: Color(0xFF000000 | hexRgb(p.color)), shadows: const [Shadow(color: Color(0xCC000000), blurRadius: 1.2)]))
+          ..pushStyle(ui.TextStyle(color: Color(0xFF000000 | hexRgb(p.color)), shadows: const [Shadow(color: Color(0xCC000000), blurRadius: 1.2 * _popScale)]))
           ..addText(p.text);
-        return pb.build()..layout(const ui.ParagraphConstraints(width: 60));
+        final para = pb.build()..layout(const ui.ParagraphConstraints(width: 60 * _popScale));
+        final rec = ui.PictureRecorder();
+        Canvas(rec).drawParagraph(para, Offset.zero);
+        return rec.endRecording().toImageSync((60 * _popScale).round(), (para.height + 2 * _popScale).ceil());
       }();
       final x = (p.x - p.y) * TILE_HALF_W - 30, y = (p.x + p.y) * TILE_HALF_H - 26 - g * 10;
-      canvas.saveLayer(null, Paint()..color = Color.fromRGBO(255, 255, 255, (1 - g).clamp(0, 1)));
-      canvas.drawParagraph(para, Offset(x, y));
-      canvas.restore();
+      _popPaint.color = Color.fromRGBO(255, 255, 255, (1 - g).clamp(0.0, 1.0));
+      canvas.drawImageRect(img, Rect.fromLTWH(0, 0, img.width.toDouble(), img.height.toDouble()),
+          Rect.fromLTWH(x, y, img.width / _popScale, img.height / _popScale), _popPaint);
     }
   }
 

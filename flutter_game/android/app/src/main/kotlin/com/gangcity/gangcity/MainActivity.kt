@@ -1,6 +1,8 @@
 package com.gangcity.gangcity
 
 import android.content.Context
+import android.media.AudioAttributes
+import android.media.SoundPool
 import android.net.wifi.WifiManager
 import android.os.Bundle
 import android.os.Handler
@@ -8,12 +10,14 @@ import android.os.Looper
 import android.view.WindowManager
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import io.flutter.FlutterInjector
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
     private var lock: WifiManager.MulticastLock? = null
+    private var pool: SoundPool? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -25,6 +29,38 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         val messenger = flutterEngine.dartExecutor.binaryMessenger
+        // مؤثرات الصوت (audio/sound.dart): SoundPool واحد يفك كل ملف مرة واحدة عند التشغيل ويبقيه في الذاكرة، فلا يُفك
+        // ملف مع كل ضربة. load: مسارات الأصول ← أرقامها، play: [رقم، ارتفاع، سرعة، أولوية]، hold: إيقاف مؤقت أو متابعة
+        MethodChannel(messenger, "gangcity/sfx").setMethodCallHandler { call, result ->
+            try {
+                when (call.method) {
+                    "load" -> {
+                        val voices = call.argument<Int>("voices") ?: 24
+                        val p = pool ?: SoundPool.Builder().setMaxStreams(voices).setAudioAttributes(AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_GAME).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
+                            .build().also { pool = it }
+                        val loader = FlutterInjector.instance().flutterLoader()
+                        val ids = call.argument<List<String>>("paths")!!.map { path ->
+                            try { assets.openFd(loader.getLookupKeyForAsset(path)).use { p.load(it, 1) } } catch (_: Exception) { 0 }
+                        }
+                        result.success(ids)
+                    }
+                    "play" -> {
+                        val a = call.arguments as List<*>
+                        val v = (a[1] as Number).toFloat()
+                        pool?.play((a[0] as Number).toInt(), v, v, (a[3] as Number).toInt(), 0, (a[2] as Number).toFloat().coerceIn(0.5f, 2f))
+                        result.success(null)
+                    }
+                    "hold" -> {
+                        if (call.arguments == true) pool?.autoPause() else pool?.autoResume()
+                        result.success(null)
+                    }
+                    else -> result.notImplemented()
+                }
+            } catch (e: Exception) {
+                result.success(null)
+            }
+        }
         // اللعب المحلي (net/session.dart): قفل البث المتعدد أثناء الاستضافة والبحث، فبعض الأجهزة لا تستقبل الإعلانات بدونه
         MethodChannel(messenger, "gangcity/lan").setMethodCallHandler { call, result ->
             try {

@@ -233,7 +233,8 @@ class _MenuBackdropState extends State<MenuBackdrop> with SingleTickerProviderSt
   GameMap? map;
   late final Ticker _ticker;
   final _frame = ValueNotifier(0);
-  double x = 0, y = 0, vx = 0, vy = 0;
+  double x = 0, y = 0, vx = 0, vy = 0, zoom = 1;
+  Size view = Size.zero;               // مقاس الشاشة (من الرسم)
   Duration _last = Duration.zero;
   final J _M = UI.m('menuScene');
 
@@ -273,10 +274,19 @@ class _MenuBackdropState extends State<MenuBackdrop> with SingleTickerProviderSt
     final dt = _last == Duration.zero ? 0.0 : (now - _last).inMicroseconds / 1e6;
     if (dt < 1 / _M.d('fps') && _last != Duration.zero) return;
     _last = now;
-    final half = m.n * TILE_HALF_W * (1 - _M.d('edgeMargin')), lo = m.n * TILE_HALF_H * _M.d('edgeMargin'), hi = m.n * 2 * TILE_HALF_H - lo;
-    x += vx * dt; y += vy * dt;
-    if (x.abs() > half) { vx = -vx; x = x.clamp(-half, half); }
-    if (y < lo || y > hi) { vy = -vy; y = y.clamp(lo, hi); }
+    // الشاشة كلها داخل معيّن المدينة: التقريب يكفي لذلك، والكاميرا ترتد قبل أن يخرج ركن منها
+    final w = m.n * TILE_HALF_W, h = m.n * TILE_HALF_H, limit = 1 - _M.d('edgeMargin');
+    zoom = math.max(_M.d('zoom'), (view.width / 2 / w + view.height / 2 / h) / (limit * 0.75));
+    final hw = view.width / 2 / zoom, hh = view.height / 2 / zoom;
+    double reach(double px, double py) => (px.abs() + hw) / w + ((py - h).abs() + hh) / h;
+    final nx = x + vx * dt, ny = y + vy * dt;
+    if (reach(nx, ny) <= limit) {
+      x = nx; y = ny;
+    } else {
+      if (reach(nx, y) > limit) vx = -vx;      // الركن الذي يخرج يعكس اتجاهه
+      if (reach(x, ny) > limit) vy = -vy;
+      if (reach(x, y) > limit) { x *= 0.98; y = h + (y - h) * 0.98; }   // بعد تغيّر مقاس الشاشة: نحو الوسط
+    }
     _frame.value++;
   }
 
@@ -300,7 +310,8 @@ class _BackdropPainter extends CustomPainter {
     canvas.drawColor(deep, BlendMode.src);
     final l = v.layer, a = v.art;
     if (l == null || a == null) return;
-    final z = v._M.d('zoom');
+    v.view = size;
+    final z = v.zoom;
     canvas.save();
     canvas.translate(size.width / 2, size.height / 2);
     canvas.scale(z);

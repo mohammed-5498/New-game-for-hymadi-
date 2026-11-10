@@ -4,7 +4,6 @@
 import 'package:flutter/material.dart';
 
 import '../core/cfg.dart';
-import '../data/cities.dart';
 import '../data/js_config.dart';
 import '../game/empire.dart';
 import '../game/features.dart';
@@ -15,6 +14,8 @@ import '../game/state.dart';
 import '../game/victory.dart';
 import '../map/sizes.dart';
 import 'match_screen.dart';
+import 'menus.dart' show cityShort;
+import 'prefs.dart';
 import 'widgets.dart';
 
 
@@ -28,34 +29,20 @@ class MatchHud extends StatelessWidget {
     builder: (context, _, _) {
       final s = screen.state!;
       final me = s.humanId >= 0 ? s.players[s.humanId] : null;
-      final selected = s.units.where((u) => u.selected && u.state != 'dead').length;
+      final bar = modeBar(s);
       return Stack(children: [
-        // أعلى اليسار: الزمن والنقاط ودخلها
-        Positioned(top: 8, left: 8, child: Row(children: [
-          _Box(child: Text('${clock(s.time)} • ${CITY_THEMES[s.map.city]?.name ?? s.map.city}', style: const TextStyle(color: ink, fontSize: 13))),
+        // الصف الأعلى: الزمن والمدينة والنقاط يساراً، والأزرار يميناً، وشريط الطور في المساحة بينهما وحدها (يصغر ولا يتداخل)
+        Positioned(top: 6, left: 6, right: 6, child: Row(textDirection: TextDirection.ltr, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          _Box(child: Text('${clock(s.time)} • ${cityShort(s.map.city)}', style: const TextStyle(color: ink, fontSize: 12))),
           if (me != null && s.empire != null) ...[
-            const SizedBox(width: 6),
-            _Box(child: Row(children: [
-              const Icon(Icons.toll, size: 15, color: gold), const SizedBox(width: 4),
-              Text(s.empire!.points[me.id].floor().toString(), style: const TextStyle(color: gold, fontSize: 14, fontWeight: FontWeight.w700)),
-              Text('  +${incomeOf(s, me.id).toStringAsFixed(1)}/ث', style: const TextStyle(color: dim, fontSize: 12)),
+            const SizedBox(width: 4),
+            _Box(child: Row(mainAxisSize: MainAxisSize.min, children: [
+              const Icon(Icons.toll, size: 14, color: gold), const SizedBox(width: 3),
+              Text(s.empire!.points[me.id].floor().toString(), style: const TextStyle(color: gold, fontSize: 13, fontWeight: FontWeight.w700)),
+              Text('  +${incomeOf(s, me.id).toStringAsFixed(1)}/ث', style: const TextStyle(color: dim, fontSize: 11)),
             ])),
           ],
-          if (selected > 0) ...[const SizedBox(width: 6), _Box(child: Text('المحدد: $selected', style: const TextStyle(color: ink, fontSize: 13)))],
-        ])),
-        // شريط الطور أعلى الوسط (modeBar)، والإشعار تحته
-        if (modeBar(s) case final bar?) Positioned(top: 8, left: 0, right: 0, child: Center(child: _ModeBarBox(bar))),
-        // أسهم الحافة: زعماء الأعداء ذهبية، والتنبيهات حمراء (جنودك يُضربون خارج الشاشة، وزعيمك)
-        Positioned.fill(child: IgnorePointer(child: CustomPaint(painter: _EdgeArrows(screen)))),
-        // اللعب المحلي: المضيف أوقف المباراة، أو لا يصل دور جديد منه
-        if (screen.lanText case final t?) Positioned(top: 92, left: 0, right: 0, child: Center(child: _Box(
-            child: Text(t, style: const TextStyle(color: gold, fontSize: 14, fontWeight: FontWeight.w700))))),
-        if (s.notice != null) Positioned(top: 52, left: 0, right: 0, child: Center(child: _Box(
-            child: Text(s.notice!.text, style: TextStyle(color: s.notice!.mine ? gold : ink, fontSize: 14, fontWeight: FontWeight.w600))))),
-        // شريط القوة يساراً
-        Positioned(top: 48, left: 8, child: _Power(s)),
-        // أزرار أعلى اليمين
-        Positioned(top: 8, right: 8, child: Row(children: [
+          Expanded(child: Center(child: bar != null ? FittedBox(fit: BoxFit.scaleDown, child: _ModeBarBox(bar)) : const SizedBox())),
           _Btn(icon: Icons.highlight_alt, on: screen.selectMode, tip: 'تحديد', onTap: () { screen.selectMode = !screen.selectMode; screen.hud.value++; }),
           _Btn(icon: Icons.groups, tip: 'كل جنودك', onTap: () {
             for (final u in s.units) { u.selected = u.playerId == s.humanId && u.state != 'dead'; }
@@ -64,6 +51,17 @@ class MatchHud extends StatelessWidget {
           _Btn(icon: Icons.fort, tip: 'القاعدة', onTap: () => _nextHq(s)),
           _Btn(icon: screen.paused ? Icons.play_arrow : Icons.pause, tip: 'إيقاف', onTap: () => screen.paused ? screen.closePause() : screen.openPause()),
         ])),
+        // أسهم الحافة: زعماء الأعداء ذهبية، والتنبيهات حمراء (جنودك يُضربون خارج الشاشة، وزعيمك)
+        Positioned.fill(child: IgnorePointer(child: RepaintBoundary(child: CustomPaint(painter: _EdgeArrows(screen))))),
+        // اللعب المحلي: المضيف أوقف المباراة، أو لا يصل دور جديد منه
+        if (screen.lanText case final t?) Positioned(top: 84, left: 0, right: 0, child: IgnorePointer(child: Center(child: _Box(
+            child: Text(t, style: const TextStyle(color: gold, fontSize: 13, fontWeight: FontWeight.w700)))))),
+        // الإشعار تحت الصف الأعلى في الوسط، صغيراً ولا يلتقط اللمس
+        if (s.notice != null) Positioned(top: 46, left: 200, right: 200, child: IgnorePointer(child: Center(child: _Box(
+            child: Text(s.notice!.text, textAlign: TextAlign.center, maxLines: 2,
+                style: TextStyle(color: s.notice!.mine ? gold : ink, fontSize: 12, fontWeight: FontWeight.w600)))))),
+        // شريط القوة يساراً: لمسة تطويه إلى سطرك وحدك
+        Positioned(top: 44, left: 6, child: _Power(s)),
         // مجموعات التحكم على الحافة اليمنى
         Positioned(right: 8, top: 0, bottom: 0, child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
           for (var g = 1; g <= 5; g++) _Group(screen, g),
@@ -92,7 +90,7 @@ class _Box extends StatelessWidget {
   const _Box({required this.child});
   @override
   Widget build(BuildContext context) => Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(color: panel, borderRadius: BorderRadius.circular(9), border: Border.all(color: const Color(0x55E2B55A))),
       child: child);
 }
@@ -108,38 +106,53 @@ class _Btn extends StatelessWidget {
     padding: const EdgeInsets.only(left: 6),
     child: Material(color: on ? gold : panel, borderRadius: BorderRadius.circular(10), child: InkWell(
       borderRadius: BorderRadius.circular(10), onTap: onTap,
-      child: SizedBox(width: 44, height: 44, child: Icon(icon, color: on ? Colors.black : gold, semanticLabel: tip)))),
+      child: SizedBox(width: 40, height: 40, child: Icon(icon, size: 21, color: on ? Colors.black : gold, semanticLabel: tip)))),
   );
 }
 
 // شريط القوة: لكل عصابة لونها وأحياؤها وجنودها، وعمود الطور (النقاط، الزمن على التلة، دم الزعيم)
-class _Power extends StatelessWidget {
+bool powerFolded = Prefs.raw('gangcity.powerFold') == '1';   // يتذكر آخر طيّ (كـ gangcity.power في اللعبة الحالية)
+
+class _Power extends StatefulWidget {
   final MatchState s;
   const _Power(this.s);
   @override
-  Widget build(BuildContext context) {
+  State<_Power> createState() => _PowerState();
+}
+
+class _PowerState extends State<_Power> {
+  void _fold() {
+    setState(() => powerFolded = !powerFolded);
+    Prefs.writeRaw('gangcity.powerFold', powerFolded ? '1' : '0');
+  }
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(behavior: HitTestBehavior.opaque, onTap: _fold, child: _body());
+
+  Widget _body() {
+    final s = widget.s;
     final col = powerColumn(s);
     if (col != null && col.summary.isNotEmpty) {
       return _Box(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        for (final (l, v) in col.summary) Text('$l: $v', style: const TextStyle(color: ink, fontSize: 12.5)),
+        for (final (l, v) in powerFolded ? col.summary.take(1) : col.summary) Text('$l: $v', style: const TextStyle(color: ink, fontSize: 11.5)),
       ]));
     }
     return _Box(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      for (final p in s.players) if (!p.neutral) Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2),
+      for (final p in s.players) if (!p.neutral && (!powerFolded || p.id == s.humanId)) Padding(
+        padding: const EdgeInsets.symmetric(vertical: 1),
         child: Opacity(opacity: isPlayerAlive(s, p.id) ? 1 : 0.4, child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Container(width: 10, height: 10, decoration: BoxDecoration(color: colorOf(p.color), shape: BoxShape.circle)),
-          const SizedBox(width: 6),
-          SizedBox(width: 88, child: Text(p.isHuman ? 'أنت' : p.gangName, overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: p.isHuman ? gold : ink, fontSize: 12))),
-          Text('${ownedDistricts(s, p.id).length}', style: const TextStyle(color: ink, fontSize: 12)),
-          const Icon(Icons.flag, size: 12, color: dim),
-          const SizedBox(width: 6),
-          Text('${countUnits(s, p.id)}', style: const TextStyle(color: ink, fontSize: 12)),
-          const Icon(Icons.person, size: 12, color: dim),
+          Container(width: 8, height: 8, decoration: BoxDecoration(color: colorOf(p.color), shape: BoxShape.circle)),
+          const SizedBox(width: 5),
+          SizedBox(width: 64, child: Text(p.id == s.humanId ? 'أنت' : p.gangName, overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: p.id == s.humanId ? gold : ink, fontSize: 11))),
+          Text('${ownedDistricts(s, p.id).length}', style: const TextStyle(color: ink, fontSize: 11)),
+          const Icon(Icons.flag, size: 11, color: dim),
+          const SizedBox(width: 4),
+          Text('${countUnits(s, p.id)}', style: const TextStyle(color: ink, fontSize: 11)),
+          const Icon(Icons.person, size: 11, color: dim),
           if (col != null && s.mode != 'regicide') ...[
-            const SizedBox(width: 6),
-            Text(col.show(col.value(p.id)), style: const TextStyle(color: gold, fontSize: 12)),
+            const SizedBox(width: 4),
+            Text(col.show(col.value(p.id)), style: const TextStyle(color: gold, fontSize: 11)),
           ],
           if (col?.bar case final bar?) ...[
             const SizedBox(width: 6),
@@ -158,11 +171,11 @@ class _ModeBarBox extends StatelessWidget {
   const _ModeBarBox(this.bar);
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
     decoration: BoxDecoration(color: bar.alarm ? const Color(0xE6501A14) : panel, borderRadius: BorderRadius.circular(9),
         border: Border.all(color: bar.alarm ? danger : const Color(0x55E2B55A))),
     child: Column(mainAxisSize: MainAxisSize.min, children: [
-      Text(bar.text, style: TextStyle(color: bar.alarm ? const Color(0xFFFFC0B0) : gold, fontSize: 14, fontWeight: FontWeight.w700)),
+      Text(bar.text, style: TextStyle(color: bar.alarm ? const Color(0xFFFFC0B0) : gold, fontSize: 12.5, fontWeight: FontWeight.w700)),
       for (final (c, r, me) in bar.bars) Padding(padding: const EdgeInsets.only(top: 2), child: SizedBox(width: 150, height: me ? 5 : 3,
           child: LinearProgressIndicator(value: r.clamp(0.0, 1.0), color: colorOf(c), backgroundColor: const Color(0x55000000)))),
     ]),
@@ -247,9 +260,9 @@ class _EmpireMenu extends StatelessWidget {
     if (d.owner != pid) return const SizedBox.shrink();
     final me = s.players[pid];
     final slots = <Widget>[];
-    void slot(String label, int? cost, Result check, VoidCallback act, {int count = 0}) => slots.add(_Slot(
-        label: label, cost: cost, reason: check.ok ? '' : check.reason, count: count,
-        onTap: check.ok ? () { act(); screen.hud.value++; } : null));
+    void slot(String label, int? cost, Result check, VoidCallback act, {int count = 0, IconData icon = Icons.circle, int level = 0, int max = 0}) =>
+        slots.add(_Slot(label: label, icon: icon, cost: cost, check: check, count: count, level: level, max: max,
+            affordable: cost == null || s.empire!.points[pid] >= cost, onTap: check.ok ? () { act(); screen.hud.value++; } : null));
     // مبنى ميزة المدينة (القسم 3.11): ما يعطيه، وخانات التجنيد والترياد والصاروخ والأجراس
     String? info;
     if (d.featureTile != null && d.feature != null) {
@@ -257,17 +270,17 @@ class _EmpireMenu extends StatelessWidget {
       for (final kind in recruitsAt(d) ?? const <String>[]) {
         final R = CITY_FEATURES.m('recruits').m(kind);
         slot(R.ss('name') ?? kind, unitPrice(s, pid, kind), canQueue(s, pid, d, kind), () => screen.empire('queue', did, kind),
-            count: (s.empire!.queues[did] ?? const []).where((x) => x.kind == kind).length);
+            icon: Icons.person_add, count: (s.empire!.queues[did] ?? const []).where((x) => x.kind == kind).length);
       }
       if (d.feature == 'triads') {
-        slot('هجوم الترياد', CITY_FEATURES.m('triads').i('cost'), canCallTriads(s, pid, d),
+        slot('هجوم الترياد', CITY_FEATURES.m('triads').i('cost'), canCallTriads(s, pid, d), icon: Icons.groups,
             () => screen.startPick('triads', did, 'المس حياً لعدوك ليهجم عليه الترياد'));
       }
       if (d.feature == 'powder') {
-        slot('صاروخ البارود', CITY_FEATURES.m('powder').i('cost'), canRocket(s, pid, d),
+        slot('صاروخ البارود', CITY_FEATURES.m('powder').i('cost'), canRocket(s, pid, d), icon: Icons.rocket_launch,
             () => screen.startPick('rocket', did, 'المس حياً ليس لك ليسقط عليه الصاروخ'));
       }
-      if (d.feature == 'cathedral') slot('اقرع الأجراس', null, canRingBells(s, pid, d), () => screen.empire('bells', did, null));
+      if (d.feature == 'cathedral') slot('اقرع الأجراس', null, canRingBells(s, pid, d), () => screen.empire('bells', did, null), icon: Icons.notifications_active);
     }
     final title = d.featureTile != null && d.feature != null ? 'مبنى المدينة'
         : d.building == 'hq' ? 'القاعدة الرئيسية' : d.building == 'tower' ? 'برج رماية' : d.building == 'hospital' ? 'مستشفى' : 'حي';
@@ -278,69 +291,104 @@ class _EmpireMenu extends StatelessWidget {
         final hero = heroFor(me, kind);
         final name = kind == 'leader' ? CHAMPIONS.m(me.gang).s('name') : hero != null ? HEROES.m(hero).s('name') : 'فرد';
         slot(name, unitPrice(s, pid, kind), canQueue(s, pid, d, kind), () => screen.empire('queue', did, kind),
-            count: q.where((x) => x.kind == kind).length);
+            icon: _unitIcon[kind] ?? Icons.person, count: q.where((x) => x.kind == kind).length);
       }
     }
     final b = d.building == null ? null : EMPIRE.m('buildings').mm(d.building!);
     if (b != null) {
       for (final key in b.m('upgrades').l('order').cast<String>()) {
         final next = nextBuildingUpgrade(d, key, s);
-        slot('${b.m('upgrades').m(key).s('name')} ${next != null ? next.level : 'الأعلى'}', next?.cost,
-            canUpgradeBuilding(s, pid, d, key), () => screen.empire('improve', did, key));
+        slot(b.m('upgrades').m(key).s('name'), next?.cost, canUpgradeBuilding(s, pid, d, key), () => screen.empire('improve', did, key),
+            icon: _upgradeIcon['${d.building}.$key'] ?? Icons.upgrade, level: d.blv[key] ?? 0, max: b.m('upgrades').m(key).l('costs').length);
       }
     }
     if (d.building == 'hq') {
       for (final key in EMPIRE.m('upgrades').l('order').cast<String>()) {
         final next = nextUpgrade(s, pid, key);
-        slot('${EMPIRE.m('upgrades').m(key).s('name')} ${next != null ? next.level : 'الأعلى'}', next?.cost,
-            canUpgrade(s, pid, key), () => screen.empire('upgrade', did, key));
+        slot(EMPIRE.m('upgrades').m(key).s('name'), next?.cost, canUpgrade(s, pid, key), () => screen.empire('upgrade', did, key),
+            icon: _upgradeIcon[key] ?? Icons.upgrade, level: s.empire!.levels[pid][key], max: EMPIRE.m('upgrades').m(key).l('costs').length);
       }
     }
     if (d.building == null) {
       for (final type in EMPIRE.m('buildings').l('order').cast<String>()) {
-        slot(EMPIRE.m('buildings').m(type).s('name'), buildCost(s, type), canBuild(s, pid, d, type), () => screen.empire('build', did, type));
+        slot(EMPIRE.m('buildings').m(type).s('name'), buildCost(s, type), canBuild(s, pid, d, type), () => screen.empire('build', did, type),
+            icon: _buildIcon[type] ?? Icons.home_work);
       }
     }
     final fort = nextFort(d, s, pid);
-    slot('سور ${fort != null ? fort.level : 'الأعلى'}', fort?.cost, canFortify(s, pid, d), () => screen.empire('fortify', did, null));
+    slot('سور', fort?.cost, canFortify(s, pid, d), () => screen.empire('fortify', did, null), icon: Icons.fort, level: d.fort,
+        max: EMPIRE.m('fortify').l('levels').length);
     return ConstrainedBox(
-      constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width - 120),
+      constraints: BoxConstraints(maxWidth: (MediaQuery.sizeOf(context).width * 0.62).clamp(330.0, 560.0)),
       child: _Box(child: Column(mainAxisSize: MainAxisSize.min, children: [
         Row(mainAxisSize: MainAxisSize.min, children: [
-          Text('$title • $size', style: const TextStyle(color: gold, fontSize: 14, fontWeight: FontWeight.w700)),
-          const SizedBox(width: 10),
-          Text('${s.empire!.points[pid].floor()} نقطة', style: const TextStyle(color: dim, fontSize: 12)),
-          const SizedBox(width: 6),
-          IconButton(visualDensity: VisualDensity.compact, icon: const Icon(Icons.close, color: dim, size: 18),
-              onPressed: () { screen.menuDistrict = null; screen.hud.value++; }),
+          Text('$title • $size', style: const TextStyle(color: gold, fontSize: 12.5, fontWeight: FontWeight.w700)),
+          const SizedBox(width: 8),
+          const Icon(Icons.toll, size: 12, color: gold),
+          Text(' ${s.empire!.points[pid].floor()}', style: const TextStyle(color: gold, fontSize: 12)),
+          const SizedBox(width: 4),
+          InkWell(onTap: () { screen.menuDistrict = null; screen.hud.value++; },
+              child: const Padding(padding: EdgeInsets.all(4), child: Icon(Icons.close, color: dim, size: 16))),
         ]),
-        if (info != null) Padding(padding: const EdgeInsets.only(bottom: 4), child: Text(info, textAlign: TextAlign.center,
-            style: const TextStyle(color: ink, fontSize: 12))),
-        Wrap(spacing: 6, runSpacing: 6, alignment: WrapAlignment.center, children: slots),
+        if (info != null) Padding(padding: const EdgeInsets.only(bottom: 3), child: Text(info, textAlign: TextAlign.center, maxLines: 2,
+            overflow: TextOverflow.ellipsis, style: const TextStyle(color: ink, fontSize: 11))),
+        Wrap(spacing: 4, runSpacing: 4, alignment: WrapAlignment.center, children: slots),
       ])),
     );
   }
 }
 
+// رموز الخانات (ICON في empireMenu.js): الجنود، وترقيات العصابة والمباني، والبناء
+const _unitIcon = {'common': Icons.person, 'strong': Icons.shield, 'elite': Icons.star, 'leader': Icons.military_tech};
+const _upgradeIcon = {'hp': Icons.favorite, 'damage': Icons.sports_martial_arts, 'armor': Icons.shield, 'speed': Icons.double_arrow,
+  'hq.production': Icons.settings, 'tower.damage': Icons.sports_martial_arts, 'tower.rate': Icons.schedule,
+  'hospital.radius': Icons.gps_fixed, 'hospital.rate': Icons.favorite};
+const _buildIcon = {'tower': Icons.cell_tower, 'hospital': Icons.local_hospital, 'hq': Icons.fort};
+
+// خانة صغيرة: رمزها واسمها، ثم سعرها دائماً (أحمر حين لا تكفي النقاط)، ونقاط المستوى، وسبب المنع القصير إن لم يكن النقاط
 class _Slot extends StatelessWidget {
-  final String label, reason;
+  final String label;
+  final IconData icon;
   final int? cost;
-  final int count;
+  final Result check;
+  final int count, level, max;
+  final bool affordable;
   final VoidCallback? onTap;
-  const _Slot({required this.label, required this.cost, required this.reason, required this.onTap, this.count = 0});
+  const _Slot({required this.label, required this.icon, required this.cost, required this.check, required this.onTap,
+      required this.affordable, this.count = 0, this.level = 0, this.max = 0});
   @override
-  Widget build(BuildContext context) => Material(
-    color: onTap != null ? const Color(0xFF3A2E22) : const Color(0xFF241D16),
-    borderRadius: BorderRadius.circular(8),
-    child: InkWell(borderRadius: BorderRadius.circular(8), onTap: onTap, child: Container(
-      constraints: const BoxConstraints(minWidth: 86, minHeight: 44),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Text(count > 0 ? '$label ×$count' : label, style: TextStyle(color: onTap != null ? ink : dim, fontSize: 12.5, fontWeight: FontWeight.w600)),
-        Text(reason.isNotEmpty ? reason : cost != null ? '$cost نقطة' : '', style: TextStyle(color: reason.isNotEmpty ? const Color(0xFFD08A6A) : gold, fontSize: 11)),
-      ]),
-    )),
-  );
+  Widget build(BuildContext context) {
+    final maxed = check.reason == 'أعلى مستوى';
+    final why = !check.ok && !maxed && check.reason != 'النقاط لا تكفي' ? check.reason : '';
+    final on = onTap != null;
+    return Material(
+      color: on ? const Color(0xFF3A2E22) : const Color(0xFF241D16),
+      borderRadius: BorderRadius.circular(7),
+      child: InkWell(borderRadius: BorderRadius.circular(7), onTap: onTap, child: Container(
+        width: 66,
+        padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 3),
+        child: Opacity(opacity: on || maxed ? 1 : 0.7, child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(icon, size: 14, color: on ? gold : dim),
+            if (count > 0) Text('×$count', style: const TextStyle(color: gold, fontSize: 10, fontWeight: FontWeight.w700)),
+          ]),
+          Text(label, maxLines: 1, overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: on ? ink : dim, fontSize: 10.5, fontWeight: FontWeight.w600)),
+          if (max > 0) Padding(padding: const EdgeInsets.symmetric(vertical: 1), child: Row(mainAxisSize: MainAxisSize.min, children: [
+            for (var k = 0; k < max; k++) Container(width: 5, height: 5, margin: const EdgeInsets.symmetric(horizontal: 1),
+                decoration: BoxDecoration(shape: BoxShape.circle, color: k < level ? gold : const Color(0x55E2B55A))),
+          ])),
+          if (cost != null) Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(Icons.toll, size: 10, color: affordable ? gold : const Color(0xFFD07A6A)),
+            Text(' $cost', style: TextStyle(color: affordable ? gold : const Color(0xFFD07A6A), fontSize: 11, fontWeight: FontWeight.w700)),
+          ])
+          else Text(maxed ? 'الأعلى' : check.ok ? 'جاهز' : check.reason, maxLines: 1, overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: dim, fontSize: 9.5)),
+          if (why.isNotEmpty) Text(why, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Color(0xFFD08A6A), fontSize: 9)),
+        ])),
+      )),
+    );
+  }
 }
 
 class _Pause extends StatelessWidget {

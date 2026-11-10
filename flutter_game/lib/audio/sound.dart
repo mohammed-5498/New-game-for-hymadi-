@@ -7,6 +7,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/services.dart';
 
 import '../core/cfg.dart';
 import '../data/js_config.dart';
@@ -68,11 +69,12 @@ void flushSounds() => GameSound._flush();
 
 class GameSound {
   static bool ready = false;
-  static final _sfx = <AudioPlayer>[];
+  static const _native = MethodChannel('gangcity/sfx');   // SoundPool في MainActivity.kt: كل ملف يُفك مرة واحدة
+  static final _ids = <String, int>{};                     // مسار الملف ← رقمه في SoundPool
   static final _busyUntil = <double>[];
   static final _fight = <bool>[];
   static var _next = 0;
-  static late AudioPlayer _music, _track;
+  static late AudioPlayer _music, _music2, _track;
   static String? _musicName;
   static bool _silenced = false, _wantTheme = false, _held = false;
   static String? _city;                       // لحن المدينة المطلوب (المباراة)
@@ -80,7 +82,6 @@ class GameSound {
   static final _lastPick = <String, String>{}, _lastAt = <String, double>{};
   static var _seed = 0x2545f491;
   static final _clock = Stopwatch()..start();
-  static Timer? _fade;
 
   static double _rand() { _seed = (_seed * 1664525 + 1013904223) & 0xFFFFFFFF; return _seed / 4294967296; }
   static double _now() => _clock.elapsedMicroseconds / 1e6;
@@ -90,22 +91,23 @@ class GameSound {
   static Future<void> init() async {
     try {
       final voices = _A.i('combatVoices') + 4;
+      for (var k = 0; k < voices; k++) { _busyUntil.add(0); _fight.add(false); }
       final ctx = AudioContextConfig(focus: AudioContextConfigFocus.mixWithOthers).build();
-      for (var k = 0; k < voices; k++) {
-        final p = AudioPlayer()..setReleaseMode(ReleaseMode.stop);
-        await p.setPlayerMode(PlayerMode.lowLatency);
-        await p.setAudioContext(ctx);
-        _sfx.add(p);
-        _busyUntil.add(0);
-        _fight.add(false);
-      }
       _music = AudioPlayer();
+      _music2 = AudioPlayer();
       _track = AudioPlayer();
+      for (final p in [_music, _music2, _track]) { await p.setAudioContext(ctx); }
       await _music.setReleaseMode(ReleaseMode.loop);
-      // الملفات القصيرة جاهزة قبل أول حاجة
-      final names = <String>{for (final n in _A.m('files').l('sfx')) 'audio/$n.mp3'};
-      unawaited(AudioCache.instance.loadAll(names.toList()).catchError((_) => <Uri>[]));
+      await _music2.setReleaseMode(ReleaseMode.loop);
       ready = true;
+      // المؤثرات القصيرة كلها (ملفات المستخدم والمولَّدة) تُفك مرة واحدة الآن
+      final manifest = await AssetManifest.loadFromAssetBundle(rootBundle);
+      final paths = [
+        for (final n in _A.m('files').l('sfx')) 'assets/audio/$n.mp3',
+        for (final a in manifest.listAssets()) if (a.startsWith('assets/audio/synth/') && a.endsWith('.wav')) a,
+      ];
+      final ids = await _native.invokeListMethod<int>('load', {'paths': paths, 'voices': voices});
+      for (var k = 0; k < paths.length && ids != null; k++) { if (ids[k] > 0) _ids[paths[k].substring(7)] = ids[k]; }
     } catch (_) {
       ready = false;                            // لا صوت على هذا الجهاز: اللعبة تعمل بلا صوت
     }
@@ -131,7 +133,7 @@ class GameSound {
     final fight = _A.m('mix').m('priority').has(event);
     final now = _now();
     var live = 0;
-    for (var k = 0; k < _sfx.length; k++) { if (_fight[k] && _busyUntil[k] > now) live++; }
+    for (var k = 0; k < _busyUntil.length; k++) { if (_fight[k] && _busyUntil[k] > now) live++; }
     if (fight && live >= _A.i('combatVoices')) return;
     final gap = _A.m('mix').m('minGap').dn(event) ?? 0.045;
     if (now - (_lastAt[event] ?? -1) < gap) return;
@@ -142,22 +144,17 @@ class GameSound {
     final vol = (_sfxVol * src.$2 * gain * (1 + (_rand() * 2 - 1) * gj)).clamp(0.0, 1.0);
     final rate = src.$3 * (1 + (_rand() * 2 - 1) * rj);
     // الصوت التالي في الدور، أو أقدم ما بدأ
+    final id = _ids[src.$1];
+    if (id == null) return;
     var slot = _next;
-    for (var n = 0; n < _sfx.length; n++) {
-      final k = (_next + n) % _sfx.length;
+    for (var n = 0; n < _busyUntil.length; n++) {
+      final k = (_next + n) % _busyUntil.length;
       if (_busyUntil[k] <= now) { slot = k; break; }
     }
-    _next = (slot + 1) % _sfx.length;
+    _next = (slot + 1) % _busyUntil.length;
     _busyUntil[slot] = now + 0.6;
     _fight[slot] = fight;
-    final p = _sfx[slot];
-    unawaited(() async {
-      try {
-        await p.stop();
-        await p.setPlaybackRate(rate);
-        await p.play(AssetSource(src.$1), volume: vol);
-      } catch (_) {}
-    }());
+    _native.invokeMethod<void>('play', [id, vol, rate, fight ? 1 : 2]).catchError((_) {});
   }
 
   static void _flush() {
@@ -173,31 +170,37 @@ class GameSound {
     _queue.clear();
   }
 
-  // --- الموسيقى: لحن القوائم أو لحن المدينة، بصعود وخفوت ---
-  static void _fadeTo(double target, double seconds, [void Function()? done]) {
-    _fade?.cancel();
-    final steps = math.max(1, (seconds * 20).round());
+  // --- الموسيقى: لحن القوائم أو لحن المدينة، بصعود وخفوت، ومشغّلان يتعاقبان فيخفت القديم والجديد يصعد ---
+  static final _fades = <AudioPlayer, Timer>{};
+  static void _fadeTo(AudioPlayer p, double target, double seconds, [void Function()? done]) {
+    _fades.remove(p)?.cancel();
+    final steps = math.max(1, (seconds * 25).round());
+    final from = p.volume;
     var k = 0;
-    var from = _music.volume;
-    _fade = Timer.periodic(const Duration(milliseconds: 50), (t) {
+    _fades[p] = Timer.periodic(const Duration(milliseconds: 40), (t) {
       k++;
-      final v = from + (target - from) * k / steps;
-      unawaited(_music.setVolume(v.clamp(0.0, 1.0)));
-      if (k >= steps) { t.cancel(); done?.call(); }
+      final x = k / steps, e = x * x * (3 - 2 * x);   // صعود وخفوت ناعمان في أولهما وآخرهما
+      unawaited(p.setVolume((from + (target - from) * e).clamp(0.0, 1.0)));
+      if (k >= steps) { t.cancel(); _fades.remove(p); done?.call(); }
     });
   }
 
-  static void _playMusic(String name, String file, double level, double fadeIn) {
+  static void _playMusic(String name, String file, double level, double fadeIn, double fadeOut) {
     if (!ready) return;
-    if (_musicName == name) { _fadeTo(_musicVol * level, 0.3); return; }
+    if (_musicName == name) { _fadeTo(_music, _musicVol * level, 0.4); return; }
+    final old = _music;
+    _music = _music2;
+    _music2 = old;
+    if (_musicName != null) _fadeTo(old, 0, fadeOut, () => unawaited(old.stop()));
     _musicName = name;
-    _fade?.cancel();
+    final p = _music;
+    _fades.remove(p)?.cancel();
     unawaited(() async {
       try {
-        await _music.stop();
-        await _music.setVolume(0);
-        await _music.play(AssetSource(file));
-        _fadeTo(_musicVol * level, fadeIn);
+        await p.stop();
+        await p.setVolume(0);
+        await p.play(AssetSource(file), volume: 0);
+        if (_music == p && _musicName == name) _fadeTo(p, _musicVol * level, fadeIn);
       } catch (_) {}
     }());
   }
@@ -205,7 +208,8 @@ class GameSound {
   static void _stopMusic(double fadeOut) {
     if (!ready || _musicName == null) return;
     _musicName = null;
-    _fadeTo(0, fadeOut, () => unawaited(_music.stop()));
+    final p = _music;
+    _fadeTo(p, 0, fadeOut, () => unawaited(p.stop()));
   }
 
   static void _refresh() {
@@ -215,12 +219,12 @@ class GameSound {
     final city = _city;
     if (city != null) {
       final track = _A.m('cityMusic').ss(city);
-      if (track != null) { _playMusic('city:$track', 'audio/music/$track.mp3', T.d('city'), T.d('cityFadeIn')); return; }
+      if (track != null) { _playMusic('city:$track', 'audio/music/$track.mp3', T.d('city'), T.d('cityFadeIn'), T.d('themeFadeOut')); return; }
       _stopMusic(T.d('cityFadeOut'));
       return;
     }
     if (_wantTheme && _now() < _introUntil) return;   // صوت التشغيل أولاً
-    if (_wantTheme) { _playMusic('theme', 'audio/theme.mp3', T.d('theme'), T.d('themeFadeIn')); return; }
+    if (_wantTheme) { _playMusic('theme', 'audio/theme.mp3', T.d('theme'), T.d('themeFadeIn'), T.d('cityFadeOut')); return; }
     _stopMusic(T.d('themeFadeOut'));
   }
 
@@ -245,6 +249,7 @@ class GameSound {
     final level = _A.m('tracks').dn(name) ?? 1;
     unawaited(Future<void>.delayed(Duration(milliseconds: (delay * 1000).round()), () async {
       try {
+        _fades.remove(_track)?.cancel();
         await _track.stop();
         await _track.play(AssetSource('audio/$name.mp3'), volume: (_musicVol * level).clamp(0.0, 1.0));
       } catch (_) {}
@@ -263,7 +268,8 @@ class GameSound {
       _oneShot('match_start');
       _oneShot('loading', _A.m('tracks').d('loadingDelay'));
     } else {
-      unawaited(_track.stop());
+      final t = _track;
+      _fadeTo(t, 0, _A.m('tracks').d('loadingFade'), () => unawaited(t.stop()));   // صوت التحميل يخفت مع ارتفاع الشاشة
       _city = city;
       _refresh();
     }
@@ -277,10 +283,11 @@ class GameSound {
     if (!ready || _held == on) return;
     _held = on;
     if (on) {
-      for (final p in _sfx) { unawaited(p.stop()); }
+      _native.invokeMethod<void>('hold', true).catchError((_) {});
       unawaited(_track.stop());
       unawaited(_music.pause());
     } else {
+      _native.invokeMethod<void>('hold', false).catchError((_) {});
       if (_musicName != null) unawaited(_music.resume());
       _refresh();
     }

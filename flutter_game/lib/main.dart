@@ -26,7 +26,7 @@ Future<void> main() async {
     title: 'مدينة العصابات',
     theme: ThemeData(brightness: Brightness.dark, colorSchemeSeed: gold, scaffoldBackgroundColor: deep),
     builder: (context, child) => Directionality(textDirection: TextDirection.rtl, child: child!),
-    home: _testMatch() ?? const MainMenu(),
+    home: _testMatch() ?? const _Intro(),
   ));
 }
 
@@ -52,4 +52,25 @@ class _AppLife with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) =>
       GameSound.hold(state == AppLifecycleState.paused || state == AppLifecycleState.hidden || state == AppLifecycleState.inactive);
+}
+
+// شاشة التشغيل (introBlackout في blackout.js، UI.intro): سوداء مع صوت البداية، ثم تتلاشى إلى القائمة ولحنها
+class _Intro extends StatefulWidget {
+  const _Intro();
+  @override
+  State<_Intro> createState() => _IntroState();
+}
+
+class _IntroState extends State<_Intro> {
+  bool done = false;
+  @override
+  void initState() {
+    super.initState();
+    Future<void>.delayed(Duration(milliseconds: (UI.m('intro').d('seconds') * 1000).round()), () { if (mounted) setState(() => done = true); });
+  }
+  @override
+  Widget build(BuildContext context) => AnimatedSwitcher(
+    duration: Duration(milliseconds: UI.m('intro').i('fadeMs')),
+    child: done ? const MainMenu() : const ColoredBox(color: Colors.black, child: SizedBox.expand()),
+  );
 }
