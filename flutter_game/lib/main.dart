@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'audio/sound.dart';
 import 'core/cfg.dart';
 import 'data/js_config.dart';
 import 'ui/match_screen.dart';
@@ -15,6 +16,9 @@ Future<void> main() async {
   SystemChrome.setPreferredOrientations([DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]);
   await Prefs.init();
   Settings.load();
+  await GameSound.init();
+  GameSound.intro();
+  WidgetsBinding.instance.addObserver(_AppLife());
   runApp(MaterialApp(
     debugShowCheckedModeBanner: false,
     title: 'مدينة العصابات',
@@ -39,4 +43,11 @@ Widget? _testMatch() {
           'team': 0, 'difficulty': q['level'] ?? 'medium'},
     ],
   });
+}
+
+// تصغير التطبيق: يصمت الصوت كله ويعود عند الرجوع
+class _AppLife with WidgetsBindingObserver {
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) =>
+      GameSound.hold(state == AppLifecycleState.paused || state == AppLifecycleState.hidden || state == AppLifecycleState.inactive);
 }

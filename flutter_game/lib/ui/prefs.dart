@@ -32,7 +32,7 @@ class Prefs {
 
 // --- الإعدادات (شاشة الإعدادات في menus.js) ---
 class Settings {
-  static double sfx = 0.8, music = 0.6;
+  static double sfx = AUDIO.d('sfxVolume'), music = AUDIO.d('musicVolume');
   static bool mute = false, pops = true, battery = false;
   static String quality = 'auto';               // auto | high | medium | low (GRAPHICS)
   static const _key = 'gangcity.settings';

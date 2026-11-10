@@ -9,6 +9,7 @@ import 'package:flutter/scheduler.dart';
 import '../core/cfg.dart';
 import '../core/fmath.dart';
 import '../data/js_config.dart';
+import '../audio/sound.dart';
 import '../game/capture.dart';
 import '../game/combat.dart';
 import '../game/empire.dart';
@@ -80,6 +81,8 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
 
   @override
   void dispose() {
+    GameSound.matchSilence(false);
+    GameSound.menuMusic(true);
     WidgetsBinding.instance.removeObserver(this);
     _ticker.dispose();
     layer?.dispose();
@@ -92,6 +95,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     final began = DateTime.now();
     final tips = UI.m('blackout').l('tips');
     setState(() { loadProgress = 0; tip = tips[math.Random().nextInt(tips.length)] as String; });
+    GameSound.matchSilence(true);
     MatchState s;
     if (_resumePending) {
       _resumePending = false;
@@ -138,6 +142,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
       layer = CityLayer(s.map, a);
       _mapVersion = s.mapVersion;
     });
+    GameSound.matchSilence(false, s.map.city);
     _ticker.start();
   }
 
@@ -172,13 +177,13 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
   void openPause({bool saveNow = false}) {
     final s = state;
     if (s == null || s.matchResult != null) return;
-    if (!paused) { paused = true; hud.value++; }
+    if (!paused) { paused = true; hud.value++; GameSound.cityMusic(null); }
     if (saveNow) { saveMatch(); return; }
     // نقطة حفظ بعد ظهور القائمة حتى لا يتقطع
     Future<void>.delayed(Duration(milliseconds: UI.i('fadeMs') + 30), () { if (paused && mounted) saveMatch(); });
   }
 
-  void closePause() { paused = false; hud.value++; }
+  void closePause() { paused = false; hud.value++; GameSound.cityMusic(state?.map.city); }
 
   void leaveToMain() {
     saveMatch();
@@ -203,6 +208,8 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     _recorded = true;
     clearSavedMatch();
     final r = s.matchResult!;
+    GameSound.cityMusic(null);
+    if (s.humanId >= 0) sound(r.won ? 'victory' : 'defeat');
     final human = s.humanId >= 0 ? s.players[s.humanId] : null;
     if (settings['story'] != null) storyResult = storyEnd(settings, r.won);
     if (human != null && s.mode != 'survival' && settings['story'] == null) {
@@ -405,6 +412,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
       }
     }
     if (hit != null && hit.playerId == s.humanId) {
+      sound('select');
       for (final u in s.units) { u.selected = false; }
       hit.selected = true;
       _lastTapUnit = hit;
@@ -414,6 +422,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     }
     _lastTapUnit = null;
     if (group.isEmpty) return;
+    sound('command');
     if (hit != null && isEnemy(s, group[0], hit)) { commandAttack(s, group, hit); return; }
     final w = toWorld(s, p, size);
     final (ti, tj) = worldToTile(w.dx, w.dy);

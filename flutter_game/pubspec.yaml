@@ -28,6 +28,7 @@ environment:
 # the latest version available on pub.dev. To see which dependencies have newer
 # versions available, run `flutter pub outdated`.
 dependencies:
+  audioplayers: ^6.8.1
   flutter:
     sdk: flutter
   shared_preferences: ^2.5.6
@@ -58,6 +59,9 @@ flutter:
   uses-material-design: true
   assets:
     - assets/map/atlas/   # أطلس كل مدينة (scripts/pack_atlases.py)؛ صور الحزمة المفردة لا تدخل التطبيق
+    - assets/audio/       # صوتيات المستخدم (assets/audio في اللعبة الحالية)
+    - assets/audio/music/ # لحن لكل مدينة
+    - assets/audio/synth/ # المؤثرات المولَّدة (scripts/export_synth_sounds.cjs)
     - assets/thumbs/      # صور مصغرة للمدن والعصابات في القوائم (scripts/export_thumbs.cjs)
     - assets/units/       # صور الشخصيات مقطّعة (scripts/slice_units.py): أجزاؤها في lib/data/unit_sprites.dart
 

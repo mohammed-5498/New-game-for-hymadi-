@@ -1,6 +1,8 @@
 // عناصر القوائم المشتركة (style.css في اللعبة الحالية): لوحة داكنة دافئة بذهبي، وأزرار 52 بكسل، وخط 16
 import 'package:flutter/material.dart';
 
+import '../audio/sound.dart';
+
 const gold = Color(0xFFE2B55A), panel = Color(0xE6261E17), ink = Color(0xFFF2E6CF), dim = Color(0xFF9C8F7A);
 const deep = Color(0xFF15110D), card = Color(0xFF2E241B), cardOn = Color(0xFF4A3A26), danger = Color(0xFFE07060);
 
@@ -35,7 +37,7 @@ class WideButton extends StatelessWidget {
         disabledBackgroundColor: const Color(0xFF241D16), disabledForegroundColor: dim,
         side: ghost ? const BorderSide(color: Color(0x66E2B55A)) : null,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-      onPressed: onTap,
+      onPressed: onTap == null ? null : () { sound('ui_tap'); onTap!(); },
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         Text(label, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
         if (note != null) Text(note!, style: TextStyle(fontSize: 11, color: primary ? Colors.black87 : dim)),

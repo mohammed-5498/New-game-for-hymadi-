@@ -1,5 +1,6 @@
 // إنشاء المباراة وتحديثها (js/state.js createMatch وjs/game/loop.js updateMatch وjs/ai/botBattle.js)
 import '../ai/bot.dart';
+import '../audio/sound.dart';
 import '../core/cfg.dart';
 import '../data/js_config.dart';
 import '../map/generator.dart';
@@ -111,6 +112,7 @@ void updateMatch(MatchState state) {
   updateVictory(state);
   updateNotice(state);
   updateAlerts(state);
+  flushSounds();
   final mm = state.moveMarker;
   if (mm != null) {
     mm.t += TICK_SEC;

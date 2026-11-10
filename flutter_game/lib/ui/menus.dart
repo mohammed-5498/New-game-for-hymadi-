@@ -12,6 +12,7 @@ import '../data/js_config.dart';
 import '../map/generator.dart';
 import '../render/city_art.dart';
 import '../render/city_layer.dart';
+import '../audio/sound.dart';
 import 'match_screen.dart';
 import 'prefs.dart';
 import 'story_screen.dart';
@@ -168,7 +169,8 @@ class _MainMenuState extends State<MainMenu> {
 
   @override
   Widget build(BuildContext context) {
-    ModalRoute.of(context);       // يُعاد البناء حين تعود القائمة إلى الواجهة: خانة المتابعة بعد الخروج من مباراة
+    final route = ModalRoute.of(context);   // يُعاد البناء حين تعود القائمة إلى الواجهة: خانة المتابعة بعد الخروج من مباراة
+    if (route?.isCurrent ?? true) GameSound.menuMusic(true);
     final saved = Prefs.read(UI.s('matchInfoKey'));
     return Scaffold(body: Stack(children: [
     const Positioned.fill(child: MenuBackdrop()),
@@ -488,7 +490,7 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  void _set(VoidCallback f) { setState(f); Settings.save(); }
+  void _set(VoidCallback f) { setState(f); Settings.save(); GameSound.applyVolumes(); }
   @override
   Widget build(BuildContext context) {
     final names = {'auto': 'تلقائي', for (final k in ['high', 'medium', 'low']) k: GRAPHICS.m('levels').m(k).s('name')};
@@ -507,7 +509,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             trailing: Text(names[Settings.quality]!, style: const TextStyle(color: gold, fontSize: 15)),
             onTap: () => _set(() { final o = GRAPHICS.l('order'); Settings.quality = o[(o.indexOf(Settings.quality) + 1) % o.length] as String; })),
         Toggle('توفير البطارية (30 إطاراً)', Settings.battery, (v) => _set(() => Settings.battery = v)),
-        const Text('الصوت في مرحلة لاحقة من النقل: تُحفظ القيم الآن', style: TextStyle(color: dim, fontSize: 11)),
         const SizedBox(height: 8),
         WideButton('رجوع', () => Navigator.pop(context), ghost: true),
       ])))));
