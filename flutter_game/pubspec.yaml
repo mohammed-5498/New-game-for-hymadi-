@@ -30,6 +30,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  shared_preferences: ^2.5.6
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
@@ -57,6 +58,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/map/atlas/   # أطلس كل مدينة (scripts/pack_atlases.py)؛ صور الحزمة المفردة لا تدخل التطبيق
+    - assets/thumbs/      # صور مصغرة للمدن والعصابات في القوائم (scripts/export_thumbs.cjs)
     - assets/units/       # صور الشخصيات مقطّعة (scripts/slice_units.py): أجزاؤها في lib/data/unit_sprites.dart
 
   # To add assets to your application, add an assets section, like this:

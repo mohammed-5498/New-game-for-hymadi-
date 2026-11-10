@@ -92,6 +92,13 @@ void initRealism(MatchState state, Unit unit) {
   unit.deathFront = false;
 }
 
+// بعد تحميل مباراة محفوظة (restoreRng في realism.js): الأسلوب من الوحدة، ومولّد جديد ببذرة الزمن، والسمات المحفوظة
+void restoreRealism(MatchState state, Unit unit, Traits traits) {
+  unit.style = _styleOf(unit);
+  unit.rng = _rng32(((unit.id * 2654435761) & 0xFFFFFFFF) ^ state.combatSeed ^ ((state.time * 1000).floor() & 0xFFFFFFFF));
+  unit.traits = traits;
+}
+
 final _stMax = CR.d('stMax');
 final _moves = CR.m('moves');
 final _moveTimeBase = CR.d('moveTimeBase');

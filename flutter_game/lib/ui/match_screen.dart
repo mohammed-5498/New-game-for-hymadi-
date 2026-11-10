@@ -13,6 +13,7 @@ import '../game/capture.dart';
 import '../game/combat.dart';
 import '../game/match.dart';
 import '../game/state.dart';
+import '../game/save.dart';
 import '../game/units.dart';
 import '../map/generator.dart';
 import '../render/batch.dart';
@@ -22,16 +23,27 @@ import '../render/fx_art.dart';
 import '../render/unit_art.dart';
 import '../render/unit_atlas.dart';
 import 'hud.dart';
+import 'menus.dart';
+import 'prefs.dart';
+import 'widgets.dart';
 
 class MatchScreen extends StatefulWidget {
-  final J settings;
-  const MatchScreen({super.key, required this.settings});
+  final J? settings;
+  final bool resume;              // متابعة المباراة المحفوظة (UI.matchKey)
+  const MatchScreen({super.key, this.settings, this.resume = false});
   @override
   State<MatchScreen> createState() => MatchScreenState();
 }
 
-class MatchScreenState extends State<MatchScreen> with SingleTickerProviderStateMixin {
+class MatchScreenState extends State<MatchScreen> with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   MatchState? state;
+  late J settings = widget.settings ?? const {};
+  double loadProgress = 0;
+  String tip = '';
+  bool _recorded = false;
+  late bool _resumePending = widget.resume;
+  Duration _lastDraw = Duration.zero;
+  int _activeUntil = 0;
   CityArt? art;
   CityLayer? layer;
   UnitAtlas? units;
@@ -51,11 +63,19 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
   void initState() {
     super.initState();
     _ticker = createTicker(_onTick);
+    WidgetsBinding.instance.addObserver(this);
     _start();
+  }
+
+  // تصغير التطبيق: إيقاف وحفظ (حدث pause في اللعبة الحالية)
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.hidden) openPause(saveNow: true);
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _ticker.dispose();
     layer?.dispose();
     art?.dispose();
@@ -64,19 +84,45 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
   }
 
   Future<void> _start() async {
-    simRng = Rng(DateTime.now().microsecondsSinceEpoch & 0x7FFFFFFF);
-    final s = createMatch(widget.settings);
+    final began = DateTime.now();
+    final tips = UI.m('blackout').l('tips');
+    setState(() { loadProgress = 0; tip = tips[math.Random().nextInt(tips.length)] as String; });
+    MatchState s;
+    if (_resumePending) {
+      _resumePending = false;
+      try {
+        s = decodeMatch(Prefs.raw(UI.s('matchKey'))!);
+      } catch (_) {
+        // حفظ تالف أو بنسخة أخرى: يُحذف ويعود اللاعب إلى القائمة
+        clearSavedMatch();
+        if (mounted) Navigator.of(context).pop();
+        return;
+      }
+      settings = s.settings;
+    } else {
+      final seed = DateTime.now().microsecondsSinceEpoch & 0x7FFFFFFF;
+      simRng = Rng(seed);
+      s = createMatch(settings)..seed = seed;
+      // للفحص في المتصفح (?ff=ثوانٍ): تقديم المباراة قبل عرضها
+      final ff = (settings['ff'] as num?)?.toDouble() ?? 0;
+      for (var t = 0.0; t < ff && s.matchResult == null; t += TICK_SEC) { updateMatch(s); }
+    }
     s.running = true;
-    // للفحص في المتصفح (?ff=ثوانٍ): تقديم المباراة قبل عرضها
-    final ff = (widget.settings['ff'] as num?)?.toDouble() ?? 0;
-    for (var t = 0.0; t < ff && s.matchResult == null; t += TICK_SEC) { updateMatch(s); }
+    _recorded = false;
+    setState(() => loadProgress = 0.3);
     final a = await CityArt.load(s.map.city);
+    if (mounted) setState(() => loadProgress = 0.7);
     final pairs = [for (final p in s.players) if (!p.passive) (p.gang, p.gang == 'police' ? UNIT_ART.s('policeColor') : p.color)];
     final u = await buildUnitAtlas(pairs);
     batch.whiteU = 1.5; batch.whiteV = 1.5;
     if (!mounted) return;
-    final z = (widget.settings['zoom'] as num?)?.toDouble();
+    final z = (settings['zoom'] as num?)?.toDouble();
     if (z != null) s.camera.z = z;
+    setState(() => loadProgress = 1);
+    // شاشة التحميل لا ترتفع قبل minSeconds (UI.blackout)، إلا في الفحص
+    final wait = (UI.m('blackout').d('minSeconds') * 1000).round() - DateTime.now().difference(began).inMilliseconds;
+    if (wait > 0 && settings['ff'] == null) await Future<void>.delayed(Duration(milliseconds: wait));
+    if (!mounted) return;
     setState(() {
       state = s;
       art = a;
@@ -92,10 +138,74 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     layer?.dispose();
     art?.dispose();
     units?.image.dispose();
+    clearSavedMatch();
     setState(() { state = null; layer = null; art = null; units = null; menuDistrict = null; paused = false; });
     _last = Duration.zero; _acc = 0;
     _start();
   }
+
+  // --- الإيقاف والحفظ (hud.js: openPause وleaveToMain) ---
+  void saveMatch() {
+    final s = state;
+    if (s == null || s.matchResult != null) return;
+    Prefs.writeRaw(UI.s('matchKey'), encodeMatch(s));
+    Prefs.write(UI.s('matchInfoKey'), saveInfo(s));
+  }
+
+  void openPause({bool saveNow = false}) {
+    final s = state;
+    if (s == null || s.matchResult != null) return;
+    if (!paused) { paused = true; hud.value++; }
+    if (saveNow) { saveMatch(); return; }
+    // نقطة حفظ بعد ظهور القائمة حتى لا يتقطع
+    Future<void>.delayed(Duration(milliseconds: UI.i('fadeMs') + 30), () { if (paused && mounted) saveMatch(); });
+  }
+
+  void closePause() { paused = false; hud.value++; }
+
+  void leaveToMain() {
+    saveMatch();
+    Navigator.of(context).pop();
+  }
+
+  void openSettings() => Navigator.of(context).push(PageRouteBuilder(opaque: false,
+      pageBuilder: (_, _, _) => const SettingsScreen(overlay: true)));
+
+  // زر الرجوع في أندرويد: يغلق قائمة الحي، ثم يفتح الإيقاف أو يغلقه
+  void onBack() {
+    final s = state;
+    if (s == null) return;
+    if (s.matchResult != null) { Navigator.of(context).pop(); return; }
+    if (menuDistrict != null) { menuDistrict = null; hud.value++; return; }
+    paused ? closePause() : openPause();
+  }
+
+  // نهاية المباراة: يُحذف الحفظ، وتُضاف للإحصائيات الدائمة مرة واحدة (الصمود له رقمه القياسي)
+  void _ended(MatchState s) {
+    if (_recorded) return;
+    _recorded = true;
+    clearSavedMatch();
+    final r = s.matchResult!;
+    final human = s.humanId >= 0 ? s.players[s.humanId] : null;
+    if (human != null && s.mode != 'survival' && settings['story'] == null) {
+      Stats.record(won: r.won, duration: r.duration, kills: r.kills, losses: r.losses, maxDistricts: r.maxDistricts, gang: human.nation ?? human.gang);
+    }
+  }
+
+  // إيقاع الرسم (GRAPHICS): توفير البطارية 30، والمتوسطة 30 والكاميرا ساكنة، والإيقاف والنهاية 5
+  bool _shouldDraw(Duration now, MatchState s) {
+    final g = Settings.gfx;
+    var fps = Settings.fpsCap.toDouble();
+    if (paused || s.matchResult != null) {
+      fps = GRAPHICS.d('idleFps');
+    } else if (g.d('calmFps') > 0 && !Settings.battery && DateTime.now().millisecondsSinceEpoch > _activeUntil) {
+      fps = g.d('calmFps');
+    }
+    if (fps >= 60 || now - _lastDraw >= Duration(microseconds: (1e6 / fps - 2000).round())) { _lastDraw = now; return true; }
+    return false;
+  }
+
+  void markActive() => _activeUntil = DateTime.now().millisecondsSinceEpoch + GRAPHICS.i('activeMs');
 
   void _onTick(Duration now) {
     final s = state;
@@ -108,15 +218,16 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
       updateMatch(s);
       _acc -= TICK_SEC;
       if (++_ticks % 5 == 0) hud.value++;
-      if (s.matchResult != null) { hud.value++; break; }
+      if (s.matchResult != null) { _ended(s); hud.value++; break; }
     }
     alpha = _acc / TICK_SEC;
-    if (widget.settings['watch'] == true && _ticks % 20 == 0) _watch(s);
+    if (settings['watch'] == true && _ticks % 20 == 0) _watch(s);
     if (s.mapVersion != _mapVersion) {
       _mapVersion = s.mapVersion;
       layer?.dispose();
       layer = CityLayer(s.map, art!);
     }
+    if (!_shouldDraw(now, s)) return;
     _retint(s);
     frame.value++;
   }
@@ -164,12 +275,14 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
 
   void _onScaleStart(ScaleStartDetails d) {
     _lastScale = 1;
+    markActive();
     if (selectMode && d.pointerCount == 1) { boxStart = d.localFocalPoint; boxEnd = d.localFocalPoint; }
   }
 
   void _onScale(ScaleUpdateDetails d, Size size) {
     final s = state;
     if (s == null) return;
+    markActive();
     if (boxStart != null && d.pointerCount == 1) { boxEnd = d.localFocalPoint; return; }
     final c = s.camera;
     final fx = d.localFocalPoint.dx - size.width / 2, fy = d.localFocalPoint.dy - size.height / 2;
@@ -222,6 +335,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
   void _onTap(TapUpDetails d, Size size) {
     final s = state;
     if (s == null || s.matchResult != null) return;
+    markActive();
     final p = d.localPosition, now = DateTime.now().millisecondsSinceEpoch;
     final hit = _unitAt(s, p, size);
     // لمستان سريعتان على حي تملكه تفتحان قائمته (empireMenu)
@@ -281,27 +395,45 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
   @override
   Widget build(BuildContext context) {
     final s = state;
-    if (s == null || art == null || units == null) {
-      return const Scaffold(body: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-        CircularProgressIndicator(color: gold), SizedBox(height: 12), Text('تجهيز المدينة...', style: TextStyle(color: ink)),
-      ])));
-    }
+    if (s == null || art == null || units == null) return LoadingScreen(progress: loadProgress, tip: tip);
     final size = MediaQuery.sizeOf(context);
     s.viewW = size.width; s.viewH = size.height;
-    return Scaffold(
-      body: Stack(children: [
-        Positioned.fill(child: GestureDetector(
-          onScaleStart: _onScaleStart,
-          onScaleUpdate: (d) => _onScale(d, size),
-          onScaleEnd: (_) => _onScaleEnd(size),
-          onTapUp: (d) => _onTap(d, size),
-          onLongPressStart: (d) => _onLongPress(d, size),
-          child: CustomPaint(painter: _MatchPainter(this), isComplex: true),
-        )),
-        Positioned.fill(child: MatchHud(screen: this)),
-      ]),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) { if (!didPop) onBack(); },
+      child: Scaffold(
+        body: Stack(children: [
+          Positioned.fill(child: GestureDetector(
+            onScaleStart: _onScaleStart,
+            onScaleUpdate: (d) => _onScale(d, size),
+            onScaleEnd: (_) => _onScaleEnd(size),
+            onTapUp: (d) => _onTap(d, size),
+            onLongPressStart: (d) => _onLongPress(d, size),
+            child: CustomPaint(painter: _MatchPainter(this), isComplex: true),
+          )),
+          Positioned.fill(child: MatchHud(screen: this)),
+        ]),
+      ),
     );
   }
+}
+
+void clearSavedMatch() { Prefs.remove(UI.s('matchKey')); Prefs.remove(UI.s('matchInfoKey')); }
+
+// شاشة التحميل (blackout.js): شريط تقدم ونصيحة
+class LoadingScreen extends StatelessWidget {
+  final double progress;
+  final String tip;
+  const LoadingScreen({super.key, required this.progress, required this.tip});
+  @override
+  Widget build(BuildContext context) => Scaffold(backgroundColor: deep, body: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+    const Text('مدينة العصابات', style: TextStyle(color: gold, fontSize: 26, fontWeight: FontWeight.w900)),
+    const SizedBox(height: 14),
+    SizedBox(width: 320, child: ClipRRect(borderRadius: BorderRadius.circular(4), child: LinearProgressIndicator(
+        value: progress, minHeight: 7, color: gold, backgroundColor: card))),
+    const SizedBox(height: 14),
+    SizedBox(width: 440, child: Text(tip, textAlign: TextAlign.center, style: const TextStyle(color: dim, fontSize: 14))),
+  ])));
 }
 
 class _MatchPainter extends CustomPainter {
@@ -362,7 +494,7 @@ class _MatchPainter extends CustomPainter {
     for (final u in s.units) { if (u.selected && u.state != 'dead') drawSelectionRing(b, u, alpha); }
     if (s.moveMarker != null) drawMoveMarker(b, s.moveMarker!);
     b.flush(canvas, img);
-    _drawPops(canvas, s);
+    if (Settings.pops) _drawPops(canvas, s);
     canvas.restore();
     final bs = v.boxStart, be = v.boxEnd;
     if (bs != null && be != null) {

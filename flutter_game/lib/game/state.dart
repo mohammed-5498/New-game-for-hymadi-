@@ -326,6 +326,7 @@ class MatchState {
   List<Projectile> projectiles = [];
   List<PathRequest> pathQueue = [];
   int nextUnitId = 1;
+  int seed = 0;                  // بذرة المولّد قبل createMatch (للحفظ: الخريطة تُعاد منها)
   int humanId;
   String weather;
   String? feature;

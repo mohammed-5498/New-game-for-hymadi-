@@ -34,6 +34,7 @@ List<String> _sequence(String level) {
 
 class BotMemo { int turn = 0; double units = 0, tech = 0; }
 final _memos = Expando<Map<int, BotMemo>>();
+Map<int, BotMemo> botMemos(EmpireState e) => _memos[e] ??= {};   // للحفظ (save.dart)
 
 class _Buy {
   final double cost;

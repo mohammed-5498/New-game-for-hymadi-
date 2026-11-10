@@ -12,10 +12,8 @@ import '../game/state.dart';
 import '../game/victory.dart';
 import '../map/sizes.dart';
 import 'match_screen.dart';
+import 'widgets.dart';
 
-const gold = Color(0xFFE2B55A), panel = Color(0xE6261E17), ink = Color(0xFFF2E6CF), dim = Color(0xFF9C8F7A);
-Color colorOf(String hex) => Color(0xFF000000 | int.parse(hex.substring(1, 7), radix: 16));
-String clock(double seconds) { final s = seconds.floor(); return '${s ~/ 60}:${(s % 60).toString().padLeft(2, '0')}'; }
 
 class MatchHud extends StatelessWidget {
   final MatchScreenState screen;
@@ -24,7 +22,7 @@ class MatchHud extends StatelessWidget {
   @override
   Widget build(BuildContext context) => ValueListenableBuilder<int>(
     valueListenable: screen.hud,
-    builder: (context, _, __) {
+    builder: (context, _, _) {
       final s = screen.state!;
       final me = s.humanId >= 0 ? s.players[s.humanId] : null;
       final selected = s.units.where((u) => u.selected && u.state != 'dead').length;
@@ -55,7 +53,7 @@ class MatchHud extends StatelessWidget {
             screen.hud.value++;
           }),
           _Btn(icon: Icons.fort, tip: 'القاعدة', onTap: () => _nextHq(s)),
-          _Btn(icon: screen.paused ? Icons.play_arrow : Icons.pause, tip: 'إيقاف', onTap: () { screen.paused = !screen.paused; screen.hud.value++; }),
+          _Btn(icon: screen.paused ? Icons.play_arrow : Icons.pause, tip: 'إيقاف', onTap: () => screen.paused ? screen.closePause() : screen.openPause()),
         ])),
         // مجموعات التحكم على الحافة اليمنى
         Positioned(right: 8, top: 0, bottom: 0, child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -251,23 +249,15 @@ class _Pause extends StatelessWidget {
   final MatchScreenState screen;
   const _Pause(this.screen);
   @override
-  Widget build(BuildContext context) => Container(color: const Color(0x99000000), child: Center(child: _Box(child: Column(mainAxisSize: MainAxisSize.min, children: [
+  Widget build(BuildContext context) => Container(color: const Color(0x99000000), child: Center(child: Panel(padding: const EdgeInsets.all(14),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
     const Text('إيقاف مؤقت', style: TextStyle(color: gold, fontSize: 18, fontWeight: FontWeight.w700)),
-    const SizedBox(height: 10),
-    _Wide('متابعة', () { screen.paused = false; screen.hud.value++; }),
-    _Wide('مباراة جديدة', screen.restart),
-    _Wide('القائمة الرئيسية', () => Navigator.of(context).pop()),
+    const SizedBox(height: 8),
+    WideButton('متابعة', screen.closePause, primary: true),
+    WideButton('الإعدادات', screen.openSettings),
+    WideButton('إعادة المباراة', screen.restart),
+    WideButton('القائمة الرئيسية', screen.leaveToMain, note: 'تُحفظ المباراة للمتابعة'),
   ]))));
-}
-
-class _Wide extends StatelessWidget {
-  final String label;
-  final VoidCallback onTap;
-  const _Wide(this.label, this.onTap);
-  @override
-  Widget build(BuildContext context) => Padding(padding: const EdgeInsets.symmetric(vertical: 4), child: SizedBox(width: 220, height: 46,
-      child: FilledButton(style: FilledButton.styleFrom(backgroundColor: const Color(0xFF3A2E22), foregroundColor: ink), onPressed: onTap,
-          child: Text(label, style: const TextStyle(fontSize: 15)))));
 }
 
 class _End extends StatelessWidget {
@@ -275,15 +265,31 @@ class _End extends StatelessWidget {
   final MatchResult r;
   const _End(this.screen, this.r);
   @override
-  Widget build(BuildContext context) => Container(color: const Color(0xAA000000), child: Center(child: _Box(child: Column(mainAxisSize: MainAxisSize.min, children: [
-    Text(r.won ? 'انتصار!' : 'هزيمة', style: TextStyle(color: r.won ? gold : const Color(0xFFE07060), fontSize: 26, fontWeight: FontWeight.w800)),
-    const SizedBox(height: 6),
+  Widget build(BuildContext context) => Container(color: const Color(0xAA000000), child: Center(child: SingleChildScrollView(child: Panel(
+      padding: const EdgeInsets.all(14), child: Column(mainAxisSize: MainAxisSize.min, children: [
+    Text(r.won ? 'انتصار!' : 'هزيمة', style: TextStyle(color: r.won ? gold : danger, fontSize: 26, fontWeight: FontWeight.w800)),
+    const SizedBox(height: 4),
     Text(r.reason, style: const TextStyle(color: ink, fontSize: 14)),
-    const SizedBox(height: 6),
-    Text('المدة ${clock(r.duration)} • أكبر عدد أحياء ${r.maxDistricts} • أسقطت ${r.kills} • خسرت ${r.losses}',
-        style: const TextStyle(color: dim, fontSize: 12)),
-    const SizedBox(height: 10),
-    _Wide('مباراة جديدة', screen.restart),
-    _Wide('القائمة الرئيسية', () => Navigator.of(context).pop()),
-  ]))));
+    const SizedBox(height: 8),
+    SizedBox(width: 560, child: Wrap(spacing: 8, runSpacing: 8, alignment: WrapAlignment.center, children: [
+      StatCard('مدة المباراة', clock(r.duration)),
+      StatCard('أكبر عدد أحياء', '${r.maxDistricts}'),
+      StatCard('أعداء قتلتهم', '${r.kills}'),
+      StatCard('وحداتك التي ماتت', '${r.losses}'),
+      for (final (l, v) in endExtras(screen.state!)) StatCard(l, v),
+    ])),
+    const SizedBox(height: 8),
+    WideButton('مباراة جديدة', screen.restart, primary: true),
+    WideButton('القائمة الرئيسية', () => Navigator.of(context).pop()),
+  ])))));
+}
+
+// بطاقات النهاية الإضافية (modeExtras في hud.js): ما جُمع من النقاط والزعماء
+List<(String, String)> endExtras(MatchState s) {
+  final e = s.empire;
+  if (e == null || s.humanId < 0) return const [];
+  return [
+    ('نقاط جمعتها', '${e.earned[s.humanId].floor()}'),
+    if (e.bounties[s.humanId] > 0) ('زعماء أسقطتهم', '${e.bounties[s.humanId]}'),
+  ];
 }
