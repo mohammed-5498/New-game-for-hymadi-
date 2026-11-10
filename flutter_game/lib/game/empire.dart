@@ -30,10 +30,10 @@ class QueueItem { final String kind; final int payer; double t = 0; QueueItem(th
 class TowerShot {
   final int owner;
   final Unit target;
-  final int i, j;
+  final double i, j, top;          // top: ارتفاع منبع السهم (أبراج المزايا، رسم)
   double t = 0, prevT = 0;
   final double duration, damage;
-  TowerShot(this.owner, this.target, this.i, this.j, this.duration, this.damage);
+  TowerShot(this.owner, this.target, this.i, this.j, this.duration, this.damage, [this.top = 0]);
 }
 
 class EmpireState {
@@ -131,7 +131,7 @@ void _rewardLeaderKills(MatchState state, EmpireState ms) {
 }
 
 double districtIncome(District d) =>
-    d.building == 'hq' ? E.m('income').d('hq') * _DS.m('income').d(sizeOf(d)) : E.m('income').d('district') * _DS.m('income').d(sizeOf(d));
+    d.building == 'hq' ? E.m('income').d('hq') * _DS.m('income').d(sizeOf(d)) : featureIncome(d) ?? E.m('income').d('district') * _DS.m('income').d(sizeOf(d));
 
 double _lvl(Player player, String key) {
   if (player.isHuman || player.neutral) return 1;
@@ -160,7 +160,7 @@ double _classPrice(Player player, String kind) {
 int _priced(MatchState? state, num cost) => state != null ? jsRound(cost * eventCostMul(state)) : cost.toInt();
 int buildCost(MatchState? state, String type) => _priced(state, E.m('buildings').m(type).d('cost'));
 
-bool _producesAt(District district, String kind) => E.m('units').has(kind) && district.building == 'hq';
+bool _producesAt(District district, String kind) => E.m('units').has(kind) ? district.building == 'hq' : (recruitsAt(district) ?? const []).contains(kind);
 
 void _updateQueues(MatchState state, EmpireState ms) {
   for (final id in ms.queues.keys.toList()) {
@@ -190,7 +190,7 @@ String? heroFor(Player player, String kind) {
 }
 
 bool _produce(MatchState state, Player player, District district, String kind) {
-  if (!E.m('units').has(kind)) return false;   // ponytail: مجنَّدو المباني المميزة مع مزايا المدن (ن8)
+  if (!E.m('units').has(kind)) return spawnRecruit(state, player, district, kind);   // مجنَّد مبنى مميز (features.dart)
   if (kind == 'leader') {
     final leader = spawnChampion(state, player, district);
     if (leader != null) { applyUpgrades(state, leader); _toRally(state, district, leader); }
@@ -259,7 +259,7 @@ void _updateTowers(MatchState state, EmpireState ms) {
     final target = _nearestEnemy(state, d.owner!, at, stats.range);
     if (target == null) continue;
     d.cool = stats.attackTime;
-    ms.shots.add(TowerShot(d.owner!, target, at.i, at.j, E.m('arrow').d('flight'), stats.damage));
+    ms.shots.add(TowerShot(d.owner!, target, at.i.toDouble(), at.j.toDouble(), E.m('arrow').d('flight'), stats.damage));
     soundAt(state, 'arrow', at.i.toDouble(), at.j.toDouble());
   }
 }
@@ -330,8 +330,17 @@ Result canQueue(MatchState state, int playerId, District? district, String kind)
   final queue = state.empire!.queues[district.id] ?? const [];
   if (kind == 'leader' && _leaderTaken(state, playerId)) return _fail('لعصابتك زعيم');
   if (queue.length >= E.i('queueMax')) return _fail('الطابور ممتلئ');
+  final R = CITY_FEATURES.m('recruits').mm(kind);
+  if (R != null && truthy(R['limit']) && _recruitCount(state, playerId, kind) >= R.d('limit')) return _fail(R.s('limitText'));
   if (pointsOf(state, playerId) < unitPrice(state, playerId, kind)) return _fail('النقاط لا تكفي');
   return _ok;
+}
+
+int _recruitCount(MatchState state, int playerId, String kind) {
+  var n = 0;
+  for (final u in state.units) { if (u.playerId == playerId && u.recruitKind == kind && u.state != 'dead') n++; }
+  for (final q in state.empire!.queues.values) { for (final it in q) { if (it.payer == playerId && it.kind == kind) n++; } }
+  return n;
 }
 
 Result queueUnit(MatchState state, int playerId, int districtId, String kind) {
@@ -447,7 +456,10 @@ Result upgradeBuilding(MatchState state, int playerId, int districtId, String ke
   final level = district?.fort ?? 0;
   final C = E.m('fortify').l('costs');
   if (level >= C.length) return null;
-  return (level: level + 1, cost: _priced(state, C[level] as num));
+  // بنصف السعر لمالك بوابة كانو القديمة (12هـ)
+  final half = state != null && pid >= 0 && buildingOwner(state, 'kanoGate') == pid;
+  final c = C[level] as num;
+  return (level: level + 1, cost: _priced(state, half ? jsRound(c * CITY_FEATURES.m('kanoGate').d('fortifyMul')) : c));
 }
 
 Result canFortify(MatchState state, int playerId, District? district) {
@@ -472,7 +484,10 @@ Result fortifyDistrict(MatchState state, int playerId, int districtId) {
 
 Result empireCommand(MatchState state, int playerId, String a, int d, Object? x) {
   final district = d >= 0 && d < state.map.districts.length ? state.map.districts[d] : null;
-  if (a == 'queue' && E.m('units').l('order').contains(x)) return queueUnit(state, playerId, d, x as String);
+  if (a == 'queue' && (E.m('units').l('order').contains(x) || CITY_FEATURES.m('recruits').has('$x'))) return queueUnit(state, playerId, d, x as String);
+  if (a == 'triads') return callTriads(state, playerId, d, x as int?);
+  if (a == 'bells') return ringBells(state, playerId, d);
+  if (a == 'rocket') return launchRocket(state, playerId, d, x as int?);
   if (a == 'upgrade' && E.m('upgrades').l('order').contains(x)) return buyUpgrade(state, playerId, x as String);
   if (a == 'fortify') return fortifyDistrict(state, playerId, d);
   if (a == 'rally') return setRally(state, playerId, d, x as num);

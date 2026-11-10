@@ -199,3 +199,94 @@ void drawHillCrown(TriBatch b, double x, double y, double time, bool blocked) {
   b.tri(x + 2, yy - 3, x + 4, yy - 8, x + 6, yy - 3, 0xf0c04a);
   b.ellipse(x, yy - 1.5, 1, 1, 0xe05050, 1, 6);
 }
+
+// --- أحداث المدن ومزاياها (featureArt.js، مبسّطة): ما على الأرض تحت الجنود، وما فوقهم ---
+// ponytail: علامات بأشكال بسيطة بدل رسم featureArt.js كله (المخلوقات بشكل جندي مكبّر)، والتلميع في ن12
+const _cloudHues = [0xff4fa3, 0xffc23a, 0x4fd3ff, 0x8cff5a, 0xb36bff];
+(double, double) _iso(double i, double j) => ((i - j) * TILE_HALF_W, (i + j) * TILE_HALF_H);
+
+void drawFeatureGround(TriBatch b, MatchState s, double time) {
+  final ce = s.cityEvent, F = CITY_FEATURES;
+  if (ce == null) return;
+  final band = ce.band;
+  if (band != null) {
+    final w = F.m('flood').d('width') / 2, n = s.map.n.toDouble();
+    final (ax, ay) = band.axis == 'i' ? _iso(band.c - w, 0) : _iso(0, band.c - w);
+    final (bx, by) = band.axis == 'i' ? _iso(band.c + w, 0) : _iso(0, band.c + w);
+    final (cx, cy) = band.axis == 'i' ? _iso(band.c + w, n) : _iso(n, band.c + w);
+    final (dx, dy) = band.axis == 'i' ? _iso(band.c - w, n) : _iso(n, band.c - w);
+    b.quad(ax, ay, bx, by, cx, cy, dx, dy, 0x3f8fd8, band.on ? 0.38 : 0.16);
+  }
+  for (final (cl, gray) in [(ce.clouds, false), (ce.ash, true)]) {
+    if (cl == null) continue;
+    for (final c in cl.list) {
+      final (x, y) = _iso(c.x, c.y);
+      b.ellipse(x, y, c.r * TILE_HALF_W, c.r * TILE_HALF_H, gray ? 0x5a5550 : _cloudHues[c.hue % _cloudHues.length], cl.on ? 0.32 : 0.14, 24);
+    }
+  }
+  final fire = ce.fire;
+  if (fire != null) {
+    for (final id in fire.burning) {
+      final d = s.map.districts[id];
+      for (final (i, j) in d.tiles.take(6)) {
+        final (x, y) = _iso(i.toDouble(), j.toDouble());
+        final fl = 1 + 0.25 * math.sin(time * 9 + i * 1.7 + j);
+        b.tri(x - 3 * fl, y, x, y - 9 * fl, x + 3 * fl, y, 0xf0702a, 0.85);
+        b.tri(x - 1.5, y, x, y - 5 * fl, x + 1.5, y, 0xffd45a, 0.9);
+      }
+    }
+  }
+}
+
+void drawFeatureOver(TriBatch b, MatchState s, double time) {
+  final F = CITY_FEATURES, tick = (s.time / TICK_SEC).round();
+  final fr = F.m('fireworks').d('radius');
+  for (final f in s.fireworks) {
+    final (x, y) = _iso(f.x, f.y);
+    if (!f.done) {
+      final pulse = 0.6 + 0.4 * math.sin(time * 8);
+      b.ring(x, y, fr * TILE_HALF_W, fr * TILE_HALF_H, 1.4, 0xe03a2a, 0.9 * pulse, 40, 0, 2 * math.pi, 1);
+    } else {
+      final g = ((tick - f.at) * TICK_SEC / F.m('fireworks').d('fade')).clamp(0.0, 1.0);
+      for (var k = 0; k < 10; k++) {
+        final a = k * math.pi / 5, r = 6 + 22 * g;
+        b.ellipse(x + math.cos(a) * r, y - 14 + math.sin(a) * r * 0.6, 1.6, 1.6, k.isEven ? 0xffd45a : 0xff5a8a, 1 - g, 6);
+      }
+    }
+  }
+  final ce = s.cityEvent;
+  if (ce == null) return;
+  final lr = F.m('lightning').d('radius');
+  for (final bolt in ce.bolts) {
+    final (x, y) = _iso(bolt.x, bolt.y);
+    if (!bolt.done) {
+      b.ring(x, y, lr * TILE_HALF_W, lr * TILE_HALF_H, 1.2, 0x7ab8ff, 0.85, 32, 0, 2 * math.pi, 1);
+    } else {
+      final g = ((tick - bolt.at) * TICK_SEC / F.m('lightning').d('fade')).clamp(0.0, 1.0);
+      b.line(x + 4, y - 70, x - 3, y - 35, 2, 0xe8f2ff, 1 - g);
+      b.line(x - 3, y - 35, x, y, 2, 0xe8f2ff, 1 - g);
+    }
+  }
+  final q = ce.quake;
+  if (q != null) {
+    final (x, y) = _iso(q.x, q.y);
+    final qr = F.m('quake').d('radius');
+    b.ring(x, y, qr * TILE_HALF_W, qr * TILE_HALF_H, 1.4, 0xe03a2a, q.on ? 0.5 : 0.9, 36, 0, 2 * math.pi, 1);
+  }
+  final c = ce.chest;
+  if (c != null) {
+    final (x, y) = _iso(c.i.toDouble(), c.j.toDouble());
+    b.quad(x - 5, y - 2, x + 5, y - 2, x + 5, y - 9, x - 5, y - 9, 0xb07a22);
+    b.quad(x - 5, y - 9, x + 5, y - 9, x + 4, y - 12, x - 4, y - 12, 0xe2b55a);
+    b.ellipse(x, y - 14 + math.sin(time * 4), 1.4, 1.4, 0xffffff, 0.9, 6);
+    if (c.holder >= 0) b.ring(x, y, 9, 4.5, 1.6, 0xffd34d, 1, 32, -math.pi / 2, -math.pi / 2 + 2 * math.pi * c.since / F.m('treasure').d('hold'));
+  }
+  final sv = ce.silver;
+  if (sv != null) {
+    for (final (i, j) in sv.pieces) {
+      final (x, y) = _iso(i.toDouble(), j.toDouble());
+      final yy = y - 6 + math.sin(time * 3 + i) * 1.5;
+      b.quad(x, yy - 4, x + 3, yy, x, yy + 4, x - 3, yy, 0xdfe6ee);
+    }
+  }
+}

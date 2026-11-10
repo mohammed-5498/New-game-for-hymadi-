@@ -1,9 +1,8 @@
 // بصمات مباريات البوتات للنقل (القسم 18): نفس البذرة في js/ والنسخة الجديدة تخرج نفس البصمة.
-// مزايا المدن مطفأة (لم تُنقل بعد، ن8). البصمة كل ثانية في أول دقيقتين ثم كل 20 ثانية، حتى 10 دقائق.
+// مزايا المدن مفعّلة (ن8). البصمة كل ثانية في أول دقيقتين ثم كل 20 ثانية، حتى 10 دقائق.
 // الاستعمال: node scripts/export_sim_parity.mjs [مباريات] > flutter_game/test/sim_parity.json
 const repo = new URL('..', import.meta.url).pathname;
 const CFG = await import(repo + 'js/config.js');
-for (const k of ['cities', 'buildings', 'events']) for (const c of Object.keys(CFG.CITY_FEATURES[k])) delete CFG.CITY_FEATURES[k][c];
 const { createBattle, stepBattle, battleResult } = await import(repo + 'js/ai/botBattle.js');
 const { createMatch } = await import(repo + 'js/state.js');
 const { updateMatch } = await import(repo + 'js/game/loop.js');
@@ -52,6 +51,11 @@ const MODE_CASES = [
   { mode: 'conquest', mapSize: 'large', full: true, players: NATIONS.slice(0, 8).map((n, k) => player(k, n)) },
   { mode: 'conquest', mapSize: 'medium', city: 'japan', players: NATIONS.slice(8).map((n, k) => player(k, n, k % 2 + 1)) },
 ];
+// مزايا المدن (ن8): مباراة في كل مدينة من الـ24 بميزتها ومبناها وحدثها
+for (const [k, city] of CFG.CITIES.order.entries()) {
+  MODE_CASES.push({ mode: 'conquest', mapSize: 'small', city,
+    players: [NATIONS[k % 15], 'crows', NATIONS[(k + 7) % 15]].map((n, q) => player(q, n, 0, ['medium', 'hard', 'insane'][(k + q) % 3])) });
+}
 const matches = Number(process.argv[2] || CASES.length);
 const out = [];
 for (let k = 0; k < matches; k++) {

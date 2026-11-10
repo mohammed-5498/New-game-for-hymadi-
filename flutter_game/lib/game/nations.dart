@@ -42,7 +42,7 @@ String? nationUnitName(String? nationId, String? heroId, bool champion) {
   final nation = nationOf(nationId);
   if (nation == null) return null;
   final names = nation.m('names');
-  return champion ? names.s('champion') : heroId != null ? names.s(heroId) : names.s('common');
+  return champion ? names.ss('champion') : heroId != null ? names.ss(heroId) : names.ss('common');
 }
 
 // "داخل أحيائك": منطقة كل حي مربعاته وكل مربع أقرب إليه (بحث عرضي واحد)، والمتجاوران من تلامست منطقتاهما

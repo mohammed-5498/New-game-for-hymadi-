@@ -21,6 +21,8 @@ void main() {
   final cases = {
     'conquest': {'mode': 'conquest', 'players': [bot(0, 'crows'), bot(1, 'hammers'), bot(2, 'vipers'), bot(3, 'scorpions')]},
     'king': {'mode': 'king', 'modeOptions': {'holdMinutes': 2}, 'players': [bot(0, 'crows', 'japan'), bot(1, 'vipers', 'korea'), bot(2, 'hammers', 'egypt')]},
+    'features': {'mode': 'conquest', 'city': 'kaifeng', 'players': [bot(0, 'crows'), bot(1, 'vipers', 'mexico'), bot(2, 'hammers')]},
+    'events': {'mode': 'conquest', 'city': 'shibam', 'players': [bot(0, 'crows'), bot(1, 'scorpions', 'yemen'), bot(2, 'hammers')]},
     'survival': {'mode': 'survival', 'protagonistId': 0, 'players': [bot(0, 'vipers', 'mexico', 1), bot(1, 'crows', 'argentina', 1)]},
   };
   for (final e in cases.entries) {
@@ -28,7 +30,7 @@ void main() {
       const seed = 4242;
       simRng = Rng(seed);
       final s = createMatch({'mapSize': 'small', 'maxUnits': 100, 'weather': 'day', ...e.value})..seed = seed;
-      for (var t = 0; t < 20 * 90 && s.matchResult == null; t++) { updateMatch(s); }
+      for (var t = 0; t < 20 * 150 && s.matchResult == null; t++) { updateMatch(s); }
       final back = decodeMatch(encodeMatch(s));
       expect(sig(back), sig(s));
       expect(back.map.city, s.map.city);

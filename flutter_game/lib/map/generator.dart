@@ -55,6 +55,11 @@ class District {
   double cool = 0;             // البرج: حتى سهمه التالي
   ({int k, int owner})? rally; // مكان إنتاج القاعدة
   bool hill = false;           // ملك الحي (ن7)
+  // مزايا المدن (features.dart)
+  double taxed = 0, readyAt = 0, mineSince = 0, mineRate = 0, vault = 0, nextAt = 0, rangAt = -99;
+  int? mineOwner, bankOwner;
+  int produced = 0;
+  bool villageJoined = false, garrisonOff = false, bank = false;
   District(this.id);
 }
 

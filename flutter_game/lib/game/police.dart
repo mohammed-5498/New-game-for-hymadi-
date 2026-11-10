@@ -5,6 +5,7 @@ import '../core/cfg.dart';
 import '../data/js_config.dart';
 import '../map/generator.dart';
 import '../map/pathfinding.dart';
+import 'features.dart';
 import 'state.dart';
 import 'units.dart';
 
@@ -70,13 +71,18 @@ void updatePolice(MatchState state) {
   }
 }
 
-// ponytail: انضمام الشرطة لصاحب المركز الرئيسي (روتنبورغ) مع مزايا المدن في ن8؛ الآن تختفي كغيرها
+// والمركز الذي يحتله صاحب المركز الرئيسي (القسم 3.11): شرطته تنضم إليه بدل أن تختفي
 void _disableStation(MatchState state, District station) {
   station.policeDisabled = true;
+  final police = policePlayer(state);
+  final owner = police != null && station.owner != null && station.owner == police.friendOf ? state.players[station.owner!] : null;
+  var joined = 0;
   for (final unit in state.units) {
     if (unit.stationId != station.id || !_alive(unit)) continue;
-    unit.vanishAt = state.time + random() * POLICE.d('vanishSeconds');
+    if (owner != null) { joinPolice(state, unit, owner); joined++; }
+    else { unit.vanishAt = state.time + random() * POLICE.d('vanishSeconds'); }
   }
+  if (joined > 0 && owner!.id == state.humanId) state.notice = Notice('انضم إليك $joined من الشرطة', true, 3);
 }
 
 bool _spawnPolice(MatchState state, District station, bool captain) {
@@ -87,6 +93,7 @@ bool _spawnPolice(MatchState state, District station, bool captain) {
   if (spots.isEmpty) return false;
   final (i, j) = spots[(random() * spots.length).floor()];
   final unit = createUnit(state, player, i, j, captain ? 'captain' : null);
+  if (station.policeMain) dressMainPolice(unit, captain);
   unit.stationId = station.id;
   unit.homePost = Point2(cap.i.toDouble(), cap.j.toDouble());
   state.units.add(unit);

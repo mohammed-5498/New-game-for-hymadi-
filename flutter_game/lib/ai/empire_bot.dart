@@ -6,6 +6,8 @@ import '../core/fmath.dart';
 import '../data/js_config.dart';
 import '../game/combat.dart';
 import '../game/empire.dart';
+import '../game/spatial.dart';
+import '../game/features.dart';
 import '../game/state.dart';
 import '../map/generator.dart';
 import '../map/sizes.dart';
@@ -48,6 +50,9 @@ void empireEconomy(MatchState state, Player player) {
   final ms = state.empire!, pid = player.id;
   final memos = _memos[ms] ??= {};
   final memo = memos[pid] ??= BotMemo();
+  _botTriads(state, pid);
+  _botBells(state, pid);
+  _botRocket(state, pid);
   for (var n = 0; n < _B.i('buysPerDecision'); n++) {
     final next = _pickNext(state, player, memo);
     if (next == null || ms.points[pid] < next.cost) return;
@@ -81,7 +86,11 @@ _Buy? _pickNext(MatchState state, Player player, BotMemo memo) {
       return _Buy(unitPrice(state, pid, 'leader').toDouble(), () => queueUnit(state, pid, hq.id, 'leader'));
     }
   }
-  // ponytail: مجنَّدو المباني المميزة (pickRecruit) مع مزايا المدن في ن8
+  // مجنَّدو المباني المميزة (القسم 3.11): واحد لكل recruitEvery من جيشه، الأقل عدداً أولاً
+  if (army + queued < state.maxUnits) {
+    final recruit = _pickRecruit(state, pid, owned, army);
+    if (recruit != null) return recruit;
+  }
   final seq = _sequence(level);
   final kind = seq[memo.turn % seq.length];
   final unit = roomy ? _Buy(unitPrice(state, pid, kind).toDouble(), () => queueUnit(state, pid, hq.id, kind), turn: true) : null;
@@ -171,4 +180,69 @@ District? _farthest(List<District> list, double Function(District) score) {
   District? a;
   for (final b in list) { if (a == null || score(b) > score(a)) a = b; }
   return a;
+}
+
+_Buy? _pickRecruit(MatchState state, int pid, List<District> owned, int army) {
+  final queues = state.empire!.queues;
+  for (final d in owned) {
+    final kinds = recruitsAt(d);
+    if (kinds == null || (queues[d.id]?.length ?? 0) >= _B.i('queue')) continue;
+    int have(String kind) => state.units.where((u) => u.playerId == pid && u.recruitKind == kind && u.state != 'dead').length +
+        queues.values.fold(0, (n, q) => n + q.where((it) => it.payer == pid && it.kind == kind).length);
+    final kind = kinds.reduce((a, b) => have(b) < have(a) ? b : a);
+    if (kinds.fold(0, (n, k) => n + have(k)) * _B.d('recruitEvery') >= army) continue;
+    final check = canQueue(state, pid, d, kind);
+    if (check.ok || check.reason == 'النقاط لا تكفي') return _Buy(unitPrice(state, pid, kind).toDouble(), () => queueUnit(state, pid, d.id, kind));
+  }
+  return null;
+}
+
+// مقر الترياد: متى كان جاهزاً ومع البوت كلفته وفضل botReserve، يرسلهم إلى حي العدو الأقرب إلى أحيائه
+void _botTriads(MatchState state, int pid) {
+  if (state.feature != 'triads') return;
+  final T = CITY_FEATURES.m('triads'), map = state.map;
+  final hq = map.districts.where((d) => d.feature == 'triads' && d.owner == pid && d.featureTile != null).firstOrNull;
+  if (hq == null || state.empire!.points[pid] < T.d('cost') + T.d('botReserve') || !canCallTriads(state, pid, hq).ok) return;
+  final mine = map.districts.where((d) => d.owner == pid && d.capture != null).toList();
+  District? best;
+  var bestDist = double.infinity;
+  for (final d in map.districts) {
+    if (!triadTarget(state, pid, d)) continue;
+    for (final m in mine) {
+      final dist = hypot((d.capture!.i - m.capture!.i).toDouble(), (d.capture!.j - m.capture!.j).toDouble());
+      if (dist < bestDist) { bestDist = dist; best = d; }
+    }
+  }
+  if (best != null) callTriads(state, pid, hq.id, best.id);
+}
+
+// ورشة البارود: على ساحة الحي الذي حولها أكثر جنود أعدائه (botMin على الأقل)
+void _botRocket(MatchState state, int pid) {
+  if (state.feature != 'fireworks') return;
+  final P = CITY_FEATURES.m('powder'), R = CITY_FEATURES.m('fireworks').d('radius'), map = state.map;
+  final ws = map.districts.where((d) => d.feature == 'powder' && d.owner == pid && d.featureTile != null).firstOrNull;
+  if (ws == null || state.empire!.points[pid] < P.d('cost') + P.d('botReserve') || !canRocket(state, pid, ws).ok) return;
+  District? best;
+  var bestCount = P.i('botMin') - 1;
+  for (final d in map.districts) {
+    if (d.capture == null || d.owner == pid) continue;
+    var count = 0;
+    final ci = d.capture!.i.toDouble(), cj = d.capture!.j.toDouble();
+    forEachNearby(state, ci, cj, R, (u) {
+      if (u.state != 'dead' && u.hp > 0 && isEnemyId(state, pid, u.playerId) && !state.players[u.playerId].neutral &&
+          hypot(u.x - ci, u.y - cj) <= R) { count++; }
+    });
+    if (count > bestCount) { bestCount = count; best = d; }
+  }
+  if (best != null) launchRocket(state, pid, ws.id, best.id);
+}
+
+// الكاتدرائية: يقرع أجراسها حين يقاتل botFighting من جنوده فأكثر
+void _botBells(MatchState state, int pid) {
+  if (state.feature != 'bells') return;
+  final d = state.map.districts.where((x) => x.feature == 'cathedral' && x.featureTile != null && x.owner == pid).firstOrNull;
+  if (d == null || !canRingBells(state, pid, d).ok) return;
+  var fighting = 0;
+  for (final u in state.units) { if (u.playerId == pid && u.target != null && u.state != 'dead' && u.hp > 0) fighting++; }
+  if (fighting >= CITY_FEATURES.m('cathedral').d('botFighting')) ringBells(state, pid, d.id);
 }

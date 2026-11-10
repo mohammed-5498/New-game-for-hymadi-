@@ -12,6 +12,7 @@ import '../audio/sound.dart';
 import 'alerts.dart';
 import 'combat.dart';
 import 'empire.dart';
+import 'features.dart';
 import 'police.dart';
 import 'spawn.dart';
 import 'state.dart';
@@ -592,8 +593,15 @@ class ModeBar {
   const ModeBar(this.text, this.alarm, [this.bars = const []]);
 }
 
-// شريط أعلى وسط الشاشة لما يخص الطور (ميزة المدينة تُضاف في ن8، والقصة في ن9)
+// شريط أعلى وسط الشاشة: ما يخص الطور، ثم ميزة المدينة حين تعني شيئاً الآن (والقصة في ن9)
 ModeBar? modeBar(MatchState state) {
+  final bar = _modeOnlyBar(state);
+  final feature = state.economy ? featureBar(state) : null;
+  if (feature == null) return bar;
+  return bar != null ? ModeBar('${bar.text} • ${feature.$1}', bar.alarm || feature.$2, bar.bars) : ModeBar(feature.$1, feature.$2);
+}
+
+ModeBar? _modeOnlyBar(MatchState state) {
   if (state.mode == 'points') return ModeBar(modeClock(pointsRemaining(state)), isFinalMinute(state));
   if (state.mode == 'king') {
     final ms = modeOf(state);

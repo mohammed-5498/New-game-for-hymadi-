@@ -34,10 +34,13 @@ MatchState createMatch(J settings) {
           team: (list[k]['team'] as num?)?.toInt() ?? 0, difficulty: list[k].ss('difficulty') ?? 'medium'),
   ];
   final economy = economyOf(settings);
-  // ponytail: مزايا المدن في ن8 (features: false، وstate.feature = null)
-  final map = createMap(settings.ss('mapSize') ?? 'medium', players, settings.ss('city') ?? 'random', simRng, specials: !economy, features: false);
+  final map = createMap(settings.ss('mapSize') ?? 'medium', players, settings.ss('city') ?? 'random', simRng, specials: !economy, features: economy);
   if (map == null) throw StateError('تعذر توليد خريطة صالحة');
+  final feature = economy ? cityFeature(map.city) : null;
+  // الشرطة طرف محايد بعد الأحياء المنزلية، ثم طرف الميزة إن احتاجته
   players.add(createPolicePlayer(players));
+  final featurePlayer = createFeaturePlayer(players, feature, map.city);
+  if (featurePlayer != null) players.add(featurePlayer);
   final weather = settings.ss('weather');
   final state = MatchState(settings: settings, map: map, players: players,
       humanId: players.indexWhere((p) => p.isHuman),
@@ -45,6 +48,7 @@ MatchState createMatch(J settings) {
       maxUnits: (settings['maxUnits'] as num).toInt(),
       combatSeed: ((random() * 4294967295).floor()) & 0xFFFFFFFF);
   state.camera.z = CAMERA.d('startZoom');
+  state.feature = feature;
   state.stats = MatchStats(players.length);
   initMode(state);
   buildCaptureZones(state);
@@ -54,6 +58,7 @@ MatchState createMatch(J settings) {
   prepareModeUnits(state);
   initSpawnTimers(state);
   initPolice(state);
+  initFeatures(state);
   initBots(state);
   centerCameraOnHome(state);
   return state;

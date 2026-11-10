@@ -6,6 +6,7 @@ import '../core/cfg.dart';
 import '../core/fmath.dart';
 import '../data/js_config.dart';
 import '../game/combat.dart';
+import '../game/features.dart';
 import '../game/spatial.dart';
 import '../game/state.dart';
 import '../game/units.dart';
@@ -538,6 +539,8 @@ List<Target> _targetList(MatchState state, Player player, J lvl, int armySize, i
     final enemy = responseRadius != 0 ? math.max(near, enemyPowerAround(state, player, di, dj, responseRadius)) : near;
     var value = DISTRICT_SIZES.m('botValue').d(sizeOf(d));
     if (d.special != null) value *= paramD(lvl, 'specialValue');
+    final feature = featureValue(d);
+    if (feature != null && feature != 0) value *= feature;
     if (d.police && lvl.b('policeEarly')) value *= ai.d('stationValue');
     if (leader != null && d.owner == leader) value *= ai.d('snowballValue');
     if (owner != null && !owner.neutral) {

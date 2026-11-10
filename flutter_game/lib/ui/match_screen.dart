@@ -11,6 +11,7 @@ import '../core/fmath.dart';
 import '../data/js_config.dart';
 import '../game/capture.dart';
 import '../game/combat.dart';
+import '../game/empire.dart';
 import '../game/match.dart';
 import '../game/modes.dart';
 import '../game/state.dart';
@@ -209,6 +210,17 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     return false;
   }
 
+  // اختيار حي على الخريطة بعد خانة الترياد أو الصاروخ (takePick في empireMenu.js)
+  (String, int)? picking;
+  void startPick(String action, int did, String text) {
+    final s = state;
+    if (s == null) return;
+    picking = (action, did);
+    menuDistrict = null;
+    s.notice = Notice(text, true, 5);
+    hud.value++;
+  }
+
   void markActive() => _activeUntil = DateTime.now().millisecondsSinceEpoch + GRAPHICS.i('activeMs');
 
   void _onTick(Duration now) {
@@ -341,6 +353,15 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     if (s == null || s.matchResult != null) return;
     markActive();
     final p = d.localPosition, now = DateTime.now().millisecondsSinceEpoch;
+    final pick = picking;
+    if (pick != null) {
+      picking = null;
+      final target = _areaAt(s, p, size);
+      final r = empireCommand(s, s.humanId, pick.$1, pick.$2, target?.id);
+      if (!r.ok && r.reason.isNotEmpty) s.notice = Notice(r.reason, true, 2.5);
+      hud.value++;
+      return;
+    }
     final hit = _unitAt(s, p, size);
     // لمستان سريعتان على حي تملكه تفتحان قائمته (empireMenu)
     final area = hit != null && hit.playerId == s.humanId ? null : _areaAt(s, p, size);
@@ -478,6 +499,7 @@ class _MatchPainter extends CustomPainter {
       _borders(b, s);
       for (final f in s.fires) { drawFire(b, f, time); }
       for (final z in s.zones) { drawZone(b, z, time); }
+      if (s.feature != null) drawFeatureGround(b, s, time);
       for (final u in s.units) { if (u.state != 'dead' && truthy(u.stats['aura']) && u.playerId == s.humanId) drawAura(b, u, alpha); }
       b.flush(canvas, img);
     }, afterRow: (d) {
@@ -500,6 +522,7 @@ class _MatchPainter extends CustomPainter {
     }
     for (final cl in s.clashes) { drawClash(b, (cl.x - cl.y) * TILE_HALF_W, (cl.x + cl.y) * TILE_HALF_H - 8, cl.t); }
     for (final fx in s.ultFx) { drawUltFx(b, fx); }
+    if (s.feature != null) drawFeatureOver(b, s, time);
     for (final u in s.units) { if (u.selected && u.state != 'dead') drawSelectionRing(b, u, alpha); }
     if (s.moveMarker != null) drawMoveMarker(b, s.moveMarker!);
     b.flush(canvas, img);

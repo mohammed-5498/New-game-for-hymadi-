@@ -643,7 +643,7 @@ void drawUnit(TriBatch b, UnitAtlas atlas, Unit unit, double alpha, double zoom,
     }
   }
   final ghosts = full ? (crowded ? _CR.i('trailGhostsCrowded') : _CR.i('trailGhosts')) : 0;
-  final ring = dead ? null : unit.steadyUntil > time ? nations.m('fx').s('steadyRing') : unit.bribedUntil > time ? nations.m('fx').s('bribeRing')
+  final ring = dead || unit.creature != null ? null : unit.steadyUntil > time ? nations.m('fx').s('steadyRing') : unit.bribedUntil > time ? nations.m('fx').s('bribeRing')
       : unit.rallyUntil > time ? CITY_FEATURES.m('cathedral').s('ring') : null;
   if (ring != null) b.ring(x, y + 0.6, 6.2 * scale, 2.5 * scale, 0.9, _hex(ring));
   drawOne(b, atlas, unit, key, x, y, scale, color, time, walking, ghosts, 1, sub);

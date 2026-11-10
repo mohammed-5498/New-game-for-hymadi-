@@ -161,10 +161,10 @@ class Unit {
   String? lookKind;
   double auraSpeed = 0;
   bool harmless = false, cargo = false;
-  Object? caravanExit;
+  Exit? caravanExit, dancer, lair;   // القافلة والكرنفال: المخرج، والترول: جبله
+  bool patrol = false, blackKnight = false, fan = false;
   String? creature;
   double barY = 0, expireAt = -1, trampleAt = 0;
-  Object? lair;
   Point2? homePost;
   double vanishAt = -1;
 
@@ -330,7 +330,9 @@ class MatchState {
   int humanId;
   String weather;
   String? feature;
-  Object? cityEvent;
+  CityEventState? cityEvent;
+  List<Firework> fireworks = [];
+  bool featureHinted = false, buildingHinted = false, eventHinted = false;
   int maxUnits;
   final camera = Camera();
   double viewW = 1, viewH = 1;
@@ -371,4 +373,42 @@ class MatchState {
 
   MatchState({required this.settings, required this.map, required this.players, required this.humanId,
       required this.weather, required this.maxUnits, required this.combatSeed});
+}
+
+// --- مزايا المدن (features.dart) ---
+class Exit {
+  final double i, j, until;
+  const Exit(this.i, this.j, this.until);
+}
+
+class Firework {
+  final double x, y;
+  final int at;          // رقم تحديث الانفجار
+  bool done = false;
+  final int? owner;      // صاروخ البارود: مالك الورشة
+  Firework(this.x, this.y, this.at, [this.owner]);
+}
+
+class Band { final String axis; final double c; final int dir; bool on = false; Band(this.axis, this.c, this.dir); }
+class Chest { final int i, j; final double until; int holder = -1; double since = 0; Chest(this.i, this.j, this.until); }
+class Bolt { final double x, y; final int at; bool done = false; Bolt(this.x, this.y, this.at); }
+class Spot { final double x, y; bool on = false; Spot(this.x, this.y); }
+class Wind { final int dx, dy; bool on = false; Wind(this.dx, this.dy); }
+class Cloud { final double x, y, r; final int hue; const Cloud(this.x, this.y, this.r, this.hue); }
+class Clouds { final List<Cloud> list; bool on = false; Clouds(this.list); }
+class Silver { List<(int, int)> pieces; final double until; Silver(this.pieces, this.until); }
+class Derby { final double x, y; bool on = true; Derby(this.x, this.y); }
+class CityFire { final List<int> burning; CityFire(this.burning); }
+
+class CityEventState {
+  Band? band;
+  Chest? chest;
+  List<Bolt> bolts = [];
+  Spot? quake;
+  Wind? wind;
+  Clouds? clouds, ash;
+  Silver? silver;
+  List<(double, double)>? dancers;
+  Derby? derby;
+  CityFire? fire;
 }

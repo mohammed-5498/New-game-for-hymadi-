@@ -15,7 +15,8 @@ double moveSpeed(MatchState state, Unit unit) {
   var speed = unit.stats.d('speed') * WEATHER.m(state.weather).d('speedMul') * unit.traits.spd;
   if (unit.hasteUntil > state.time) speed *= 1 + unit.hasteFactor;
   if (unit.rallyUntil > state.time) speed *= 1 + _cathedralSpeed;
-  if (state.feature != null) speed *= featureSpeedMul(state, unit);
+  if (state.feature == 'coups' && buildingOwner(state, 'arch') == unit.playerId) speed *= 1 + CITY_FEATURES.m('arch').d('speed');
+  if (state.feature != null) speed *= eventSpeedMul(state, unit);
   if (state.economy) speed *= empireSpeedMul(state, unit.playerId);
   if (unit.slowUntil > state.time) return speed * (1 - unit.slowFactor);
   return speed;

@@ -7,6 +7,7 @@ import '../core/cfg.dart';
 import '../data/cities.dart';
 import '../data/js_config.dart';
 import '../game/empire.dart';
+import '../game/features.dart';
 import '../game/modes.dart';
 import '../game/spawn.dart';
 import '../game/state.dart';
@@ -244,7 +245,27 @@ class _EmpireMenu extends StatelessWidget {
     void slot(String label, int? cost, Result check, VoidCallback act, {int count = 0}) => slots.add(_Slot(
         label: label, cost: cost, reason: check.ok ? '' : check.reason, count: count,
         onTap: check.ok ? () { act(); screen.hud.value++; } : null));
-    final title = d.building == 'hq' ? 'القاعدة الرئيسية' : d.building == 'tower' ? 'برج رماية' : d.building == 'hospital' ? 'مستشفى' : 'حي';
+    // مبنى ميزة المدينة (القسم 3.11): ما يعطيه، وخانات التجنيد والترياد والصاروخ والأجراس
+    String? info;
+    if (d.featureTile != null && d.feature != null) {
+      info = CITY_FEATURES.m('desc').ss(d.feature!);
+      for (final kind in recruitsAt(d) ?? const <String>[]) {
+        final R = CITY_FEATURES.m('recruits').m(kind);
+        slot(R.ss('name') ?? kind, unitPrice(s, pid, kind), canQueue(s, pid, d, kind), () => queueUnit(s, pid, did, kind),
+            count: (s.empire!.queues[did] ?? const []).where((x) => x.kind == kind).length);
+      }
+      if (d.feature == 'triads') {
+        slot('هجوم الترياد', CITY_FEATURES.m('triads').i('cost'), canCallTriads(s, pid, d),
+            () => screen.startPick('triads', did, 'المس حياً لعدوك ليهجم عليه الترياد'));
+      }
+      if (d.feature == 'powder') {
+        slot('صاروخ البارود', CITY_FEATURES.m('powder').i('cost'), canRocket(s, pid, d),
+            () => screen.startPick('rocket', did, 'المس حياً ليس لك ليسقط عليه الصاروخ'));
+      }
+      if (d.feature == 'cathedral') slot('اقرع الأجراس', null, canRingBells(s, pid, d), () => ringBells(s, pid, did));
+    }
+    final title = d.featureTile != null && d.feature != null ? 'مبنى المدينة'
+        : d.building == 'hq' ? 'القاعدة الرئيسية' : d.building == 'tower' ? 'برج رماية' : d.building == 'hospital' ? 'مستشفى' : 'حي';
     final size = {'small': 'صغير', 'medium': 'متوسط', 'large': 'كبير'}[sizeOf(d)];
     if (d.building == 'hq') {
       final q = s.empire!.queues[did] ?? const [];
@@ -288,6 +309,8 @@ class _EmpireMenu extends StatelessWidget {
           IconButton(visualDensity: VisualDensity.compact, icon: const Icon(Icons.close, color: dim, size: 18),
               onPressed: () { screen.menuDistrict = null; screen.hud.value++; }),
         ]),
+        if (info != null) Padding(padding: const EdgeInsets.only(bottom: 4), child: Text(info, textAlign: TextAlign.center,
+            style: const TextStyle(color: ink, fontSize: 12))),
         Wrap(spacing: 6, runSpacing: 6, alignment: WrapAlignment.center, children: slots),
       ])),
     );

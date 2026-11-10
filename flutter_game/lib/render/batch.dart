@@ -149,4 +149,9 @@ class TriBatch {
   }
 }
 
-int hexRgb(String hex) => int.parse(hex.substring(1, 7), radix: 16);
+int hexRgb(String hex) {
+  if (hex.startsWith('#')) return int.parse(hex.substring(1, 7), radix: 16);
+  // rgba(r,g,b,a) كما في بعض ألوان الإعداد
+  final v = hex.substring(hex.indexOf('(') + 1, hex.indexOf(')')).split(',').map((x) => double.parse(x.trim()).round()).toList();
+  return (v[0] << 16) | (v[1] << 8) | v[2];
+}

@@ -118,13 +118,14 @@ Map<String, Object?> _unit(Unit u) => {
   'flurry': u.flurry == null ? null : [u.flurry!.target?.id, u.flurry!.left, u.flurry!.damage, u.flurry!.interval, u.flurry!.next, u.flurry!.radius],
   'phases': u.cPhases == null ? null : [u.cPhases!.wind, u.cPhases!.strike, u.cPhases!.hold, u.cPhases!.rec, u.cPhases!.total],
   'traits': [u.traits.aggr, u.traits.skill, u.traits.react, u.traits.spd, u.traits.size],
+  'feat': [u.patrol, u.blackKnight, u.fan, _exit(u.dancer), _exit(u.lair), _exit(u.caravanExit)],
   'task': u.botTask == null ? null : [u.botTask!.type, u.botTask!.squadId, u.botTask!.districtId, u.botTask!.until,
     u.botTask!.leader?.id, u.botTask!.point?.x, u.botTask!.point?.y],
 };
 
 // --- الحفظ ---
 // ارفعه إذا تغيّر شكل الحفظ (كـ UI.matchVersion في اللعبة الحالية)
-const saveVersion = 2;
+const saveVersion = 3;
 String encodeMatch(MatchState s) {
   final e = s.empire;
   return jsonEncode({
@@ -139,6 +140,8 @@ String encodeMatch(MatchState s) {
       'o': d.owner, 'p': d.progress, 'po': d.progressOwner, 'tc': d.tintColor, 'tm': d.tintMix, 'f': d.fort, 'b': d.building,
       'bt': d.buildTile, 'blv': d.blv, 'cool': d.cool, 'rally': d.rally == null ? null : [d.rally!.k, d.rally!.owner],
       'pd': d.policeDisabled,
+      'fx': [d.taxed, d.readyAt, d.mineSince, d.mineRate, d.vault, d.nextAt, d.rangAt, d.mineOwner, d.bankOwner, d.produced,
+        d.villageJoined, d.garrisonOff, d.cool],
     }],
     'units': [for (final u in s.units) _unit(u)],
     'shots': [for (final p in s.projectiles) {
@@ -153,11 +156,14 @@ String encodeMatch(MatchState s) {
       'points': e.points, 'earned': e.earned, 'bounties': e.bounties,
       'levels': [for (final l in e.levels) [l.hp, l.damage, l.armor, l.speed]],
       'queues': {for (final q in e.queues.entries) '${q.key}': [for (final it in q.value) [it.kind, it.payer, it.t]]},
-      'shots': [for (final t in e.shots) [t.owner, t.target.id, t.i, t.j, t.t, t.duration, t.damage]],
+      'shots': [for (final t in e.shots) [t.owner, t.target.id, t.i, t.j, t.t, t.duration, t.damage, t.top]],
       'incomeMul': e.incomeMul,
       'memo': {for (final m in botMemos(e).entries) '${m.key}': [m.value.turn, m.value.units, m.value.tech]},
     },
     'mode': _modeJson(modeOf(s)),
+    'hints': [s.featureHinted, s.buildingHinted, s.eventHinted],
+    'fireworks': [for (final f in s.fireworks) [f.x, f.y, f.at, f.done, f.owner]],
+    'event': _eventJson(s.cityEvent),
     'brains': {for (final b in s.botBrains.entries) '${b.key}': {
       'n': b.value.nextId, 'r': b.value.rallyId,
       's': [for (final q in b.value.squads) {'id': q.id, 'ty': q.type, 'u': q.units, 't': q.targetId, 'p': q.power, 'ph': q.phase,
@@ -208,6 +214,10 @@ MatchState decodeMatch(String text) {
     final r = x['rally'] as List?;
     d.rally = r == null ? null : (k: r[0] as int, owner: r[1] as int);
     d.policeDisabled = x['pd'] == true;
+    final fx = x['fx'] as List;
+    d..taxed = _n(fx[0])!..readyAt = _n(fx[1])!..mineSince = _n(fx[2])!..mineRate = _n(fx[3])!..vault = _n(fx[4])!..nextAt = _n(fx[5])!
+      ..rangAt = _n(fx[6])!..mineOwner = (fx[7] as int?)..bankOwner = (fx[8] as int?)..produced = fx[9] as int..villageJoined = fx[10] == true
+      ..garrisonOff = fx[11] == true..cool = _n(fx[12])!;
     // المباني التي بُنيت أثناء المباراة: حرفها في الخريطة (القواعد المنزلية من المولّد نفسه)
     if (d.building != null && d.buildTile != null) s.map.type[d.buildTile!] = BUILDING_TILE[d.building]!;
   }
@@ -237,6 +247,9 @@ MatchState decodeMatch(String text) {
     u.cPhases = ph == null ? null : Phases(_n(ph[0])!, _n(ph[1])!, _n(ph[2])!, _n(ph[3])!, _n(ph[4])!);
     final t = x['traits'] as List;
     restoreRealism(s, u, Traits(_n(t[0])!, _n(t[1])!, _n(t[2])!, _n(t[3])!, _n(t[4])!));
+    final ft = x['feat'] as List;
+    u..patrol = ft[0] == true..blackKnight = ft[1] == true..fan = ft[2] == true..dancer = _exitBack(ft[3])..lair = _exitBack(ft[4])
+      ..caravanExit = _exitBack(ft[5]);
     if (u.riot) { final st = u.style; u.style = FightStyleInfo(st.turn, st.flank, st.moves, true, st.primary); }
     byId[u.id] = u;
     raw[u] = x;
@@ -282,7 +295,7 @@ MatchState decodeMatch(String text) {
     }
     e.queues.clear();
     (em['queues'] as Map).forEach((k, v) => e.queues[int.parse('$k')] = [for (final it in v as List) QueueItem((it as List)[0] as String, it[1] as int)..t = _n(it[2])!]);
-    e.shots = [for (final t in em['shots'] as List) if (byId[(t as List)[1]] != null) TowerShot(t[0] as int, byId[t[1]]!, t[2] as int, t[3] as int, _n(t[5])!, _n(t[6])!)..t = _n(t[4])!];
+    e.shots = [for (final t in em['shots'] as List) if (byId[(t as List)[1]] != null) TowerShot(t[0] as int, byId[t[1]]!, _n(t[2])!, _n(t[3])!, _n(t[5])!, _n(t[6])!, t.length > 7 ? _n(t[7])! : 0)..t = _n(t[4])!];
     e.incomeMul = _n(em['incomeMul'])!;
     final memos = botMemos(e);
     (em['memo'] as Map).forEach((k, v) => memos[int.parse('$k')] = BotMemo()..turn = (v as List)[0] as int..units = _n(v[1])!..tech = _n(v[2])!);
@@ -295,6 +308,10 @@ MatchState decodeMatch(String text) {
     s.botBrains[b.playerId] = b;
   });
   _modeBack(modeOf(s), (j['mode'] as Map).cast<String, Object?>());
+  final h = j['hints'] as List;
+  s..featureHinted = h[0] == true..buildingHinted = h[1] == true..eventHinted = h[2] == true;
+  s.fireworks = [for (final f in j['fireworks'] as List) Firework(_n((f as List)[0])!, _n(f[1])!, f[2] as int, f[4] as int?)..done = f[3] == true];
+  s.cityEvent = _eventBack(j['event'] as Map?);
   s.mapVersion++;
   return s;
 }
@@ -309,4 +326,48 @@ void _modeBack(ModeState m, Map<String, Object?> j) {
     ..held = [for (final v in j['he'] as List) _n(v)!]..warned = {for (final v in j['wa'] as List) v as String}..blocked = j['bl'] == true
     ..leaderKills = j['lk'] as int..lastHp = _n(j['lh'])..alertAt = _n(j['aa'])!..level = j['lv'] as String..wave = j['wv'] as int
     ..nextWaveAt = _n(j['nw'])!..retargetAt = _n(j['rt'])!;
+}
+
+List<double>? _exit(Exit? e) => e == null ? null : [e.i, e.j, e.until];
+Exit? _exitBack(Object? v) => v == null ? null : Exit(_n((v as List)[0])!, _n(v[1])!, _n(v[2])!);
+
+Map<String, Object?>? _eventJson(CityEventState? e) => e == null ? null : {
+  'band': e.band == null ? null : [e.band!.axis, e.band!.c, e.band!.dir, e.band!.on],
+  'chest': e.chest == null ? null : [e.chest!.i, e.chest!.j, e.chest!.until, e.chest!.holder, e.chest!.since],
+  'bolts': [for (final b in e.bolts) [b.x, b.y, b.at, b.done]],
+  'quake': e.quake == null ? null : [e.quake!.x, e.quake!.y, e.quake!.on],
+  'wind': e.wind == null ? null : [e.wind!.dx, e.wind!.dy, e.wind!.on],
+  'clouds': _cloudsJson(e.clouds), 'ash': _cloudsJson(e.ash),
+  'silver': e.silver == null ? null : [[for (final p in e.silver!.pieces) [p.$1, p.$2]], e.silver!.until],
+  'dancers': e.dancers == null ? null : [for (final d in e.dancers!) [d.$1, d.$2]],
+  'derby': e.derby == null ? null : [e.derby!.x, e.derby!.y, e.derby!.on],
+  'fire': e.fire?.burning,
+};
+Object? _cloudsJson(Clouds? c) => c == null ? null : [[for (final x in c.list) [x.x, x.y, x.r, x.hue]], c.on];
+Clouds? _cloudsBack(Object? v) => v == null ? null
+    : (Clouds([for (final x in (v as List)[0] as List) Cloud(_n((x as List)[0])!, _n(x[1])!, _n(x[2])!, x[3] as int)])..on = v[1] == true);
+
+CityEventState? _eventBack(Map? j) {
+  if (j == null) return null;
+  final e = CityEventState();
+  final b = j['band'] as List?;
+  if (b != null) e.band = Band(b[0] as String, _n(b[1])!, b[2] as int)..on = b[3] == true;
+  final c = j['chest'] as List?;
+  if (c != null) e.chest = Chest(c[0] as int, c[1] as int, _n(c[2])!)..holder = c[3] as int..since = _n(c[4])!;
+  e.bolts = [for (final x in j['bolts'] as List) Bolt(_n((x as List)[0])!, _n(x[1])!, x[2] as int)..done = x[3] == true];
+  final q = j['quake'] as List?;
+  if (q != null) e.quake = Spot(_n(q[0])!, _n(q[1])!)..on = q[2] == true;
+  final w = j['wind'] as List?;
+  if (w != null) e.wind = Wind(w[0] as int, w[1] as int)..on = w[2] == true;
+  e.clouds = _cloudsBack(j['clouds']);
+  e.ash = _cloudsBack(j['ash']);
+  final sv = j['silver'] as List?;
+  if (sv != null) e.silver = Silver([for (final p in sv[0] as List) ((p as List)[0] as int, p[1] as int)], _n(sv[1])!);
+  final dn = j['dancers'] as List?;
+  if (dn != null) e.dancers = [for (final p in dn) (_n((p as List)[0])!, _n(p[1])!)];
+  final dy = j['derby'] as List?;
+  if (dy != null) e.derby = Derby(_n(dy[0])!, _n(dy[1])!)..on = dy[2] == true;
+  final f = j['fire'] as List?;
+  if (f != null) e.fire = CityFire([for (final x in f) x as int]);
+  return e;
 }

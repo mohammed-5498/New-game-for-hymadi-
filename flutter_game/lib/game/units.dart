@@ -44,11 +44,12 @@ String _unitName(String gangId, String? heroId, bool champion, String? nationId)
   return heroId != null ? HEROES.m(heroId).s('name') : 'فرد';
 }
 
-Unit createUnit(MatchState state, Player player, int i, int j, [String? heroId, bool champion = false]) {
-  final nation = player.nation;
-  final stats = unitStats(player.gang, heroId, champion, nation);
-  final unit = Unit(id: state.nextUnitId++, playerId: player.id, gang: player.gang, nation: nation, color: player.color,
-      hero: champion ? null : heroId, champion: champion, name: _unitName(player.gang, heroId, champion, nation),
+// gangAs/nationAs: وحدة لاعب بشكل أمة أخرى ({ ...player, gang, nation } في JavaScript: المجنَّدون والترياد)
+Unit createUnit(MatchState state, Player player, int i, int j, [String? heroId, bool champion = false, String? gangAs, String? nationAs]) {
+  final nation = gangAs != null ? nationAs : player.nation, gang = gangAs ?? player.gang;
+  final stats = unitStats(gang, heroId, champion, nation);
+  final unit = Unit(id: state.nextUnitId++, playerId: player.id, gang: gang, nation: nation, color: player.color,
+      hero: champion ? null : heroId, champion: champion, name: _unitName(gang, heroId, champion, nation),
       x: i.toDouble(), y: j.toDouble(), stats: stats);
   initRealism(state, unit);
   return unit;
