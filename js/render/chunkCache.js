@@ -958,3 +958,6 @@ export function drawWholeMap(ctx, state, lights = null) {
     }
   }
 }
+
+// لأداة تصدير صور الخريطة للمحرك الجديد (scripts/export_port_assets.cjs): قطع السور وحدها
+export { EDGES, wallsOf, wallStyle, drawWalls, drawGates, drawTowers };
