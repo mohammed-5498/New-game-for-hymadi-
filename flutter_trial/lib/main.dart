@@ -88,6 +88,7 @@ class TrialPageState extends State<TrialPage> with SingleTickerProviderStateMixi
   // قياسات النصف ثانية الأخيرة
   int painted = 0, timed = 0;
   double simUs = 0, buildUs = 0, rasterUs = 0;
+  String uiMs = '-', gpuMs = '-';   // الجوال يرسل أزمنة الإطارات دفعة كل ثانية تقريباً: يبقى آخرها ظاهراً
   // الكاميرا: مركزها بوحدات العالم، والتقريب بكسل منطقي لكل وحدة
   double camX = 0, camY = 0, zoom = 2.2, lastScale = 1;
 
@@ -131,9 +132,10 @@ class TrialPageState extends State<TrialPage> with SingleTickerProviderStateMixi
     if (now - statAt >= 0.5) {
       final dt = now - statAt;
       String ms(double us, int k) => k == 0 ? '-' : (us / k / 1000).toStringAsFixed(1);
-      stats.value = 'إطارات/ث ${(painted / dt).round()}   واجهة ${ms(buildUs, timed)} م.ث   رسم ${ms(rasterUs, timed)} م.ث'
+      if (timed > 0) { uiMs = ms(buildUs, timed); gpuMs = ms(rasterUs, timed); timed = 0; buildUs = rasterUs = 0; }
+      stats.value = 'إطارات/ث ${(painted / dt).round()}   واجهة $uiMs م.ث   رسم $gpuMs م.ث'
           '   محاكاة ${(simUs / dt / 1000 / 20).toStringAsFixed(2)} م.ث   جنود ${s.battle.alive(0) + s.battle.alive(1)}';
-      statAt = now; painted = 0; timed = 0; simUs = buildUs = rasterUs = 0;
+      statAt = now; painted = 0; simUs = 0;
     }
   }
 
