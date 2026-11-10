@@ -46,6 +46,7 @@ async function setup(page) {
       const c = cv.getContext('2d', { willReadFrequently: true });
       c.translate(AX, AY); c.scale(S, S);
       M.TH.setThemeContext(c, 7);
+      M.TH.setTone(null);          // لا صبغ باقٍ من رسم القائمة خلف الصفحة
       draw(c);
       M.TH.setTone(null);
       return c.getImageData(0, 0, W, H);
@@ -202,14 +203,18 @@ function cityShots({ city, FEAT }) {
     tint: C,
     cities: {}
   };
+  // ONLY: مدن بعينها فوق الحزمة الموجودة، والباقي كما هو
+  const old = path.join(OUT, 'manifest.json');
+  if (ONLY && fs.existsSync(old)) manifest.cities = JSON.parse(fs.readFileSync(old, 'utf8')).cities;
   const save = (rel, url) => {
     const f = path.join(OUT, rel);
     fs.mkdirSync(path.dirname(f), { recursive: true });
     fs.writeFileSync(f, Buffer.from(url.split(',')[1], 'base64'));
   };
-  fs.rmSync(OUT, { recursive: true, force: true });
+  if (!ONLY) fs.rmSync(OUT, { recursive: true, force: true });
   for (const city of cities) {
     if (ONLY && !ONLY.includes(city)) continue;
+    fs.rmSync(path.join(OUT, 'cities', city), { recursive: true, force: true });
     const { info, shots } = await page.evaluate(cityShots, { city, FEAT });
     const entry = { ...info, images: [] };
     for (const s of shots) {
