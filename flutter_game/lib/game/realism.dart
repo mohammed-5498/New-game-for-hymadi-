@@ -426,6 +426,8 @@ class _Vis { final Unit unit; final double d; _Vis(this.unit, this.d); }
 void updateLod(MatchState state) {
   if (state.time < state.lodAt) return;
   state.lodAt = state.time + _lod.d('refreshSeconds');
+  // اللعب المحلي: المستوى يغيّر القتال نفسه، فيُحسب من كاميرات كل اللاعبين (أوامر مشتركة) فتتطابق الأجهزة
+  if (state.netCams != null) { _lodFromCams(state, state.netCams!); return; }
   final cx = state.camera.x, cy = state.camera.y;
   final visible = <_Vis>[];
   var alive = 0;
@@ -445,6 +447,32 @@ void updateLod(MatchState state) {
   }
   stableSort<_Vis>(visible, (a, b) => byNum(a.d, b.d));
   for (var k = 0; k < fullUnits; k++) { visible[k].unit.lod = 'full'; }
+}
+
+// الظاهر في أي شاشة مبسّط، وأقرب fullUnits لوسط كل شاشة كامل، والباقي إحصائي
+void _lodFromCams(MatchState state, List<NetCam?> cams) {
+  var alive = 0;
+  for (final unit in state.units) {
+    if (unit.state != 'dead') alive++;
+    unit.lod = 'stat';
+  }
+  final fullUnits = alive > _lod.i('crowdedAbove') ? _lod.i('fullUnitsCrowded') : _lod.i('fullUnits');
+  var crowded = false;
+  for (final cam in cams) {
+    if (cam == null) continue;
+    final visible = <_Vis>[];
+    for (final unit in state.units) {
+      final wx = (unit.x - unit.y) * 18, wy = (unit.x + unit.y) * 9;
+      final sx = (wx - cam.x) * cam.z + cam.w / 2, sy = (wy - cam.y) * cam.z + cam.h / 2;
+      if (sx < -40 || sx > cam.w + 40 || sy < -40 || sy > cam.h + 40) continue;
+      if (unit.lod == 'stat') unit.lod = 'simple';
+      final dx = wx - cam.x, dy = wy - cam.y;
+      visible.add(_Vis(unit, dx * dx + dy * dy));
+    }
+    if (visible.length > fullUnits) { crowded = true; stableSort<_Vis>(visible, (a, b) => byNum(a.d, b.d)); }
+    for (var k = 0; k < fullUnits && k < visible.length; k++) { visible[k].unit.lod = 'full'; }
+  }
+  state.lodCrowded = crowded;
 }
 
 final statDamageFactor = _lod.d('offScreenDamage');

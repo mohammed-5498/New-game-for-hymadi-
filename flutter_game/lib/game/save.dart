@@ -131,13 +131,13 @@ const saveVersion = 4;
 String encodeMatch(MatchState s) {
   final e = s.empire;
   return jsonEncode({
-    'v': saveVersion, 'seed': s.seed, 'settings': s.settings, 'rng': simRng.state,
+    'v': saveVersion, 'seed': s.seed, 'settings': s.settings, 'rng': (s.netRng ?? simRng).state,
     'time': s.time, 'nextUnitId': s.nextUnitId, 'combatSeed': s.combatSeed, 'rolling': s.rollingCorpses,
     'events': s.combatEvents, 'kills': s.stats.kills, 'losses': s.stats.losses, 'maxDistricts': s.stats.maxDistricts,
     'spawn': s.spawnTimers, 'hero': s.heroTimers, 'heroTurn': s.heroTurn, 'champ': s.championTimers, 'bot': s.botTimers,
     'police': {for (final e in s.policeTimers.entries) '${e.key}': [e.value.produce, e.value.captain]},
     'camera': [s.camera.x, s.camera.y, s.camera.z], 'empireHinted': s.empireHinted,
-    'players': [for (final p in s.players) [p.friendOf, p.fallen]],
+    'players': [for (final p in s.players) [p.friendOf, p.fallen, p.isHuman]],
     'districts': [for (final d in s.map.districts) {
       'o': d.owner, 'p': d.progress, 'po': d.progressOwner, 'tc': d.tintColor, 'tm': d.tintMix, 'f': d.fort, 'b': d.building,
       'bt': d.buildTile, 'blv': d.blv, 'cool': d.cool, 'rally': d.rally == null ? null : [d.rally!.k, d.rally!.owner],
@@ -167,6 +167,7 @@ String encodeMatch(MatchState s) {
     'fireworks': [for (final f in s.fireworks) [f.x, f.y, f.at, f.done, f.owner]],
     'event': _eventJson(s.cityEvent),
     'story': _storyJson(s.story),
+    'net': s.netCams == null ? null : [s.netTick, [for (final c in s.netCams!) c == null ? null : [c.x, c.y, c.z, c.w, c.h]]],
     'brains': {for (final b in s.botBrains.entries) '${b.key}': {
       'n': b.value.nextId, 'r': b.value.rallyId,
       's': [for (final q in b.value.squads) {'id': q.id, 'ty': q.type, 'u': q.units, 't': q.targetId, 'p': q.power, 'ph': q.phase,
@@ -196,6 +197,7 @@ MatchState decodeMatch(String text) {
     final p = (j['players'] as List)[k] as List;
     s.players[k].friendOf = p[0] as int?;
     s.players[k].fallen = p[1] == true;
+    if (p.length > 2) s.players[k].isHuman = p[2] == true;   // لاعب محلي غادر: يقوده بوت
   }
   s.stats.maxDistricts = j['maxDistricts'] as int;
   s.spawnTimers = [for (final v in j['spawn'] as List) _n(v)!];
@@ -321,6 +323,12 @@ MatchState decodeMatch(String text) {
   s.fireworks = [for (final f in j['fireworks'] as List) Firework(_n((f as List)[0])!, _n(f[1])!, f[2] as int, f[4] as int?)..done = f[3] == true];
   s.cityEvent = _eventBack(j['event'] as Map?);
   _storyBack(s.story, j['story'] as Map?);
+  final net = j['net'] as List?;
+  if (net != null) {
+    s.netTick = net[0] as int;
+    s.netCams = [for (final c in net[1] as List) c == null ? null : NetCam(_n(c[0])!, _n(c[1])!, _n(c[2])!, _n(c[3])!, _n(c[4])!)];
+    s.netRng = simRng;
+  }
   s.mapVersion++;
   return s;
 }

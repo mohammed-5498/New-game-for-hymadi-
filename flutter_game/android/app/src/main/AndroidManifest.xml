@@ -1,4 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- اللعب المحلي (القسم 16): الاتصال بالأصدقاء على الواي فاي، وقفل البث المتعدد لاستقبال إعلانات المباريات -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
     <application
         android:label="مدينة العصابات (جديدة)"
         android:name="${applicationName}"

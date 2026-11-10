@@ -1,5 +1,6 @@
 // شاشة المباراة: الحلقة (20 تحديثاً في الثانية بالمنطق المنقول، والرسم بإيقاع الشاشة بتنعيم بين تحديثين)،
 // والكاميرا، ورسم المدينة صفاً صفاً بالعمق والجنود في صفوفهم، واللمس (js/ui/input.js): تحديد وتحريك وهجوم
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -20,6 +21,7 @@ import '../game/save.dart';
 import '../game/story.dart';
 import '../game/units.dart';
 import '../map/generator.dart';
+import '../net/session.dart';
 import '../render/batch.dart';
 import '../render/city_art.dart';
 import '../render/city_layer.dart';
@@ -35,7 +37,8 @@ import 'widgets.dart';
 class MatchScreen extends StatefulWidget {
   final J? settings;
   final bool resume;              // متابعة المباراة المحفوظة (UI.matchKey)
-  const MatchScreen({super.key, this.settings, this.resume = false});
+  final MatchState? lanState;     // اللعب المحلي (net/session.dart): المباراة كما بدأت عند الجميع
+  const MatchScreen({super.key, this.settings, this.resume = false, this.lanState});
   @override
   State<MatchScreen> createState() => MatchScreenState();
 }
@@ -48,6 +51,10 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
   bool _recorded = false;
   ({String title, List<(String, String)> lines, String reward, String ending, String next})? storyResult;
   late bool _resumePending = widget.resume;
+  StreamSubscription<String>? _lanSub;
+  int _frames = 0;
+  String? get lanRole => state?.lanRole;
+  String? get lanText => lanRole == null ? null : Lan.status();
   Duration _lastDraw = Duration.zero;
   int _activeUntil = 0;
   CityArt? art;
@@ -70,6 +77,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     super.initState();
     _ticker = createTicker(_onTick);
     WidgetsBinding.instance.addObserver(this);
+    if (widget.lanState != null) _lanSub = Lan.events.listen(_onLan);
     _start();
   }
 
@@ -83,6 +91,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
   void dispose() {
     GameSound.matchSilence(false);
     GameSound.menuMusic(true);
+    _lanSub?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _ticker.dispose();
     layer?.dispose();
@@ -97,7 +106,10 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     setState(() { loadProgress = 0; tip = tips[math.Random().nextInt(tips.length)] as String; });
     GameSound.matchSilence(true);
     MatchState s;
-    if (_resumePending) {
+    if (widget.lanState != null) {
+      s = widget.lanState!;
+      settings = s.settings;
+    } else if (_resumePending) {
       _resumePending = false;
       try {
         s = decodeMatch(Prefs.raw(UI.s('matchKey'))!);
@@ -146,6 +158,32 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     _ticker.start();
   }
 
+  // اللعب المحلي: إعادة المزامنة تستبدل المباراة كلها، والمضيف يعود إلى الغرفة، أو ينقطع الاتصال به
+  void _onLan(String e) {
+    if (!mounted) return;
+    if (e == 'resynced' && Lan.L != null && state != null) {
+      final s = Lan.L!.state;
+      layer?.dispose();
+      setState(() { state = s; layer = CityLayer(s.map, art!); _mapVersion = s.mapVersion; });
+    } else if ((e == 'back' || e == 'left') && lanRole == 'client') {
+      Navigator.of(context).pop();
+    }
+  }
+
+  void lanBackToLobby() {
+    Lan.backToLobby();
+    Navigator.of(context).pop();
+  }
+
+  // أمر من قائمة الحي (فُحص قبلها): في اللعب المحلي يُرسل فينفذه كل جهاز في التحديث نفسه
+  void empire(String a, int did, Object? x) {
+    final s = state;
+    if (s == null) return;
+    if (lanRole != null) { Lan.command({'k': 'emp', 'a': a, 'd': did, 'x': x}); return; }
+    final r = empireCommand(s, s.humanId, a, did, x);
+    if (!r.ok && r.reason.isNotEmpty) s.notice = Notice(r.reason, true, 2.5);
+  }
+
   // زر نهاية مرحلة القصة: التالية أو إعادتها، أو العودة إلى قائمة القصة بعد آخرها
   void storyNext() {
     final next = storyAgain(settings, state?.matchResult?.won ?? false);
@@ -169,7 +207,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
   // --- الإيقاف والحفظ (hud.js: openPause وleaveToMain) ---
   void saveMatch() {
     final s = state;
-    if (s == null || s.matchResult != null) return;
+    if (s == null || s.matchResult != null || s.lanRole != null) return;   // المحلية لا تمس مباراتك المحفوظة
     Prefs.writeRaw(UI.s('matchKey'), encodeMatch(s));
     Prefs.write(UI.s('matchInfoKey'), saveInfo(s));
   }
@@ -177,15 +215,28 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
   void openPause({bool saveNow = false}) {
     final s = state;
     if (s == null || s.matchResult != null) return;
-    if (!paused) { paused = true; hud.value++; GameSound.cityMusic(null); }
+    if (!paused) { paused = true; hud.value++; if (s.lanRole != 'client') GameSound.cityMusic(null); }
+    if (s.lanRole == 'host') Lan.pause(true);
+    if (s.lanRole != null) return;
     if (saveNow) { saveMatch(); return; }
     // نقطة حفظ بعد ظهور القائمة حتى لا يتقطع
     Future<void>.delayed(Duration(milliseconds: UI.i('fadeMs') + 30), () { if (paused && mounted) saveMatch(); });
   }
 
-  void closePause() { paused = false; hud.value++; GameSound.cityMusic(state?.map.city); }
+  void closePause() {
+    paused = false;
+    hud.value++;
+    if (lanRole != 'client') GameSound.cityMusic(state?.map.city);
+    if (lanRole == 'host') Lan.pause(false);
+  }
 
+  // اللعب المحلي: المغادرة نهائية (جيش المنضم يقوده بوت عند الباقين، وخروج المضيف ينهيها عند الجميع)
   void leaveToMain() {
+    if (lanRole != null) {
+      Lan.leave();
+      Navigator.of(context).popUntil((r) => r.isFirst);
+      return;
+    }
     saveMatch();
     Navigator.of(context).pop();
   }
@@ -206,7 +257,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
   void _ended(MatchState s) {
     if (_recorded) return;
     _recorded = true;
-    clearSavedMatch();
+    if (s.lanRole == null) clearSavedMatch();
     final r = s.matchResult!;
     GameSound.cityMusic(null);
     if (s.humanId >= 0) sound(r.won ? 'victory' : 'defeat');
@@ -248,15 +299,24 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     if (s == null) return;
     var dt = _last == Duration.zero ? 0.0 : (now - _last).inMicroseconds / 1e6;
     _last = now;
-    if (paused || s.matchResult != null) dt = 0;
-    _acc = math.min(_acc + dt, 0.25);
-    while (_acc >= TICK_SEC) {
-      updateMatch(s);
-      _acc -= TICK_SEC;
-      if (++_ticks % 5 == 0) hud.value++;
-      if (s.matchResult != null) { _ended(s); hud.value++; break; }
+    if (s.lanRole != null && Lan.L != null) {
+      // اللعب المحلي: التحديثات حسب أدوار المضيف، والمضيف يوقفها عند الجميع
+      if (s.lanRole == 'host') s.paused = paused;
+      final before = s.netTick;
+      alpha = Lan.frame(math.min(dt, 0.25));
+      if (s.netTick ~/ 5 != before ~/ 5 || ++_frames % 30 == 0) hud.value++;
+      if (s.matchResult != null && !_recorded) { _ended(s); hud.value++; }
+    } else {
+      if (paused || s.matchResult != null) dt = 0;
+      _acc = math.min(_acc + dt, 0.25);
+      while (_acc >= TICK_SEC) {
+        updateMatch(s);
+        _acc -= TICK_SEC;
+        if (++_ticks % 5 == 0) hud.value++;
+        if (s.matchResult != null) { _ended(s); hud.value++; break; }
+      }
+      alpha = _acc / TICK_SEC;
     }
-    alpha = _acc / TICK_SEC;
     if (settings['watch'] == true && _ticks % 20 == 0) _watch(s);
     if (s.mapVersion != _mapVersion) {
       _mapVersion = s.mapVersion;
@@ -377,8 +437,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     if (pick != null) {
       picking = null;
       final target = _areaAt(s, p, size);
-      final r = empireCommand(s, s.humanId, pick.$1, pick.$2, target?.id);
-      if (!r.ok && r.reason.isNotEmpty) s.notice = Notice(r.reason, true, 2.5);
+      empire(pick.$1, pick.$2, target?.id);
       hud.value++;
       return;
     }
@@ -423,9 +482,18 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     _lastTapUnit = null;
     if (group.isEmpty) return;
     sound('command');
-    if (hit != null && isEnemy(s, group[0], hit)) { commandAttack(s, group, hit); return; }
     final w = toWorld(s, p, size);
     final (ti, tj) = worldToTile(w.dx, w.dy);
+    if (s.lanRole != null) {
+      // اللعب المحلي: أمر ينفذه كل جهاز في التحديث نفسه، وحلقة مكانه تظهر هنا فوراً
+      final ids = [for (final u in group) u.id];
+      if (hit != null && isEnemy(s, group[0], hit)) { Lan.command({'k': 'attack', 'u': ids, 't': hit.id}); return; }
+      final i = jsRound(ti).clamp(0, s.map.n - 1), j = jsRound(tj).clamp(0, s.map.n - 1);
+      Lan.command({'k': 'move', 'u': ids, 'i': i, 'j': j});
+      s.moveMarker = MoveMarker(i, j, false);
+      return;
+    }
+    if (hit != null && isEnemy(s, group[0], hit)) { commandAttack(s, group, hit); return; }
     commandMove(s, ti, tj, group);
   }
 

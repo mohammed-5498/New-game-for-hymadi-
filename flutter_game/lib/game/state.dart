@@ -22,7 +22,7 @@ class Player extends MapPlayer {
   final String? nation;
   final String gangName;
   final String color;
-  final bool isHuman;
+  bool isHuman;               // اللعب المحلي: يصير بوتاً إن غادر صاحبه
   final String difficulty;
   bool neutral = false;      // الشرطة: خارج الفوز والبوتات
   bool fallen = false;       // حماية الزعيم: سقط زعيمه
@@ -321,6 +321,12 @@ class Camera {
   double x = 0, y = 0, z = 2.2;
 }
 
+// كاميرا لاعب في اللعب المحلي (القسم 16): مركزها في العالم وتقريبها ومقاس شاشتها، لمستويات التفصيل المشتركة
+class NetCam {
+  final double x, y, z, w, h;
+  const NetCam(this.x, this.y, this.z, this.w, this.h);
+}
+
 class MatchState {
   J settings;
   GameMap map;
@@ -372,6 +378,11 @@ class MatchState {
   final unitHash = <int, List<Unit>>{};
   double unitHashTime = -1;
   MoveMarker? moveMarker;
+  // اللعب المحلي (net/lockstep.dart): كاميرات اللاعبين وعدّاد التحديثات ومولّد المباراة، ودور هذا الجهاز
+  List<NetCam?>? netCams;
+  int netTick = 0;
+  Rng? netRng;
+  String? lanRole;
   double battleMaxSeconds = 1e9;   // معركة البوتات (match.dart)
   final botBrains = SplayTreeMap<int, Brain>();   // عقل كل بوت (ai/squads.dart)، بترتيب أرقام اللاعبين
 

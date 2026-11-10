@@ -1,5 +1,6 @@
 // القوائم (js/ui/menus.js وpicker.js وstoreScreen.js، القسم 12): الرئيسية بخلفية مدينة حية، والإعداد بخاناته ولوحاته،
 // والإعدادات، والإحصائيات، والمتجر. الصور المصغرة من اللعبة الحالية نفسها (assets/thumbs، scripts/export_thumbs.cjs)
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -13,13 +14,17 @@ import '../map/generator.dart';
 import '../render/city_art.dart';
 import '../render/city_layer.dart';
 import '../audio/sound.dart';
+import '../game/match.dart';
+import '../game/state.dart';
+import '../net/session.dart';
+import 'lan_screen.dart';
 import 'match_screen.dart';
 import 'prefs.dart';
 import 'story_screen.dart';
 import 'widgets.dart';
 
 // ===================== إعداد المباراة =====================
-const _slotTypes = {'human': 'أنت', 'bot': 'بوت', 'closed': 'مغلقة'};
+const _slotTypes = {'human': 'أنت', 'bot': 'بوت', 'closed': 'مغلقة', 'net': 'صديق'};
 const _maxSlots = 8;
 List<String> get _gangIds => [for (final g in GANG_IDS) g as String];
 List<String> get _colorIds => [for (final c in PLAYER_COLORS) (c as J).s('id')];
@@ -28,6 +33,8 @@ String colorHex(String id) => (PLAYER_COLORS.firstWhere((c) => (c as J)['id'] ==
 class Slot {
   String type, side, color, difficulty;
   int team;
+  int? peer;                     // اللعب المحلي: رقم اتصال الصديق صاحب الخانة
+  String name = '', was = 'closed';
   Slot(this.type, this.side, this.color, this.team, this.difficulty);
   Map<String, Object?> toJson() => {'type': type, 'side': side, 'color': color, 'team': team, 'difficulty': difficulty};
 }
@@ -95,12 +102,13 @@ class SetupModel {
     return null;
   }
 
-  J build() {
+  J build({String? host}) {
     final a = active;
+    // اللعب المحلي: كل صديق لاعب حقيقي على جهازه، وإن غادر يقوده بوت متوسط
     final players = [
       for (var k = 0; k < a.length; k++)
-        {'name': k == 0 ? 'أنت' : 'بوت $k', ...resolveSide(a[k].side), 'color': a[k].color, 'isHuman': k == 0,
-          'team': survival ? 1 : a[k].team, 'difficulty': a[k].difficulty},
+        {'name': k == 0 ? host ?? 'أنت' : a[k].type == 'net' ? a[k].name : 'بوت $k', ...resolveSide(a[k].side), 'color': a[k].color,
+          'isHuman': k == 0 || a[k].type == 'net', 'team': survival ? 1 : a[k].team, 'difficulty': a[k].type == 'net' ? 'medium' : a[k].difficulty},
     ];
     return {
       'mode': mode,
@@ -155,6 +163,18 @@ String? regionOfCity(String city) {
   return null;
 }
 
+// لوحة الأمم والعصابات (الإعداد وأمة الصديق في اللعب المحلي)
+Future<String?> pickSide(BuildContext context, String current) => showModalBottomSheet<String>(context: context, backgroundColor: panel,
+    isScrollControlled: true, builder: (_) => PickerSheet(title: 'الأمة أو العصابة', groups: [
+      for (final (name, list) in sideGroups)
+        (name, [
+          for (final g in list)
+            PickCard(title: sideName(g), note: _isNation(g) ? '${sideNote(g)} • ${nations.m('styles').m(nations.m(g).s('style')).s('name')}'
+                : nations.m('styles').m(g).s('name'), image: 'assets/thumbs/side_$g.webp', aspect: 2.5,
+                selected: current == g, onTap: () => Navigator.pop(context, g)),
+        ]),
+    ], footer: [WideButton('عشوائي', () => Navigator.pop(context, 'random'), width: 160)]));
+
 // ===================== القائمة الرئيسية =====================
 class MainMenu extends StatefulWidget {
   const MainMenu({super.key});
@@ -183,7 +203,7 @@ class _MainMenuState extends State<MainMenu> {
           note: '${cityShort('${saved['city']}')} • ${clock((saved['time'] as num).toDouble())}'),
       WideButton('لعب', () => _go(const SetupScreen()), primary: saved == null),
       WideButton('القصة', () => _go(const StoryScreen()), note: 'حملة أبناء سبأ'),
-      const WideButton('لعب محلي', null, note: 'في مرحلة لاحقة من النقل'),
+      WideButton('لعب محلي', () => _go(const LanScreen()), note: 'مع الأصدقاء على نفس الواي فاي'),
       Row(mainAxisSize: MainAxisSize.min, children: [
         WideButton('المتجر', () => _go(const StoreScreen()), width: 124),
         const SizedBox(width: 6),
@@ -291,7 +311,8 @@ class _BackdropPainter extends CustomPainter {
 
 // ===================== قائمة الإعداد =====================
 class SetupScreen extends StatefulWidget {
-  const SetupScreen({super.key});
+  final bool lan;                // اللعب المحلي: المضيف يعدّ المباراة هنا، وكل صديق ينضم يأخذ خانة بوت
+  const SetupScreen({super.key, this.lan = false});
   @override
   State<SetupScreen> createState() => _SetupScreenState();
 }
@@ -299,6 +320,60 @@ class SetupScreen extends StatefulWidget {
 class _SetupScreenState extends State<SetupScreen> {
   final m = SetupModel.load();
   String? error;
+  StreamSubscription<String>? _sub;
+  String _sentLobby = '';
+
+  @override
+  void initState() {
+    super.initState();
+    if (!widget.lan) return;
+    final modes = NET.l('modes').cast<String>();
+    if (!modes.contains(m.mode)) m.mode = modes.first;
+    Lan.canSeat = () => m.slots.skip(1).any((s) => s.type != 'net');
+    _sub = Lan.events.listen((e) { if (e == 'lobby' && mounted) setState(_syncSlots); });
+    _syncSlots();
+  }
+
+  @override
+  void dispose() {
+    _sub?.cancel();
+    Lan.canSeat = () => true;
+    super.dispose();
+  }
+
+  // المنضمون ← الخانات: الجديد يأخذ أول خانة بوت ثم أول مغلقة، ومن غادر تعود خانته، والأمة اختيار صاحبها
+  void _syncSlots() {
+    final peers = Lan.helloPeers, ids = {for (final p in peers) p.id};
+    for (final slot in m.slots) {
+      if (slot.type == 'net' && !ids.contains(slot.peer)) { slot.type = slot.was; slot.peer = null; }
+    }
+    for (final peer in peers) {
+      var slot = m.slots.where((s) => s.type == 'net' && s.peer == peer.id).firstOrNull;
+      if (slot == null) {
+        slot = m.slots.skip(1).where((s) => s.type == 'bot').firstOrNull ?? m.slots.skip(1).where((s) => s.type == 'closed').firstOrNull;
+        if (slot == null) continue;
+        slot..was = slot.type..type = 'net'..peer = peer.id;
+      }
+      slot.name = peer.name;
+      if (_sides.contains(peer.side)) slot.side = peer.side;
+    }
+  }
+
+  // وصف الغرفة الذي يراه المنضمون في غرفة الانتظار، حين يتغير
+  void _sendLobby() {
+    final view = {
+      'mode': m.mode, 'city': m.city, 'mapSize': m.mapSize, 'weather': m.weather, 'maxUnits': m.maxUnits,
+      'players': [
+        for (final (k, s) in m.slots.where((s) => s.type != 'closed').indexed)
+          {'kind': k == 0 ? 'host' : s.type, 'name': k == 0 ? Lan.name : s.type == 'net' ? s.name : 'بوت ${BOT.m(s.difficulty).s('name')}',
+            'side': s.side, 'color': s.color, 'team': s.team, 'peer': s.type == 'net' ? s.peer : null},
+      ],
+    };
+    final text = view.toString();
+    if (text == _sentLobby) return;
+    _sentLobby = text;
+    Lan.broadcastLobby(view);
+  }
 
   Future<T?> _sheet<T>(Widget child) => showModalBottomSheet<T>(context: context, backgroundColor: panel, isScrollControlled: true,
       builder: (_) => child);
@@ -332,7 +407,7 @@ class _SetupScreenState extends State<SetupScreen> {
         const Text('اختر طور اللعب', style: TextStyle(color: gold, fontSize: 17, fontWeight: FontWeight.w800)),
         const SizedBox(height: 8),
         Wrap(spacing: 8, runSpacing: 8, alignment: WrapAlignment.center, children: [
-          for (final k in _GM.l('order').cast<String>())
+          for (final k in _GM.l('order').cast<String>()) if (!widget.lan || NET.l('modes').contains(k))
             SizedBox(width: 190, child: PickCard(title: _GM.m(k).s('name'), note: _GM.m(k).s('short'), selected: m.mode == k,
                 onTap: () { m.mode = k; set(() {}); setState(() {}); })),
         ]),
@@ -360,15 +435,7 @@ class _SetupScreenState extends State<SetupScreen> {
   }
 
   Future<void> _pickSide(int k) async {
-    final pick = await _sheet<String>(PickerSheet(title: 'الأمة أو العصابة', groups: [
-      for (final (name, list) in sideGroups)
-        (name, [
-          for (final g in list)
-            PickCard(title: sideName(g), note: _isNation(g) ? '${sideNote(g)} • ${nations.m('styles').m(nations.m(g).s('style')).s('name')}'
-                : nations.m('styles').m(g).s('name'), image: 'assets/thumbs/side_$g.webp', aspect: 2.5,
-                selected: m.slots[k].side == g, onTap: () => Navigator.pop(context, g)),
-        ]),
-    ], footer: [WideButton('عشوائي', () => Navigator.pop(context, 'random'), width: 160)]));
+    final pick = await pickSide(context, m.slots[k].side);
     if (pick != null) setState(() => m.slots[k].side = pick);
   }
 
@@ -394,8 +461,18 @@ class _SetupScreenState extends State<SetupScreen> {
   }
 
   void _start() {
-    final e = m.validate();
+    final e = widget.lan && !m.active.any((s) => s.type == 'net') ? 'انتظر حتى ينضم صديق واحد على الأقل.' : m.validate();
     if (e != null) { setState(() => error = e); return; }
+    if (widget.lan) {
+      // أصحاب الخانات بترتيب لاعبي المباراة (رقم اتصال كل صديق، أو null للمضيف والبوتات)
+      final seed = DateTime.now().microsecondsSinceEpoch & 0x7FFFFFFF;
+      simRng = Rng(seed);
+      final s = createMatch(m.build(host: Lan.name))..seed = seed;
+      final mine = Lan.startHost(s, [for (final x in m.active) x.type == 'net' ? x.peer : null]);
+      setState(() => error = null);
+      Navigator.of(context).push(MaterialPageRoute(builder: (_) => MatchScreen(lanState: mine)));
+      return;
+    }
     m.save();
     Prefs.remove(UI.s('matchKey'));
     Prefs.remove(UI.s('matchInfoKey'));
@@ -412,16 +489,17 @@ class _SetupScreenState extends State<SetupScreen> {
     final closed = surv ? k > m.allies : s.type == 'closed';
     bool openIfClosed() { if (!closed || surv) return closed; setState(() => s.type = 'bot'); return true; }
     const st = TextStyle(color: ink, fontSize: 13);
-    final level = k > 0 && !closed ? BOT.m(s.difficulty) : null;
+    final level = k > 0 && !closed && s.type != 'net' ? BOT.m(s.difficulty) : null;
     return Opacity(opacity: closed ? 0.45 : 1, child: Padding(padding: const EdgeInsets.symmetric(vertical: 2), child: Row(children: [
       SizedBox(width: 18, child: Text('${k + 1}', style: const TextStyle(color: dim, fontSize: 12))),
-      _cell(64, Text(surv ? (k == 0 ? 'أنت' : closed ? 'مغلقة' : 'حليف') : _slotTypes[s.type]!, style: st),
-          () { if (k > 0 && !surv) setState(() => s.type = s.type == 'bot' ? 'closed' : 'bot'); }),
+      _cell(64, Text(surv ? (k == 0 ? 'أنت' : closed ? 'مغلقة' : 'حليف') : s.type == 'net' ? s.name : _slotTypes[s.type]!, style: st,
+          overflow: TextOverflow.ellipsis),
+          () { if (k > 0 && !surv && s.type != 'net') setState(() => s.type = s.type == 'bot' ? 'closed' : 'bot'); }),
       const SizedBox(width: 4),
       _cell(120, Column(mainAxisSize: MainAxisSize.min, children: [
         Text(sideName(s.side), style: st),
         if (sideNote(s.side).isNotEmpty) Text(sideNote(s.side), style: const TextStyle(color: dim, fontSize: 10)),
-      ]), () { if (!openIfClosed()) _pickSide(k); }),
+      ]), () { if (!openIfClosed() && s.type != 'net') _pickSide(k); }),   // الصديق يختار أمته بنفسه
       const SizedBox(width: 4),
       _cell(40, Container(width: 22, height: 22, decoration: BoxDecoration(color: colorOf(colorHex(s.color)), shape: BoxShape.circle)),
           () { if (!openIfClosed()) setState(() => s.color = _nextColor(k)); }),
@@ -442,6 +520,7 @@ class _SetupScreenState extends State<SetupScreen> {
   @override
   Widget build(BuildContext context) {
     final size = MAP_SIZES.m(m.mapSize);
+    if (widget.lan) _sendLobby();
     return Scaffold(body: SafeArea(child: Column(children: [
       Expanded(child: SingleChildScrollView(padding: const EdgeInsets.all(10), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Column(children: [
@@ -462,8 +541,13 @@ class _SetupScreenState extends State<SetupScreen> {
         ]),
         const SizedBox(width: 12),
         Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(m.survival ? 'أنت و${m.allies} حلفاء ضد موجات الشرطة • الحد ${m.limit} لاعبين'
-              : 'الخانة الأولى أنت • الحد على هذه الخريطة ${m.limit} لاعبين', style: const TextStyle(color: dim, fontSize: 12)),
+          if (widget.lan) SizedBox(width: 404, child: Text('مباراة محلية باسم «${Lan.name}»'
+              '${Lan.ips.isNotEmpty ? ' • عنوانك: ${Lan.ips.join(' أو ')}' : ''}'
+              '${m.slots.any((s) => s.type == 'net') ? ' • انضم ${m.slots.where((s) => s.type == 'net').length}' : ' • بانتظار الأصدقاء…'}',
+              style: const TextStyle(color: gold, fontSize: 12.5))),
+          SizedBox(width: 404, child: Text(m.survival ? 'أنت و${m.allies} حلفاء ضد موجات الشرطة • الحد ${m.limit} لاعبين'
+              : widget.lan ? 'الخانة الأولى أنت • كل صديق ينضم يأخذ خانة بوت • الحد ${m.limit} لاعبين'
+              : 'الخانة الأولى أنت • الحد على هذه الخريطة ${m.limit} لاعبين', style: const TextStyle(color: dim, fontSize: 12))),
           const SizedBox(height: 4),
           for (var k = 0; k < _maxSlots; k++) _row(k),
           const SizedBox(height: 4),
@@ -471,7 +555,7 @@ class _SetupScreenState extends State<SetupScreen> {
         ]),
       ]))),
       Container(color: const Color(0xFF1C1611), padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), child: Row(children: [
-        Expanded(child: Text(error ?? (Prefs.raw(UI.s('matchKey')) != null ? 'بدء مباراة جديدة يحذف المباراة المحفوظة.' : ''),
+        Expanded(child: Text(error ?? (!widget.lan && Prefs.raw(UI.s('matchKey')) != null ? 'بدء مباراة جديدة يحذف المباراة المحفوظة.' : ''),
             style: TextStyle(color: error != null ? danger : dim, fontSize: 12.5))),
         WideButton('رجوع', () => Navigator.pop(context), ghost: true, width: 120),
         const SizedBox(width: 8),

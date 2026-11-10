@@ -47,6 +47,9 @@ class MatchHud extends StatelessWidget {
         if (modeBar(s) case final bar?) Positioned(top: 8, left: 0, right: 0, child: Center(child: _ModeBarBox(bar))),
         // أسهم الحافة: زعماء الأعداء ذهبية، وزعيمك حين يُضرب حمراء (حماية الزعيم)
         if (s.mode == 'regicide' || s.story != null) Positioned.fill(child: IgnorePointer(child: CustomPaint(painter: _EdgeArrows(screen)))),
+        // اللعب المحلي: المضيف أوقف المباراة، أو لا يصل دور جديد منه
+        if (screen.lanText case final t?) Positioned(top: 92, left: 0, right: 0, child: Center(child: _Box(
+            child: Text(t, style: const TextStyle(color: gold, fontSize: 14, fontWeight: FontWeight.w700))))),
         if (s.notice != null) Positioned(top: 52, left: 0, right: 0, child: Center(child: _Box(
             child: Text(s.notice!.text, style: TextStyle(color: s.notice!.mine ? gold : ink, fontSize: 14, fontWeight: FontWeight.w600))))),
         // شريط القوة يساراً
@@ -253,7 +256,7 @@ class _EmpireMenu extends StatelessWidget {
       info = CITY_FEATURES.m('desc').ss(d.feature!);
       for (final kind in recruitsAt(d) ?? const <String>[]) {
         final R = CITY_FEATURES.m('recruits').m(kind);
-        slot(R.ss('name') ?? kind, unitPrice(s, pid, kind), canQueue(s, pid, d, kind), () => queueUnit(s, pid, did, kind),
+        slot(R.ss('name') ?? kind, unitPrice(s, pid, kind), canQueue(s, pid, d, kind), () => screen.empire('queue', did, kind),
             count: (s.empire!.queues[did] ?? const []).where((x) => x.kind == kind).length);
       }
       if (d.feature == 'triads') {
@@ -264,7 +267,7 @@ class _EmpireMenu extends StatelessWidget {
         slot('صاروخ البارود', CITY_FEATURES.m('powder').i('cost'), canRocket(s, pid, d),
             () => screen.startPick('rocket', did, 'المس حياً ليس لك ليسقط عليه الصاروخ'));
       }
-      if (d.feature == 'cathedral') slot('اقرع الأجراس', null, canRingBells(s, pid, d), () => ringBells(s, pid, did));
+      if (d.feature == 'cathedral') slot('اقرع الأجراس', null, canRingBells(s, pid, d), () => screen.empire('bells', did, null));
     }
     final title = d.featureTile != null && d.feature != null ? 'مبنى المدينة'
         : d.building == 'hq' ? 'القاعدة الرئيسية' : d.building == 'tower' ? 'برج رماية' : d.building == 'hospital' ? 'مستشفى' : 'حي';
@@ -274,7 +277,7 @@ class _EmpireMenu extends StatelessWidget {
       for (final kind in EMPIRE.m('units').l('order').cast<String>()) {
         final hero = heroFor(me, kind);
         final name = kind == 'leader' ? CHAMPIONS.m(me.gang).s('name') : hero != null ? HEROES.m(hero).s('name') : 'فرد';
-        slot(name, unitPrice(s, pid, kind), canQueue(s, pid, d, kind), () => queueUnit(s, pid, did, kind),
+        slot(name, unitPrice(s, pid, kind), canQueue(s, pid, d, kind), () => screen.empire('queue', did, kind),
             count: q.where((x) => x.kind == kind).length);
       }
     }
@@ -283,23 +286,23 @@ class _EmpireMenu extends StatelessWidget {
       for (final key in b.m('upgrades').l('order').cast<String>()) {
         final next = nextBuildingUpgrade(d, key, s);
         slot('${b.m('upgrades').m(key).s('name')} ${next != null ? next.level : 'الأعلى'}', next?.cost,
-            canUpgradeBuilding(s, pid, d, key), () => upgradeBuilding(s, pid, did, key));
+            canUpgradeBuilding(s, pid, d, key), () => screen.empire('improve', did, key));
       }
     }
     if (d.building == 'hq') {
       for (final key in EMPIRE.m('upgrades').l('order').cast<String>()) {
         final next = nextUpgrade(s, pid, key);
         slot('${EMPIRE.m('upgrades').m(key).s('name')} ${next != null ? next.level : 'الأعلى'}', next?.cost,
-            canUpgrade(s, pid, key), () => buyUpgrade(s, pid, key));
+            canUpgrade(s, pid, key), () => screen.empire('upgrade', did, key));
       }
     }
     if (d.building == null) {
       for (final type in EMPIRE.m('buildings').l('order').cast<String>()) {
-        slot(EMPIRE.m('buildings').m(type).s('name'), buildCost(s, type), canBuild(s, pid, d, type), () => buildDistrict(s, pid, did, type));
+        slot(EMPIRE.m('buildings').m(type).s('name'), buildCost(s, type), canBuild(s, pid, d, type), () => screen.empire('build', did, type));
       }
     }
     final fort = nextFort(d, s, pid);
-    slot('سور ${fort != null ? fort.level : 'الأعلى'}', fort?.cost, canFortify(s, pid, d), () => fortifyDistrict(s, pid, did));
+    slot('سور ${fort != null ? fort.level : 'الأعلى'}', fort?.cost, canFortify(s, pid, d), () => screen.empire('fortify', did, null));
     return ConstrainedBox(
       constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width - 120),
       child: _Box(child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -346,12 +349,14 @@ class _Pause extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(color: const Color(0x99000000), child: Center(child: Panel(padding: const EdgeInsets.all(14),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
-    const Text('إيقاف مؤقت', style: TextStyle(color: gold, fontSize: 18, fontWeight: FontWeight.w700)),
+    // اللعب المحلي: المضيف يوقفها عند الجميع، والمنضم يفتح القائمة واللعب مستمر، والمغادرة نهائية
+    Text(screen.lanRole == 'client' ? 'القائمة • المباراة مستمرة' : 'إيقاف مؤقت', style: const TextStyle(color: gold, fontSize: 18, fontWeight: FontWeight.w700)),
     const SizedBox(height: 8),
     WideButton('متابعة', screen.closePause, primary: true),
     WideButton('الإعدادات', screen.openSettings),
-    WideButton('إعادة المباراة', screen.restart),
-    WideButton('القائمة الرئيسية', screen.leaveToMain, note: 'تُحفظ المباراة للمتابعة'),
+    if (screen.lanRole == null) WideButton('إعادة المباراة', screen.restart),
+    WideButton(screen.lanRole != null ? 'مغادرة المباراة' : 'القائمة الرئيسية', screen.leaveToMain,
+        note: screen.lanRole == 'host' ? 'تنتهي عند الجميع' : screen.lanRole == 'client' ? 'يقود جيشك بوت' : 'تُحفظ المباراة للمتابعة'),
   ]))));
 }
 
@@ -382,8 +387,11 @@ class _End extends StatelessWidget {
     ])),
     const SizedBox(height: 8),
     if (screen.storyResult case final sr?) WideButton(sr.next, screen.storyNext, primary: true)
+    else if (screen.lanRole == 'host') WideButton('غرفة الانتظار', screen.lanBackToLobby, primary: true, note: 'مباراة جديدة مع الأصدقاء')
+    else if (screen.lanRole == 'client') const Text('المضيف يبدأ المباراة التالية', style: TextStyle(color: dim, fontSize: 13))
     else WideButton('مباراة جديدة', screen.restart, primary: true),
-    WideButton(screen.storyResult != null ? 'قائمة القصة' : 'القائمة الرئيسية', () => Navigator.of(context).pop()),
+    WideButton(screen.storyResult != null ? 'قائمة القصة' : screen.lanRole != null ? 'مغادرة' : 'القائمة الرئيسية',
+        screen.lanRole != null ? screen.leaveToMain : () => Navigator.of(context).pop()),
   ])))));
 }
 
