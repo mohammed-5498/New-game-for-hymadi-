@@ -596,7 +596,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void _set(VoidCallback f) { setState(f); Settings.save(); GameSound.applyVolumes(); }
   @override
   Widget build(BuildContext context) {
-    final names = {'auto': 'تلقائي', for (final k in ['high', 'medium', 'low']) k: GRAPHICS.m('levels').m(k).s('name')};
     final body = Center(child: SingleChildScrollView(child: Panel(padding: const EdgeInsets.all(16), child: SizedBox(width: 520, child: Column(
       mainAxisSize: MainAxisSize.min, children: [
         const Text('الإعدادات', style: TextStyle(color: gold, fontSize: 20, fontWeight: FontWeight.w800)),
@@ -608,9 +607,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Text('${(Settings.music * 100).round()}%', style: const TextStyle(color: dim))]),
         Toggle('كتم كل الأصوات', Settings.mute, (v) => _set(() => Settings.mute = v)),
         Toggle('الكلمات الطائرة في القتال', Settings.pops, (v) => _set(() => Settings.pops = v)),
-        ListTile(dense: true, title: const Text('جودة الرسم', style: TextStyle(color: ink, fontSize: 15)),
-            trailing: Text(names[Settings.quality]!, style: const TextStyle(color: gold, fontSize: 15)),
-            onTap: () => _set(() { final o = GRAPHICS.l('order'); Settings.quality = o[(o.indexOf(Settings.quality) + 1) % o.length] as String; })),
         Toggle('توفير البطارية (30 إطاراً)', Settings.battery, (v) => _set(() => Settings.battery = v)),
         const SizedBox(height: 8),
         WideButton('رجوع', () => Navigator.pop(context), ghost: true),

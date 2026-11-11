@@ -118,8 +118,10 @@ class CityLayer {
   final _applied = <int, (String?, double)>{};
   bool tinted = false;
   final List<Light> lights;          // إضاءة الليل الثابتة (weather_art.dart)
+  final Map<int, int> _tileItem;     // المربع ← رقم صورته (لتبديل صورة مربع واحد بلا بناء الطبقة كلها)
+  final Map<int, Sprite> _tileSprite;
   CityLayer._(this.ground, this.marks, this.rows, this.rowStart, this.xf, this.rects, this._pos, this._baseCol, this._col,
-      this._tileDistrict, this._spriteDistrict, this.spriteCol, this.lights);
+      this._tileDistrict, this._spriteDistrict, this.spriteCol, this.lights, this._tileItem, this._tileSprite);
 
   // ما يرتفع فوق قاعدته (CITY_CACHE.reach.up) وما ينزل تحتها
   static const _up = 120.0, _down = 20.0;
@@ -127,7 +129,7 @@ class CityLayer {
   factory CityLayer(GameMap map, CityArt art, [String weather = 'day']) {
     final n = map.n, depths = 2 * n - 1;
     final pos = Float32List(n * n * 12), col = Int32List(n * n * 6), base = Int32List(n * n), tileD = Int32List(n * n);
-    final items = <(int, int, Sprite, double, double, double, int)>[];
+    final items = <(int, int, Sprite, double, double, double, int, int)>[];
     final decor = Decor(map), markVec = Vec(), rowVecs = List.generate(depths, (_) => Vec());
     decor.groundMarks(markVec);
     for (var j = 0; j < n; j++) {
@@ -140,17 +142,20 @@ class CityLayer {
         col.fillRange(k * 6, k * 6 + 6, base[k]);
         tileD[k] = map.road[k] == 1 || map.type[k] == tWater || map.type[k] == tY ? -1 : map.districtAt[k];
         final s = tileSprite(map, art, i, j);
-        if (s != null) items.add((i + j, i, s.$1, x, y + s.$3, s.$2, map.road[k] == 1 ? -1 : map.districtAt[k]));
+        if (s != null) items.add((i + j, i, s.$1, x, y + s.$3, s.$2, map.road[k] == 1 ? -1 : map.districtAt[k], k));
         decor.tileDecor(rowVecs[i + j], i, j);
       }
     }
     items.sort((a, b) => a.$1 != b.$1 ? a.$1 - b.$1 : a.$2 - b.$2);
     final xf = Float32List(items.length * 4), rects = Float32List(items.length * 4), rowStart = Int32List(depths + 1);
     final spriteD = Int32List(items.length), spriteCol = Int32List(items.length)..fillRange(0, items.length, -1);
+    final tileItem = <int, int>{}, tileImg = <int, Sprite>{};
     var d = 0;
     for (var m = 0; m < items.length; m++) {
-      final (depth, _, s, x, y, scale, did) = items[m];
+      final (depth, _, s, x, y, scale, did, k) = items[m];
       spriteD[m] = did;
+      tileItem[k] = m;
+      tileImg[k] = s;
       while (d <= depth) { rowStart[d++] = m; }
       final unit = scale / art.px, o = m * 4;
       xf[o] = unit; xf[o + 1] = 0; xf[o + 2] = x - unit * s.ax; xf[o + 3] = y - unit * s.ay;
@@ -158,7 +163,25 @@ class CityLayer {
     }
     while (d <= depths) { rowStart[d++] = items.length; }
     return CityLayer._(ui.Vertices.raw(ui.VertexMode.triangles, pos, colors: col), markVec.build(),
-        [for (final v in rowVecs) v.build()], rowStart, xf, rects, pos, base, col, tileD, spriteD, spriteCol, mapLights(map, decor.lights));
+        [for (final v in rowVecs) v.build()], rowStart, xf, rects, pos, base, col, tileD, spriteD, spriteCol, mapLights(map, decor.lights),
+        tileItem, tileImg);
+  }
+
+  // مبنى جديد في الحي (القاعدة والبرج والمستشفى): تتبدل صورة مربعه وحده في مكانها. يعيد false إن لم يكن له مكان
+  // (مربع بلا صورة قبلها أو بعدها)، فتُبنى الطبقة كلها
+  bool refreshTiles(GameMap map, CityArt art, Iterable<int> tiles) {
+    for (final k in tiles) {
+      final now = tileSprite(map, art, k % map.n, k ~/ map.n), m = _tileItem[k];
+      if (now == null && m == null) continue;
+      if (now == null || m == null) return false;
+      if (identical(_tileSprite[k], now.$1)) continue;
+      final s = now.$1, unit = now.$2 / art.px, o = m * 4;
+      final x = (k % map.n - k ~/ map.n) * TILE_HALF_W, y = (k % map.n + k ~/ map.n) * TILE_HALF_H + now.$3;
+      xf[o] = unit; xf[o + 1] = 0; xf[o + 2] = x - unit * s.ax; xf[o + 3] = y - unit * s.ay;
+      rects[o] = s.x; rects[o + 1] = s.y; rects[o + 2] = s.x + s.w; rects[o + 3] = s.y + s.h;
+      _tileSprite[k] = s;
+    }
+    return true;
   }
 
   // صبغ الأحياء بلون مالكها (tintAmount في capture.js و tint في colors.js): الأرض والصور، ولا يُعاد إلا ما تغيّر

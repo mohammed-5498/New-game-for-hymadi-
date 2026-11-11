@@ -616,18 +616,12 @@ void _dust(TriBatch b, double x, double g, double s) {
 }
 
 // ===================== الوحدة كلها (drawUnit في units.js) =====================
-final _detailZoom = PERFORMANCE.d('unitDetailZoom');
 final _speedLinesAbove = _CR.d('speedLinesAbove');
 void drawUnit(TriBatch b, UnitAtlas atlas, Unit unit, double alpha, double zoom, double time, bool crowded) {
   final i = unit.prevX + (unit.x - unit.prevX) * alpha, j = unit.prevY + (unit.y - unit.prevY) * alpha;
   final x = (i - j) * TILE_HALF_W, y = (i + j) * TILE_HALF_H;
   final dead = unit.state == 'dead';
   final color = artColor(unit);
-  if (!dead && zoom < _detailZoom) {
-    final size = unit.champion ? 6.0 : unit.hero != null ? 5.0 : 4.0;
-    b.rect(x - size / 2, y - size, size, size, _hexCache[color] ??= _hex(color));
-    return;
-  }
   final key = artKey(unit, time), scale = artScale(unit), walking = isWalking(unit);
   final full = unit.lod == 'full';
   final sub = alpha * TICK_SEC;

@@ -1,6 +1,8 @@
 // واجهة المباراة (js/ui/hud.js وpower.js وempireMenu.js وgroups.js): النقاط ودخلها، وشريط القوة، والإشعار،
 // وأزرار التحديد والقاعدة والإيقاف، ومجموعات التحكم، وقائمة الحي (الإنتاج والترقيات والبناء والتحصين)، وشاشة النهاية.
 // تُعاد بناؤها أربع مرات في الثانية (hud) لا مع كل إطار
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../core/cfg.dart';
@@ -12,6 +14,7 @@ import '../game/story.dart';
 import '../game/spawn.dart';
 import '../game/state.dart';
 import '../game/victory.dart';
+import '../map/generator.dart' show District;
 import '../map/sizes.dart';
 import 'match_screen.dart';
 import 'menus.dart' show cityShort;
@@ -248,7 +251,71 @@ class _Group extends StatelessWidget {
   }
 }
 
-// قائمة الحي (empireMenu.js): خانات بأسعارها، والمعطلة بسببها
+// قائمة الحي (empireMenu.js): خانات صغيرة برمزها وسعرها ونقاط مستواها وما تعطيه بأرقامه (رقائق)، وسطر حجم الحي وقدرة
+// مبناه، والطابور بشريط تقدمه
+const _chipIcon = {'coin': Icons.toll, 'shield': Icons.shield, 'castle': Icons.fort, 'sword': Icons.sports_martial_arts,
+  'range': Icons.gps_fixed, 'clock': Icons.schedule, 'heart': Icons.favorite, 'boot': Icons.double_arrow, 'gear': Icons.settings,
+  'people': Icons.groups, 'block': Icons.crop_square};
+typedef _Chip = (String, String);
+String _pct(num v) => '${(v * 100).round()}%';
+String _sec(num v) => '${(v * 10).round() / 10}ث';
+String _num(num v) => '${(v * 10).round() / 10}'.replaceAll(RegExp(r'\.0$'), '');
+final J _DS = DISTRICT_SIZES;
+
+// ما يعطيه المبنى إن بُني هنا (بحجم الحي)
+List<_Chip> _buildPerks(District d, String type) {
+  final size = sizeOf(d), B = EMPIRE.m('buildings');
+  if (type == 'tower') return [('sword', '${(B.m('tower').d('damage') * _DS.m('power').d(size)).round()}'), ('range', _num(B.m('tower').d('range') * _DS.m('reach').d(size)))];
+  if (type == 'hospital') return [('heart', '${_num(B.m('hospital').d('perSecond') * _DS.m('power').d(size))}/ث')];
+  return [('coin', '+${_num(EMPIRE.m('income').d('hq') * _DS.m('income').d(size))}/ث'), ('people', '')];
+}
+
+// ترقية مبنى بمستواها التالي: سرعة إنتاج القاعدة، وضرر البرج وسرعته، ومدى المستشفى وعلاجه
+List<_Chip> _upgradePerks(String building, String key, int level) {
+  final U = EMPIRE.m('buildings').m(building).m('upgrades').m(key);
+  if (building == 'hq') return [('gear', '−${_pct(1 - (U.l('times')[level] as num))}')];
+  if (building == 'tower') return key == 'damage' ? [('sword', '+${_pct(U.d('per') * level)}')] : [('clock', '−${_pct(U.d('per') * level)}')];
+  return key == 'radius' ? [('range', '+${_num(U.d('per') * level)}')] : [('heart', '+${_pct(U.d('per') * level)}')];
+}
+
+const _gangIcon = {'hp': 'heart', 'damage': 'sword', 'armor': 'shield', 'speed': 'boot'};
+
+// سطر حجم الحي وتحصينه: الدخل، وصعوبة احتلاله، وقوة مبانيه ومداها، وسرعة الإنتاج فيه
+List<_Chip> _sizeChips(District d) {
+  final size = sizeOf(d), list = <_Chip>[('block', 'حي ${_DS.m('names').s(size)}')];
+  String signed(num v) => '${v >= 0 ? '+' : '−'}${_pct(v.abs())}';
+  if (size != 'medium') {
+    list.addAll([('coin', signed(_DS.m('income').d(size) - 1)), ('shield', signed(1 / _DS.m('capture').d(size) - 1)),
+      ('sword', signed(_DS.m('power').d(size) - 1)), ('range', signed(_DS.m('reach').d(size) - 1))]);
+    if (d.building == 'hq' || recruitsAt(d) != null) list.add(('gear', signed(1 - _DS.m('production').d(size))));
+  }
+  if (d.fort > 0) list.add(('castle', '+${_pct(EMPIRE.m('fortify').l('capture')[d.fort - 1] as num)}'));
+  return list;
+}
+
+// قدرة البرج والمستشفى الآن
+List<_Chip>? _statsChips(MatchState s, District d) {
+  if (d.building == 'tower') {
+    final t = towerStats(d, s);
+    return [('sword', '${t.damage.round()}'), ('clock', _sec(t.attackTime)), ('range', _num(t.range))];
+  }
+  if (d.building == 'hospital') {
+    final h = hospitalStats(d);
+    return [('heart', '${_num(h.perSecond)}/ث'), ('range', _num(h.radius))];
+  }
+  return null;
+}
+
+Widget _chips(List<_Chip> list, {double size = 9.5, Color color = dim, Color icon = dim}) => Wrap(
+  spacing: 4, runSpacing: 0, alignment: WrapAlignment.center,
+  children: [
+    for (final (k, t) in list) Row(mainAxisSize: MainAxisSize.min, textDirection: TextDirection.ltr, children: [
+      Icon(_chipIcon[k], size: size + 1, color: icon),
+      if (t.isNotEmpty) Text(t, textDirection: TextDirection.ltr, style: TextStyle(color: color, fontSize: size)),
+    ]),
+  ],
+);
+
 class _EmpireMenu extends StatelessWidget {
   final MatchScreenState screen;
   final int did;
@@ -258,80 +325,109 @@ class _EmpireMenu extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = screen.state!, d = s.map.districts[did], pid = s.humanId;
     if (d.owner != pid) return const SizedBox.shrink();
-    final me = s.players[pid];
+    final me = s.players[pid], e = s.empire!;
     final slots = <Widget>[];
-    void slot(String label, int? cost, Result check, VoidCallback act, {int count = 0, IconData icon = Icons.circle, int level = 0, int max = 0}) =>
-        slots.add(_Slot(label: label, icon: icon, cost: cost, check: check, count: count, level: level, max: max,
-            affordable: cost == null || s.empire!.points[pid] >= cost, onTap: check.ok ? () { act(); screen.hud.value++; } : null));
+    int next(int level, int max) => math.min(level + 1, max);
+    void slot(String label, int? cost, Result check, VoidCallback act,
+        {int count = 0, IconData icon = Icons.circle, int level = 0, int max = 0, List<_Chip> perks = const [], String? note}) =>
+        slots.add(_Slot(label: label, icon: icon, cost: cost, check: check, count: count, level: level, max: max, perks: perks, note: note,
+            affordable: cost == null || e.points[pid] >= cost, onTap: check.ok ? () { act(); screen.hud.value++; } : null));
+    final queue = e.queues[did] ?? const [];
+    var hasQueue = false;
     // مبنى ميزة المدينة (القسم 3.11): ما يعطيه، وخانات التجنيد والترياد والصاروخ والأجراس
     String? info;
     if (d.featureTile != null && d.feature != null) {
       info = CITY_FEATURES.m('desc').ss(d.feature!);
       for (final kind in recruitsAt(d) ?? const <String>[]) {
         final R = CITY_FEATURES.m('recruits').m(kind);
+        hasQueue = true;
         slot(R.ss('name') ?? kind, unitPrice(s, pid, kind), canQueue(s, pid, d, kind), () => screen.empire('queue', did, kind),
-            icon: Icons.person_add, count: (s.empire!.queues[did] ?? const []).where((x) => x.kind == kind).length);
+            icon: Icons.person_add, count: queue.where((x) => x.kind == kind).length);
       }
+      final F = CITY_FEATURES;
       if (d.feature == 'triads') {
-        slot('هجوم الترياد', CITY_FEATURES.m('triads').i('cost'), canCallTriads(s, pid, d), icon: Icons.groups,
-            () => screen.startPick('triads', did, 'المس حياً لعدوك ليهجم عليه الترياد'));
+        slot('هجوم الترياد', F.m('triads').i('cost'), canCallTriads(s, pid, d),
+            () => screen.startPick('triads', did, 'المس حياً لعدوك ليهجم عليه الترياد'), icon: Icons.groups,
+            perks: [('people', '${F.m('triads').l('heroes').length}'), ('clock', _sec(F.m('triads').d('seconds')))]);
       }
       if (d.feature == 'powder') {
-        slot('صاروخ البارود', CITY_FEATURES.m('powder').i('cost'), canRocket(s, pid, d), icon: Icons.rocket_launch,
-            () => screen.startPick('rocket', did, 'المس حياً ليس لك ليسقط عليه الصاروخ'));
+        slot('صاروخ البارود', F.m('powder').i('cost'), canRocket(s, pid, d),
+            () => screen.startPick('rocket', did, 'المس حياً ليس لك ليسقط عليه الصاروخ'), icon: Icons.rocket_launch,
+            perks: [('sword', '${F.m('powder').i('damage')}'), ('clock', _sec(F.m('powder').d('delay')))]);
       }
-      if (d.feature == 'cathedral') slot('اقرع الأجراس', null, canRingBells(s, pid, d), () => screen.empire('bells', did, null), icon: Icons.notifications_active);
+      if (d.feature == 'cathedral') {
+        final C = F.m('cathedral');
+        slot('اقرع الأجراس', null, canRingBells(s, pid, d), () => screen.empire('bells', did, null), icon: Icons.notifications_active,
+            perks: [('boot', '+${_pct(C.d('speed'))}'), ('sword', '+${_pct(C.d('damage'))}'), ('clock', _sec(C.d('seconds')))]);
+      }
     }
     final title = d.featureTile != null && d.feature != null ? 'مبنى المدينة'
         : d.building == 'hq' ? 'القاعدة الرئيسية' : d.building == 'tower' ? 'برج رماية' : d.building == 'hospital' ? 'مستشفى' : 'حي';
-    final size = {'small': 'صغير', 'medium': 'متوسط', 'large': 'كبير'}[sizeOf(d)];
     if (d.building == 'hq') {
-      final q = s.empire!.queues[did] ?? const [];
+      hasQueue = true;
       for (final kind in EMPIRE.m('units').l('order').cast<String>()) {
         final hero = heroFor(me, kind);
         final name = kind == 'leader' ? CHAMPIONS.m(me.gang).s('name') : hero != null ? HEROES.m(hero).s('name') : 'فرد';
         slot(name, unitPrice(s, pid, kind), canQueue(s, pid, d, kind), () => screen.empire('queue', did, kind),
-            icon: _unitIcon[kind] ?? Icons.person, count: q.where((x) => x.kind == kind).length);
+            icon: _unitIcon[kind] ?? Icons.person, count: queue.where((x) => x.kind == kind).length);
       }
+      // مكان الإنتاج: لمسة على الخريطة بعد الخانة، ولمسة على القاعدة نفسها تلغيه
+      final set = d.rally != null && d.rally!.owner == pid;
+      slot('مكان الإنتاج', null, canRally(s, pid, d),
+          () => screen.startPick('rally', did, 'المس مكان تجمع الجنود الجدد، أو القاعدة نفسها لإلغائه'), icon: Icons.flag,
+          note: set ? 'محدد' : 'غير محدد');
     }
     final b = d.building == null ? null : EMPIRE.m('buildings').mm(d.building!);
     if (b != null) {
       for (final key in b.m('upgrades').l('order').cast<String>()) {
-        final next = nextBuildingUpgrade(d, key, s);
-        slot(b.m('upgrades').m(key).s('name'), next?.cost, canUpgradeBuilding(s, pid, d, key), () => screen.empire('improve', did, key),
-            icon: _upgradeIcon['${d.building}.$key'] ?? Icons.upgrade, level: d.blv[key] ?? 0, max: b.m('upgrades').m(key).l('costs').length);
+        final next0 = nextBuildingUpgrade(d, key, s), max = b.m('upgrades').m(key).l('costs').length, lv = d.blv[key] ?? 0;
+        slot(b.m('upgrades').m(key).s('name'), next0?.cost, canUpgradeBuilding(s, pid, d, key), () => screen.empire('improve', did, key),
+            icon: _upgradeIcon['${d.building}.$key'] ?? Icons.upgrade, level: lv, max: max, perks: _upgradePerks(d.building!, key, next(lv, max)));
       }
     }
     if (d.building == 'hq') {
       for (final key in EMPIRE.m('upgrades').l('order').cast<String>()) {
-        final next = nextUpgrade(s, pid, key);
-        slot(EMPIRE.m('upgrades').m(key).s('name'), next?.cost, canUpgrade(s, pid, key), () => screen.empire('upgrade', did, key),
-            icon: _upgradeIcon[key] ?? Icons.upgrade, level: s.empire!.levels[pid][key], max: EMPIRE.m('upgrades').m(key).l('costs').length);
+        final U = EMPIRE.m('upgrades').m(key), max = U.l('costs').length, lv = e.levels[pid][key], n = next(lv, max);
+        slot(U.s('name'), nextUpgrade(s, pid, key)?.cost, canUpgrade(s, pid, key), () => screen.empire('upgrade', did, key),
+            icon: _upgradeIcon[key] ?? Icons.upgrade, level: lv, max: max,
+            perks: [(_gangIcon[key]!, '+${_pct(U.d('per') * n)}'), if (U.dn('evade') != null) ('shield', '${_pct(U.d('evade') * n)} تفادٍ')]);
       }
     }
-    if (d.building == null) {
+    if (d.building == null && d.featureTile == null) {
       for (final type in EMPIRE.m('buildings').l('order').cast<String>()) {
         slot(EMPIRE.m('buildings').m(type).s('name'), buildCost(s, type), canBuild(s, pid, d, type), () => screen.empire('build', did, type),
-            icon: _buildIcon[type] ?? Icons.home_work);
+            icon: _buildIcon[type] ?? Icons.home_work, perks: _buildPerks(d, type));
       }
     }
-    final fort = nextFort(d, s, pid);
-    slot('سور', fort?.cost, canFortify(s, pid, d), () => screen.empire('fortify', did, null), icon: Icons.fort, level: d.fort,
-        max: EMPIRE.m('fortify').l('levels').length);
+    final fort = nextFort(d, s, pid), fmax = EMPIRE.m('fortify').l('costs').length;
+    slot('سور', fort?.cost, canFortify(s, pid, d), () => screen.empire('fortify', did, null), icon: Icons.fort, level: d.fort, max: fmax,
+        perks: [('castle', '+${_pct(EMPIRE.m('fortify').l('capture')[next(d.fort, fmax) - 1] as num)}')]);
+    final stats = _statsChips(s, d);
+    final item = queue.isEmpty ? null : queue.first;
+    final done = item == null ? 0.0 : math.min(1.0, item.t / productionTime(s, d, item.kind));
     return ConstrainedBox(
-      constraints: BoxConstraints(maxWidth: (MediaQuery.sizeOf(context).width * 0.62).clamp(330.0, 560.0)),
+      constraints: BoxConstraints(maxWidth: (MediaQuery.sizeOf(context).width * 0.64).clamp(340.0, 600.0)),
       child: _Box(child: Column(mainAxisSize: MainAxisSize.min, children: [
         Row(mainAxisSize: MainAxisSize.min, children: [
-          Text('$title • $size', style: const TextStyle(color: gold, fontSize: 12.5, fontWeight: FontWeight.w700)),
+          Text(title, style: const TextStyle(color: gold, fontSize: 12.5, fontWeight: FontWeight.w700)),
           const SizedBox(width: 8),
           const Icon(Icons.toll, size: 12, color: gold),
-          Text(' ${s.empire!.points[pid].floor()}', style: const TextStyle(color: gold, fontSize: 12)),
+          Text(' ${e.points[pid].floor()}', style: const TextStyle(color: gold, fontSize: 12)),
           const SizedBox(width: 4),
           InkWell(onTap: () { screen.menuDistrict = null; screen.hud.value++; },
               child: const Padding(padding: EdgeInsets.all(4), child: Icon(Icons.close, color: dim, size: 16))),
         ]),
-        if (info != null) Padding(padding: const EdgeInsets.only(bottom: 3), child: Text(info, textAlign: TextAlign.center, maxLines: 2,
-            overflow: TextOverflow.ellipsis, style: const TextStyle(color: ink, fontSize: 11))),
+        // حجم الحي وتحصينه، وقدرة البرج أو المستشفى الآن
+        _chips([..._sizeChips(d), ...?stats], size: 10, color: ink, icon: gold),
+        if (info != null) Padding(padding: const EdgeInsets.only(top: 2), child: Text(info, textAlign: TextAlign.center, maxLines: 2,
+            overflow: TextOverflow.ellipsis, style: const TextStyle(color: ink, fontSize: 10.5))),
+        if (hasQueue) Padding(padding: const EdgeInsets.symmetric(vertical: 3), child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Text(item == null ? 'الطابور فارغ' : 'الطابور ${queue.length}/${EMPIRE.i('queueMax')}', style: const TextStyle(color: ink, fontSize: 10.5)),
+          const SizedBox(width: 6),
+          SizedBox(width: 90, height: 5, child: ClipRRect(borderRadius: BorderRadius.circular(3), child: LinearProgressIndicator(
+              value: done, color: const Color(0xFFE8C45A), backgroundColor: const Color(0x55000000)))),
+        ])),
+        const SizedBox(height: 2),
         Wrap(spacing: 4, runSpacing: 4, alignment: WrapAlignment.center, children: slots),
       ])),
     );
@@ -354,8 +450,10 @@ class _Slot extends StatelessWidget {
   final int count, level, max;
   final bool affordable;
   final VoidCallback? onTap;
+  final List<_Chip> perks;
+  final String? note;            // حالة الخانة مكان السعر (مكان الإنتاج)
   const _Slot({required this.label, required this.icon, required this.cost, required this.check, required this.onTap,
-      required this.affordable, this.count = 0, this.level = 0, this.max = 0});
+      required this.affordable, this.count = 0, this.level = 0, this.max = 0, this.perks = const [], this.note});
   @override
   Widget build(BuildContext context) {
     final maxed = check.reason == 'أعلى مستوى';
@@ -365,7 +463,7 @@ class _Slot extends StatelessWidget {
       color: on ? const Color(0xFF3A2E22) : const Color(0xFF241D16),
       borderRadius: BorderRadius.circular(7),
       child: InkWell(borderRadius: BorderRadius.circular(7), onTap: onTap, child: Container(
-        width: 66,
+        width: 70,
         padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 3),
         child: Opacity(opacity: on || maxed ? 1 : 0.7, child: Column(mainAxisSize: MainAxisSize.min, children: [
           Row(mainAxisSize: MainAxisSize.min, children: [
@@ -374,6 +472,7 @@ class _Slot extends StatelessWidget {
           ]),
           Text(label, maxLines: 1, overflow: TextOverflow.ellipsis,
               style: TextStyle(color: on ? ink : dim, fontSize: 10.5, fontWeight: FontWeight.w600)),
+          if (perks.isNotEmpty) _chips(perks),
           if (max > 0) Padding(padding: const EdgeInsets.symmetric(vertical: 1), child: Row(mainAxisSize: MainAxisSize.min, children: [
             for (var k = 0; k < max; k++) Container(width: 5, height: 5, margin: const EdgeInsets.symmetric(horizontal: 1),
                 decoration: BoxDecoration(shape: BoxShape.circle, color: k < level ? gold : const Color(0x55E2B55A))),
@@ -382,7 +481,7 @@ class _Slot extends StatelessWidget {
             Icon(Icons.toll, size: 10, color: affordable ? gold : const Color(0xFFD07A6A)),
             Text(' $cost', style: TextStyle(color: affordable ? gold : const Color(0xFFD07A6A), fontSize: 11, fontWeight: FontWeight.w700)),
           ])
-          else Text(maxed ? 'الأعلى' : check.ok ? 'جاهز' : check.reason, maxLines: 1, overflow: TextOverflow.ellipsis,
+          else Text(note ?? (maxed ? 'الأعلى' : check.ok ? 'جاهز' : check.reason), maxLines: 1, overflow: TextOverflow.ellipsis,
               style: const TextStyle(color: dim, fontSize: 9.5)),
           if (why.isNotEmpty) Text(why, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Color(0xFFD08A6A), fontSize: 9)),
         ])),

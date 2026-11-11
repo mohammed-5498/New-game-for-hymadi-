@@ -1,10 +1,8 @@
 // ما يُحفظ على الجهاز (localStorage في اللعبة الحالية): الإعدادات والإحصائيات وآخر إعداد مباراة والمباراة المحفوظة،
 // بالمفاتيح نفسها (UI.statsKey...). SharedPreferences: ملف التطبيق في أندرويد، وlocalStorage في المتصفح
 import 'dart:convert';
-import 'dart:io' show Platform;
 import 'dart:math' as math;
 
-import 'package:flutter/foundation.dart' show kIsWeb;
 
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -53,13 +51,8 @@ class Settings {
 
   static void save() => Prefs.write(_key, {'sfx': sfx, 'music': music, 'mute': mute, 'pops': pops, 'battery': battery, 'quality': quality});
 
-  // المستوى الفعلي. التلقائي بعدد أنوية المعالج (GRAPHICS.auto.lowCores): 4 فأقل منخفضة، و8 فأكثر عالية (60 إطاراً دائماً،
-  // فالجنود لا يتحركون بـ 30 حين لا تلمس الشاشة)، وما بينهما متوسطة
-  static String get level {
-    if (quality != 'auto') return quality;
-    final cores = kIsWeb ? 4 : Platform.numberOfProcessors;
-    return cores <= GRAPHICS.m('auto').i('lowCores') ? 'low' : cores >= 8 ? 'high' : 'medium';
-  }
+  // جودة الرسم ثابتة: العالية (60 إطاراً دائماً وكل التفاصيل، بطلب المستخدم بحذف الخيار). توفير البطارية وحده يخفضها إلى 30
+  static String get level => 'high';
   static J get gfx => GRAPHICS.m('levels').m(level);
   static int get fpsCap => battery ? GRAPHICS.i('batteryFps') : gfx.i('fps');
 }
