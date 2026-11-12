@@ -267,7 +267,7 @@ List<_Chip> _buildPerks(District d, String type) {
   final size = sizeOf(d), B = EMPIRE.m('buildings');
   if (type == 'tower') return [('sword', '${(B.m('tower').d('damage') * _DS.m('power').d(size)).round()}'), ('range', _num(B.m('tower').d('range') * _DS.m('reach').d(size)))];
   if (type == 'hospital') return [('heart', '${_num(B.m('hospital').d('perSecond') * _DS.m('power').d(size))}/ث')];
-  return [('coin', '+${_num(EMPIRE.m('income').d('hq') * _DS.m('income').d(size))}/ث'), ('people', '')];
+  return [('coin', '+${_num(EMPIRE.m('income').d('mul') * EMPIRE.m('income').d('hq') * _DS.m('income').d(size))}/ث'), ('people', '')];
 }
 
 // ترقية مبنى بمستواها التالي: سرعة إنتاج القاعدة، وضرر البرج وسرعته، ومدى المستشفى وعلاجه

@@ -700,13 +700,13 @@ class _MatchPainter extends CustomPainter {
         }
       }
       _mark('units');
-      fog?.drawRow(b, d, left, right);
       b.flush(canvas, img);
       _mark('flush');
     });
+    fog?.paint(canvas, left, right, top, bottom);   // ضباب الحرب فوق المدينة كلها، وما بعده يُرسم لما يُرى وحده
     for (final shot in s.projectiles) { if (sees(shot.x, shot.y)) drawProjectile(b, shot, alpha); }
     drawEmpireShots(b, s, alpha, fog == null ? null : (u) => fog.friendly(s, u.playerId) || fog.sees(u.x, u.y));
-    drawFlagArrows(b, s, time, left, right, top, bottom, fog?.known);
+    drawFlagArrows(b, s, time, left, right, top, bottom, fog?.sees);
     for (final fx in s.fx) {
       if (!sees(fx.x, fx.y)) continue;
       final gx = (fx.x - fx.y) * TILE_HALF_W, gy = (fx.x + fx.y) * TILE_HALF_H;
@@ -736,7 +736,7 @@ class _MatchPainter extends CustomPainter {
     canvas.translate(size.width / 2, size.height / 2);
     canvas.scale(c.z);
     canvas.translate(-c.x, -c.y);
-    drawEmpireMarks(b, s, art, v.menuDistrict, left, right, top, bottom, fog?.known);
+    drawEmpireMarks(b, s, art, v.menuDistrict, left, right, top, bottom, fog?.sees);
     b.flush(canvas, img);
     canvas.restore();
     _mark('marks');

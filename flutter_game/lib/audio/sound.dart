@@ -195,8 +195,17 @@ class GameSound {
     _musicName = name;
     final p = _music;
     _fades.remove(p)?.cancel();
+    final primed = _primed == file;
+    _primed = null;
     unawaited(() async {
       try {
+        if (primed) {
+          // المجهّز أثناء الشاشة السوداء: يبدأ فوراً بصعود قصير
+          await p.setVolume(0);
+          await p.resume();
+          if (_music == p && _musicName == name) _fadeTo(p, _musicVol * level, _A.m('tracks').d('introFadeIn'));
+          return;
+        }
         await p.stop();
         await p.setVolume(0);
         await p.play(AssetSource(file), volume: 0);
@@ -241,9 +250,13 @@ class GameSound {
     if (!ready) return;
     _oneShot('game_start');
     _introUntil = _now() + UI.m('intro').d('seconds');
+    // لحن القائمة يُجهَّز في المشغّل التالي أثناء الشاشة السوداء، فيبدأ فور انتهائها بلا انتظار تحميل
+    _primed = 'audio/music/${_A.s('menuTrack')}.mp3';
+    unawaited(_music2.setSource(AssetSource(_primed!)).catchError((_) {}));
     Timer(Duration(milliseconds: (UI.m('intro').d('seconds') * 1000).round() + 50), _refresh);
   }
   static double _introUntil = 0;
+  static String? _primed;
 
   static void _oneShot(String name, [double delay = 0]) {
     final level = _A.m('tracks').dn(name) ?? 1;

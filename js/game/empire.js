@@ -115,8 +115,8 @@ function rewardLeaderKills(state, ms) {
 
 // دخل الحي في الثانية: القاعدة الرئيسية، أو مبنى ميزة المدينة (الهرم، القسم 3.11)، أو الحي العادي.
 // والقاعدة والحي العادي بحجم الحي (القسم 3.12)، ودخل المزايا كما صُمم
-const districtIncome = (d) => d.building === 'hq' ? E.income.hq * DS.income[sizeOf(d)]
-  : featureIncome(d) ?? E.income.district * DS.income[sizeOf(d)];
+const districtIncome = (d) => E.income.mul * (d.building === 'hq' ? E.income.hq * DS.income[sizeOf(d)]
+  : featureIncome(d) ?? E.income.district * DS.income[sizeOf(d)]);
 
 // --- الإنتاج: طابور لكل قاعدة رئيسية، وأول طلب فيه يتقدم ---
 // البوت المجنون ينتج أسرع 25% (مزيته المعلنة في الظهور، ai.levels.insane.spawnFactor)

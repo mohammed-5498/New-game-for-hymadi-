@@ -230,7 +230,7 @@ function buildPerks(district, type) {
   const size = sizeOf(district);
   if (type === 'tower') return [['sword', String(Math.round(E.buildings.tower.damage * DS.power[size]))], ['range', String(Math.round(E.buildings.tower.range * DS.reach[size] * 10) / 10)]];
   if (type === 'hospital') return [['heart', (Math.round(E.buildings.hospital.perSecond * DS.power[size] * 10) / 10) + '/ث']];
-  return [['coin', '+' + (Math.round(E.income.hq * DS.income[size] * 10) / 10) + '/ث'], ['people', '']];
+  return [['coin', '+' + (Math.round(E.income.mul * E.income.hq * DS.income[size] * 10) / 10) + '/ث'], ['people', '']];
 }
 
 // ترقية مبنى بمستواها: سرعة إنتاج القاعدة (زمن أقل)، وضرر البرج وسرعته، ومدى المستشفى وعلاجه

@@ -130,8 +130,9 @@ void _rewardLeaderKills(MatchState state, EmpireState ms) {
   }
 }
 
-double districtIncome(District d) =>
-    d.building == 'hq' ? E.m('income').d('hq') * _DS.m('income').d(sizeOf(d)) : featureIncome(d) ?? E.m('income').d('district') * _DS.m('income').d(sizeOf(d));
+final _incomeMul = E.m('income').d('mul');   // نصف الدخل (2026-11-12)
+double districtIncome(District d) => _incomeMul *
+    (d.building == 'hq' ? E.m('income').d('hq') * _DS.m('income').d(sizeOf(d)) : featureIncome(d) ?? E.m('income').d('district') * _DS.m('income').d(sizeOf(d)));
 
 double _lvl(Player player, String key) {
   if (player.isHuman || player.neutral) return 1;

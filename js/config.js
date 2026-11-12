@@ -942,7 +942,7 @@ export const UNITS = {
   arriveDistance: 0.06,       // اعتبار الوحدة وصلت لنقطة المسار
   groupSpotsFactor: 2,        // عدد مربعات الهدف = عدد الوحدات × هذا الرقم
   pathRequestsPerTick: 20,    // حد طلبات A* في التحديث الواحد
-  moveMul: 0.6                // مشي كل الوحدات أبطأ 40% (بطلب المستخدم، 2026-11-12؛ moveSpeed في weather.js)
+  moveMul: 0.8                // مشي كل الوحدات أبطأ 20% (بطلب المستخدم، 2026-11-12: كان 40% ثم 20%؛ moveSpeed في weather.js)
 };
 
 // --- القتال ---
@@ -1319,7 +1319,8 @@ export const AUDIO = {
   // على الشاشة السوداء لبدء المباراة، وgame_start على شاشة التشغيل السوداء إن جهز الصوت وهي ظاهرة (التطبيق)،
   // واللحن يبدأ مع ارتفاعها مباشرة (بطلب المستخدم)
   // loadingFade: صوت التحميل يخفت في هذا الزمن إن ارتفعت شاشة التحميل قبل أن ينتهي
-  tracks: { theme: 0.95, themeFadeIn: 1.5, themeFadeOut: 0.6, match_start: 0.9, loading: 0.85, loadingDelay: 0.6, loadingFade: 0.4,
+  // introFadeIn: لحن القائمة بعد الشاشة السوداء عند التشغيل يبدأ فوراً (مجهّز أثناءها، بطلب المستخدم 2026-11-12)
+  tracks: { theme: 0.95, themeFadeIn: 1.5, introFadeIn: 0.15, themeFadeOut: 0.6, match_start: 0.9, loading: 0.85, loadingDelay: 0.6, loadingFade: 0.4,
             game_start: 0.9, city: 0.2, cityFadeIn: 2, cityFadeOut: 0.8 },
 
   // موسيقى الخرائط (بطلب المستخدم، assets/audio/music/): لحن لكل مدينة يدور خلف المباراة، وبعض المدن تتشارك لحناً.
@@ -1567,7 +1568,9 @@ export const gameModes = {
 // المباني بطراز كل مدينة (art أدناه)، ولا يتغير شكل الجنود مع الترقيات
 export const EMPIRE = {
   startPoints: 0,
-  income: { district: 0.5, hq: 2 },        // نقطة في الثانية: كل حي، والقاعدة الرئيسية (بدل الحي)
+  // نقطة في الثانية: كل حي، والقاعدة الرئيسية (بدل الحي). وmul على كل دخل الأحياء (العادي والقاعدة والمباني المميزة):
+  // النصف بطلب المستخدم (2026-11-12)، لا مكافآت الزعماء والقوافل والكنوز
+  income: { district: 0.5, hq: 2, mul: 0.5 },
   leaderKill: 50,                           // من يُسقط زعيم عصابة (بطلها) يأخذ هذه النقاط
   hintSeconds: 7,                           // تلميح البداية: لمستان على حيك تفتحان قائمته
   // الإنتاج من القاعدة الرئيسية: الكلفة بالنقاط، والزمن بالثواني قبل ترقية سرعة الإنتاج
@@ -1975,7 +1978,7 @@ export const CITY_FEATURES = {
   // ومن بقي بعد maxSeconds يخرج على أي حال
   // (12أ: كانت 150 و180، وmaxSeconds 150؛ وصار أقل من every فلا تلتقي قافلتان)
   caravan: { first: 90, every: 108, merchants: 4, guards: [null, null, 'sniper'], loot: 20, think: 2, exitRadius: 1.6,
-             maxSeconds: 167, escort: 1.5,   // 100 ث قبل إبطاء المشي 40% (UNITS.moveMul) name: 'القافلة', merchantName: 'تاجر', color: '#7a5a34', nation: 'saudi',
+             maxSeconds: 125, escort: 1.5,   // 100 ث قبل إبطاء المشي 20% (UNITS.moveMul) name: 'القافلة', merchantName: 'تاجر', color: '#7a5a34', nation: 'saudi',
              merchant: { hp: 120, damage: 0, speed: 0.9 }, guard: { hp: 200, armor: 0.15, speed: 1.6 } },
   // السوق الكبير (المدينة العربية): مالكه يأخذ tax من كل ما يصرفه غيره، ولا يدفع الصارف أكثر من سعره
   souk: { tax: 0.1, top: 50 },
