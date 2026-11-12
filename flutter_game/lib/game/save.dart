@@ -2,6 +2,7 @@
 // يعطي الخريطة نفسها)، ثم يُكتب فوقها ما تغيّر: الوحدات بكل حقولها والأحياء والنقاط والطوابير والبوتات والمؤقتات.
 // الإشارات (هدف الوحدة...) بأرقام الوحدات. والمتابعة لا تطابق المباراة الأصلية بالبت (كالحالية): مولّد كل وحدة يُبذر من جديد
 import 'dart:convert';
+import 'dart:typed_data';
 
 import '../ai/empire_bot.dart' show BotMemo, botMemos;
 import '../ai/squads.dart';
@@ -168,6 +169,7 @@ String encodeMatch(MatchState s) {
     'event': _eventJson(s.cityEvent),
     'story': _storyJson(s.story),
     'net': s.netCams == null ? null : [s.netTick, [for (final c in s.netCams!) c == null ? null : [c.x, c.y, c.z, c.w, c.h]]],
+    'fog': {for (final b in s.fogBelief.entries) '${b.key}': [...b.value]},   // ما يعرفه كل بوت تحت ضباب الحرب
     'brains': {for (final b in s.botBrains.entries) '${b.key}': {
       'n': b.value.nextId, 'r': b.value.rallyId,
       's': [for (final q in b.value.squads) {'id': q.id, 'ty': q.type, 'u': q.units, 't': q.targetId, 'p': q.power, 'ph': q.phase,
@@ -310,6 +312,8 @@ MatchState decodeMatch(String text) {
     final memos = botMemos(e);
     (em['memo'] as Map).forEach((k, v) => memos[int.parse('$k')] = BotMemo()..turn = (v as List)[0] as int..units = _n(v[1])!..tech = _n(v[2])!);
   }
+  s.fogBelief.clear();
+  (j['fog'] as Map?)?.forEach((k, v) => s.fogBelief[int.parse('$k')] = Int32List.fromList([for (final x in v as List) x as int]));
   s.botBrains.clear();
   (j['brains'] as Map).forEach((k, v) {
     final b = Brain(int.parse('$k'))..nextId = (v as Map)['n'] as int..rallyId = v['r'] as int;

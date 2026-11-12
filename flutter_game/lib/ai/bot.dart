@@ -15,6 +15,7 @@ import '../game/ults.dart';
 import '../game/units.dart';
 import '../map/generator.dart';
 import 'empire_bot.dart';
+import 'fog_ai.dart';
 import 'squads.dart';
 
 bool _alive(Unit? u) => u != null && u.state != 'dead' && u.hp > 0;
@@ -38,8 +39,10 @@ void updateBots(MatchState state) {
     state.botTimers[player.id] -= TICK_SEC;
     if (state.botTimers[player.id] > 0) continue;
     state.botTimers[player.id] = config.d('decisionInterval');
-    if (state.economy) empireEconomy(state, player);
-    _decide(state, player, _modeConfig(state, config));
+    withBotFog(state, player, () {
+      if (state.economy) empireEconomy(state, player);
+      _decide(state, player, _modeConfig(state, config));
+    });
   }
   _updateTactics(state);
 }
@@ -234,7 +237,7 @@ int _districtThreat(MatchState state, District district, int playerId) {
   final radius = MAP_GEN.d('captureRadius') * 2;
   var count = 0;
   forEachNearby(state, district.capture!.i.toDouble(), district.capture!.j.toDouble(), radius, (unit) {
-    if (!_alive(unit)) return;
+    if (!_alive(unit) || !botSees(state, unit)) return;   // ضباب الحرب: لا يُحسب من لا يُرى
     if (!isEnemyId(state, playerId, unit.playerId)) return;
     if (_distTo(unit, district) <= radius) count++;
   });

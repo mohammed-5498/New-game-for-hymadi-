@@ -1,6 +1,7 @@
 // حالة المباراة: اللاعبون والوحدات والمقذوفات وما يحمله القتال، بأسماء حقول js/state.js وjs/game/units.js نفسها
 // (كائنات JavaScript صنوف هنا). والعشوائية من مولّد واحد ببذرة (random): كل سحب بترتيبه في اللعبة الحالية
 import 'dart:collection';
+import 'dart:typed_data';
 
 import '../ai/squads.dart' show Brain;
 import '../core/cfg.dart';
@@ -384,6 +385,7 @@ class MatchState {
   Rng? netRng;
   String? lanRole;
   double battleMaxSeconds = 1e9;   // معركة البوتات (match.dart)
+  final fogBelief = SplayTreeMap<int, Int32List>();   // ضباب الحرب: مالك كل حي كما رآه كل بوت آخر مرة (-1 محايد أو مجهول، ai/fog_ai.dart)
   final botBrains = SplayTreeMap<int, Brain>();   // عقل كل بوت (ai/squads.dart)، بترتيب أرقام اللاعبين
 
   MatchState({required this.settings, required this.map, required this.players, required this.humanId,

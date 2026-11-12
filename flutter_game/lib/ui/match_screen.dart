@@ -130,6 +130,8 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
       }
       settings = s.settings;
     } else {
+      // ضباب الحرب صريحاً في إعداد المباراة (المحاكاة للبوتات والرسم معاً): من قائمة اللعب، والقصة بآخر اختيار فيها
+      settings['fog'] ??= Prefs.read(UI.s('setupKey'))?['fog'] != false;
       final seed = (settings['seed'] as int?) ?? DateTime.now().microsecondsSinceEpoch & 0x7FFFFFFF;   // seed: للفحص
       simRng = Rng(seed);
       s = createMatch(settings)..seed = seed;
@@ -165,7 +167,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
       layer = CityLayer(s.map, a, s.weather);
       _mapVersion = s.mapVersion;
       // ضباب الحرب من إعداد المباراة، وطور القصة بآخر إعداد (2.0.5). والمستكشف يعود مع المباراة المحفوظة
-      final on = settings['fog'] is bool ? settings['fog'] as bool : Prefs.read(UI.s('setupKey'))?['fog'] != false;
+      final on = settings['fog'] == true;
       if (on && s.humanId >= 0) {
         fog = Fog(s.map.n, s.humanId, layer!.lift, layer!.wide);
         if (widget.resume) fog!.restore(Prefs.raw(FOG.key));

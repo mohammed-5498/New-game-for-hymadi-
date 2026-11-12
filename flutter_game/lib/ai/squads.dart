@@ -6,6 +6,7 @@ import '../core/cfg.dart';
 import '../core/fmath.dart';
 import '../data/js_config.dart';
 import '../game/combat.dart';
+import 'fog_ai.dart';
 import '../game/features.dart';
 import '../game/spatial.dart';
 import '../game/state.dart';
@@ -78,13 +79,14 @@ double _snapTime = -1;
 final _snapValue = Expando<double>(), _snapX = Expando<double>(), _snapY = Expando<double>();
 final _snapAlive = Expando<bool>();
 
+int? _snapViewer;
 void _snapshot(MatchState state) {
   ensureUnitHash(state);
-  if (identical(_snapState, state) && _snapTime == state.time) return;
-  _snapState = state; _snapTime = state.time;
+  if (identical(_snapState, state) && _snapTime == state.time && _snapViewer == fogViewer) return;
+  _snapState = state; _snapTime = state.time; _snapViewer = fogViewer;
   for (final bucket in state.unitHash.values) {
     for (final u in bucket) {
-      final alive = _alive(u) && !state.players[u.playerId].passive;
+      final alive = _alive(u) && !state.players[u.playerId].passive && botSees(state, u);   // ضباب الحرب
       _snapAlive[u] = alive;
       _snapValue[u] = alive ? unitValue(u) : 0.0;
       _snapX[u] = u.x; _snapY[u] = u.y;
@@ -110,8 +112,9 @@ MatchState? _powerState;
 double _powerTime = -1;
 Map<int, Float32List> _power = {};
 
+int? _powerViewer;
 Map<int, Float32List> _powerMap(MatchState state) {
-  if (identical(_powerState, state) && _powerTime == state.time) return _power;
+  if (identical(_powerState, state) && _powerTime == state.time && _powerViewer == fogViewer) return _power;
   final R = ai.d('powerRadius'), n = state.players.length;
   _snapshot(state);
   final power = <int, Float32List>{};
@@ -126,7 +129,7 @@ Map<int, Float32List> _powerMap(MatchState state) {
     });
     power[d.id] = row;
   }
-  _powerState = state; _powerTime = state.time; _power = power;
+  _powerState = state; _powerTime = state.time; _power = power; _powerViewer = fogViewer;
   return power;
 }
 
@@ -155,9 +158,12 @@ Map<int, Float32List> _powerMap(MatchState state) {
 MatchState? _aroundState;
 double _aroundTime = -1;
 final _aroundCache = <(int, int, int, double), double>{};
+int? _aroundViewer;
 
 double enemyPowerAround(MatchState state, Player player, double pi, double pj, double radius) {
-  if (!identical(_aroundState, state) || _aroundTime != state.time) { _aroundState = state; _aroundTime = state.time; _aroundCache.clear(); }
+  if (!identical(_aroundState, state) || _aroundTime != state.time || _aroundViewer != fogViewer) {
+    _aroundState = state; _aroundTime = state.time; _aroundViewer = fogViewer; _aroundCache.clear();
+  }
   final key = (player.id, jsRound(pi * 2), jsRound(pj * 2), radius);
   final hit = _aroundCache[key];
   if (hit != null) return hit;
@@ -171,9 +177,12 @@ double enemyPowerAround(MatchState state, Player player, double pi, double pj, d
 MatchState? _nearState;
 double _nearTime = -1;
 final _nearCache = <(double, double, double), (List<int>, List<double>)>{};
+int? _nearViewer;
 
 (List<int>, List<double>) _unitsAround(MatchState state, double i, double j, double radius) {
-  if (!identical(_nearState, state) || _nearTime != state.time) { _nearState = state; _nearTime = state.time; _nearCache.clear(); }
+  if (!identical(_nearState, state) || _nearTime != state.time || _nearViewer != fogViewer) {
+    _nearState = state; _nearTime = state.time; _nearViewer = fogViewer; _nearCache.clear();
+  }
   final key = (i, j, radius);
   final cached = _nearCache[key];
   if (cached != null) return cached;

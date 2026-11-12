@@ -5,6 +5,7 @@ import '../core/cfg.dart';
 import '../core/fmath.dart';
 import '../data/js_config.dart';
 import '../game/combat.dart';
+import 'fog_ai.dart';
 import '../game/empire.dart';
 import '../game/spatial.dart';
 import '../game/features.dart';
@@ -229,7 +230,7 @@ void _botRocket(MatchState state, int pid) {
     var count = 0;
     final ci = d.capture!.i.toDouble(), cj = d.capture!.j.toDouble();
     forEachNearby(state, ci, cj, R, (u) {
-      if (u.state != 'dead' && u.hp > 0 && isEnemyId(state, pid, u.playerId) && !state.players[u.playerId].neutral &&
+      if (u.state != 'dead' && u.hp > 0 && isEnemyId(state, pid, u.playerId) && !state.players[u.playerId].neutral && botSees(state, u) &&
           hypot(u.x - ci, u.y - cj) <= R) { count++; }
     });
     if (count > bestCount) { bestCount = count; best = d; }
