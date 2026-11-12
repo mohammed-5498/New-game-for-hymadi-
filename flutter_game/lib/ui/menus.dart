@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
 import '../core/cfg.dart';
+import '../config.dart' show PACE;
 import '../core/fmath.dart';
 import '../data/cities.dart';
 import '../data/js_config.dart';
@@ -232,6 +233,7 @@ class _MenuBackdropState extends State<MenuBackdrop> with SingleTickerProviderSt
   CityLayer? layer;
   GameMap? map;
   late final Ticker _ticker;
+  Timer? _rest;
   final _frame = ValueNotifier(0);
   double x = 0, y = 0, vx = 0, vy = 0, zoom = 1;
   Size view = Size.zero;               // مقاس الشاشة (من الرسم)
@@ -272,7 +274,6 @@ class _MenuBackdropState extends State<MenuBackdrop> with SingleTickerProviderSt
     final m = map;
     if (m == null) return;
     final dt = _last == Duration.zero ? 0.0 : (now - _last).inMicroseconds / 1e6;
-    if (dt < 1 / _M.d('fps') && _last != Duration.zero) return;
     _last = now;
     // الشاشة كلها داخل معيّن المدينة: التقريب يكفي لذلك، والكاميرا ترتد قبل أن يخرج ركن منها
     final w = m.n * TILE_HALF_W, h = m.n * TILE_HALF_H, limit = 1 - _M.d('edgeMargin');
@@ -288,10 +289,13 @@ class _MenuBackdropState extends State<MenuBackdrop> with SingleTickerProviderSt
       if (reach(x, y) > limit) { x *= 0.98; y = h + (y - h) * 0.98; }   // بعد تغيّر مقاس الشاشة: نحو الوسط
     }
     _frame.value++;
+    _rest?.cancel();
+    _rest = restTicker(_ticker, PACE.menuFps, context);   // 20 إطاراً فعلاً (كانت الشاشة تُركَّب 60)
   }
 
   @override
   void dispose() {
+    _rest?.cancel();
     _ticker.dispose();
     layer?.dispose();
     art?.dispose();

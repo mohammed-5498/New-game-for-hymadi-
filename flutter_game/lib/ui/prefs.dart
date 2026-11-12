@@ -51,10 +51,9 @@ class Settings {
 
   static void save() => Prefs.write(_key, {'sfx': sfx, 'music': music, 'mute': mute, 'pops': pops, 'battery': battery, 'quality': quality});
 
-  // جودة الرسم ثابتة: العالية (60 إطاراً دائماً وكل التفاصيل، بطلب المستخدم بحذف الخيار). توفير البطارية وحده يخفضها إلى 30
+  // جودة الرسم ثابتة: العالية (كل التفاصيل، بطلب المستخدم بحذف الخيار). والإطارات من PACE في match_screen
   static String get level => 'high';
   static J get gfx => GRAPHICS.m('levels').m(level);
-  static int get fpsCap => battery ? GRAPHICS.i('batteryFps') : gfx.i('fps');
 }
 
 // --- الإحصائيات الدائمة (js/stats.js) ---

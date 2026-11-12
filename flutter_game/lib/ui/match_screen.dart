@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
 import '../core/cfg.dart';
+import '../config.dart' show PACE;
 import '../core/fmath.dart';
 import '../data/js_config.dart';
 import '../audio/sound.dart';
@@ -57,8 +58,9 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
   int _frames = 0;
   String? get lanRole => state?.lanRole;
   String? get lanText => lanRole == null ? null : Lan.status();
-  Duration _lastDraw = Duration.zero;
   int _activeUntil = 0;
+  Timer? _rest;
+  double _camX = 0, _camY = 0, _camZ = 0;
   CityArt? art;
   CityLayer? layer;
   UnitAtlas? units;
@@ -97,6 +99,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     GameSound.menuMusic(true);
     _lanSub?.cancel();
     WidgetsBinding.instance.removeObserver(this);
+    _rest?.cancel();
     _ticker.dispose();
     layer?.dispose();
     art?.dispose();
@@ -274,17 +277,11 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     }
   }
 
-  // إيقاع الرسم (GRAPHICS): توفير البطارية 30، والمتوسطة 30 والكاميرا ساكنة، والإيقاف والنهاية 5
-  bool _shouldDraw(Duration now, MatchState s) {
-    final g = Settings.gfx;
-    var fps = Settings.fpsCap.toDouble();
-    if (paused || s.matchResult != null) {
-      fps = GRAPHICS.d('idleFps');
-    } else if (g.d('calmFps') > 0 && !Settings.battery && DateTime.now().millisecondsSinceEpoch > _activeUntil) {
-      fps = g.d('calmFps');
-    }
-    if (fps >= 60 || now - _lastDraw >= Duration(microseconds: (1e6 / fps - 2000).round())) { _lastDraw = now; return true; }
-    return false;
+  // إيقاع الرسم (PACE): الإيقاف والنهاية 5، وتوفير البطارية 30، و60 مع اللمس والكاميرا والقتال، و30 بعدها
+  double _targetFps(MatchState s) {
+    if (paused || s.matchResult != null) return GRAPHICS.d('idleFps');
+    if (Settings.battery) return GRAPHICS.d('batteryFps');
+    return DateTime.now().millisecondsSinceEpoch <= _activeUntil ? 60 : PACE.calmFps;
   }
 
   // اختيار حي على الخريطة بعد خانة الترياد أو الصاروخ (takePick في empireMenu.js)
@@ -298,7 +295,10 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     hud.value++;
   }
 
-  void markActive() => _activeUntil = DateTime.now().millisecondsSinceEpoch + GRAPHICS.i('activeMs');
+  void markActive() {
+    _activeUntil = DateTime.now().millisecondsSinceEpoch + PACE.activeMs;
+    if (_ticker.muted) { _rest?.cancel(); wakeTicker(_ticker, context); }
+  }
 
   void _onTick(Duration now) {
     final s = state;
@@ -336,11 +336,14 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
         layer = CityLayer(s.map, art!, s.weather);
       }
     }
-    if (!_shouldDraw(now, s)) return;
+    final c = s.camera;
+    if (c.x != _camX || c.y != _camY || c.z != _camZ) { _camX = c.x; _camY = c.y; _camZ = c.z; markActive(); }
     final pr = perfProbe, t0 = pr == null ? 0 : _clockUs();
     _retint(s);
     if (pr != null) pr['retint'] = (pr['retint'] ?? 0) + _clockUs() - t0;
     frame.value++;
+    _rest?.cancel();
+    _rest = restTicker(_ticker, _targetFps(s), context);
   }
 
   // للفحص (?watch=1): الكاميرا على أكبر اشتباك
@@ -638,6 +641,7 @@ class _MatchPainter extends CustomPainter {
     while (_rows.length < depths) { _rows.add([]); }
     for (final r in _rows) { r.clear(); }
     var visible = 0;
+    var busy = false;
     for (final u in s.units) {
       final i = u.prevX + (u.x - u.prevX) * alpha, j = u.prevY + (u.y - u.prevY) * alpha;
       final x = (i - j) * TILE_HALF_W, y = (i + j) * TILE_HALF_H;
@@ -645,7 +649,9 @@ class _MatchPainter extends CustomPainter {
       final d = (i + j).floor().clamp(0, depths - 1);
       _rows[d].add(u);
       visible++;
+      if (u.state == 'attacking' || (u.selected && u.state == 'moving')) busy = true;
     }
+    if (busy) v.markActive();   // قتال ظاهر أو جنودك المحددون يمشون: 60 إطاراً
     final crowded = visible > COMBAT_REALISM.m('lod').i('fullUnits');
     b.reset();
     _mark('sortUnits');

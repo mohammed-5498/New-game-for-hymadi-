@@ -82,6 +82,10 @@ const CITY_UNTINTED = ['palm', 'cherry', 'lantern', 'willow', 'lanterns', 'pine'
   'grove', 'well', 'cart', 'wallI', 'wallJ', 'gateI', 'gateJ', 'archI', 'archJ', 'wallTower', 'brokenI', 'brokenJ', 'brokenTower',
   'monument'];
 
+// --- إيقاع الرسم في التطبيق (2.0.4، للتطبيق وحده): 60 إطاراً مع اللمس وتحرك الكاميرا والقتال الظاهر وجنودك المحددين
+// يمشون، و30 بعد activeMs بلا شيء منها، وخلفية القوائم 20. الإيقاف والنهاية GRAPHICS.idleFps وتوفير البطارية batteryFps ---
+const PACE = (calmFps: 30.0, activeMs: 2000, menuFps: 20.0);
+
 // --- الكاميرا ---
 const CAMERA = (minZoom: 0.8, maxZoom: 4.5, startZoom: 2.2);
 
