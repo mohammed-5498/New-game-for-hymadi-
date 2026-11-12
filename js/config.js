@@ -1318,18 +1318,22 @@ export const AUDIO = {
   // على الشاشة السوداء لبدء المباراة، وgame_start على شاشة التشغيل السوداء إن جهز الصوت وهي ظاهرة (التطبيق)،
   // واللحن يبدأ مع ارتفاعها مباشرة (بطلب المستخدم)
   // loadingFade: صوت التحميل يخفت في هذا الزمن إن ارتفعت شاشة التحميل قبل أن ينتهي
-  tracks: { theme: 0.8, themeFadeIn: 1.5, themeFadeOut: 0.6, match_start: 0.9, loading: 0.85, loadingDelay: 0.6, loadingFade: 0.4,
+  tracks: { theme: 0.95, themeFadeIn: 1.5, themeFadeOut: 0.6, match_start: 0.9, loading: 0.85, loadingDelay: 0.6, loadingFade: 0.4,
             game_start: 0.9, city: 0.2, cityFadeIn: 2, cityFadeOut: 0.8 },
 
   // موسيقى الخرائط (بطلب المستخدم، assets/audio/music/): لحن لكل مدينة يدور خلف المباراة، وبعض المدن تتشارك لحناً.
-  // الملفات m01-m20 بترتيب إرساله ومسوّاة الارتفاع، وتُسمع بـ tracks.city (20%) قبل مؤشر الموسيقى، وتظهر بتلاشٍ
+  // الملفات (من m01-m20 بترتيب إرساله، وبقي ما اختاره المستخدم لكل منطقة) مسوّاة الارتفاع، وتُسمع بـ tracks.city (20%) قبل مؤشر الموسيقى، وتظهر بتلاشٍ
   // بعد الشاشة السوداء. والخريطة لكل لحن من كلامه. المدينة بلا لحن هنا: الموسيقى المولَّدة كما كانت
+  // لحن لكل منطقة (بطلب المستخدم، 2026-11-12): العربية m03، والأوروبية m05 إلا النرويجية m06، والآسيوية m02 إلا
+  // هونغ كونغ m20، والأفريقية m14، والأمريكتان m09 إلا شيكاغو m13. وحُذفت بقية الألحان لتخفيف المساحة
   cityMusic: {
-    rio: 'm01', china: 'm02', kaifeng: 'm02', arab: 'm03', cairo: 'm04', diriyah: 'm04', europe: 'm05',
-    norway: 'm06', japan: 'm07', birmingham: 'm08', tenoch: 'm09', mexico: 'm09', jaipur: 'm10',
-    rothenburg: 'm11', shibam: 'm12', yamamah: 'm12', chicago: 'm13', gondar: 'm14', gyeongju: 'm15',
-    paris: 'm16', kano: 'm17', laboca: 'm18', meroe: 'm19', hk: 'm20'
-  }
+    arab: 'm03', shibam: 'm03', diriyah: 'm03', yamamah: 'm03', cairo: 'm03',
+    europe: 'm05', paris: 'm05', birmingham: 'm05', rothenburg: 'm05', norway: 'm06',
+    china: 'm02', kaifeng: 'm02', japan: 'm02', gyeongju: 'm02', jaipur: 'm02', hk: 'm20',
+    gondar: 'm14', kano: 'm14', meroe: 'm14',
+    rio: 'm09', laboca: 'm09', tenoch: 'm09', mexico: 'm09', chicago: 'm13'
+  },
+  menuTrack: 'm07'       // لحن القائمة الرئيسية من ألحان المدن (بطلب المستخدم)، مكان theme.mp3
 };
 
 // --- الأداء ---

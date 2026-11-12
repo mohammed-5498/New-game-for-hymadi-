@@ -224,7 +224,7 @@ class GameSound {
       return;
     }
     if (_wantTheme && _now() < _introUntil) return;   // صوت التشغيل أولاً
-    if (_wantTheme) { _playMusic('theme', 'audio/theme.mp3', T.d('theme'), T.d('themeFadeIn'), T.d('cityFadeOut')); return; }
+    if (_wantTheme) { _playMusic('theme', 'audio/music/${_A.s('menuTrack')}.mp3', T.d('theme'), T.d('themeFadeIn'), T.d('cityFadeOut')); return; }
     _stopMusic(T.d('themeFadeOut'));
   }
 
