@@ -46,6 +46,7 @@ final J _GM = gameModes;
 class SetupModel {
   String mode = _GM.s('defaultMode'), city = CITIES.s('defaultCity'), mapSize = MATCH_DEFAULTS.s('mapSize'), weather = 'day';
   int maxUnits = UNITS.i('maxUnitsDefault');
+  bool fog = true;                     // ضباب الحرب (2.0.5)
   int pointsMinutes = _GM.m('points').i('defaultMinutes'), kingMinutes = _GM.m('king').i('defaultHoldMinutes');
   int allies = _GM.m('survival').i('defaultAllies');
   String survivalLevel = _GM.m('survival').s('defaultLevel');
@@ -66,6 +67,7 @@ class SetupModel {
     if (MAP_SIZES.has('${j['mapSize']}')) m.mapSize = j['mapSize'] as String;
     if (UNITS.l('maxUnitsChoices').contains(j['maxUnits'])) m.maxUnits = j['maxUnits'] as int;
     if (WEATHER_KEYS.contains(j['weather']) || j['weather'] == 'random') m.weather = j['weather'] as String;
+    if (j['fog'] is bool) m.fog = j['fog'] as bool;
     final sl = j['slots'];
     if (sl is List && sl.length == _maxSlots) {
       for (var k = 0; k < _maxSlots; k++) {
@@ -83,7 +85,7 @@ class SetupModel {
   }
 
   void save() => Prefs.write(UI.s('setupKey'), {'mode': mode, 'pointsMinutes': pointsMinutes, 'kingMinutes': kingMinutes, 'allies': allies,
-    'survivalLevel': survivalLevel, 'city': city, 'mapSize': mapSize, 'maxUnits': maxUnits, 'weather': weather, 'slots': [for (final s in slots) s.toJson()]});
+    'survivalLevel': survivalLevel, 'city': city, 'mapSize': mapSize, 'maxUnits': maxUnits, 'weather': weather, 'fog': fog, 'slots': [for (final s in slots) s.toJson()]});
 
   int get limit => MAP_SIZES.m(mapSize).i('maxPlayers');
   bool get survival => mode == 'survival';
@@ -119,7 +121,7 @@ class SetupModel {
       'mapSize': mapSize,
       // مدينة المضيف: مدينة أمة اللاعب الأول بعد حسم العشوائي، أو عشوائي للعصابة الكلاسيكية
       'city': city == 'host' ? hostCity(players[0]['nation'] as String?) : city,
-      'maxUnits': maxUnits, 'players': players,
+      'maxUnits': maxUnits, 'players': players, 'fog': fog,
       'weather': weather == 'random' ? WEATHER_KEYS[math.Random().nextInt(WEATHER_KEYS.length)] : weather,
     };
   }
@@ -144,15 +146,6 @@ List<String> get _sides => [..._nationIds, ..._gangIds, 'random'];
 bool _isNation(String side) => _nationIds.contains(side);
 String sideName(String side) => side == 'random' ? 'عشوائي' : _isNation(side) ? nations.m(side).s('name') : GANGS.m(side).s('name');
 String sideNote(String side) => side == 'random' ? '' : _isNation(side) ? nations.m(side).s('gangName') : nations.s('classicNote');
-String sideDesc(String side) {
-  if (side == 'random') return 'عشوائي: أمة أو عصابة كلاسيكية تُختار عند بدء المباراة';
-  if (_isNation(side)) {
-    final n = nations.m(side);
-    return '${n.s('name')} «${n.s('gangName')}» — «${n.m('trait').s('name')}»: ${n.m('trait').s('desc')}';
-  }
-  final st = nations.m('styles').m(side);
-  return '${GANGS.m(side).s('name')} (${nations.s('classicNote')}) — نمط ${st.s('name')}: ${st.s('desc')}';
-}
 
 // لوحة العصابات: تبويب لكل منطقة بأممها، ثم الكلاسيكية (SIDE_GROUPS)
 List<(String, List<String>)> get sideGroups => [
@@ -167,17 +160,59 @@ String? regionOfCity(String city) {
   return null;
 }
 
-// لوحة الأمم والعصابات (الإعداد وأمة الصديق في اللعب المحلي)
+// لوحة الأمم والعصابات (الإعداد وأمة الصديق في اللعب المحلي): لمسة على الخانة تحددها وتكتب قدرتها في اللوحة
+// الجانبية، وزر "اختيار" يعتمدها (بطلب المستخدم، 2.0.5)
 Future<String?> pickSide(BuildContext context, String current) => showModalBottomSheet<String>(context: context, backgroundColor: panel,
-    isScrollControlled: true, builder: (_) => PickerSheet(title: 'الأمة أو العصابة', groups: [
-      for (final (name, list) in sideGroups)
-        (name, [
-          for (final g in list)
-            PickCard(title: sideName(g), note: _isNation(g) ? '${sideNote(g)} • ${nations.m('styles').m(nations.m(g).s('style')).s('name')}'
-                : nations.m('styles').m(g).s('name'), image: 'assets/thumbs/side_$g.webp', aspect: 2.5,
-                selected: current == g, onTap: () => Navigator.pop(context, g)),
-        ]),
-    ], footer: [WideButton('عشوائي', () => Navigator.pop(context, 'random'), width: 160)]));
+    isScrollControlled: true, builder: (_) => _SidePicker(current));
+
+class _SidePicker extends StatefulWidget {
+  final String current;
+  const _SidePicker(this.current);
+  @override
+  State<_SidePicker> createState() => _SidePickerState();
+}
+
+class _SidePickerState extends State<_SidePicker> {
+  late String chosen = widget.current;
+
+  // سطر عنوان ذهبي ثم وصفه
+  List<Widget> _line(String head, String text) => [
+    const SizedBox(height: 6),
+    Text(head, style: const TextStyle(color: gold, fontSize: 12.5, fontWeight: FontWeight.w700)),
+    Text(text, style: const TextStyle(color: ink, fontSize: 12)),
+  ];
+
+  Widget _details() {
+    final g = chosen;
+    if (g == 'random') return const Text('المس عصابة لترى قدرتها', style: TextStyle(color: dim, fontSize: 12.5));
+    final style = nations.m('styles').m(_isNation(g) ? nations.m(g).s('style') : g);
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(sideName(g), style: const TextStyle(color: ink, fontSize: 16, fontWeight: FontWeight.w800)),
+      Text(sideNote(g), style: const TextStyle(color: dim, fontSize: 11.5)),
+      if (_isNation(g)) ..._line('القدرة: ${nations.m(g).m('trait').s('name')}', nations.m(g).m('trait').s('desc')),
+      if (_isNation(g)) ..._line('ضربة البطل: ${nations.m(g).m('ult').s('name')}', nations.m(g).m('ult').s('desc')),
+      ..._line('الفئة: ${style.s('name')}', style.s('desc')),
+    ]);
+  }
+
+  @override
+  Widget build(BuildContext context) => PickerSheet(title: 'الأمة أو العصابة', groups: [
+    for (final (name, list) in sideGroups)
+      (name, [
+        for (final g in list)
+          PickCard(title: sideName(g), note: _isNation(g) ? '${sideNote(g)} • ${nations.m('styles').m(nations.m(g).s('style')).s('name')}'
+              : nations.m('styles').m(g).s('name'), image: 'assets/thumbs/side_$g.webp', aspect: 2.5,
+              selected: chosen == g, onTap: () => setState(() => chosen = g)),
+      ]),
+  ], side: Container(width: 250, margin: const EdgeInsets.fromLTRB(10, 10, 0, 10), padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(color: card, borderRadius: BorderRadius.circular(10)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Expanded(child: SingleChildScrollView(child: _details())),
+        const SizedBox(height: 8),
+        WideButton('اختيار', chosen == 'random' ? null : () => Navigator.pop(context, chosen), primary: true),
+      ])),
+    footer: [WideButton('عشوائي', () => Navigator.pop(context, 'random'), width: 160)]);
+}
 
 // ===================== القائمة الرئيسية =====================
 class MainMenu extends StatefulWidget {
@@ -561,6 +596,9 @@ class _SetupScreenState extends State<SetupScreen> {
             PickTile(title: 'الحد', value: '${m.maxUnits} وحدة', note: 'لكل لاعب', icon: Icons.groups, width: 96,
                 onTap: () => _choose<int>('الحد الأقصى للوحدات', [for (final v in UNITS.l('maxUnitsChoices')) v as int], (v) => '$v', m.maxUnits, (v) => m.maxUnits = v)),
           ]),
+          const SizedBox(height: 6),
+          PickTile(title: 'ضباب الحرب', value: m.fog ? 'مفعّل' : 'بدون', note: m.fog ? 'الخريطة تنكشف بالاستكشاف' : 'الخريطة كلها ظاهرة',
+              icon: m.fog ? Icons.cloud : Icons.visibility, width: 300, onTap: () => setState(() { m.fog = !m.fog; m.save(); })),
         ]),
         const SizedBox(width: 12),
         Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -573,8 +611,6 @@ class _SetupScreenState extends State<SetupScreen> {
               : 'الخانة الأولى أنت • الحد على هذه الخريطة ${m.limit} لاعبين', style: const TextStyle(color: dim, fontSize: 12))),
           const SizedBox(height: 4),
           for (var k = 0; k < _maxSlots; k++) _row(k),
-          const SizedBox(height: 4),
-          SizedBox(width: 400, child: Text(sideDesc(m.slots[0].side), style: const TextStyle(color: dim, fontSize: 11.5))),
         ]),
       ]))),
       Container(color: const Color(0xFF1C1611), padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), child: Row(children: [

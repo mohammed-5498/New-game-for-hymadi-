@@ -388,9 +388,15 @@ class _EmpireMenu extends StatelessWidget {
     if (d.building == 'hq') {
       for (final key in EMPIRE.m('upgrades').l('order').cast<String>()) {
         final U = EMPIRE.m('upgrades').m(key), max = U.l('costs').length, lv = e.levels[pid][key], n = next(lv, max);
-        slot(U.s('name'), nextUpgrade(s, pid, key)?.cost, canUpgrade(s, pid, key), () => screen.empire('upgrade', did, key),
-            icon: _upgradeIcon[key] ?? Icons.upgrade, level: lv, max: max,
-            perks: [(_gangIcon[key]!, '+${_pct(U.d('per') * n)}'), if (U.dn('evade') != null) ('shield', '${_pct(U.d('evade') * n)} تفادٍ')]);
+        // الخانة الرابعة بفئة العصابة (2026-11-12): الضربة المحيطية للصامد، والمدى والاختراق للرامي، وسرعة الاحتلال للحشد
+        final C = key == 'speed' ? U.m('classes').mm(s.players[pid].gang) : null;
+        slot((C ?? U).s('name'), nextUpgrade(s, pid, key)?.cost, canUpgrade(s, pid, key), () => screen.empire('upgrade', did, key),
+            icon: C == null ? _upgradeIcon[key] ?? Icons.upgrade : C.has('chance') ? Icons.flare : C.has('range') ? Icons.gps_fixed : Icons.flag,
+            level: lv, max: max,
+            perks: C == null ? [(_gangIcon[key]!, '+${_pct(U.d('per') * n)}'), if (U.dn('evade') != null) ('shield', '${_pct(U.d('evade') * n)} تفادٍ')]
+                : C.has('chance') ? [('sword', '${_pct(C.l('chance')[n - 1] as num)} فرصة'), ('people', '${_pct(C.d('splash'))} حوله')]
+                : C.has('range') ? [('range', '+${_num(C.d('range') * n)}'), ('shield', '${_pct(C.d('pierce') * n)} خرق')]
+                : [('castle', '+${_pct(C.d('capture') * n)}')]);
       }
     }
     if (d.building == null && d.featureTile == null) {

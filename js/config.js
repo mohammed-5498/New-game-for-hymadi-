@@ -941,7 +941,8 @@ export const UNITS = {
   separationStrength: 1.2,    // قوة دفع التباعد (مربع/ثانية)
   arriveDistance: 0.06,       // اعتبار الوحدة وصلت لنقطة المسار
   groupSpotsFactor: 2,        // عدد مربعات الهدف = عدد الوحدات × هذا الرقم
-  pathRequestsPerTick: 20     // حد طلبات A* في التحديث الواحد
+  pathRequestsPerTick: 20,    // حد طلبات A* في التحديث الواحد
+  moveMul: 0.6                // مشي كل الوحدات أبطأ 40% (بطلب المستخدم، 2026-11-12؛ moveSpeed في weather.js)
 };
 
 // --- القتال ---
@@ -1588,8 +1589,16 @@ export const EMPIRE = {
     hp:         { name: 'الدم',         costs: [30, 50, 70], per: 0.20 },   // +20% دم لكل مستوى
     damage:     { name: 'الضرر',        costs: [30, 50, 70], per: 0.25 },   // +25% ضرر
     armor:      { name: 'الدفاع',       costs: [30, 50, 70], per: 0.10 },   // +10 نقاط درع (من 100) فوق درع الوحدة
-    // +10% سرعة لكل مستوى، ومعها فرصة تجنب الضربة كلها evade (5% لكل مستوى، applyDamage في combat.js)
-    speed:      { name: 'سرعة المشي',   costs: [30, 50, 70], per: 0.10, evade: 0.05 }
+    // +10% سرعة لكل مستوى، ومعها فرصة تجنب الضربة كلها evade (5% لكل مستوى، applyDamage في combat.js).
+    // للخاطف وحده؛ وبطلب المستخدم (2026-11-12) الخانة نفسها لكل فئة أخرى بأثرها (classUpgrade في empire.js):
+    // الصامد: فرصة chance (لكل مستوى) أن تصيب ضربته كل عدو حوله داخل radius بـ splash من ضررها.
+    // الرامي: مدى رمي +range وخرق درع pierce لكل مستوى. الحشد: احتلال الأحياء أسرع capture لكل مستوى
+    speed:      { name: 'سرعة المشي',   costs: [30, 50, 70], per: 0.10, evade: 0.05,
+                  classes: {
+                    hammers:   { name: 'الضربة المحيطية', chance: [0.10, 0.20, 0.25], splash: 0.2, radius: 1.5 },
+                    vipers:    { name: 'المدى والاختراق', range: 0.2, pierce: 0.10 },
+                    scorpions: { name: 'سرعة الاحتلال',   capture: 0.20 }
+                  } }
   },
   buildings: {
     order: ['tower', 'hospital', 'hq'],
@@ -1966,7 +1975,7 @@ export const CITY_FEATURES = {
   // ومن بقي بعد maxSeconds يخرج على أي حال
   // (12أ: كانت 150 و180، وmaxSeconds 150؛ وصار أقل من every فلا تلتقي قافلتان)
   caravan: { first: 90, every: 108, merchants: 4, guards: [null, null, 'sniper'], loot: 20, think: 2, exitRadius: 1.6,
-             maxSeconds: 100, escort: 1.5, name: 'القافلة', merchantName: 'تاجر', color: '#7a5a34', nation: 'saudi',
+             maxSeconds: 167, escort: 1.5,   // 100 ث قبل إبطاء المشي 40% (UNITS.moveMul) name: 'القافلة', merchantName: 'تاجر', color: '#7a5a34', nation: 'saudi',
              merchant: { hp: 120, damage: 0, speed: 0.9 }, guard: { hp: 200, armor: 0.15, speed: 1.6 } },
   // السوق الكبير (المدينة العربية): مالكه يأخذ tax من كل ما يصرفه غيره، ولا يدفع الصارف أكثر من سعره
   souk: { tax: 0.1, top: 50 },

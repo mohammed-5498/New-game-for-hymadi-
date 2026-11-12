@@ -86,6 +86,11 @@ const CITY_UNTINTED = ['palm', 'cherry', 'lantern', 'willow', 'lanterns', 'pine'
 // يمشون، و30 بعد activeMs بلا شيء منها، وخلفية القوائم 20. الإيقاف والنهاية GRAPHICS.idleFps وتوفير البطارية batteryFps ---
 const PACE = (calmFps: 30.0, activeMs: 2000, menuFps: 20.0);
 
+// --- ضباب الحرب (2.0.5، للتطبيق وحده، بطلب المستخدم مثل Age of Empires II): رصد كل جندي unitSight مربعاً على الأقل
+// (أو رصده إن كان أبعد)، وأحياؤك ومناطقها ظاهرة، والمستكشف الذي لا يُرى الآن بعتمة explored، وما لم يُستكشف أسود.
+// يُحسب كل every ثانية من زمن المباراة، والمستكشف يُحفظ مع المباراة في key ---
+const FOG = (unitSight: 6.0, explored: 0.55, every: 0.1, key: 'gangcity.matchFog');
+
 // --- الكاميرا ---
 const CAMERA = (minZoom: 0.8, maxZoom: 4.5, startZoom: 2.2);
 

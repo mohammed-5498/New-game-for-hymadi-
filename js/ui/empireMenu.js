@@ -149,9 +149,13 @@ function districtSections(state, district) {
         cmd: { a: 'queue', d: district.id, x: kind }
       })), ...buildingSlots(state, pid, district)] },
       { title: 'ترقيات العصابة', slots: E.upgrades.order.map(key => ({
-        name: E.upgrades[key].name, max: E.upgrades[key].costs.length,
+        name: (key === 'speed' && E.upgrades.speed.classes[player.gang] || E.upgrades[key]).name, max: E.upgrades[key].costs.length,
         perks: () => {
           const U = E.upgrades[key], lv = nextLevel(levels[key], U.costs.length);
+          const C = key === 'speed' && U.classes[player.gang];   // الخانة الرابعة بفئة العصابة (2026-11-12)
+          if (C) return C.chance ? [['sword', pct(C.chance[lv - 1]) + ' فرصة'], ['people', pct(C.splash) + ' حوله']]
+            : C.range ? [['range', '+' + (C.range * lv).toFixed(1)], ['shield', pct(C.pierce * lv) + ' خرق']]
+            : [['castle', '+' + pct(C.capture * lv)]];
           return [[GANG_ICON[key], '+' + pct(U.per * lv)], ...(U.evade ? [['shield', pct(U.evade * lv) + ' تفادٍ']] : [])];
         },
         level: () => levels[key],

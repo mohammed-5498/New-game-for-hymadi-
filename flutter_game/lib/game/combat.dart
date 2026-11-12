@@ -9,6 +9,7 @@ import '../data/js_config.dart';
 import '../map/pathfinding.dart';
 import 'abilities.dart';
 import 'alerts.dart';
+import 'empire.dart' show classUpgrade, classPierce, empireEvade;
 import 'features.dart';
 import 'realism.dart';
 import 'spatial.dart';
@@ -505,6 +506,26 @@ void _hitSound(MatchState state, Unit attacker, Unit target, double amount) {
 }
 
 bool _strike(MatchState state, Unit attacker, Unit target, double amount, [bool shot = false]) {
+  final died = _strikeOnly(state, attacker, target, amount, shot);
+  _steadySplash(state, attacker, target, amount, shot);
+  return died;
+}
+
+// ترقية الصامد (بطلب المستخدم، 2026-11-12): فرصة chance[مستوى] أن تصيب الضربة كل عدو حول الضارب بـ splash من ضررها
+void _steadySplash(MatchState state, Unit attacker, Unit target, double amount, bool shot) {
+  if (state.players[attacker.playerId].gang != 'hammers') return;
+  final up = classUpgrade(state, attacker.playerId);
+  if (up == null || random() >= (up.c.l('chance')[up.level - 1] as num).toDouble()) return;
+  final r = up.c.d('radius'), rSq = r * r, splash = up.c.d('splash');
+  forEachNearby(state, attacker.x, attacker.y, r, (other) {
+    if (other == target || other.state == 'dead' || other.hp <= 0) return;
+    if (_distanceSq(other, attacker) > rSq) return;
+    if (!isEnemy(state, attacker, other)) return;
+    applyDamage(state, attacker, other, amount * splash, shot);
+  });
+}
+
+bool _strikeOnly(MatchState state, Unit attacker, Unit target, double amount, bool shot) {
   final splash = attacker.stats.dz('splashRadius');
   if (splash == 0) return applyDamage(state, attacker, target, amount, shot);
   var died = false;
@@ -523,12 +544,11 @@ final _beats = STYLE_PERKS.m('beats'), _counter = STYLE_PERKS.m('counter');
 final _pierce = STYLE_PERKS.d('pierce'), _shotGuard = STYLE_PERKS.d('shotGuard');
 final _maxArmor = COMBAT.d('maxArmor'), _hitFlashTime = COMBAT.d('hitFlashTime'), _deathTime = COMBAT.d('deathTime');
 final _hurtSeconds = UNIT_ART.d('hurtSeconds');
-final _evadePer = EMPIRE.m('upgrades').m('speed').d('evade');
 
 bool applyDamage(MatchState state, Unit attacker, Unit target, double amount, [bool shot = false]) {
   if (!isAlive(target)) return false;
   if (target.invulnUntil > state.time) return false;
-  final evade = state.economy ? state.empire!.levels[target.playerId].speed * _evadePer : 0.0;
+  final evade = state.economy ? empireEvade(state, target.playerId) : 0.0;
   if (evade != 0 && random() < evade) { if (!attacker.isSource) addPop(state, target, 'تفادى!', 'dodge'); return false; }
   _retaliateIfCloser(state, attacker, target);
   final beats = attacker.creature == null && target.creature == null && _beats[attacker.gang] == target.gang;
@@ -537,6 +557,7 @@ bool applyDamage(MatchState state, Unit attacker, Unit target, double amount, [b
   _hitSound(state, attacker, target, amount);
   var armor = math.min(_maxArmor, target.stats.d('armor') + target.armorBonus);
   if (beats && attacker.gang == 'crows') armor *= 1 - _pierce;
+  if (!attacker.isSource && state.economy) armor *= 1 - classPierce(state, attacker.playerId);   // ترقية الرامي (2026-11-12)
   var taken = amount * (1 - armor) * target.takenMul;
   if (shot && target.gang == 'hammers' && target.creature == null) taken *= 1 - _shotGuard;
   target.hp -= taken;

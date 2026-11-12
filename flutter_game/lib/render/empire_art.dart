@@ -56,10 +56,11 @@ void drawEmpireHalos(TriBatch b, MatchState s, double time) {
 }
 
 // --- سهام الأبراج ---
-void drawEmpireShots(TriBatch b, MatchState s, double alpha) {
+void drawEmpireShots(TriBatch b, MatchState s, double alpha, [bool Function(Unit)? show]) {
   final e = s.empire;
   if (e == null || e.shots.isEmpty) return;
   for (final shot in e.shots) {
+    if (show != null && !show(shot.target)) continue;   // ضباب الحرب
     final t = math.min(1.0, (shot.prevT + (shot.t - shot.prevT) * alpha) / shot.duration);
     final (fx, fy0) = _w(shot.i, shot.j);
     final fy = fy0 - (shot.top != 0 ? shot.top : _E.m('arrow').d('top'));
@@ -75,7 +76,8 @@ void drawEmpireShots(TriBatch b, MatchState s, double alpha) {
 }
 
 // --- الأعلام: سهم ذهبي فوق كل علم (لا التلة) ---
-void drawFlagArrows(TriBatch b, MatchState s, double time, double left, double right, double top, double bottom) {
+void drawFlagArrows(TriBatch b, MatchState s, double time, double left, double right, double top, double bottom,
+    [bool Function(double, double)? known]) {
   final M = CAPTURE.m('flagMark'), A = M.m('arrow');
   final pulse = M.d('pulseMin') + (1 - M.d('pulseMin')) * (0.5 + 0.5 * math.sin(time * M.d('pulseSpeed')));
   final hill = s.mode == 'king' && s.modeState != null ? modeOf(s).hillId : -1;
@@ -83,7 +85,7 @@ void drawFlagArrows(TriBatch b, MatchState s, double time, double left, double r
   final glow = _rgbList(M.s('glow')), core = _rgb(M.s('color'));
   for (final d in s.map.districts) {
     final c = d.capture;
-    if (c == null || d.id == hill) continue;
+    if (c == null || d.id == hill || (known != null && !known(c.i.toDouble(), c.j.toDouble()))) continue;
     final (x, y) = _w(c.i, c.j);
     if (x < left || x > right || y < top || y > bottom) continue;
     final tip0 = y - A.d('lift') + bob, cy = tip0 - half * 1.15;
@@ -161,7 +163,8 @@ void _icon(TriBatch b, String kind, double x, double y, double s, String city) {
   return null;
 }
 
-void drawEmpireMarks(TriBatch b, MatchState s, CityArt art, int? openDistrict, double left, double right, double top, double bottom) {
+void drawEmpireMarks(TriBatch b, MatchState s, CityArt art, int? openDistrict, double left, double right, double top, double bottom,
+    [bool Function(double, double)? known]) {
   final e = s.empire;
   if (!s.economy || e == null) return;
   final z = s.camera.z, B = _E.m('badge'), n = s.map.n;
@@ -169,6 +172,7 @@ void drawEmpireMarks(TriBatch b, MatchState s, CityArt art, int? openDistrict, d
   // الشارات لكل مبنى ظاهر في كل الأحياء (لك ولخصومك)
   for (final d in s.map.districts) {
     if (d.building == null || d.buildTile == null) continue;
+    if (known != null && !known((d.buildTile! % n).toDouble(), (d.buildTile! ~/ n).toDouble())) continue;   // ضباب الحرب
     final (x, roof, cy, r) = badgeOf(s, art, d);
     if (!seen(x, roof)) continue;
     b.line(x, roof + 1, x, cy + r, math.max(1.1, 1.6 / z), 0x2b2825);

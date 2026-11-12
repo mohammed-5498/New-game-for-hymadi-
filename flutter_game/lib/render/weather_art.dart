@@ -78,10 +78,12 @@ class WeatherFx {
 
   final _lx = Float32List(4 * 160), _lr = Float32List(4 * 160);
   final _lc = Int32List(160);
+  final _fl = <double>[];             // أضواء النيران المدموجة: x وy ونصف القطر والعدد
   static final _plus = ui.Paint()..blendMode = ui.BlendMode.plus..filterQuality = ui.FilterQuality.low;
 
   // بعد رسم العالم، بإحداثيات الشاشة. statics من mapLights، وdt زمن الإطار (صفر في الإيقاف)
-  void paint(ui.Canvas canvas, ui.Size size, MatchState s, List<Light> statics, double dt, J gfx) {
+  // lit: قوة الضوء في هذا الموضع من العالم (ضباب الحرب: لا أضواء فيما لم يُستكشف، وأخفت فيما لا يُرى الآن)
+  void paint(ui.Canvas canvas, ui.Size size, MatchState s, List<Light> statics, double dt, J gfx, [double Function(double, double)? lit]) {
     final w = WEATHER.m(s.weather), c = s.camera;
     final overlay = w.ss('overlay');
     if (overlay != null) canvas.drawRect(ui.Offset.zero & size, ui.Paint()..color = ui.Color((((_alpha(overlay) * 255).round()) << 24) | _rgb(overlay)));
@@ -90,6 +92,7 @@ class WeatherFx {
       var n = 0;
       void add(double wx, double wy, double r, int rgb, double a) {
         if (n >= max) return;
+        if (lit != null) { final f = lit(wx, wy); if (f <= 0) return; a *= f; }
         final sx = (wx - c.x) * c.z + size.width / 2, sy = (wy - c.y) * c.z + size.height / 2, rr = r * c.z;
         if (rr < 1 || sx < -rr || sy < -rr || sx > size.width + rr || sy > size.height + rr) return;
         final k = rr / _g, o = n * 4;
@@ -97,7 +100,18 @@ class WeatherFx {
         _lr..[o] = 0..[o + 1] = 0..[o + 2] = _g * 2..[o + 3] = _g * 2;
         _lc[n++] = ((a.clamp(0, 1) * 255).round() << 24 | rgb).toSigned(32);
       }
-      for (final f in s.fires) { add((f.x - f.y) * TILE_HALF_W, (f.x + f.y) * TILE_HALF_H, f.radius * 28, 0xff963c, 0.7); }
+      // النيران المتقاربة ضوء واحد يكبر قليلاً بعددها: كانت كل نار ضوءاً يُجمع فوق غيره فتصير بقعة بيضاء تعمي ما حولها
+      _fl.clear();
+      for (final f in s.fires) {
+        final x = (f.x - f.y) * TILE_HALF_W, y = (f.x + f.y) * TILE_HALF_H, r = f.radius * 28;
+        var k = 0;
+        while (k < _fl.length && ((_fl[k] - x) * (_fl[k] - x) + (_fl[k + 1] - y) * (_fl[k + 1] - y)) > r * r) { k += 4; }
+        if (k == _fl.length) { _fl.addAll([x, y, r, 1]); continue; }
+        final m = _fl[k + 3];
+        _fl[k] = (_fl[k] * m + x) / (m + 1); _fl[k + 1] = (_fl[k + 1] * m + y) / (m + 1);
+        _fl[k + 2] = math.max(_fl[k + 2], r); _fl[k + 3] = m + 1;
+      }
+      for (var k = 0; k < _fl.length; k += 4) { add(_fl[k], _fl[k + 1], _fl[k + 2] * math.min(1.6, 1 + 0.15 * (_fl[k + 3] - 1)), 0xff963c, 0.5); }
       for (final l in statics) { add(l.x, l.y, l.r, l.rgb, l.a); }
       if (n > 0) {
         canvas.drawRawAtlas(_glow!, Float32List.sublistView(_lx, 0, n * 4), Float32List.sublistView(_lr, 0, n * 4),

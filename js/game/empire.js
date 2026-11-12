@@ -226,6 +226,36 @@ export function applyUpgrades(state, unit) {
   const factor = 1 + state.modeState.levels[unit.playerId].hp * E.upgrades.hp.per;
   unit.maxHp = unit.stats.hp * factor;
   unit.hp = unit.maxHp;
+  rangedUpgrade(state, unit);
+}
+
+// ترقية الخانة الرابعة بفئة اللاعب (بطلب المستخدم، 2026-11-12): إعدادها، أو null للخاطف (سرعة المشي والتجنب)
+export function classUpgrade(state, playerId) {
+  if (!state.economy) return null;
+  const C = E.upgrades.speed.classes[state.players[playerId].gang];
+  const level = state.modeState.levels[playerId].speed;
+  return C && level ? { C, level } : null;
+}
+
+// الرامي: مداه ورصده يزيدان بمستواه، والمضاف محفوظ في stats.rangeUp فلا يتكرر
+function rangedUpgrade(state, unit) {
+  if (!unit.stats.projectile || state.players[unit.playerId].gang !== 'vipers') return;
+  const up = classUpgrade(state, unit.playerId), want = up ? up.level * up.C.range : 0;
+  const delta = want - (unit.stats.rangeUp || 0);
+  if (!delta) return;
+  unit.stats.attackRange += delta;
+  unit.stats.visionRange += delta;
+  unit.stats.rangeUp = want;
+}
+
+// خرق الدرع للرامي، والحشد يحتل أسرع
+export function classPierce(state, playerId) {
+  const up = classUpgrade(state, playerId);
+  return up && up.C.pierce ? up.level * up.C.pierce : 0;
+}
+export function classCaptureMul(state, playerId) {
+  const up = classUpgrade(state, playerId);
+  return up && up.C.capture ? 1 + up.level * up.C.capture : 1;
 }
 
 // مضاعفات اللاعب للقتال والحركة (0 أو 1 خارج هذا الطور)
@@ -236,7 +266,12 @@ export function empireArmorBonus(state, playerId) {
   return state.modeState.levels[playerId].armor * E.upgrades.armor.per;
 }
 export function empireSpeedMul(state, playerId) {
+  if (E.upgrades.speed.classes[state.players[playerId].gang]) return 1;   // الخانة لغير الخاطف أثر آخر
   return 1 + state.modeState.levels[playerId].speed * E.upgrades.speed.per;
+}
+export function empireEvade(state, playerId) {
+  if (E.upgrades.speed.classes[state.players[playerId].gang]) return 0;
+  return state.modeState.levels[playerId].speed * E.upgrades.speed.evade;
 }
 
 // --- أبراج الرماية: سهم على أقرب عدو في المدى كل attackTime ثانية ---
@@ -398,6 +433,8 @@ export function buyUpgrade(state, playerId, key) {
       unit.maxHp = max;
     }
   }
+  // مدى الرامي: جنوده الحاليون أيضاً
+  if (key === 'speed') for (const unit of state.units) if (unit.playerId === playerId && isAlive(unit)) rangedUpgrade(state, unit);
   return OK;
 }
 

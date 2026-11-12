@@ -30,6 +30,13 @@ class Vec {
   double alpha = 1;      // globalAlpha
 
   bool get isEmpty => _pos.isEmpty;
+  int get length => _pos.length;
+  // أعلى نقطة (أصغر y) فيما أُضيف بعد from: ارتفاع زينة المربع لضباب الحرب
+  double minY(int from) {
+    var m = double.infinity;
+    for (var k = from + 1; k < _pos.length; k += 2) { m = math.min(m, _pos[k]); }
+    return m;
+  }
 
   int _a(int c) {
     if (alpha == 1) return c;

@@ -233,13 +233,46 @@ void applyUpgrades(MatchState state, Unit unit) {
   final factor = 1 + state.empire!.levels[unit.playerId].hp * _hpPer;
   unit.maxHp = unit.stats.d('hp') * factor;
   unit.hp = unit.maxHp;
+  _rangedUpgrade(state, unit);
+}
+
+// ترقية الخانة الرابعة بفئة اللاعب (بطلب المستخدم، 2026-11-12): إعدادها ومستواها، أو null للخاطف (سرعة المشي والتجنب)
+final _classes = E.m('upgrades').m('speed').m('classes');
+({J c, int level})? classUpgrade(MatchState state, int playerId) {
+  if (!state.economy) return null;
+  final c = _classes.mm(state.players[playerId].gang), level = state.empire!.levels[playerId].speed;
+  return c != null && level != 0 ? (c: c, level: level) : null;
+}
+
+// الرامي: مداه ورصده يزيدان بمستواه، والمضاف محفوظ في stats.rangeUp فلا يتكرر
+void _rangedUpgrade(MatchState state, Unit unit) {
+  if (!truthy(unit.stats['projectile']) || state.players[unit.playerId].gang != 'vipers') return;
+  final up = classUpgrade(state, unit.playerId), want = up != null ? up.level * up.c.d('range') : 0.0;
+  final delta = want - unit.stats.dz('rangeUp');
+  if (delta == 0) return;
+  unit.stats['attackRange'] = unit.stats.d('attackRange') + delta;
+  unit.stats['visionRange'] = unit.stats.d('visionRange') + delta;
+  unit.stats['rangeUp'] = want;
+}
+
+// خرق الدرع للرامي، والحشد يحتل أسرع
+double classPierce(MatchState state, int playerId) {
+  final up = classUpgrade(state, playerId);
+  return up != null && up.c['pierce'] != null ? up.level * up.c.d('pierce') : 0;
+}
+double classCaptureMul(MatchState state, int playerId) {
+  final up = classUpgrade(state, playerId);
+  return up != null && up.c['capture'] != null ? 1 + up.level * up.c.d('capture') : 1;
 }
 
 final _damagePer = E.m('upgrades').m('damage').d('per'), _armorPer = E.m('upgrades').m('armor').d('per');
-final _speedPer = E.m('upgrades').m('speed').d('per');
+final _speedPer = E.m('upgrades').m('speed').d('per'), _evadePer = E.m('upgrades').m('speed').d('evade');
 double empireDamageBonus(MatchState state, int playerId) => state.empire!.levels[playerId].damage * _damagePer;
 double empireArmorBonus(MatchState state, int playerId) => state.empire!.levels[playerId].armor * _armorPer;
-double empireSpeedMul(MatchState state, int playerId) => 1 + state.empire!.levels[playerId].speed * _speedPer;
+double empireSpeedMul(MatchState state, int playerId) =>
+    _classes.has(state.players[playerId].gang) ? 1 : 1 + state.empire!.levels[playerId].speed * _speedPer;   // لغير الخاطف أثر آخر
+double empireEvade(MatchState state, int playerId) =>
+    _classes.has(state.players[playerId].gang) ? 0 : state.empire!.levels[playerId].speed * _evadePer;
 
 ({int i, int j}) tileOf(GameMap map, int k) => (i: k % map.n, j: k ~/ map.n);
 
@@ -381,6 +414,8 @@ Result buyUpgrade(MatchState state, int playerId, String key) {
       unit.maxHp = max;
     }
   }
+  // مدى الرامي: جنوده الحاليون أيضاً
+  if (key == 'speed') { for (final unit in state.units) { if (unit.playerId == playerId && isAlive(unit)) _rangedUpgrade(state, unit); } }
   return _ok;
 }
 

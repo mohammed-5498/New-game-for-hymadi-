@@ -1,6 +1,7 @@
 // طبقة المدينة الثابتة: تُبنى مرة لكل خريطة، ثم يرسمها كرت الشاشة بأمرين في كل إطار بلا عمل على المعالج:
 // الأرض شبكة مثلثات واحدة بلون كل مربع (groundColor في js/render/cityRender.js)، والمباني والأشجار والمعالم
 // من أطلس المدينة مرتبة بالعمق (i + j) كما يرسمها cityRender.js وlandmarks.js
+import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -120,15 +121,23 @@ class CityLayer {
   final List<Light> lights;          // إضاءة الليل الثابتة (weather_art.dart)
   final Map<int, int> _tileItem;     // المربع ← رقم صورته (لتبديل صورة مربع واحد بلا بناء الطبقة كلها)
   final Map<int, Sprite> _tileSprite;
+  final Float32List lift;            // لكل مربع: ارتفاع ما عليه فوق ركنه الخلفي (ضباب الحرب)
+  final Float32List wide;            // ونصف عرض صورته من وسطه (المبنى المميز 2×2 أعرض من مربعه)
   CityLayer._(this.ground, this.marks, this.rows, this.rowStart, this.xf, this.rects, this._pos, this._baseCol, this._col,
-      this._tileDistrict, this._spriteDistrict, this.spriteCol, this.lights, this._tileItem, this._tileSprite);
+      this._tileDistrict, this._spriteDistrict, this.spriteCol, this.lights, this._tileItem, this._tileSprite, this.lift, this.wide);
+
+  static void _widen(Float32List wide, int k, int n, double left, double width) {
+    final x = (k % n - k ~/ n) * TILE_HALF_W;
+    wide[k] = math.max(wide[k], math.max(x - left, left + width - x));
+  }
 
   // ما يرتفع فوق قاعدته (CITY_CACHE.reach.up) وما ينزل تحتها
   static const _up = 120.0, _down = 20.0;
 
   factory CityLayer(GameMap map, CityArt art, [String weather = 'day']) {
     final n = map.n, depths = 2 * n - 1;
-    final pos = Float32List(n * n * 12), col = Int32List(n * n * 6), base = Int32List(n * n), tileD = Int32List(n * n);
+    final pos = Float32List(n * n * 12), col = Int32List(n * n * 6), base = Int32List(n * n), tileD = Int32List(n * n), lift = Float32List(n * n),
+        wide = Float32List(n * n)..fillRange(0, n * n, TILE_HALF_W);
     final items = <(int, int, Sprite, double, double, double, int, int)>[];
     final decor = Decor(map), markVec = Vec(), rowVecs = List.generate(depths, (_) => Vec());
     decor.groundMarks(markVec);
@@ -143,7 +152,10 @@ class CityLayer {
         tileD[k] = map.road[k] == 1 || map.type[k] == tWater || map.type[k] == tY ? -1 : map.districtAt[k];
         final s = tileSprite(map, art, i, j);
         if (s != null) items.add((i + j, i, s.$1, x, y + s.$3, s.$2, map.road[k] == 1 ? -1 : map.districtAt[k], k));
+        final from = rowVecs[i + j].length;
         decor.tileDecor(rowVecs[i + j], i, j);
+        // ارتفاع ما على المربع فوق ركنه الخلفي (ضباب الحرب يغطيه كله): الزينة هنا، والصورة بعد ترتيبها
+        lift[k] = math.max(0.0, y - TILE_HALF_H - rowVecs[i + j].minY(from));
       }
     }
     items.sort((a, b) => a.$1 != b.$1 ? a.$1 - b.$1 : a.$2 - b.$2);
@@ -160,11 +172,18 @@ class CityLayer {
       final unit = scale / art.px, o = m * 4;
       xf[o] = unit; xf[o + 1] = 0; xf[o + 2] = x - unit * s.ax; xf[o + 3] = y - unit * s.ay;
       rects[o] = s.x; rects[o + 1] = s.y; rects[o + 2] = s.x + s.w; rects[o + 3] = s.y + s.h;
+      lift[k] = math.max(lift[k], (k ~/ n + k % n) * TILE_HALF_H - TILE_HALF_H - xf[o + 3]);
+      _widen(wide, k, n, xf[o + 2], unit * s.w);
     }
     while (d <= depths) { rowStart[d++] = items.length; }
+    // وعلم الحي فوق مربعه (_flag في match_screen: سارية 22)
+    for (final dist in map.districts) {
+      final c = dist.capture;
+      if (c != null) lift[c.j * n + c.i] = math.max(lift[c.j * n + c.i], 24 - TILE_HALF_H);
+    }
     return CityLayer._(ui.Vertices.raw(ui.VertexMode.triangles, pos, colors: col), markVec.build(),
         [for (final v in rowVecs) v.build()], rowStart, xf, rects, pos, base, col, tileD, spriteD, spriteCol, mapLights(map, decor.lights),
-        tileItem, tileImg);
+        tileItem, tileImg, lift, wide);
   }
 
   // مبنى جديد في الحي (القاعدة والبرج والمستشفى): تتبدل صورة مربعه وحده في مكانها. يعيد false إن لم يكن له مكان
@@ -179,6 +198,8 @@ class CityLayer {
       final x = (k % map.n - k ~/ map.n) * TILE_HALF_W, y = (k % map.n + k ~/ map.n) * TILE_HALF_H + now.$3;
       xf[o] = unit; xf[o + 1] = 0; xf[o + 2] = x - unit * s.ax; xf[o + 3] = y - unit * s.ay;
       rects[o] = s.x; rects[o + 1] = s.y; rects[o + 2] = s.x + s.w; rects[o + 3] = s.y + s.h;
+      lift[k] = math.max(lift[k], (k ~/ map.n + k % map.n) * TILE_HALF_H - TILE_HALF_H - xf[o + 3]);
+      _widen(wide, k, map.n, xf[o + 2], unit * s.w);
       _tileSprite[k] = s;
     }
     return true;

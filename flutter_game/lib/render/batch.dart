@@ -93,6 +93,12 @@ class TriBatch {
     _vert(x1, y1, whiteU, whiteV, col); _vert(x2, y2, whiteU, whiteV, col); _vert(x3, y3, whiteU, whiteV, col);
   }
 
+  // مثلث بلون واحد وشفافية لكل رأس (حواف ضباب الحرب الناعمة)
+  void triA(double x1, double y1, double a1, double x2, double y2, double a2, double x3, double y3, double a3, int rgb) {
+    _grow(3);
+    _vert(x1, y1, whiteU, whiteV, _argb(rgb, a1)); _vert(x2, y2, whiteU, whiteV, _argb(rgb, a2)); _vert(x3, y3, whiteU, whiteV, _argb(rgb, a3));
+  }
+
   void quad(double x1, double y1, double x2, double y2, double x3, double y3, double x4, double y4, int rgb, [double al = 1]) {
     tri(x1, y1, x2, y2, x3, y3, rgb, al);
     tri(x1, y1, x3, y3, x4, y4, rgb, al);

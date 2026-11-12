@@ -8,7 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
 import '../core/cfg.dart';
-import '../config.dart' show PACE;
+import '../config.dart' show PACE, FOG;
 import '../core/fmath.dart';
 import '../data/js_config.dart';
 import '../audio/sound.dart';
@@ -31,6 +31,7 @@ import '../render/unit_art.dart';
 import '../render/unit_atlas.dart';
 import '../render/weather_art.dart';
 import '../render/empire_art.dart';
+import '../render/fog.dart';
 import 'hud.dart';
 import 'menus.dart';
 import 'prefs.dart';
@@ -76,6 +77,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
   int _lastTapAt = 0, _lastDistrictTapAt = 0, _lastDistrictTap = -1;
   final batch = TriBatch();
   final weather = WeatherFx();
+  Fog? fog;                           // ضباب الحرب (null: مطفأ، أو مشاهدة بلا لاعب)
   double frameDt = 0;                 // زمن الإطار للطقس (صفر في الإيقاف)
 
   @override
@@ -162,6 +164,13 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
       units = u;
       layer = CityLayer(s.map, a, s.weather);
       _mapVersion = s.mapVersion;
+      // ضباب الحرب من إعداد المباراة، وطور القصة بآخر إعداد (2.0.5). والمستكشف يعود مع المباراة المحفوظة
+      final on = settings['fog'] is bool ? settings['fog'] as bool : Prefs.read(UI.s('setupKey'))?['fog'] != false;
+      if (on && s.humanId >= 0) {
+        fog = Fog(s.map.n, s.humanId, layer!.lift, layer!.wide);
+        if (widget.resume) fog!.restore(Prefs.raw(FOG.key));
+        fog!.update(s, force: true);
+      }
     });
     GameSound.matchSilence(false, s.map.city);
     _ticker.start();
@@ -173,7 +182,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     if (e == 'resynced' && Lan.L != null && state != null) {
       final s = Lan.L!.state;
       layer?.dispose();
-      setState(() { state = s; layer = CityLayer(s.map, art!, s.weather); _mapVersion = s.mapVersion; });
+      setState(() { state = s; layer = CityLayer(s.map, art!, s.weather); _mapVersion = s.mapVersion; fog?..lift = layer!.lift..wide = layer!.wide; });
     } else if ((e == 'back' || e == 'left') && lanRole == 'client') {
       Navigator.of(context).pop();
     }
@@ -219,6 +228,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     if (s == null || s.matchResult != null || s.lanRole != null) return;   // المحلية لا تمس مباراتك المحفوظة
     Prefs.writeRaw(UI.s('matchKey'), encodeMatch(s));
     Prefs.write(UI.s('matchInfoKey'), saveInfo(s));
+    if (fog != null) Prefs.writeRaw(FOG.key, fog!.save());
   }
 
   void openPause({bool saveNow = false}) {
@@ -327,6 +337,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
       alpha = _acc / TICK_SEC;
     }
     if (settings['watch'] == true && _ticks % 20 == 0) _watch(s);
+    fog?.update(s);
     if (s.mapVersion != _mapVersion) {
       _mapVersion = s.mapVersion;
       // مبنى جديد أو ترقية أو تحصين: صورة مربع المبنى وحده تتبدل (الترقيات والأسوار لا تمس الطبقة)، والطبقة كلها نادراً
@@ -334,6 +345,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
       if (!(layer?.refreshTiles(s.map, art!, tiles) ?? true)) {
         layer?.dispose();
         layer = CityLayer(s.map, art!, s.weather);
+        fog?..lift = layer!.lift..wide = layer!.wide;
       }
     }
     final c = s.camera;
@@ -428,8 +440,9 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
   Unit? _unitAt(MatchState s, Offset p, Size size) {
     Unit? best;
     var bestD = INPUT.d('unitTapRadiusPx');
+    final f = fog;
     for (final u in s.units) {
-      if (u.state == 'dead') continue;
+      if (u.state == 'dead' || (f != null && !f.friendly(s, u.playerId) && !f.sees(u.x, u.y))) continue;
       final q = toScreen(s, (u.x - u.y) * TILE_HALF_W, (u.x + u.y) * TILE_HALF_H - 8 * s.camera.z / 2.2, size);
       final d = (q - p).distance;
       if (d < bestD) { bestD = d; best = u; }
@@ -560,7 +573,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
   }
 }
 
-void clearSavedMatch() { Prefs.remove(UI.s('matchKey')); Prefs.remove(UI.s('matchInfoKey')); }
+void clearSavedMatch() { Prefs.remove(UI.s('matchKey')); Prefs.remove(UI.s('matchInfoKey')); Prefs.remove(FOG.key); }
 
 // شاشة التحميل (blackout.js): شريط تقدم ونصيحة
 class LoadingScreen extends StatelessWidget {
@@ -642,10 +655,13 @@ class _MatchPainter extends CustomPainter {
     for (final r in _rows) { r.clear(); }
     var visible = 0;
     var busy = false;
+    final fog = v.fog;
+    bool sees(double i, double j) => fog == null || fog.sees(i, j);
     for (final u in s.units) {
       final i = u.prevX + (u.x - u.prevX) * alpha, j = u.prevY + (u.y - u.prevY) * alpha;
       final x = (i - j) * TILE_HALF_W, y = (i + j) * TILE_HALF_H;
       if (x < left || x > right || y < top || y > bottom) continue;
+      if (fog != null && !fog.friendly(s, u.playerId) && !fog.sees(i, j)) continue;   // عدو في الضباب
       final d = (i + j).floor().clamp(0, depths - 1);
       _rows[d].add(u);
       visible++;
@@ -666,6 +682,7 @@ class _MatchPainter extends CustomPainter {
       b.flush(canvas, img);
     }, afterRow: (d) {
       for (final fl in _flagsAt(s, d)) {
+        if (fog != null && !fog.known(fl.capture!.i.toDouble(), fl.capture!.j.toDouble())) continue;   // لم يُستكشف
         _flag(b, s, fl, time);
         if (fl.hill) drawHillCrown(b, (fl.capture!.i - fl.capture!.j) * TILE_HALF_W, (fl.capture!.i + fl.capture!.j) * TILE_HALF_H, time,
             (s.modeState as ModeState?)?.blocked ?? false);
@@ -683,17 +700,19 @@ class _MatchPainter extends CustomPainter {
         }
       }
       _mark('units');
+      fog?.drawRow(b, d, left, right);
       b.flush(canvas, img);
       _mark('flush');
     });
-    for (final shot in s.projectiles) { drawProjectile(b, shot, alpha); }
-    drawEmpireShots(b, s, alpha);
-    drawFlagArrows(b, s, time, left, right, top, bottom);
+    for (final shot in s.projectiles) { if (sees(shot.x, shot.y)) drawProjectile(b, shot, alpha); }
+    drawEmpireShots(b, s, alpha, fog == null ? null : (u) => fog.friendly(s, u.playerId) || fog.sees(u.x, u.y));
+    drawFlagArrows(b, s, time, left, right, top, bottom, fog?.known);
     for (final fx in s.fx) {
+      if (!sees(fx.x, fx.y)) continue;
       final gx = (fx.x - fx.y) * TILE_HALF_W, gy = (fx.x + fx.y) * TILE_HALF_H;
       drawImpact(b, fx, gx, gy, UNIT_ART.d('scale'), fx.t + alpha * TICK_SEC);
     }
-    for (final cl in s.clashes) { drawClash(b, (cl.x - cl.y) * TILE_HALF_W, (cl.x + cl.y) * TILE_HALF_H - 8, cl.t); }
+    for (final cl in s.clashes) { if (sees(cl.x, cl.y)) drawClash(b, (cl.x - cl.y) * TILE_HALF_W, (cl.x + cl.y) * TILE_HALF_H - 8, cl.t); }
     for (final fx in s.ultFx) { drawUltFx(b, fx); }
     if (s.feature != null) drawFeatureOver(b, s, time);
     if (s.story != null) {
@@ -704,17 +723,20 @@ class _MatchPainter extends CustomPainter {
     if (s.moveMarker != null) drawMoveMarker(b, s.moveMarker!);
     b.flush(canvas, img);
     _mark('fx');
-    if (Settings.pops) _drawPops(canvas, s);
+    if (Settings.pops) _drawPops(canvas, s, sees);
     _mark('pops');
     canvas.restore();
-    v.weather.paint(canvas, size, s, layer.lights, v.frameDt, Settings.gfx);   // الطقس والإضاءة فوق المشهد
+    v.weather.paint(canvas, size, s, layer.lights, v.frameDt, Settings.gfx, fog == null ? null : (wx, wy) {
+      final (i, j) = v.worldToTile(wx, wy);
+      return fog.sees(i, j) ? 1.0 : fog.known(i, j) ? 1 - FOG.explored : 0.0;
+    });   // الطقس والإضاءة فوق المشهد
     _mark('weather');
     // الشارات والطابور والمدى والراية فوق طبقة الليل لتُقرأ دائماً
     canvas.save();
     canvas.translate(size.width / 2, size.height / 2);
     canvas.scale(c.z);
     canvas.translate(-c.x, -c.y);
-    drawEmpireMarks(b, s, art, v.menuDistrict, left, right, top, bottom);
+    drawEmpireMarks(b, s, art, v.menuDistrict, left, right, top, bottom, fog?.known);
     b.flush(canvas, img);
     canvas.restore();
     _mark('marks');
@@ -804,9 +826,10 @@ class _MatchPainter extends CustomPainter {
   // الكلمات الطائرة: تفادى! صدّ! من الخلف! كل كلمة بلونها صورة صغيرة (popImage، تُجهَّز عند التحميل)، وتُرسم بشفافيتها
   // بلا طبقة خارج الشاشة لكل كلمة
   final _popPaint = Paint()..filterQuality = FilterQuality.medium;
-  void _drawPops(Canvas canvas, MatchState s) {
+  void _drawPops(Canvas canvas, MatchState s, bool Function(double, double) sees) {
     final secs = COMBAT_REALISM.m('pops').d('seconds');
     for (final p in s.pops) {
+      if (!sees(p.x, p.y)) continue;
       final g = p.t / secs, img = popImage(p.text, p.color);
       final x = (p.x - p.y) * TILE_HALF_W - 30, y = (p.x + p.y) * TILE_HALF_H - 26 - g * 10;
       _popPaint.color = Color.fromRGBO(255, 255, 255, (1 - g).clamp(0.0, 1.0));

@@ -11,8 +11,9 @@ double visionRange(MatchState state, Unit unit) {
 }
 
 final _cathedralSpeed = CITY_FEATURES.m('cathedral').d('speed');
+final _moveMul = UNITS.d('moveMul');
 double moveSpeed(MatchState state, Unit unit) {
-  var speed = unit.stats.d('speed') * WEATHER.m(state.weather).d('speedMul') * unit.traits.spd;
+  var speed = unit.stats.d('speed') * _moveMul * WEATHER.m(state.weather).d('speedMul') * unit.traits.spd;   // UNITS.moveMul: أبطأ 40%
   if (unit.hasteUntil > state.time) speed *= 1 + unit.hasteFactor;
   if (unit.rallyUntil > state.time) speed *= 1 + _cathedralSpeed;
   if (state.feature == 'coups' && buildingOwner(state, 'arch') == unit.playerId) speed *= 1 + CITY_FEATURES.m('arch').d('speed');

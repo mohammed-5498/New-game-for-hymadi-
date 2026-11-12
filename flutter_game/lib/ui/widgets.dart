@@ -137,7 +137,8 @@ class PickerSheet extends StatelessWidget {
   final String title;
   final List<(String, List<Widget>)> groups;
   final List<Widget> footer;
-  const PickerSheet({super.key, required this.title, required this.groups, this.footer = const []});
+  final Widget? side;                  // لوحة جانبية (يسار الخانات): وصف المختار وزر اختياره
+  const PickerSheet({super.key, required this.title, required this.groups, this.footer = const [], this.side});
   @override
   Widget build(BuildContext context) => SizedBox(
     height: MediaQuery.sizeOf(context).height * 0.9,
@@ -145,9 +146,12 @@ class PickerSheet extends StatelessWidget {
       Padding(padding: const EdgeInsets.only(top: 8), child: Text(title, style: const TextStyle(color: gold, fontSize: 17, fontWeight: FontWeight.w800))),
       if (groups.length > 1) TabBar(isScrollable: true, labelColor: gold, unselectedLabelColor: dim, indicatorColor: gold,
           tabs: [for (final g in groups) Tab(text: g.$1)]),
-      Expanded(child: TabBarView(children: [
-        for (final g in groups) GridView.extent(maxCrossAxisExtent: 210, childAspectRatio: 1.7, padding: const EdgeInsets.all(10),
-            mainAxisSpacing: 8, crossAxisSpacing: 8, children: g.$2),
+      Expanded(child: Row(children: [
+        Expanded(child: TabBarView(children: [
+          for (final g in groups) GridView.extent(maxCrossAxisExtent: 210, childAspectRatio: 1.7, padding: const EdgeInsets.all(10),
+              mainAxisSpacing: 8, crossAxisSpacing: 8, children: g.$2),
+        ])),
+        ?side,
       ])),
       if (footer.isNotEmpty) Padding(padding: const EdgeInsets.only(bottom: 8), child: Wrap(spacing: 8, children: footer)),
     ])),
