@@ -453,6 +453,7 @@ Result buildDistrict(MatchState state, int playerId, int districtId, String type
   district.building = type;
   district.buildTile = k;
   district.blv = {};
+  district.lastUp = null;
   district.cool = 0;
   state.map.type[k] = BUILDING_TILE[type]!;
   if (type == 'hq') _fortify(state.map, district);
@@ -485,6 +486,7 @@ Result upgradeBuilding(MatchState state, int playerId, int districtId, String ke
   final next = nextBuildingUpgrade(district, key, state)!;
   spend(state, playerId, next.cost);
   district.blv = {...district.blv, key: next.level};
+  district.lastUp = key;
   state.mapVersion++;
   return _ok;
 }

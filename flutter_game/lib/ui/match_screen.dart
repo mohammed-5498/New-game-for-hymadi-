@@ -69,7 +69,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
   final frame = ValueNotifier<int>(0), hud = ValueNotifier<int>(0);
   Duration _last = Duration.zero;
   double _acc = 0, alpha = 0, _lastScale = 1;
-  int _mapVersion = 0, _ticks = 0;
+  int _mapVersion = 0, _ticks = 0, _hqSig = 0;
   bool selectMode = false, paused = false;
   Offset? boxStart, boxEnd;
   int? menuDistrict;
@@ -164,8 +164,9 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
       state = s;
       art = a;
       units = u;
-      layer = CityLayer(s.map, a, s.weather);
+      layer = CityLayer(s.map, a, s.weather, s);
       _mapVersion = s.mapVersion;
+      _hqSig = _hqTiers(s);
       // ضباب الحرب من إعداد المباراة، وطور القصة بآخر إعداد (2.0.5). والمستكشف يعود مع المباراة المحفوظة
       final on = settings['fog'] == true;
       if (on && s.humanId >= 0) {
@@ -184,7 +185,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     if (e == 'resynced' && Lan.L != null && state != null) {
       final s = Lan.L!.state;
       layer?.dispose();
-      setState(() { state = s; layer = CityLayer(s.map, art!, s.weather); _mapVersion = s.mapVersion; fog?..lift = layer!.lift..wide = layer!.wide; });
+      setState(() { state = s; layer = CityLayer(s.map, art!, s.weather, s); _mapVersion = s.mapVersion; _hqSig = _hqTiers(s); fog?..lift = layer!.lift..wide = layer!.wide; });
     } else if ((e == 'back' || e == 'left') && lanRole == 'client') {
       Navigator.of(context).pop();
     }
@@ -340,13 +341,23 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     }
     if (settings['watch'] == true && _ticks % 20 == 0) _watch(s);
     fog?.update(s);
-    if (s.mapVersion != _mapVersion) {
+    // مستوى القاعدة يتبع ترقيات جنود مالكها ومن يحتلها أيضاً، لا ترقيات المبنى وحدها
+    final sig = _hqTiers(s);
+    if (s.mapVersion != _mapVersion || sig != _hqSig) {
       _mapVersion = s.mapVersion;
-      // مبنى جديد أو ترقية أو تحصين: صورة مربع المبنى وحده تتبدل (الترقيات والأسوار لا تمس الطبقة)، والطبقة كلها نادراً
-      final tiles = [for (final d in s.map.districts) if (d.buildTile != null) d.buildTile!];
-      if (!(layer?.refreshTiles(s.map, art!, tiles) ?? true)) {
+      _hqSig = sig;
+      // مبنى جديد أو ترقية أو تحصين: صورة مربع المبنى وساحة علمه وأسوار الحي تتبدل في مكانها، والطبقة كلها نادراً
+      final tiles = [
+        for (final d in s.map.districts) ...[
+          if (d.buildTile != null) d.buildTile!,
+          if (d.building == 'hq' && d.capture != null) s.map.idx(d.capture!.i, d.capture!.j),
+        ]
+      ];
+      if (layer?.refreshTiles(s.map, art!, tiles, s) ?? true) {
+        layer?.refreshWalls(s.map, art!);
+      } else {
         layer?.dispose();
-        layer = CityLayer(s.map, art!, s.weather);
+        layer = CityLayer(s.map, art!, s.weather, s);
         fog?..lift = layer!.lift..wide = layer!.wide;
       }
     }
@@ -358,6 +369,15 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     frame.value++;
     _rest?.cancel();
     _rest = restTicker(_ticker, _targetFps(s), context);
+  }
+
+  // بصمة مستويات القواعد (صورة القاعدة وساحة تدريبها)
+  int _hqTiers(MatchState s) {
+    var h = 0;
+    for (final d in s.map.districts) {
+      if (d.building == 'hq') h = h * 31 + d.id * 4 + hqTier(s, d);
+    }
+    return h;
   }
 
   // للفحص (?watch=1): الكاميرا على أكبر اشتباك
@@ -762,18 +782,6 @@ class _MatchPainter extends CustomPainter {
       final e = edges[d.id];
       for (var k = 0; k < e.length; k += 4) { b.line(e[k], e[k + 1], e[k + 2], e[k + 3], B.d('underWidth'), 0x18120c, 0.45 * d.tintMix); }
       for (var k = 0; k < e.length; k += 4) { b.line(e[k], e[k + 1], e[k + 2], e[k + 3], B.d('width'), col, al); }
-    }
-    // أسوار الأحياء المحصّنة (القسم 3.12): حجر بارتفاع المستوى، وأعلاه بلون المالك
-    // ponytail: سور بسيط بلا طراز كل منطقة ولا أبراج (chunkCache.js)، والطراز مع التلميع في ن12
-    for (final d in m.districts) {
-      if (d.fort <= 0) continue;
-      final h = 2.0 + 2.0 * d.fort, e = edges[d.id];
-      final top = d.owner != null ? hexRgb(s.players[d.owner!].color) : 0xb8ab94;
-      for (var k = 0; k < e.length; k += 4) {
-        final x1 = e[k], y1 = e[k + 1], x2 = e[k + 2], y2 = e[k + 3];
-        b.quad(x1, y1, x2, y2, x2, y2 - h, x1, y1 - h, x2 > x1 == y2 > y1 ? 0x8c7f6b : 0x76695a);
-        b.line(x1, y1 - h, x2, y2 - h, 1.2, top);
-      }
     }
   }
 

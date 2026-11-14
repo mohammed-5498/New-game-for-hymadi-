@@ -11,12 +11,14 @@ ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'flutter_g
 OUT = os.path.join(ROOT, 'atlas')
 WIDTH = 2048      # عرض الأطلس (والحد 4096 للضلع: كل الجوالات تقبله)
 PAD = 6           # فراغ شفاف حول كل صورة: لا تختلط الجارتان في مستويات التصغير
-META = ('group', 'kind', 'variant', 'size', 'level', 'footprint')
+META = ('group', 'kind', 'variant', 'size', 'level', 'footprint', 'up')
 
 man = json.load(open(os.path.join(ROOT, 'manifest.json')))
 os.makedirs(OUT, exist_ok=True)
 for city, entry in man['cities'].items():
-    recs = sorted(entry['images'], key=lambda r: -r['h'])
+    # قناع رايات المالك (owner) صورة بجانب صورته في الأطلس، بمقاسها نفسه
+    recs = entry['images'] + [{'file': r['owner'], 'w': r['w'], 'h': r['h'], '_of': r} for r in entry['images'] if r.get('owner')]
+    recs = sorted(recs, key=lambda r: -r['h'])
     x, y, row = PAD, PAD, 0
     for r in recs:
         if x + r['w'] + PAD > WIDTH:
@@ -31,10 +33,14 @@ for city, entry in man['cities'].items():
     for r in recs:
         im = Image.open(os.path.join(ROOT, r['file'])).convert('RGBA')
         atlas.paste(im, r['_at'])
+    for r in recs:
+        if '_of' in r: continue
         key = r['file'].split('/', 2)[2].rsplit('.', 1)[0]
-        sprites.append({'key': key, **{k: r[k] for k in META if k in r},
-                        'r': [r['_at'][0], r['_at'][1], r['w'], r['h'], r['ax'], r['ay']]})
-    atlas.save(os.path.join(OUT, city + '.webp'), 'WEBP', quality=92, method=6)
+        s = {'key': key, **{k: r[k] for k in META if k in r}, 'r': [r['_at'][0], r['_at'][1], r['w'], r['h'], r['ax'], r['ay']]}
+        m = next((o['_at'] for o in recs if o.get('_of') is r), None)
+        if m: s['m'] = list(m)
+        sprites.append(s)
+    atlas.save(os.path.join(OUT, city + '.webp'), 'WEBP', quality=85, method=6)
     json.dump({'name': entry['name'], 'scale': entry['scale'], 'colors': entry['colors'], 'pxPerUnit': man['pxPerUnit'],
                'size': [WIDTH, height], 'sprites': sprites},
               open(os.path.join(OUT, city + '.json'), 'w'), ensure_ascii=False, separators=(',', ':'))

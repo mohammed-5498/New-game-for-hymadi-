@@ -52,6 +52,7 @@ class District {
   bool contested = false;
   int? buildTile;              // مربع مبنى الاقتصاد (empire.dart)
   Map<String, int> blv = {};   // مستويات ترقيات المبنى
+  String? lastUp;              // آخر ترقية اشتُريت للمبنى: صورته تظهرها (للرسم وحده، لا تُحفظ)
   double cool = 0;             // البرج: حتى سهمه التالي
   ({int k, int owner})? rally; // مكان إنتاج القاعدة
   bool hill = false;           // ملك الحي (ن7)

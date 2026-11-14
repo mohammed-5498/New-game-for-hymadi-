@@ -13,9 +13,9 @@ import '../game/features.dart';
 import '../game/modes.dart' show modeOf;
 import '../game/state.dart';
 import '../map/generator.dart';
-import '../map/sizes.dart';
 import 'batch.dart';
 import 'city_art.dart';
+import 'city_layer.dart' show tileSprite;
 
 final J _E = EMPIRE;
 const _sqrt2 = 1.4142135623730951;
@@ -101,10 +101,10 @@ void drawFlagArrows(TriBatch b, MatchState s, double time, double left, double r
 }
 
 // --- الشارات والطابور والمدى والراية: فوق طبقة الليل لتُقرأ دائماً ---
-// أعلى سطح المبنى في العالم (من صورته في الأطلس)
+// أعلى سطح المبنى في العالم (من صورته في الأطلس بترقيته أو مستواه ومقياسها)
 double _roofTop(MatchState s, CityArt art, District d, double y) {
-  final sp = art.economy(d.building!, sizeOf(d));
-  return sp == null ? y - 30 : y - sp.ay / art.px;
+  final sp = tileSprite(s.map, art, d.buildTile! % s.map.n, d.buildTile! ~/ s.map.n, s);
+  return sp == null ? y - 30 : y - sp.$1.ay * sp.$2 / art.px;
 }
 
 // مكان الشارة: (x، أعلى السطح، مركز القرص، نصف قطره)
