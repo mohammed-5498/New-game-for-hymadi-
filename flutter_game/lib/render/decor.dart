@@ -42,13 +42,20 @@ class Decor {
           _roadSurface(v, i, j, x, y);
         } else if (_isLane(k)) {
           _lanePaving(v, i, j, x, y);
-        } else if (map.kind[k] == 'fplaza') {
+        } else if (map.kind[k] == 'fplaza' && _squareOf(k) == null) {
           v.stroke([[x - 12, y], [x, y - 6], [x + 12, y], [x, y + 6], [x - 12, y]], 'rgba(255,226,150,0.32)', 0.6);
           v.ln(x - 6, y - 3, x + 6, y + 3, 'rgba(255,226,150,0.32)', 0.6);
           v.ln(x + 6, y - 3, x - 6, y + 3, 'rgba(255,226,150,0.32)', 0.6);
         } else if (map.type[k] == tY && _roundaboutAnchor(i, j)) {
           v.ring(x, y - 9, 38, 19, 'rgba(240,236,224,0.7)', 0.9, [4, 3]);
         }
+      }
+    }
+    // المعابد والمرتزقة وما بقي من مبنى المدينة (3.14): رصفها وحافتها ومنصة مبناها
+    for (var j = 0; j < map.n; j++) {
+      for (var i = 0; i < map.n; i++) {
+        final k = map.idx(i, j), d = _squareOf(k);
+        if (d != null) _squareGround(v, d, i, j, (i - j) * TILE_HALF_W, (i + j) * TILE_HALF_H);
       }
     }
     // خطوط منتصف الشوارع
@@ -447,7 +454,101 @@ class Decor {
   }
 
   // --- زينة أركان ساحة المبنى المميز (drawFeaturePlaza في featureArt.js) ---
+  // --- أحياء المعابد ومباني المرتزقة المربعة (3.14) ---
+  // الحي المربع للمعبد أو المرتزقة أو ما بقي من مبنى المدينة، بمبناه الكبير، أو null
+  District? _squareOf(int k) {
+    final id = map.districtAt[k];
+    if (id < 0 || map.road[k] != 0) return null;
+    final d = map.districts[id];
+    return d.featureBig && d.featureTile != null && (d.temple || d.merc || _boxes.containsKey(id)) ? d : null;
+  }
+  // حدود كل حي مربع (i0، j0، i1، j1): ما بقي من مبنى المدينة القديم مربع أيضاً إن كانت حدوده مستطيلاً ممتلئاً
+  late final Map<int, (int, int, int, int)> _boxes = () {
+    final out = <int, (int, int, int, int)>{};
+    final temples = map.districts.any((d) => d.temple);
+    for (final d in map.districts) {
+      if (!d.featureBig || d.tiles.isEmpty || !temples) continue;
+      var i0 = 1 << 30, j0 = 1 << 30, i1 = -1, j1 = -1;
+      for (final (i, j) in d.tiles) { i0 = math.min(i0, i); j0 = math.min(j0, j); i1 = math.max(i1, i); j1 = math.max(j1, j); }
+      if ((i1 - i0 + 1) * (j1 - j0 + 1) == d.tiles.length) out[d.id] = (i0, j0, i1, j1);
+    }
+    return out;
+  }();
+
+  // الرصف بطابع الحي، وحافة حجر على محيطه، ومنصة داكنة تحت المبنى فيجلس عليها لا فوق الأرض
+  void _squareGround(Vec v, District d, int i, int j, double x, double y) {
+    final k = map.idx(i, j), temple = d.temple, merc = d.merc;
+    if (map.kind[k] == 'fplaza' || map.type[k] == tP) {
+      if (temple) {
+        if ((i + j) % 2 == 0) v.poly([[x - 9, y], [x, y - 4.5], [x + 9, y], [x, y + 4.5]], 'rgba(255,236,170,0.22)');
+        v.stroke([[x - 18, y], [x, y - 9], [x + 18, y], [x, y + 9], [x - 18, y]], 'rgba(120,88,40,0.28)', 0.6);
+      } else if (merc) {
+        for (var n = 0; n < 5; n++) {
+          final a = h(i, j, 520 + n) - 0.5, b = h(i, j, 530 + n) - 0.5, p = _at(x, y, a * 0.8, b * 0.8);
+          v.el(p[0], p[1], 2.6 + h(i, j, 540 + n) * 1.6, 1.3 + h(i, j, 550 + n) * 0.8, 'rgba(60,42,26,0.22)');
+        }
+      } else {
+        v.stroke([[x - 12, y], [x, y - 6], [x + 12, y], [x, y + 6], [x - 12, y]], 'rgba(255,226,150,0.32)', 0.6);
+      }
+    }
+    // الحافة: ضلع كل مربع لا يجاوره مربع من حيه
+    final rim = temple ? '#f3dfa0' : merc ? '#b89b72' : '#eadcb6', shade = 'rgba(40,28,16,0.5)';
+    bool out(int a, int b) => !map.inBounds(a, b) || map.districtAt[map.idx(a, b)] != d.id;
+    void edge(double x1, double y1, double x2, double y2, double ox, double oy) {
+      v.ln(x1, y1, x2, y2, shade, 2.2);
+      v.ln(x1 + ox, y1 + oy, x2 + ox, y2 + oy, rim, 1.3);
+    }
+    if (out(i + 1, j)) edge(x + 18, y, x, y + 9, -1.2, -0.6);
+    if (out(i - 1, j)) edge(x, y - 9, x - 18, y, 1.2, 0.6);
+    if (out(i, j + 1)) edge(x - 18, y, x, y + 9, 1.2, -0.6);
+    if (out(i, j - 1)) edge(x, y - 9, x + 18, y, -1.2, 0.6);
+    // المنصة: مرة واحدة عند أعلى مربعات الكتلة (المبنى في المربع الأمامي منها)
+    final f = d.featureTile!, fi = f % map.n, fj = f ~/ map.n;
+    if (i == fi - 1 && j == fj - 1) {
+      const g = 3.0;
+      final top = [x, y - 9 - g], right = [x + 36 + g * 2, y + 9], bottom = [x, y + 27 + g], left = [x - 36 - g * 2, y + 9];
+      v.poly([top, right, bottom, left], temple ? 'rgba(92,70,36,0.42)' : 'rgba(52,38,24,0.4)');
+      v.stroke([top, right, bottom, left, top], rim, 1.1);
+    }
+  }
+
+  // زينة الأركان: فوانيس حجرية للمعبد، ومشاعل وصناديق ورايات للمرتزقة
+  void _squareCorner(Vec v, District d, int i, int j, double x, double y) {
+    final b = _boxes[d.id] ?? _bbox(d);
+    final corner = (i == b.$1 || i == b.$3) && (j == b.$2 || j == b.$4);
+    if (!corner) return;
+    if (d.temple) {
+      v.box(x, y, 2.4, 1.2, 3, '#8f8676', '#b3a994', '#c8bfa9');
+      v.box(x, y - 3, 1.2, 0.6, 7, '#9a917f', '#bdb39e');
+      v.box(x, y - 10, 2.6, 1.3, 3.2, '#7d756a', '#a39a87', '#ffe39a');
+      v.poly([[x - 3.4, y - 13.2], [x, y - 16.6], [x + 3.4, y - 13.2], [x, y - 11.6]], '#6b6358');
+      lights.add(Light(x, y - 11, 26, 0xffd98a, 0.5));
+    } else if (d.merc) {
+      if ((i + j) % 2 == 0) {
+        _brazier(v, x, y);
+        lights.add(Light(x, y - 9, 28, 0xff963c, 0.55));
+      } else {
+        v.box(x - 2, y + 1, 2.6, 1.3, 3.6, '#6e4f30', '#8a6640', '#9c7449');
+        v.box(x + 2.2, y, 2, 1, 2.8, '#5f432a', '#7a5838', '#8c6844');
+        v.ln(x + 0.6, y - 1, x + 0.6, y - 17, '#3a2a1c', 0.9);
+        v.poly([[x + 0.6, y - 16.5], [x + 6.4, y - 15], [x + 6.4, y - 10.4], [x + 0.6, y - 11.9]], '#8e2f24');
+        v.ln(x + 0.6, y - 14.2, x + 6.4, y - 12.7, '#e8c56a', 0.5);
+      }
+    } else {
+      _brazier(v, x, y);
+      lights.add(Light(x, y - 9, 24, 0xff963c, 0.45));
+    }
+  }
+
+  (int, int, int, int) _bbox(District d) {
+    var i0 = 1 << 30, j0 = 1 << 30, i1 = -1, j1 = -1;
+    for (final (i, j) in d.tiles) { i0 = math.min(i0, i); j0 = math.min(j0, j); i1 = math.max(i1, i); j1 = math.max(j1, j); }
+    return (i0, j0, i1, j1);
+  }
+
   void _featurePlaza(Vec v, int i, int j, double x, double y) {
+    final sq = _squareOf(map.idx(i, j));
+    if (sq != null) { _squareCorner(v, sq, i, j, x, y); return; }
     final d = map.districtOf(i, j);
     if (d == null || !d.featureBig || d.featureTile == null) return;
     final i0 = d.featureTile! % map.n - 1, j0 = d.featureTile! ~/ map.n - 1;

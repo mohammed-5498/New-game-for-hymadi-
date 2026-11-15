@@ -66,6 +66,20 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
   CityLayer? layer;
   UnitAtlas? units;
   late final Ticker _ticker;
+  bool _growing = false;
+
+  // وحدة بلون لا صورة له في الأطلس (أهل قرية انضموا، ترياد بلون مالكها...): تُصبغ صورتها وحدها وتُضاف، وما فيه يبقى
+  void _growAtlas() {
+    final u = units;
+    if (u == null || u.missing.isEmpty || _growing) return;
+    _growing = true;
+    buildUnitAtlas([...u.missing], u).then((n) {
+      _growing = false;
+      if (!mounted || units != u) { n.image.dispose(); return; }
+      units = n;
+      u.image.dispose();
+    });
+  }
   final frame = ValueNotifier<int>(0), hud = ValueNotifier<int>(0);
   Duration _last = Duration.zero;
   double _acc = 0, alpha = 0, _lastScale = 1;
@@ -145,7 +159,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     final a = await CityArt.load(s.map.city);
     if (mounted) setState(() => loadProgress = 0.7);
     final pairs = [
-      for (final p in s.players) if (!p.passive) (spriteGang(p.gang, p.nation), p.gang == 'police' ? UNIT_ART.s('policeColor') : p.color),
+      ...atlasPairs(s),
       if (s.mode == 'survival') ('police', gameModes.m('survival').m('riot').s('color')),   // وحدات التدخل بلونها
     ];
     final u = await buildUnitAtlas(pairs);
@@ -154,6 +168,14 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     batch.whiteU = 1.5; batch.whiteV = 1.5;
     if (!mounted) return;
     final z = (settings['zoom'] as num?)?.toDouble();
+    // للفحص: الكاميرا على مربع (i،j) أو على المعبد
+    final at = settings['cam'] as String?;
+    if (at != null) {
+      final t = at == 'temple' ? s.map.districts.where((d) => d.temple).firstOrNull?.capture : null;
+      final p = at.split(','), ci = t?.i.toDouble() ?? double.parse(p[0]), cj = t?.j.toDouble() ?? double.parse(p[1]);
+      s.camera.x = (ci - cj) * TILE_HALF_W;
+      s.camera.y = (ci + cj) * TILE_HALF_H;
+    }
     if (z != null) s.camera.z = z;
     setState(() => loadProgress = 1);
     // شاشة التحميل لا ترتفع قبل minSeconds (UI.blackout)، إلا في الفحص
@@ -316,6 +338,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
   void _onTick(Duration now) {
     final s = state;
     if (s == null) return;
+    _growAtlas();
     var dt = _last == Duration.zero ? 0.0 : (now - _last).inMicroseconds / 1e6;
     _last = now;
     frameDt = paused && s.lanRole != 'client' ? 0 : math.min(dt, 0.1);

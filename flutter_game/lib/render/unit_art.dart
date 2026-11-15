@@ -6,6 +6,7 @@ import 'dart:math' as math;
 import '../core/cfg.dart';
 import '../data/js_config.dart';
 import '../data/unit_sprites.dart';
+import '../game/features.dart' show FEATURES, recruitsAt;
 import '../game/realism.dart' show fightStyle, fightBig, hitstopOf;
 import '../game/state.dart';
 import 'batch.dart';
@@ -57,16 +58,16 @@ class _Desc {
 class _Ctx {
   final TriBatch b;
   final Map<String, List<double>> parts;
-  final double oy;
+  final double ox, oy;
   double hipX = 0, hipY = 0, midX = 0, midY = 0, chestX = 0, chestY = 0, headX = 0, headY = 0, a2 = 0, pl = 0;
   double sbX = 0, sbY = 0, sfX = 0, sfY = 0, hbX = 0, hbY = 0, hfX = 0, hfY = 0, efX = 0, efY = 0;
-  _Ctx(this.b, this.parts, this.oy);
+  _Ctx(this.b, this.parts, this.ox, this.oy);
   List<double> part(String name) => parts[name]!;
 }
 
 final double _upp = SPRITE_UPP;
 void _part(_Ctx k, List<double> p, double x, double y, double ang, [double s = 1]) =>
-    k.b.imageAt(p[0], p[1] + k.oy, p[2], p[3], p[4], p[5], x, y, ang - p[6], _upp * s);
+    k.b.imageAt(p[0] + k.ox, p[1] + k.oy, p[2], p[3], p[4], p[5], x, y, ang - p[6], _upp * s);
 
 double _angleOf(double ax, double ay, double bx, double by) => math.atan2(by - ay, bx - ax);
 (double, double) _rot(double x, double y, double a) => (x * math.cos(a) - y * math.sin(a), x * math.sin(a) + y * math.cos(a));
@@ -233,6 +234,20 @@ String artKey(Unit unit, [double time = 0]) {
 
 // أطلس كل وحدة: أمتها، وإلا عصابتها
 String spriteGang(String gang, String? nation) => nation != null && SPRITE_GANGS.containsKey(nation) ? nation : gang;
+
+// صور المباراة عند تحميلها: كل لاعب بعصابته، وما على الخريطة بلونه، ومجنّدو مبانيها بألوان كل من قد يحتلها (3.14).
+// وما يظهر بعدها بلون جديد (أهل قرية انضموا، ترياد...) يضيفه الأطلس وحده (UnitAtlas.missing)
+List<(String, String)> atlasPairs(MatchState s) {
+  final rivals = [for (final p in s.players) if (p.feature == null && p.gang != 'police') p.color];
+  final kinds = {for (final d in s.map.districts) ...?recruitsAt(d)};
+  return [
+    for (final p in s.players) if (!p.passive) (spriteGang(p.gang, p.nation), p.gang == 'police' ? _ART.s('policeColor') : p.color),
+    for (final u in s.units) if (describe(artKey(u)) case final d?) (d.gang, artColor(u)),
+    for (final k in kinds)
+      if (FEATURES.m('recruits').mm(k) case final R? when R['creature'] == null)
+        for (final c in rivals) (R.ss('gang') ?? spriteGang(nations.m(R.s('nation')).s('style'), R.s('nation')), c),
+  ];
+}
 
 double artScale(Unit unit) => _ART.d('scale') * (unit.champion ? _ART.d('championScale') : unit.hero != null ? _ART.d('heroScale') : 1) *
     unit.traits.size * (unit.artScale ?? 1);
@@ -444,7 +459,7 @@ void _skirt(_Ctx k, Pose p, _Desc ud) {
   final yx = (-sa * math.cos(tilt) + ca * math.sin(tilt)) * m, yy = (ca * math.cos(tilt) + sa * math.sin(tilt)) * m;
   k.b.save();
   k.b.transform(ca * _upp, sa * _upp, yx * _upp, yy * _upp, k.hipX, k.hipY);
-  k.b.image(s[0], s[1] + k.oy, s[2], s[3], -s[4], -s[5]);
+  k.b.image(s[0] + k.ox, s[1] + k.oy, s[2], s[3], -s[4], -s[5]);
   k.b.restore();
 }
 
@@ -470,8 +485,9 @@ final _hexCache = <String, int>{};
 void drawOne(TriBatch b, UnitAtlas atlas, Unit unit, String key, double x, double y, double scale, String color, double time,
     bool walking, int ghosts, double alpha, double sub) {
   final ud = describe(key) ?? describe('crow_common')!;
-  final oy = atlas.yOf(ud.gang, color);
-  if (oy == null) return;
+  final sheet = atlas.at(ud.gang, color);
+  if (sheet == null) { atlas.missing.add((ud.gang, color)); return; }
+  final (ox, oy) = sheet;
   final rt = time + sub, animT = rt + (unit.id % 17) * 0.13;
   final dead = unit.state == 'dead';
   final style = fightStyle(unit), big = fightBig(unit);
@@ -546,7 +562,7 @@ void drawOne(TriBatch b, UnitAtlas atlas, Unit unit, String key, double x, doubl
     }
   }
 
-  final k = _Ctx(b, ud.parts, oy);
+  final k = _Ctx(b, ud.parts, ox, oy);
   _spriteBody(k, p, ud);
 
   if (sw != null && sw.stop) {

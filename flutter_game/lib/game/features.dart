@@ -468,7 +468,13 @@ void _spawnBandits(MatchState s, int wave) {
   if (player == null) return;
   final count = math.min(B.i('maxCount'), B.i('count') + B.i('perWave') * (wave - 1));
   final mul = 1 + B.d('grow') * (wave - 1);
-  final spots = findFreeTiles(map, jsRound((map.land - 1) / 2), jsRound((map.n - 1) / 2), count);
+  // مع المعابد (3.14): من مخيماتهم بالتناوب، ولا موجة إن احتلها اللاعبون كلها
+  final dens = _dens(s, 'bandits');
+  if (dens != null && dens.isEmpty) return;
+  final spots = dens == null ? findFreeTiles(map, jsRound((map.land - 1) / 2), jsRound((map.n - 1) / 2), count) : [
+    for (var k = 0; k < dens.length; k++)
+      ...findFreeTiles(map, dens[k].capture!.i, dens[k].capture!.j, count ~/ dens.length + (k < count % dens.length ? 1 : 0)),
+  ];
   for (var k = 0; k < spots.length; k++) {
     final hero = wave >= B.i('heroFrom') && k % B.i('heroEvery') == B.i('heroEvery') - 1 ? heroFor(player, 'strong') : null;
     final unit = createUnit(s, player, spots[k].$1, spots[k].$2, hero);
@@ -476,9 +482,17 @@ void _spawnBandits(MatchState s, int wave) {
     s.units.add(unit);
   }
   if (spots.isNotEmpty) {
-    s.notice = Notice('${B.s('name')} ظهروا في وسط المدينة! (الموجة $wave)', false, 4);
+    s.notice = Notice('${B.s('name')} ${dens == null ? 'ظهروا في وسط المدينة' : 'خرجوا من مخيماتهم'}! (الموجة $wave)', false, 4);
     sound('alert');
   }
+}
+
+// مباني الموجات التي لم يحتلها لاعب (null: مباراة بلا معابد، فالموجات كما كانت)
+List<District>? _dens(MatchState s, String event) {
+  final kinds = _T.m('dens').l(event);
+  final all = [for (final d in s.map.districts) if (d.merc && d.capture != null && kinds.contains(d.feature)) d];
+  if (all.isEmpty) return null;
+  return [for (final d in all) if (d.owner == null || s.players[d.owner!].neutral) d];
 }
 
 void _thinkBandits(MatchState s) {
@@ -535,7 +549,7 @@ void _updateCoups(MatchState s) {
 void _coup(MatchState s, int wave) {
   final C = F.m('coups'), rebels = featurePlayer(s), map = s.map;
   if (rebels == null) return;
-  final mul = 1 + C.d('grow') * (wave - 1), arch = buildingOwner(s, 'arch');
+  final mul = 1 + C.d('grow') * (wave - 1), arch = buildingOwner(s, 'arch'), dens = _dens(s, 'coups');
   var mine = 0, total = 0;
   for (final player in s.players.toList()) {
     if (player.neutral || player.id == arch) continue;
@@ -548,12 +562,21 @@ void _coup(MatchState s, int wave) {
       d.owner = rebels.id;
       d.progress = 100;
       d.progressOwner = rebels.id;
-      for (final (i, j) in findFreeTiles(map, d.capture!.i, d.capture!.j, C.i('perDistrict'))) {
+      // مع المعابد: المتمردون يخرجون من أقرب حانة لم يحتلها لاعب ويسيرون إلى حيهم (_thinkRebels)
+      var from = d;
+      for (final t in dens ?? const <District>[]) {
+        double far(District x) => hypot((x.capture!.i - d.capture!.i).toDouble(), (x.capture!.j - d.capture!.j).toDouble());
+        if (from == d || far(t) < far(from)) from = t;
+      }
+      final band = <Unit>[];
+      for (final (i, j) in findFreeTiles(map, from.capture!.i, from.capture!.j, C.i('perDistrict'))) {
         final unit = createUnit(s, rebels, i, j);
         _boost(unit, null, mul);
         unit.raidFrom = d.id;
         s.units.add(unit);
+        band.add(unit);
       }
+      if (from != d && band.isNotEmpty) commandAttackMove(s, d.capture!.i.toDouble(), d.capture!.j.toDouble(), band, false);
       total++;
       if (player.id == s.humanId) mine++;
     }

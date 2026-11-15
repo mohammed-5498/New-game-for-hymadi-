@@ -45,7 +45,10 @@ int _groundOf(GameMap map, CityArt art, int i, int j, int k, int type, Map<Strin
   if (type == tDot && (kind == 'lane_i' || kind == 'lane_j')) {
     color = mix(color, hex(c['plaza']!), 0.8);                    // ممر مرصوف بين صفوف المباني
   } else if (kind == 'fplaza') {
-    color = mix(hex(c['plaza']!), hex('#d9c79c'), 0.35);          // ساحة المبنى المميز
+    // ساحة المبنى المميز، والمعبد بحجر ذهبي والمرتزقة بأرض مدكوكة (3.14)
+    final d = map.districtOf(i, j);
+    color = mix(hex(c['plaza']!), hex(d != null && d.temple ? '#e9cf88' : d != null && d.merc ? '#8f7252' : '#d9c79c'),
+        d != null && (d.temple || d.merc) ? 0.42 : 0.35);
   } else if (map.city == 'norway') {
     if (hsh(i, j, 300, map.seed) < 0.5) color = hex('#dfe6eb');   // ثلج النرويجية (groundAt)
   } else if (hsh(i, j, 200, map.seed) < 0.3) {

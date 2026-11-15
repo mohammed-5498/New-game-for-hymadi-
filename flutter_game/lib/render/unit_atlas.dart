@@ -13,12 +13,16 @@ import '../data/unit_sprites.dart';
 
 class UnitAtlas {
   final ui.Image image;
-  final Map<String, double> sheetY;     // 'عصابة|لون' ← بداية صورتها المصبوغة في الأطلس
-  UnitAtlas(this.image, this.sheetY);
-  double? yOf(String gang, String color) => sheetY['$gang|$color'];
+  final Map<String, (double, double)> sheets;     // 'عصابة|لون' ← ركن صورتها المصبوغة في الأطلس
+  final Uint8List pixels;                         // نسخته في الذاكرة: يكبر بما ينقصه بلا صبغ ما فيه من جديد
+  final List<int> colY;
+  final missing = <(String, String)>{};           // ما طُلب رسمه ولا صورة له بعد (مجنّد بلون جديد...): يُضاف في الأطلس التالي
+  UnitAtlas(this.image, this.sheets, this.pixels, this.colY);
+  (double, double)? at(String gang, String color) => sheets['$gang|$color'];
 }
 
 const _white = 4;    // شريط أبيض أعلى الأطلس بارتفاعه
+const _col = 1024, _cols = 4;   // أربعة أعمدة بعرض الصورة (كلها حتى 1024): الأطلس عريض قصير فتسع المرتزقة بألوان اللاعبين
 
 Future<(Uint8List, int, int)> _load(String path) async {
   final data = await rootBundle.load(path);
@@ -41,23 +45,35 @@ Future<(Uint8List, int, int)> _load(String path) async {
 
 const _sectors = [[0, 3, 1], [2, 0, 1], [1, 0, 3], [1, 2, 0], [3, 1, 0], [0, 1, 2]];
 
-// pairs: (عصابة، لون) لكل لاعب في المباراة، والشرطة بلونها
-Future<UnitAtlas> buildUnitAtlas(Iterable<(String, String)> pairs) async {
+// pairs: (عصابة، لون) لكل ما يُرسم في المباراة. from: أطلس قائم يُضاف إليه ما ليس فيه
+Future<UnitAtlas> buildUnitAtlas(Iterable<(String, String)> pairs, [UnitAtlas? from]) async {
   final list = <(String, String)>[];
-  for (final p in pairs) { if (!list.contains(p) && SPRITE_GANGS.containsKey(p.$1)) list.add(p); }
+  for (final p in pairs) { if (!list.contains(p) && SPRITE_GANGS.containsKey(p.$1) && from?.at(p.$1, p.$2) == null) list.add(p); }
   final src = <String, (Uint8List, int, int)>{};
   for (final (gang, _) in list) {
     src[gang] ??= await _load((SPRITE_GANGS[gang] as J).s('src'));
   }
-  var width = 4, height = _white;
-  for (final (gang, _) in list) { width = math.max(width, src[gang]!.$2); height += (SPRITE_GANGS[gang] as J).i('h') + 2; }
-  final out = Uint8List(width * height * 4);
-  for (var y = 0; y < _white; y++) {
-    for (var x = 0; x < 4; x++) { out.fillRange((y * width + x) * 4, (y * width + x) * 4 + 4, 255); }
+  final colY = from != null ? [...from.colY] : List.filled(_cols, _white), spot = <(int, int)>[];
+  for (final (gang, _) in list) {
+    var c = 0;
+    for (var k = 1; k < _cols; k++) { if (colY[k] < colY[c]) c = k; }
+    spot.add((c * _col, colY[c]));
+    colY[c] += (SPRITE_GANGS[gang] as J).i('h') + 2;
   }
-  final sheetY = <String, double>{};
-  var oy = _white;
-  for (final (gang, color) in list) {
+  const width = _col * _cols;
+  final height = colY.reduce(math.max);
+  final out = Uint8List(width * height * 4);
+  if (from != null) {
+    out.setRange(0, from.pixels.length, from.pixels);
+  } else {
+    for (var y = 0; y < _white; y++) {
+      for (var x = 0; x < 4; x++) { out.fillRange((y * width + x) * 4, (y * width + x) * 4 + 4, 255); }
+    }
+  }
+  final sheets = <String, (double, double)>{...?from?.sheets};
+  for (var n = 0; n < list.length; n++) {
+    final (gang, color) = list[n];
+    final (ox, oy) = spot[n];
     final g = SPRITE_GANGS[gang] as J, h = g.i('h');
     final (px, w, _) = src[gang]!;
     final (hue, sat, val) = _hexHsv(color);
@@ -66,7 +82,7 @@ Future<UnitAtlas> buildUnitAtlas(Iterable<(String, String)> pairs) async {
     final half = w * h * 4;
     for (var y = 0; y < h; y++) {
       for (var x = 0; x < w; x++) {
-        final i = (y * w + x) * 4, o = ((oy + y) * width + x) * 4;
+        final i = (y * w + x) * 4, o = ((oy + y) * width + ox + x) * 4;
         double r = px[i].toDouble(), gg = px[i + 1].toDouble(), b = px[i + 2].toDouble();
         final a = px[i + 3];
         final m = px[i + half + 3] / 255;
@@ -80,10 +96,9 @@ Future<UnitAtlas> buildUnitAtlas(Iterable<(String, String)> pairs) async {
         out[o] = (r * a / 255).round(); out[o + 1] = (gg * a / 255).round(); out[o + 2] = (b * a / 255).round(); out[o + 3] = a;
       }
     }
-    sheetY['$gang|$color'] = oy.toDouble();
-    oy += h + 2;
+    sheets['$gang|$color'] = (ox.toDouble(), oy.toDouble());
   }
   final done = Completer<ui.Image>();
   ui.decodeImageFromPixels(out, width, height, ui.PixelFormat.rgba8888, done.complete);
-  return UnitAtlas(await done.future, sheetY);
+  return UnitAtlas(await done.future, sheets, out, colY);
 }

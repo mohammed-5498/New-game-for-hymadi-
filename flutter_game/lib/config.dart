@@ -174,6 +174,11 @@ const TEMPLES = <String, Object?>{
     'hp': 1.25, 'kinds': <String, Object?>{'triads': 'triadGuard', 'clinic': 'doctor', 'hunters': 'trollHunter', 'mercs': 'blade'}},
   // ما تجنّده مباني المرتزقة القديمة إضافة لما تجنّده الآن
   'extraRecruits': <String, Object?>{'village': ['janbiya'], 'hunters': ['trollHunter']},
+  // أماكن ثابتة مربعة (بالمربعات، وحولها شارع): المعبد في الوسط، والمرتزقة في الزوايا، وقواعد اللاعبين على دائرة
+  // بأبعاد متساوية (نصف قطرها نسبة من الخريطة، من ringMax نزولاً حتى تتسع)، وما بقي من مبنى المدينة القديم بين قاعدتين
+  'layout': <String, Object?>{'home': 4, 'temple': 5, 'merc': 4, 'extra': 4, 'ringMax': 0.40, 'ringMin': 0.20, 'ringStep': 0.01},
+  // موجات قطاع الطرق ومتمردو الانقلاب يخرجون من مبانيهم ما لم يحتلها لاعب (من يحتلها يغلقها)
+  'dens': <String, Object?>{'bandits': ['koreanCamp', 'kanoCamp'], 'coups': ['apache']},
   // مزايا المعابد الجديدة
   'awwam': <String, Object?>{'perVillage': 1.0},
   'sensoji': <String, Object?>{'ultCharge': 1.25},
