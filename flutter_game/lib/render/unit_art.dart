@@ -178,6 +178,14 @@ J? _saudiSniper;
 }
 
 final _descs = <String, _Desc?>{};
+// وصف كل شخصية في صور المباراة عند التحميل، لا عند أول ظهور لها في القتال (كان يؤخر إطاراً)
+void warmDescribe(Iterable<String> gangs) {
+  for (final g in gangs.toSet()) {
+    final units = (SPRITE_GANGS[g] as J?)?.mm('units');
+    if (units == null) continue;
+    for (final key in units.keys) { describe(key); describe('${key}_away'); }
+  }
+}
 _Desc? describe(String key) {
   if (_descs.containsKey(key)) return _descs[key];
   final away = key.endsWith('_away'), base = away ? key.substring(0, key.length - 5) : key;
@@ -240,12 +248,20 @@ String spriteGang(String gang, String? nation) => nation != null && SPRITE_GANGS
 List<(String, String)> atlasPairs(MatchState s) {
   final rivals = [for (final p in s.players) if (p.feature == null && p.gang != 'police') p.color];
   final kinds = {for (final d in s.map.districts) ...?recruitsAt(d)};
+  final policeId = s.players.indexWhere((p) => p.gang == 'police'), main = s.map.districts.any((d) => d.policeMain);
   return [
-    for (final p in s.players) if (!p.passive) (spriteGang(p.gang, p.nation), p.gang == 'police' ? _ART.s('policeColor') : p.color),
+    for (final p in s.players) (spriteGang(p.gang, p.nation), p.gang == 'police' ? _ART.s('policeColor') : p.color),   // والمسالمون (الكرنفال وجمهور الديربي)
     for (final u in s.units) if (describe(artKey(u)) case final d?) (d.gang, artColor(u)),
     for (final k in kinds)
       if (FEATURES.m('recruits').mm(k) case final R? when R['creature'] == null)
         for (final c in rivals) (R.ss('gang') ?? spriteGang(nations.m(R.s('nation')).s('style'), R.s('nation')), c),
+    // من ينضم لمن يحتل حيّه بلونه: أهل القرى، وشرطة المركز الرئيسي في روتنبورغ (فلا يُصبغ أطلس جديد أثناء القتال)
+    for (final u in s.units)
+      if (s.players[u.playerId].passive || (u.playerId == policeId && main))
+        if (describe(artKey(u)) case final d?) for (final c in rivals) (d.gang, c),
+    // مقاتلو الترياد بلون من يستدعيهم
+    if (s.map.districts.any((d) => d.feature == 'triads'))
+      for (final c in rivals) (spriteGang(nations.m(FEATURES.m('triads').s('nation')).s('style'), FEATURES.m('triads').s('nation')), c),
   ];
 }
 

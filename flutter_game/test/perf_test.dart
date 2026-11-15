@@ -1,5 +1,5 @@
 // قياس كلفة الإطار على المعالج (للفحص فقط، لا يدخل الفحص العادي: flutter test test/perf_test.dart)
-// مباراة أربعة لاعبين بعد دقيقتين ونصف، والكاميرا على أكبر اشتباك: زمن التحديث، وزمن بناء الإطار بأقسامه
+// مباراة أربعة لاعبين (أنت وثلاثة بوتات، بضباب الحرب كما في اللعب) بعد دقيقتين ونصف، والكاميرا على أكبر اشتباك: زمن التحديث، وزمن بناء الإطار بأقسامه
 @Tags(['perf'])
 library;
 
@@ -24,11 +24,11 @@ void main() {
     addTearDown(tester.view.reset);
     final key = GlobalKey<MatchScreenState>();
     await tester.runAsync(() => tester.pumpWidget(MaterialApp(home: MatchScreen(key: key, settings: {
-      'seed': 777, 'mapSize': 'medium', 'city': 'rio', 'weather': 'night', 'mode': 'conquest', 'maxUnits': 100, 'ff': 240.0, 'watch': true,
+      'seed': 777, 'mapSize': 'medium', 'city': 'rio', 'weather': 'night', 'mode': 'conquest', 'maxUnits': 100, 'ff': 240.0, 'watch': true, 'fog': true,
       'players': [
         for (var k = 0; k < 4; k++)
           {'name': 'p$k', 'gang': ['crows', 'hammers', 'vipers', 'scorpions'][k], 'nation': k == 1 ? 'brazil' : null,
-            'color': ['blue', 'red', 'green', 'yellow'][k], 'isHuman': false, 'team': 0, 'difficulty': 'hard'},
+            'color': ['blue', 'red', 'green', 'yellow'][k], 'isHuman': k == 0, 'team': 0, 'difficulty': 'hard'},
       ],
     }))));
     await tester.runAsync(() async {
@@ -50,11 +50,14 @@ void main() {
       if (k % 3 == 0) updateMatch(s);
       key.currentState!.alpha = (k % 3) / 3;
       if (k % 3 == 0) sims.add(sw.elapsedMicroseconds);
-      final before = Map.of(probe);
+      final before = Map.of(probe), h0 = key.currentState!.hud.value;
       sw.reset();
       await tester.pump(const Duration(milliseconds: 17));
       frames.add(sw.elapsedMicroseconds);
-      worst.add((sw.elapsedMicroseconds, {for (final e in probe.entries) if (e.value - (before[e.key] ?? 0) > 300) e.key: e.value - (before[e.key] ?? 0)}));
+      worst.add((sw.elapsedMicroseconds, {
+        for (final e in probe.entries) if (e.value - (before[e.key] ?? 0) > 300) e.key: e.value - (before[e.key] ?? 0),
+        if (key.currentState!.hud.value != h0) 'HUD': 0,
+      }));
     }
     worst.sort((a, b) => b.$1 - a.$1);
     // ignore: avoid_print

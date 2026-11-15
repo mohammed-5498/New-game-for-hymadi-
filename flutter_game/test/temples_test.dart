@@ -5,6 +5,7 @@ import 'dart:math' as math;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gangcity/core/fmath.dart';
+import 'package:gangcity/game/combat.dart' show isEnemyId;
 import 'package:gangcity/game/features.dart';
 import 'package:gangcity/game/match.dart';
 import 'package:gangcity/game/modes.dart';
@@ -81,6 +82,11 @@ void main() {
     simRng = Rng(9);
     _run(c2, 60);
     expect(hashState(c1), hashState(c2));
+    // حراس المرتزقة والشرطة لا يتقاتلون (بطلب المستخدم)، ويبقون أعداء للاعبين
+    final guards = a.players.firstWhere((p) => p.feature == 'guards'), police = a.players.firstWhere((p) => p.gang == 'police');
+    expect(isEnemyId(a, guards.id, police.id), isFalse);
+    expect(isEnemyId(a, police.id, guards.id), isFalse);
+    expect(isEnemyId(a, guards.id, 0), isTrue);
     // من يحتل معبد الباغودا يأخذ ميزته
     final t = a.map.districts.firstWhere((d) => d.temple);
     t..owner = 0..progress = 100..progressOwner = 0;

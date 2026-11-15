@@ -90,7 +90,8 @@ const PACE = (calmFps: 30.0, activeMs: 2000, menuFps: 20.0, unitHz: 30.0);   // 
 // رصد كل جندي unitSight مربعاً على الأقل (أو رصده إن كان أبعد) بحافة ناعمة عرضها soft، وأحياؤك ومناطقها ظاهرة.
 // المستكشف الذي لا يُرى الآن بعتمة explored (تخفي المباني)، وما لم يُستكشف أسود. وminLift: أقل ارتفاع يغطيه الضباب فوق
 // المربع (رأس الجندي)، وblur تنعيم الطبقة كلها بوحدات العالم. يُحسب كل every ثانية من زمن المباراة، والمستكشف يُحفظ مع المباراة في key ---
-const FOG = (unitSight: 6.0, soft: 2.0, explored: 0.84, minLift: 10.0, blur: 6.0, every: 0.1, key: 'gangcity.matchFog');
+// bake: دقة صورة الضباب الجاهزة (مقابل وحدات العالم): تُرسم مع كل حساب (every) ويعرضها كل إطار كما هي
+const FOG = (unitSight: 6.0, soft: 2.0, explored: 0.84, minLift: 10.0, blur: 6.0, every: 0.1, key: 'gangcity.matchFog', bake: 0.5);
 
 // --- الكاميرا ---
 const CAMERA = (minZoom: 0.8, maxZoom: 4.5, startZoom: 2.2);

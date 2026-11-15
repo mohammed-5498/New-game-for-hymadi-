@@ -26,6 +26,8 @@ class MatchHud extends StatelessWidget {
   final MatchScreenState screen;
   const MatchHud({super.key, required this.screen});
 
+  // كل جزء من الواجهة (_Memo) يُبنى ويُرسم من جديد حين يتغير ما يعرضه وحده: كانت الواجهة كلها تُبنى مرتين في الثانية
+  // (الأزرار والمجموعات وشريط القوة...) فيتأخر إطار في القتال
   @override
   Widget build(BuildContext context) => ValueListenableBuilder<int>(
     valueListenable: screen.hud,
@@ -33,42 +35,46 @@ class MatchHud extends StatelessWidget {
       final s = screen.state!;
       final me = s.humanId >= 0 ? s.players[s.humanId] : null;
       final bar = modeBar(s);
+      final points = me != null && s.empire != null ? s.empire!.points[me.id].floor() : null, income = points == null ? '' : incomeOf(s, me!.id).toStringAsFixed(1);
       return Stack(children: [
         // الصف الأعلى: الزمن والمدينة والنقاط يساراً، والأزرار يميناً، وشريط الطور في المساحة بينهما وحدها (يصغر ولا يتداخل)
         Positioned(top: 6, left: 6, right: 6, child: Row(textDirection: TextDirection.ltr, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          _Box(child: Text('${clock(s.time)} • ${cityShort(s.map.city)}', style: const TextStyle(color: ink, fontSize: 12))),
-          if (me != null && s.empire != null) ...[
+          _Memo('clock', clock(s.time), () => RepaintBoundary(child: _Box(child: Text('${clock(s.time)} • ${cityShort(s.map.city)}', style: const TextStyle(color: ink, fontSize: 12))))),
+          if (points != null) ...[
             const SizedBox(width: 4),
-            _Box(child: Row(mainAxisSize: MainAxisSize.min, children: [
+            _Memo('points', '$points|$income', () => _Box(child: Row(mainAxisSize: MainAxisSize.min, children: [
               const Icon(Icons.toll, size: 14, color: gold), const SizedBox(width: 3),
-              Text(s.empire!.points[me.id].floor().toString(), style: const TextStyle(color: gold, fontSize: 13, fontWeight: FontWeight.w700)),
-              Text('  +${incomeOf(s, me.id).toStringAsFixed(1)}/ث', style: const TextStyle(color: dim, fontSize: 11)),
-            ])),
+              Text('$points', style: const TextStyle(color: gold, fontSize: 13, fontWeight: FontWeight.w700)),
+              Text('  +$income/ث', style: const TextStyle(color: dim, fontSize: 11)),
+            ]))),
           ],
-          Expanded(child: Center(child: bar != null ? FittedBox(fit: BoxFit.scaleDown, child: _ModeBarBox(bar)) : const SizedBox())),
-          _Btn(icon: Icons.highlight_alt, on: screen.selectMode, tip: 'تحديد', onTap: () { screen.selectMode = !screen.selectMode; screen.hud.value++; }),
-          _Btn(icon: Icons.groups, tip: 'كل جنودك', onTap: () {
-            for (final u in s.units) { u.selected = u.playerId == s.humanId && u.state != 'dead'; }
-            screen.hud.value++;
-          }),
-          _Btn(icon: Icons.fort, tip: 'القاعدة', onTap: () => _nextHq(s)),
-          _Btn(icon: screen.paused ? Icons.play_arrow : Icons.pause, tip: 'إيقاف', onTap: () => screen.paused ? screen.closePause() : screen.openPause()),
+          Expanded(child: _Memo('bar', bar == null ? '' : '${bar.text}|${bar.alarm}|${[for (final (c, r, m) in bar.bars) '$c${(r * 150).round()}$m'].join()}',
+              () => Center(child: bar != null ? FittedBox(fit: BoxFit.scaleDown, child: _ModeBarBox(bar)) : const SizedBox()))),
+          _Memo('buttons', '${screen.selectMode}|${screen.paused}', () => Row(mainAxisSize: MainAxisSize.min, textDirection: TextDirection.ltr, children: [
+            _Btn(icon: Icons.highlight_alt, on: screen.selectMode, tip: 'تحديد', onTap: () { screen.selectMode = !screen.selectMode; screen.hud.value++; }),
+            _Btn(icon: Icons.groups, tip: 'كل جنودك', onTap: () {
+              for (final u in s.units) { u.selected = u.playerId == s.humanId && u.state != 'dead'; }
+              screen.hud.value++;
+            }),
+            _Btn(icon: Icons.fort, tip: 'القاعدة', onTap: () => _nextHq(s)),
+            _Btn(icon: screen.paused ? Icons.play_arrow : Icons.pause, tip: 'إيقاف', onTap: () => screen.paused ? screen.closePause() : screen.openPause()),
+          ])),
         ])),
-        // أسهم الحافة: زعماء الأعداء ذهبية، والتنبيهات حمراء (جنودك يُضربون خارج الشاشة، وزعيمك)
-        Positioned.fill(child: IgnorePointer(child: RepaintBoundary(child: CustomPaint(painter: _EdgeArrows(screen))))),
+        // أسهم الحافة: زعماء الأعداء ذهبية، والتنبيهات حمراء (جنودك يُضربون خارج الشاشة، وزعيمك). ترسم نفسها كل إطار
+        _Memo('arrows', 0, () => Positioned.fill(child: IgnorePointer(child: RepaintBoundary(child: CustomPaint(painter: _EdgeArrows(screen)))))),
         // اللعب المحلي: المضيف أوقف المباراة، أو لا يصل دور جديد منه
-        if (screen.lanText case final t?) Positioned(top: 84, left: 0, right: 0, child: IgnorePointer(child: Center(child: _Box(
-            child: Text(t, style: const TextStyle(color: gold, fontSize: 13, fontWeight: FontWeight.w700)))))),
+        if (screen.lanText case final t?) _Memo('lan', t, () => Positioned(top: 84, left: 0, right: 0, child: IgnorePointer(child: Center(child: _Box(
+            child: Text(t, style: const TextStyle(color: gold, fontSize: 13, fontWeight: FontWeight.w700))))))),
         // الإشعار تحت الصف الأعلى في الوسط، صغيراً ولا يلتقط اللمس
-        if (s.notice != null) Positioned(top: 46, left: 200, right: 200, child: IgnorePointer(child: Center(child: _Box(
-            child: Text(s.notice!.text, textAlign: TextAlign.center, maxLines: 2,
-                style: TextStyle(color: s.notice!.mine ? gold : ink, fontSize: 12, fontWeight: FontWeight.w600)))))),
+        if (s.notice case final n?) _Memo('notice', '${n.text}|${n.mine}', () => Positioned(top: 46, left: 200, right: 200, child: IgnorePointer(child: Center(child: _Box(
+            child: Text(n.text, textAlign: TextAlign.center, maxLines: 2,
+                style: TextStyle(color: n.mine ? gold : ink, fontSize: 12, fontWeight: FontWeight.w600))))))),
         // شريط القوة يساراً: لمسة تطويه إلى سطرك وحدك
-        Positioned(top: 44, left: 6, child: _Power(s)),
+        _Memo('power', _powerSig(s), () => Positioned(top: 44, left: 6, child: RepaintBoundary(child: _Power(s)))),
         // مجموعات التحكم على الحافة اليمنى
-        Positioned(right: 8, top: 0, bottom: 0, child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+        _Memo('groups', _groupSig(s), () => Positioned(right: 8, top: 0, bottom: 0, child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
           for (var g = 1; g <= 5; g++) _Group(screen, g),
-        ]))),
+        ])))),
         if (screen.menuDistrict != null) Positioned(left: 0, right: 0, bottom: 8, child: Center(child: _EmpireMenu(screen, screen.menuDistrict!))),
         if (screen.paused && s.matchResult == null) Positioned.fill(child: _Pause(screen)),
         if (s.matchResult != null) Positioned.fill(child: _End(screen, s.matchResult!)),
@@ -85,6 +91,48 @@ class MatchHud extends StatelessWidget {
     for (final u in s.units) { u.selected = false; }
     screen.menuDistrict = d.id;
     screen.hud.value++;
+  }
+}
+
+// ما يعرضه شريط القوة ومجموعات التحكم، لمعرفة هل تغيّر
+String _powerSig(MatchState s) {
+  final col = powerColumn(s), b = StringBuffer('$powerFolded');
+  if (col != null) { for (final (l, v) in col.summary) { b..write(l)..write(v); } }
+  for (final p in s.players) {
+    if (p.neutral) continue;
+    b..write('|')..write(isPlayerAlive(s, p.id))..write(ownedDistricts(s, p.id).length)..write(',')..write(countUnits(s, p.id));
+    if (col != null) b..write(',')..write(col.show(col.value(p.id)));
+    if (col?.bar case final bar?) b..write(',')..write((bar(p.id) * 34).round());
+  }
+  return b.toString();
+}
+
+String _groupSig(MatchState s) {
+  final n = List.filled(6, 0);
+  for (final u in s.units) { if (u.group > 0 && u.group < 6 && u.state != 'dead') n[u.group]++; }
+  return n.join(',');
+}
+
+// جزء من الواجهة يعيد ما بناه نفسه ما دام مفتاحه sig كما هو، فلا يُبنى ما تحته ولا يُرسم (وطبقته وحدها حين يتغير).
+// الاسم مفتاحه بين إخوته، فلا يأخذ جزء ما بناه غيره إن ظهر إشعار أو اختفى
+class _Memo extends StatefulWidget {
+  final Object sig;
+  final Widget Function() make;
+  _Memo(String name, this.sig, this.make) : super(key: ValueKey(name));
+  @override
+  State<_Memo> createState() => _MemoState();
+}
+
+class _MemoState extends State<_Memo> {
+  Object? _sig;
+  Widget? _built;
+  @override
+  Widget build(BuildContext context) {
+    if (_built == null || _sig != widget.sig) {
+      _sig = widget.sig;
+      _built = widget.make();
+    }
+    return _built!;
   }
 }
 

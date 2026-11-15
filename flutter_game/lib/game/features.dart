@@ -1678,8 +1678,11 @@ Player? createGuardsPlayer(List<Player> players, String city) {
   final pair = TEMPLES_OF[city];
   if (pair == null || _guardKind(pair) == null) return null;
   final G = _T.m('guards');
+  // صديق الشرطة (بطلب المستخدم): حراس المرتزقة والشرطة لا يتقاتلون
+  final police = players.where((p) => p.gang == 'police').firstOrNull;
   return Player(id: players.length, name: G.s('name'), gang: 'crows', gangName: G.s('name'), color: G.s('color'))
     ..neutral = true
+    ..friendOf = police?.id ?? -1
     ..feature = 'guards';
 }
 final TEMPLES_OF = {for (final e in (TEMPLES['cities'] as J).entries) e.key: (e.value as List)[1] as String};

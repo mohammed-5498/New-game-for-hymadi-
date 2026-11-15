@@ -20,8 +20,6 @@ class Fog {
   final Float32List vis, dark;          // لكل ركن بين المربعات ((n+1)²): الرؤية (0-1) والعتمة المرسومة
   Float32List lift, wide;               // ارتفاع ما على كل مربع ونصف عرضه (من CityLayer، ويتبدلان معها)
   double _at = -1;
-  Float32List _pos = Float32List(0);
-  Int32List _col = Int32List(0);
   static final _src = ui.Paint()..blendMode = ui.BlendMode.src;
   static final _layer = ui.Paint()..imageFilter = ui.ImageFilter.blur(sigmaX: FOG.blur, sigmaY: FOG.blur);
   Fog(this.n, this.me, this.lift, this.wide)
@@ -110,52 +108,79 @@ class Fog {
     }
   }
 
-  // الطبقة كلها بين حدود الشاشة (بوحدات العالم)، من الصف الخلفي إلى الأمامي
-  void paint(ui.Canvas canvas, double left0, double right0, double top0, double bottom0) {
-    const hw = TILE_HALF_W, hh = TILE_HALF_H;
-    final m = n + 1, minLift = FOG.minLift, pad = 3 * FOG.blur + hw;   // ما يسحبه التنعيم من خارج الشاشة
-    final left = left0 - pad, right = right0 + pad, top = top0 - pad, bottom = bottom0 + pad;
-    final d0 = ((top - hh) / hh).floor(), d1 = ((bottom + 160) / hh).ceil();
-    var v = 0, any = false;
-    void grow(int more) {
-      if (v + more <= _col.length) return;
-      final cap = math.max(_col.length * 2, v + more + 1024);
-      _pos = Float32List(cap * 2)..setRange(0, v * 2, _pos);
-      _col = Int32List(cap)..setRange(0, v, _col);
-    }
-    int argb(double a) => ((a.clamp(0.0, 1.0) * 255).round() << 24).toSigned(32);
-    void tri(double x1, double y1, double a1, double x2, double y2, double a2, double x3, double y3, double a3) {
-      final o = v * 2;
-      _pos[o] = x1; _pos[o + 1] = y1; _pos[o + 2] = x2; _pos[o + 3] = y2; _pos[o + 4] = x3; _pos[o + 5] = y3;
-      _col[v] = argb(a1); _col[v + 1] = argb(a2); _col[v + 2] = argb(a3);
-      v += 3;
-    }
-    // ومعها حلقة سوداء خارج الخريطة (out مربعات) حتى لا يسحب التنعيم ضوء حافتها إلى الضباب
-    const out = 3;
-    for (var d = d0; d <= d1; d++) {
+  // الضباب صورة جاهزة للخريطة كلها (بنصف الدقة ومنعّمة) تُرسم من جديد حين تتغير عتمته أو ارتفاعات مبانيها (كل حساب
+  // على الأكثر، أي 10 مرات في الثانية)، وكل إطار يعرضها كما هي: لا حساب ولا تنعيم على كرت الشاشة مع كل إطار
+  ui.Image? _img;
+  ui.Rect _rect = ui.Rect.zero;
+  Float32List? _shown;                 // العتمة التي في الصورة الآن
+  Float32List? _liftShown;
+  static final _imgPaint = ui.Paint()..filterQuality = ui.FilterQuality.low;
+
+  void paint(ui.Canvas canvas, double left, double right, double top, double bottom) {
+    if (_img == null || !_same(_shown, dark) || !_same(_liftShown, lift)) _bake();
+    final img = _img;
+    if (img == null) return;
+    canvas.drawImageRect(img, ui.Rect.fromLTWH(0, 0, img.width.toDouble(), img.height.toDouble()), _rect, _imgPaint);
+  }
+
+  static bool _same(Float32List? a, Float32List b) {
+    if (a == null || a.length != b.length) return false;
+    for (var k = 0; k < b.length; k++) { if (a[k] != b[k]) return false; }
+    return true;
+  }
+
+  // شكل الضباب (مثلثات كل مربع وما فوقه حتى أعلى صورته) يُبنى مرة ويُعاد حين تتغير ارتفاعات المباني وحدها،
+  // ولكل رأس ركنه من مصفوفة العتمة (−1 خارج الخريطة: أسود)، فإعادة الصورة تلوين الرؤوس وحده
+  Float32List _gpos = Float32List(0);
+  Int32List _corner = Int32List(0), _gcol = Int32List(0);
+
+  void _shape() {
+    const hw = TILE_HALF_W, hh = TILE_HALF_H, out = 3;   // وحلقة سوداء خارج الخريطة حتى لا يسحب التنعيم ضوء حافتها
+    final m = n + 1, minLift = FOG.minLift;
+    final pos = <double>[], corner = <int>[];
+    var top = double.infinity;
+    for (var d = -2 * out; d <= 2 * (n - 1 + out); d++) {
       final y = d * hh;
       for (var i = math.max(-out, d - n + 1 - out); i <= math.min(d + out, n - 1 + out); i++) {
         final j = d - i, x = (i - j) * hw;
         if (j < -out || j > n - 1 + out) continue;
-        final inside = i >= 0 && j >= 0 && i < n && j < n, k = inside ? j * n + i : -1, w = inside ? wide[k] : hw;
-        if (x + w < left || x - w > right) continue;
-        final aT = inside ? dark[j * m + i] : 1.0, aR = inside ? dark[j * m + i + 1] : 1.0;
-        final aB = inside ? dark[(j + 1) * m + i + 1] : 1.0, aL = inside ? dark[(j + 1) * m + i] : 1.0;
-        if (inside && aT + aR + aB + aL > 0) any = true;
-        final t = y - hh - (inside ? math.max(lift[k], minLift) : minLift);
-        grow(9);
+        final inside = i >= 0 && j >= 0 && i < n && j < n, kk = inside ? j * n + i : -1, w = inside ? wide[kk] : hw;
+        final cR = inside ? j * m + i + 1 : -1, cB = inside ? (j + 1) * m + i + 1 : -1, cL = inside ? (j + 1) * m + i : -1;
+        final t = y - hh - (inside ? math.max(lift[kk], minLift) : minLift);
+        top = math.min(top, t);
         // أرض المربع، ثم ما فوقه مستطيل بعرض صورته حتى أعلاها (المداخن وأطراف السطح والمبنى الأعرض من مربعه)
-        tri(x - hw, y, aL, x, y + hh, aB, x + hw, y, aR);
-        tri(x - w, y, aL, x + w, y, aR, x + w, t, aR);
-        tri(x - w, y, aL, x + w, t, aR, x - w, t, aL);
+        pos.addAll([x - hw, y, x, y + hh, x + hw, y, x - w, y, x + w, y, x + w, t, x - w, y, x + w, t, x - w, t]);
+        corner.addAll([cL, cB, cR, cL, cR, cR, cL, cR, cL]);
       }
     }
-    if (!any || v == 0) return;   // كل ما على الشاشة ظاهر
-    final verts = ui.Vertices.raw(ui.VertexMode.triangles, Float32List.sublistView(_pos, 0, v * 2), colors: Int32List.sublistView(_col, 0, v));
-    // والطبقة تُنعَّم كلها (blur بوحدات العالم) فتختفي حواف المربعات وتصير الحافة ضباباً
-    canvas.saveLayer(ui.Rect.fromLTRB(left - hw, top - 200, right + hw, bottom + 200), _layer);
-    canvas.drawVertices(verts, ui.BlendMode.dst, _src);
-    canvas.restore();
-    verts.dispose();
+    final pad = 3 * FOG.blur, half = (n - 1 + 2 * out) * hw + 2 * hw;
+    _rect = ui.Rect.fromLTRB(-half - pad, top - pad, half + pad, (2 * (n - 1 + out)) * hh + hh + pad);
+    _gpos = Float32List.fromList(pos);
+    _corner = Int32List.fromList(corner);
+    _gcol = Int32List(corner.length);
+    _liftShown = Float32List.fromList(lift);
   }
+
+  void _bake() {
+    if (!_same(_liftShown, lift) || _gpos.isEmpty) _shape();
+    final k = FOG.bake, col = _gcol, corner = _corner, d = dark;
+    for (var v = 0; v < col.length; v++) {
+      final c = corner[v], a = c < 0 ? 1.0 : d[c];
+      col[v] = ((a.clamp(0.0, 1.0) * 255).round() << 24).toSigned(32);
+    }
+    final verts = ui.Vertices.raw(ui.VertexMode.triangles, _gpos, colors: col);
+    final rec = ui.PictureRecorder(), c = ui.Canvas(rec);
+    c.scale(k);
+    c.translate(-_rect.left, -_rect.top);
+    // والطبقة تُنعَّم كلها (blur بوحدات العالم) فتختفي حواف المربعات وتصير الحافة ضباباً
+    c.saveLayer(_rect, _layer);
+    c.drawVertices(verts, ui.BlendMode.dst, _src);
+    c.restore();
+    _img?.dispose();
+    _img = rec.endRecording().toImageSync((_rect.width * k).ceil(), (_rect.height * k).ceil());
+    verts.dispose();
+    _shown = Float32List.fromList(dark);
+  }
+
+  void dispose() { _img?.dispose(); _img = null; }
 }

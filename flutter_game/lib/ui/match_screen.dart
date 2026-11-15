@@ -118,6 +118,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     _rest?.cancel();
     _ticker.dispose();
     layer?.dispose();
+    fog?.dispose();
     art?.dispose();
     units?.image.dispose();
     super.dispose();
@@ -192,6 +193,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
       // ضباب الحرب من إعداد المباراة، وطور القصة بآخر إعداد (2.0.5). والمستكشف يعود مع المباراة المحفوظة
       final on = settings['fog'] == true;
       if (on && s.humanId >= 0) {
+        fog?.dispose();
         fog = Fog(s.map.n, s.humanId, layer!.lift, layer!.wide);
         if (widget.resume) fog!.restore(Prefs.raw(FOG.key));
         fog!.update(s, force: true);
@@ -363,7 +365,9 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
       alpha = _acc / TICK_SEC;
     }
     if (settings['watch'] == true && _ticks % 20 == 0) _watch(s);
+    final p0 = perfProbe, f0 = p0 == null ? 0 : _clockUs();
     fog?.update(s);
+    if (p0 != null) p0['fogUpdate'] = (p0['fogUpdate'] ?? 0) + _clockUs() - f0;
     // مستوى القاعدة يتبع ترقيات جنود مالكها ومن يحتلها أيضاً، لا ترقيات المبنى وحدها
     final sig = _hqTiers(s);
     if (s.mapVersion != _mapVersion || sig != _hqSig) {
@@ -376,13 +380,16 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
           if (d.building == 'hq' && d.capture != null) s.map.idx(d.capture!.i, d.capture!.j),
         ]
       ];
+      final r0 = p0 == null ? 0 : _clockUs();
       if (layer?.refreshTiles(s.map, art!, tiles, s) ?? true) {
         layer?.refreshWalls(s.map, art!);
       } else {
         layer?.dispose();
         layer = CityLayer(s.map, art!, s.weather, s);
         fog?..lift = layer!.lift..wide = layer!.wide;
+        if (p0 != null) p0['FULLREBUILD'] = (p0['FULLREBUILD'] ?? 0) + 1000;
       }
+      if (p0 != null) p0['refresh'] = (p0['refresh'] ?? 0) + _clockUs() - r0;
     }
     final c = s.camera;
     if (c.x != _camX || c.y != _camY || c.z != _camZ) { _camX = c.x; _camY = c.y; _camZ = c.z; markActive(); }
@@ -657,6 +664,7 @@ void warmMatchArt(MatchState s) {
     popImage(t, C.s(k));
   }
   if (s.feature == 'storm') popImage(CITY_FEATURES.m('storm').s('pop'), C.s('miss'));
+  warmDescribe([for (final (g, _) in atlasPairs(s)) g]);
   for (final u in s.units) {
     final show = u.stats['showoff'];
     if (show is Map && show['pop'] is String) popImage(show['pop'] as String, C.s('show'));
