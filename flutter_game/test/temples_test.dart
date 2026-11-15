@@ -87,6 +87,13 @@ void main() {
     expect(isEnemyId(a, guards.id, police.id), isFalse);
     expect(isEnemyId(a, police.id, guards.id), isFalse);
     expect(isEnemyId(a, guards.id, 0), isTrue);
+    // وحراس الحصن والدوجو (طرف الميزة) كذلك، كما في صورة غوندر
+    for (final city in ['gondar', 'japan']) {
+      final g = _match(city, 3), fp = g.players.firstWhere((p) => p.feature == 'fortress' || p.feature == 'dojo');
+      final pol = g.players.firstWhere((p) => p.gang == 'police');
+      expect(isEnemyId(g, fp.id, pol.id), isFalse, reason: city);
+      expect(isEnemyId(g, fp.id, 0), isTrue, reason: city);
+    }
     // من يحتل معبد الباغودا يأخذ ميزته
     final t = a.map.districts.firstWhere((d) => d.temple);
     t..owner = 0..progress = 100..progressOwner = 0;

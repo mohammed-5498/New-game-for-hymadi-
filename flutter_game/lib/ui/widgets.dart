@@ -1,5 +1,7 @@
 // عناصر القوائم المشتركة (style.css في اللعبة الحالية): لوحة داكنة دافئة بذهبي، وأزرار 52 بكسل، وخط 16
 import 'dart:async';
+import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart' show Ticker;
@@ -160,10 +162,15 @@ class PickerSheet extends StatelessWidget {
 
 // إيقاع أقل من الشاشة فعلاً: بعد كل إطار مرسوم تُكتم التكتكة حتى موعد التالي، فلا يركّب المحرك إطارات لا تتغير
 // (تخطي الرسم وحده كان يتركه يركّب كل إطارات الشاشة). وTickerMode صاحب الكلمة: لا تُفتح التكتكة وشاشتها مخفية
+// وشاشات 90 و120 هرتز: الحد 60 فيها أيضاً (2.1.1، كانت تُرسم بإيقاع الشاشة كله فيتضاعف العمل)
+final _hz = () {
+  final r = ui.PlatformDispatcher.instance.displays.firstOrNull?.refreshRate ?? 60;
+  return r < 30 ? 60.0 : r;
+}();
 Timer? restTicker(Ticker t, double fps, BuildContext context) {
-  if (fps >= 60) return null;
+  if (fps >= _hz - 1) return null;
   t.muted = true;
-  return Timer(Duration(microseconds: (1e6 / fps - 8000).round()), () => wakeTicker(t, context));
+  return Timer(Duration(microseconds: (1e6 / fps - math.min(8000, 750000 / _hz)).round()), () => wakeTicker(t, context));
 }
 
 void wakeTicker(Ticker t, BuildContext context) {

@@ -9,6 +9,7 @@ import '../data/unit_sprites.dart';
 import '../game/features.dart' show FEATURES, recruitsAt;
 import '../game/realism.dart' show fightStyle, fightBig, hitstopOf;
 import '../game/state.dart';
+import '../game/units.dart' show createUnit;
 import 'batch.dart';
 import 'pose.dart';
 import '../data/rig_sprites.dart';
@@ -680,6 +681,51 @@ void _dust(TriBatch b, double x, double g, double s) {
     final an = i * 2.1 + 0.6, d = (2 + g * 5) * s;
     b.ellipse(x + math.cos(an) * d * 1.4, -1 - g * 2 * s + math.sin(an) * d * 0.35, (2.2 + g * 2.6) * s, (1.2 + g * 1.2) * s, 0xcdbb98, 0.55 * (1 - g));
   }
+}
+
+// تسخين الحركات قبل المباراة (2.1.1، بطلب المستخدم: "قم بتحميل الحركات والانميشين للشخصيات قبل بدء المباراه"):
+// كل نوع جندي يمكن أن يظهر (عادي وأبطال عصابة كل لاعب وزعيمها، وأنواع جنود المباراة الآن) يُرسم وقت التحميل بكل حالاته
+// خارج الشاشة: وقوف ومشي، وكل حركات القتال بمراحلها، والرمي، والإصابة والصد والسقوط والموت. نسخ لا تدخل المباراة
+// (أرقامها تُعاد كما كانت، ولا عشوائية من المحاكاة)، فلا يُحسب شيء من رسمها أول مرة وسط القتال
+void warmUnitArt(MatchState s, UnitAtlas atlas, TriBatch b) {
+  final id0 = s.nextUnitId;
+  final copies = <Unit>[
+    for (final p in s.players)
+      if (GANGS.mm(p.gang) case final g?) ...[
+        createUnit(s, p, 0, 0),
+        for (final h in g.l('heroes')) createUnit(s, p, 0, 0, h as String),
+        createUnit(s, p, 0, 0, null, true),
+      ],
+    for (final u in s.units)
+      if (u.creature == null)
+        createUnit(s, s.players[u.playerId], 0, 0, u.hero, u.champion, u.gang, u.nation)
+          ..lookKind = u.lookKind..artColor = u.artColor..artScale = u.artScale,
+  ];
+  s.nextUnitId = id0;
+  final t = s.time;
+  void draw(Unit u) {
+    b.reset();
+    drawOne(b, atlas, u, artKey(u, t), 0, 0, artScale(u), artColor(u), t, isWalking(u), 2, 1, 0);
+  }
+  const moves = [('quick', 'L1'), ('quick', 'L2'), ('quick', 'L3'), ('quick', 'L4'), ('quick', 'D'), ('thrust', 'L1'), ('heavy', 'H1'),
+    ('heavy', 'F'), ('spin', 'S1'), ('punch', 'P'), ('kick_front', 'KF'), ('kick_high', 'KH')];
+  for (final u in copies) {
+    draw(u);
+    u.state = 'moving'; u.vx = 1; draw(u);
+    u.state = 'attacking'; u.vx = 0;
+    u.attackRate = 1;
+    for (final a in const [0.15, 0.45, 0.8]) { u.attackStart = t - a; draw(u); }   // الرمي والضربة العادية
+    u.cPhases = Phases(0.3, 0.1, 0.1, 0.3, 0.8);
+    for (final (move, node) in moves) {
+      u..cMove = move..cNode = node..attackStart = t - 1..landAt = t - 1..hitDoneAt = t - 1;
+      for (final a in const [0.1, 0.35, 0.5, 0.75]) { u.cMoveT = a; draw(u); }
+    }
+    u..cMove = null..cPhases = null..attackStart = null..hitFlash = 0.1;
+    for (final c in const ['stagger', 'block', 'dodge', 'down']) { u..cState = c..cTimer = 0.4..blockFlash = 0.1; draw(u); }
+    u..cState = null..state = 'dead';
+    for (final d in const [1.2, 0.8, 0.4, 0.1]) { u.deathTimer = d; draw(u); }
+  }
+  b.reset();
 }
 
 // ===================== الوحدة كلها (drawUnit في units.js) =====================

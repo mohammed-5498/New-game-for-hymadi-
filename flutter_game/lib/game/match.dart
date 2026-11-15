@@ -47,6 +47,10 @@ MatchState createMatch(J settings) {
   // حراس مباني المرتزقة المحايدون (3.14)
   final guards = map.districts.any((d) => d.merc) ? createGuardsPlayer(players, map.city) : null;
   if (guards != null) players.add(guards);
+  // والقرى والدوجو والحصن مباني مرتزقة بحراس طرف الميزة: صديقو الشرطة أيضاً (بطلب المستخدم، المعابد وحدها)
+  if (featurePlayer != null && map.districts.any((d) => d.merc) && const ['villages', 'dojo', 'fortress'].contains(featurePlayer.feature)) {
+    featurePlayer.friendOf = players.firstWhere((p) => p.gang == 'police').id;
+  }
   players.addAll(createStoryPlayers(settings, players));
   final weather = settings.ss('weather');
   final state = MatchState(settings: settings, map: map, players: players,

@@ -99,6 +99,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     super.initState();
     _ticker = createTicker(_onTick);
     WidgetsBinding.instance.addObserver(this);
+    SchedulerBinding.instance.addTimingsCallback(_timings);
     if (widget.lanState != null) _lanSub = Lan.events.listen(_onLan);
     _start();
   }
@@ -115,6 +116,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     GameSound.menuMusic(true);
     _lanSub?.cancel();
     WidgetsBinding.instance.removeObserver(this);
+    SchedulerBinding.instance.removeTimingsCallback(_timings);
     _rest?.cancel();
     _ticker.dispose();
     layer?.dispose();
@@ -167,6 +169,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     final u = await buildUnitAtlas(pairs);
     await WeatherFx.init();
     warmMatchArt(s);
+    warmUnitArt(s, u, batch);
     batch.whiteU = 1.5; batch.whiteV = 1.5;
     if (!mounted) return;
     final z = (settings['zoom'] as num?)?.toDouble();
@@ -319,7 +322,16 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
   double _targetFps(MatchState s) {
     if (paused || s.matchResult != null) return GRAPHICS.d('idleFps');
     if (Settings.battery) return GRAPHICS.d('batteryFps');
-    return DateTime.now().millisecondsSinceEpoch <= _activeUntil ? 60 : PACE.calmFps;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    return now <= _activeUntil && now > _heavyUntil ? 60 : PACE.calmFps;
+  }
+
+  // أزمنة إطارات الجهاز نفسه (يرسلها المحرك كل ثانية تقريباً): إن لم يلحق بـ 60 فـ 30 ثابتة بدل إطارات متفاوتة
+  int _heavyUntil = 0;
+  void _timings(List<ui.FrameTiming> list) {
+    if (list.length < 8) return;
+    final slow = list.where((t) => math.max(t.buildDuration.inMicroseconds, t.rasterDuration.inMicroseconds) > PACE.slowMs * 1000).length;
+    if (slow > list.length * PACE.slowShare) _heavyUntil = DateTime.now().millisecondsSinceEpoch + PACE.heavyMs;
   }
 
   // اختيار حي على الخريطة بعد خانة الترياد أو الصاروخ (takePick في empireMenu.js)
@@ -355,7 +367,9 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     } else {
       if (paused || s.matchResult != null) dt = 0;
       _acc = math.min(_acc + dt, 0.25);
+      var ticks = 0;
       while (_acc >= TICK_SEC) {
+        if (++ticks > PACE.maxTicks) { _acc = TICK_SEC; break; }   // لا يُلحق الإطار المتأخر بأكثر (تبطؤ اللعبة لحظة بدل أن تتجمد)
         final pr = perfProbe, t0 = pr == null ? 0 : _clockUs();
         updateMatch(s);
         if (pr != null) pr['tickSim'] = (pr['tickSim'] ?? 0) + _clockUs() - t0;
@@ -738,6 +752,8 @@ class _MatchPainter extends CustomPainter {
       b.flush(canvas, img);
     }, afterRow: (d) {
       for (final fl in _flagsAt(s, d)) {
+        final fx = (fl.capture!.i - fl.capture!.j) * TILE_HALF_W;
+        if (fx < left || fx > right) continue;   // خارج الشاشة يميناً أو يساراً (الصف يعبر الخريطة كلها)
         if (fog != null && !fog.known(fl.capture!.i.toDouble(), fl.capture!.j.toDouble())) continue;   // لم يُستكشف
         _flag(b, s, fl, time);
         if (fl.hill) drawHillCrown(b, (fl.capture!.i - fl.capture!.j) * TILE_HALF_W, (fl.capture!.i + fl.capture!.j) * TILE_HALF_H, time,

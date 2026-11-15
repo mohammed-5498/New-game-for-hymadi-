@@ -76,8 +76,6 @@ Squad? squadOf(MatchState state, Unit unit) {
 // --- لقطة الوحدات للتحديث (aiSnapshot): الحياة والقيمة لحظة أول سؤال في التحديث، بترتيب خلايا الشبكة ---
 MatchState? _snapState;
 double _snapTime = -1;
-final _snapValue = Expando<double>(), _snapX = Expando<double>(), _snapY = Expando<double>();
-final _snapAlive = Expando<bool>();
 
 int? _snapViewer;
 void _snapshot(MatchState state) {
@@ -87,22 +85,19 @@ void _snapshot(MatchState state) {
   for (final bucket in state.unitHash.values) {
     for (final u in bucket) {
       final alive = _alive(u) && !state.players[u.playerId].passive && botSees(state, u);   // ضباب الحرب
-      _snapAlive[u] = alive;
-      _snapValue[u] = alive ? unitValue(u) : 0.0;
-      _snapX[u] = u.x; _snapY[u] = u.y;
+      u..snapAlive = alive..snapValue = alive ? unitValue(u) : 0.0..snapX = u.x..snapY = u.y;
     }
   }
 }
 
 void _scanAround(MatchState state, double x, double y, double radius, void Function(Unit u, double ux, double uy, double value) fn) {
   final (minI, maxI, minJ, maxJ) = cellBox(x, y, radius);
-  for (var ci = minI; ci <= maxI; ci++) {
-    for (var cj = minJ; cj <= maxJ; cj++) {
-      final bucket = cellUnits(state, ci, cj);
-      if (bucket == null) continue;
-      for (final u in bucket) {
-        if (_snapAlive[u] == true) fn(u, _snapX[u]!, _snapY[u]!, _snapValue[u]!);
-      }
+  for (final (ci, cj, bucket) in state.unitCells) {
+    if (ci < minI) continue;
+    if (ci > maxI) break;
+    if (cj < minJ || cj > maxJ) continue;
+    for (final u in bucket) {
+      if (u.snapAlive) fn(u, u.snapX, u.snapY, u.snapValue);
     }
   }
 }
@@ -167,9 +162,24 @@ double enemyPowerAround(MatchState state, Player player, double pi, double pj, d
   final key = (player.id, jsRound(pi * 2), jsRound(pj * 2), radius);
   final hit = _aroundCache[key];
   if (hit != null) return hit;
-  final near = _unitsAround(state, pi, pj, radius);
+  // كـ _unitsAround ثم الجمع، بالترتيب نفسه والحدود نفسها، بلا قوائم ولا دوال (أسرع بكثير، والمجموع نفسه بالبت)
+  final enemy = [for (var p = 0; p < state.players.length; p++) isEnemyId(state, player.id, p)];
+  final inside = radius * radius * (1 - 1e-9), outside = radius * radius * (1 + 1e-9);
+  _snapshot(state);
   double total = 0;
-  for (var k = 0; k < near.$1.length; k++) { if (isEnemyId(state, player.id, near.$1[k])) total += near.$2[k]; }
+  final (minI, maxI, minJ, maxJ) = cellBox(pi, pj, radius);
+  for (final (ci, cj, bucket) in state.unitCells) {
+    if (ci < minI) continue;
+    if (ci > maxI) break;
+    if (cj < minJ || cj > maxJ) continue;
+    for (final u in bucket) {
+      if (!u.snapAlive || !enemy[u.playerId]) continue;
+      final dx = u.snapX - pi, dy = u.snapY - pj, d2 = dx * dx + dy * dy;
+      if (d2 > outside) continue;
+      if (d2 >= inside && !(hypot(dx, dy) <= radius)) continue;
+      total += u.snapValue;
+    }
+  }
   _aroundCache[key] = total;
   return total;
 }

@@ -375,11 +375,16 @@ class _EmpireMenu extends StatelessWidget {
     if (d.owner != pid) return const SizedBox.shrink();
     final me = s.players[pid], e = s.empire!;
     final slots = <Widget>[];
+    // بصمة ما تعرضه الخانات: تُبنى خاناتها من جديد حين يتغير شيء منها وحده (كانت تُبنى مع كل تحديث للواجهة، مرتين في الثانية)
+    final sig = StringBuffer('$did');
     int next(int level, int max) => math.min(level + 1, max);
     void slot(String label, int? cost, Result check, VoidCallback act,
-        {int count = 0, IconData icon = Icons.circle, int level = 0, int max = 0, List<_Chip> perks = const [], String? note}) =>
-        slots.add(_Slot(label: label, icon: icon, cost: cost, check: check, count: count, level: level, max: max, perks: perks, note: note,
-            affordable: cost == null || e.points[pid] >= cost, onTap: check.ok ? () { act(); screen.hud.value++; } : null));
+        {int count = 0, IconData icon = Icons.circle, int level = 0, int max = 0, List<_Chip> perks = const [], String? note}) {
+      final affordable = cost == null || e.points[pid] >= cost;
+      sig.write('|$label,$cost,${check.ok},${check.reason},$count,$level,$max,$affordable,$note');
+      slots.add(_Slot(label: label, icon: icon, cost: cost, check: check, count: count, level: level, max: max, perks: perks, note: note,
+          affordable: affordable, onTap: check.ok ? () { act(); screen.hud.value++; } : null));
+    }
     final queue = e.queues[did] ?? const [];
     var hasQueue = false;
     // مبنى ميزة المدينة (القسم 3.11): ما يعطيه، وخانات التجنيد والترياد والصاروخ والأجراس
@@ -482,7 +487,7 @@ class _EmpireMenu extends StatelessWidget {
               value: done, color: const Color(0xFFE8C45A), backgroundColor: const Color(0x55000000)))),
         ])),
         const SizedBox(height: 2),
-        Wrap(spacing: 4, runSpacing: 4, alignment: WrapAlignment.center, children: slots),
+        _Memo('slots', sig.toString(), () => Wrap(spacing: 4, runSpacing: 4, alignment: WrapAlignment.center, children: slots)),
       ])),
     );
   }

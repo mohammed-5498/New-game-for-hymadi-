@@ -179,6 +179,9 @@ class Unit {
   bool hardened = false, leaderPaid = false;
   BotTask? botTask;
   int gatherRally = -1;            // نقطة تجمع الفرقة (رقم حيها، ai/squads.dart)
+  // لقطة البوتات لحظة أول سؤال في التحديث (ai/squads.dart)، حقولاً لا جداول (أسرع، والنتيجة نفسها)
+  bool snapAlive = false;
+  double snapValue = 0, snapX = 0, snapY = 0;
   double kiteAt = -99, ultHeldSince = -1;
   int lastHitBy = -1;
   double fadeAt = -1;
@@ -378,6 +381,7 @@ class MatchState {
   int mapVersion = 0;            // يزيد مع كل مبنى أو ترقية أو تحصين: الرسم يعيد طبقة المدينة
   // الشبكة المكانية (spatial.dart)
   final unitHash = <int, List<Unit>>{};
+  final unitCells = <(int, int, List<Unit>)>[];   // الخلايا المشغولة مرتبة (spatial.dart)
   double unitHashTime = -1;
   MoveMarker? moveMarker;
   // اللعب المحلي (net/lockstep.dart): كاميرات اللاعبين وعدّاد التحديثات ومولّد المباراة، ودور هذا الجهاز

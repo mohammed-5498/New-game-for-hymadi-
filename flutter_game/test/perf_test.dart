@@ -3,6 +3,8 @@
 @Tags(['perf'])
 library;
 
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gangcity/game/match.dart';
@@ -23,8 +25,11 @@ void main() {
     tester.view.devicePixelRatio = 2.625;
     addTearDown(tester.view.reset);
     final key = GlobalKey<MatchScreenState>();
+    // المعركة الكبيرة كما في جوال المستخدم: PERF_CITY=gondar PERF_SIZE=large PERF_FF=600 PERF_ZOOM=1.2 PERF_TEMPLES=1
+    final env = Platform.environment;
     await tester.runAsync(() => tester.pumpWidget(MaterialApp(home: MatchScreen(key: key, settings: {
-      'seed': 777, 'mapSize': 'medium', 'city': 'rio', 'weather': 'night', 'mode': 'conquest', 'maxUnits': 100, 'ff': 240.0, 'watch': true, 'fog': false,
+      'seed': 777, 'mapSize': env['PERF_SIZE'] ?? 'medium', 'city': env['PERF_CITY'] ?? 'rio', 'weather': 'night', 'mode': 'conquest', 'maxUnits': 100,
+      'ff': double.parse(env['PERF_FF'] ?? '240'), 'watch': true, 'fog': env['PERF_FOG'] == '1', 'temples': env['PERF_TEMPLES'] == '1',
       'players': [
         for (var k = 0; k < 4; k++)
           {'name': 'p$k', 'gang': ['crows', 'hammers', 'vipers', 'scorpions'][k], 'nation': ['yemen', 'saudi', 'egypt', 'japan'][k], 'skin': k.isOdd ? 'elite' : null,
@@ -36,7 +41,7 @@ void main() {
     });
     await tester.pump();
     final s = key.currentState!.state!;
-    s.camera.z = 2.2;
+    s.camera.z = double.parse(env['PERF_ZOOM'] ?? '2.2');
     final probe = perfProbe = <String, int>{};
     final sims = <int>[], frames = <int>[];
     final sw = Stopwatch()..start();

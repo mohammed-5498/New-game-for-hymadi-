@@ -17,6 +17,12 @@ void buildUnitHash(MatchState state) {
     (cells[_cellIndex(unit.x, unit.y)] ??= []).add(unit);
   }
   state.unitHashTime = state.time;
+  // الخلايا المشغولة وحدها مرتبة بإحداثياتها (i ثم j، كترتيب المرور على الخلايا): المسح الكبير للبوتات يمر عليها
+  // بدل كل خلايا مربعه (169 خلية لنصف قطر 12، وأغلبها فارغة)، بالترتيب نفسه فالنتيجة نفسها
+  final keys = [for (final e in cells.entries) if (e.value.isNotEmpty) e.key]..sort();
+  state.unitCells
+    ..clear()
+    ..addAll([for (final k in keys) (k ~/ _stride - _offset, k % _stride - _offset, cells[k]!)]);
 }
 
 void ensureUnitHash(MatchState state) {
@@ -44,8 +50,3 @@ void forEachNearby(MatchState state, double x, double y, double radius, void Fun
 (int, int, int, int) cellBox(double x, double y, double radius) =>
     (((x - radius) / _cell).floor(), ((x + radius) / _cell).floor(), ((y - radius) / _cell).floor(), ((y + radius) / _cell).floor());
 
-// وحدات خلية واحدة (للمسح الكبير بالخلايا: البوتات)
-List<Unit>? cellUnits(MatchState state, int ci, int cj) {
-  ensureUnitHash(state);
-  return state.unitHash[(ci + _offset) * _stride + cj + _offset];
-}
