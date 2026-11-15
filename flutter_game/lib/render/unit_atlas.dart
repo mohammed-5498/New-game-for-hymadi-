@@ -9,7 +9,11 @@ import 'dart:ui' as ui;
 import 'package:flutter/services.dart' show rootBundle;
 
 import '../core/cfg.dart';
+import '../data/rig_sprites.dart';
 import '../data/unit_sprites.dart';
+
+// لوح صور: القديم المقطّع من وضعية T، أو المقطّع أجزاءً منفصلة (البديل والنخبة)
+J? sheetInfo(String gang) => (SPRITE_GANGS[gang] ?? RIG_SHEETS[gang]) as J?;
 
 class UnitAtlas {
   final ui.Image image;
@@ -48,17 +52,17 @@ const _sectors = [[0, 3, 1], [2, 0, 1], [1, 0, 3], [1, 2, 0], [3, 1, 0], [0, 1, 
 // pairs: (عصابة، لون) لكل ما يُرسم في المباراة. from: أطلس قائم يُضاف إليه ما ليس فيه
 Future<UnitAtlas> buildUnitAtlas(Iterable<(String, String)> pairs, [UnitAtlas? from]) async {
   final list = <(String, String)>[];
-  for (final p in pairs) { if (!list.contains(p) && SPRITE_GANGS.containsKey(p.$1) && from?.at(p.$1, p.$2) == null) list.add(p); }
+  for (final p in pairs) { if (!list.contains(p) && sheetInfo(p.$1) != null && from?.at(p.$1, p.$2) == null) list.add(p); }
   final src = <String, (Uint8List, int, int)>{};
   for (final (gang, _) in list) {
-    src[gang] ??= await _load((SPRITE_GANGS[gang] as J).s('src'));
+    src[gang] ??= await _load(sheetInfo(gang)!.s('src'));
   }
   final colY = from != null ? [...from.colY] : List.filled(_cols, _white), spot = <(int, int)>[];
   for (final (gang, _) in list) {
     var c = 0;
     for (var k = 1; k < _cols; k++) { if (colY[k] < colY[c]) c = k; }
     spot.add((c * _col, colY[c]));
-    colY[c] += (SPRITE_GANGS[gang] as J).i('h') + 2;
+    colY[c] += sheetInfo(gang)!.i('h') + 2;
   }
   const width = _col * _cols;
   final height = colY.reduce(math.max);
@@ -74,7 +78,7 @@ Future<UnitAtlas> buildUnitAtlas(Iterable<(String, String)> pairs, [UnitAtlas? f
   for (var n = 0; n < list.length; n++) {
     final (gang, color) = list[n];
     final (ox, oy) = spot[n];
-    final g = SPRITE_GANGS[gang] as J, h = g.i('h');
+    final g = sheetInfo(gang)!, h = g.i('h');
     final (px, w, _) = src[gang]!;
     final (hue, sat, val) = _hexHsv(color);
     final ks = sat / g.d('sat'), kv = val / g.d('val'), f = hue % 1, order = _sectors[hue.floor() % 6];

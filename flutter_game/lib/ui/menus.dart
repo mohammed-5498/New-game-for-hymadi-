@@ -11,6 +11,7 @@ import '../config.dart' show PACE;
 import '../core/fmath.dart';
 import '../data/cities.dart';
 import '../data/js_config.dart';
+import '../data/rig_sprites.dart';
 import '../map/generator.dart';
 import '../render/city_art.dart';
 import '../render/city_layer.dart';
@@ -129,23 +130,28 @@ class SetupModel {
 
 // الأمة ← نمطها القتالي، والعشوائي من كل الخيارات (resolveSide في nations.js)
 Map<String, Object?> resolveSide(String choice) {
-  if (choice == 'random') choice = _sides[math.Random().nextInt(_sides.length - 1)];
-  final nation = nations.mm(choice);
-  if (nation != null && nations.l('order').contains(choice)) return {'gang': nation.s('style'), 'nation': choice};
+  if (choice == 'random') { final pool = [..._nationIds, ..._gangIds]; choice = pool[math.Random().nextInt(pool.length)]; }
+  final base = _baseSide(choice), nation = nations.mm(base);
+  if (nation != null && nations.l('order').contains(base)) return {'gang': nation.s('style'), 'nation': base, if (_isElite(choice)) 'skin': 'elite'};
   return {'gang': _gangIds.contains(choice) ? choice : _gangIds[0], 'nation': null};
 }
 
 String hostCity(String? side) {
-  final n = side != null && nations.l('order').contains(side) ? nations.m(side) : null;
+  final n = side != null && nations.l('order').contains(_baseSide(side)) ? nations.m(_baseSide(side)) : null;
   return n != null && CITIES.l('order').contains(n['city']) ? n.s('city') : 'random';
 }
 
 // الأمم الـ15 ثم العصابات الكلاسيكية الأربع ثم العشوائي (SIDE_CHOICES)
 List<String> get _nationIds => nations.l('order').cast<String>();
-List<String> get _sides => [..._nationIds, ..._gangIds, 'random'];
-bool _isNation(String side) => _nationIds.contains(side);
-String sideName(String side) => side == 'random' ? 'عشوائي' : _isNation(side) ? nations.m(side).s('name') : GANGS.m(side).s('name');
-String sideNote(String side) => side == 'random' ? '' : _isNation(side) ? nations.m(side).s('gangName') : nations.s('classicNote');
+List<String> get _sides => [..._nationIds, ..._eliteIds, ..._gangIds, 'random'];
+bool _isNation(String side) => _nationIds.contains(_baseSide(side));
+// مظهر النخبة الأسود والذهبي لكل أمة (حزمة المستخدم، 2026-11-15): "<أمة>_elite"، باسم "نخبة <الأمة>" بجوار عصابته
+List<String> get _eliteIds => [for (final n in _nationIds) if (RIG_SHEETS.containsKey('${n}_elite')) '${n}_elite'];
+bool _isElite(String side) => side.endsWith('_elite') && _nationIds.contains(side.substring(0, side.length - 6));
+String _baseSide(String side) => _isElite(side) ? side.substring(0, side.length - 6) : side;
+String sideName(String side) => side == 'random' ? 'عشوائي' : _isElite(side) ? 'نخبة ${nations.m(_baseSide(side)).s('name')}'
+    : _isNation(side) ? nations.m(side).s('name') : GANGS.m(side).s('name');
+String sideNote(String side) => side == 'random' ? '' : _isNation(side) ? nations.m(_baseSide(side)).s('gangName') : nations.s('classicNote');
 
 // لوحة العصابات: تبويب لكل منطقة بأممها، ثم الكلاسيكية (SIDE_GROUPS)
 List<(String, List<String>)> get sideGroups => [
@@ -185,12 +191,13 @@ class _SidePickerState extends State<_SidePicker> {
   Widget _details() {
     final g = chosen;
     if (g == 'random') return const Text('المس عصابة لترى قدرتها', style: TextStyle(color: dim, fontSize: 12.5));
-    final style = nations.m('styles').m(_isNation(g) ? nations.m(g).s('style') : g);
+    final n = _baseSide(g), style = nations.m('styles').m(_isNation(g) ? nations.m(n).s('style') : g);
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text(sideName(g), style: const TextStyle(color: ink, fontSize: 16, fontWeight: FontWeight.w800)),
       Text(sideNote(g), style: const TextStyle(color: dim, fontSize: 11.5)),
-      if (_isNation(g)) ..._line('القدرة: ${nations.m(g).m('trait').s('name')}', nations.m(g).m('trait').s('desc')),
-      if (_isNation(g)) ..._line('ضربة البطل: ${nations.m(g).m('ult').s('name')}', nations.m(g).m('ult').s('desc')),
+      if (_isElite(g)) ..._line('المظهر', 'زي أسود وذهبي، والوجه واليدان بلونك. القدرات كما هي لأمته'),
+      if (_isNation(g)) ..._line('القدرة: ${nations.m(n).m('trait').s('name')}', nations.m(n).m('trait').s('desc')),
+      if (_isNation(g)) ..._line('ضربة البطل: ${nations.m(n).m('ult').s('name')}', nations.m(n).m('ult').s('desc')),
       ..._line('الفئة: ${style.s('name')}', style.s('desc')),
     ]);
   }
@@ -199,8 +206,8 @@ class _SidePickerState extends State<_SidePicker> {
   Widget build(BuildContext context) => PickerSheet(title: 'الأمة أو العصابة', groups: [
     for (final (name, list) in sideGroups)
       (name, [
-        for (final g in list)
-          PickCard(title: sideName(g), note: _isNation(g) ? '${sideNote(g)} • ${nations.m('styles').m(nations.m(g).s('style')).s('name')}'
+        for (final g in [for (final x in list) ...[x, if (_eliteIds.contains('${x}_elite')) '${x}_elite']])   // النخبة بجوار عصابتها
+          PickCard(title: sideName(g), note: _isNation(g) ? '${sideNote(g)} • ${nations.m('styles').m(nations.m(_baseSide(g)).s('style')).s('name')}'
               : nations.m('styles').m(g).s('name'), image: 'assets/thumbs/side_$g.webp', aspect: 2.5,
               selected: chosen == g, onTap: () => setState(() => chosen = g)),
       ]),
@@ -706,13 +713,15 @@ class _StoreScreenState extends State<StoreScreen> {
       return _asideBox(Image.asset('assets/thumbs/city_$c.webp', fit: BoxFit.cover), cityName(c), free, lines,
           WideButton('عرض المدينة', () => Navigator.push(context, MaterialPageRoute(builder: (_) => CityPreview(city: c))), width: 200));
     }
-    final s = chosenSide, nation = _isNation(s) ? nations.m(s) : null, style = nation?.s('style') ?? s, st = nations.m('styles').m(style);
+    final s = chosenSide, nation = _isNation(s) ? nations.m(_baseSide(s)) : null, style = nation?.s('style') ?? s, st = nations.m('styles').m(style);
     final names = nation != null
         ? [nation.m('names').s('common'), for (final h in GANGS.m(style).l('heroes').cast<String>()) nation.m('names').s(h), nation.m('names').s('champion')]
         : ['الفرد العادي', for (final h in GANGS.m(s).l('heroes').cast<String>()) HEROES.m(h).s('name'), CHAMPIONS.m(s).s('name')];
     final free = _gangIds.contains(s);
-    return _asideBox(Image.asset('assets/thumbs/side_$s.webp', fit: BoxFit.contain), nation != null ? '${nation.s('gangName')} — ${nation.s('name')}' : GANGS.m(s).s('name'), free,
-        [names.join(' • '), if (nation != null) '«${nation.m('trait').s('name')}»: ${nation.m('trait').s('desc')}', 'نمط ${st.s('name')}: ${st.s('desc')}'], null);
+    return _asideBox(Image.asset('assets/thumbs/side_$s.webp', fit: BoxFit.contain),
+        _isElite(s) ? '${sideName(s)} — ${nation!.s('gangName')}' : nation != null ? '${nation.s('gangName')} — ${nation.s('name')}' : GANGS.m(s).s('name'), free,
+        [if (_isElite(s)) 'مظهر أسود وذهبي لـ${nation!.s('gangName')}: الوجه واليدان بلونك، والقدرات كما هي. يُختار بجوار عصابته في الإعداد',
+         names.join(' • '), if (nation != null) '«${nation.m('trait').s('name')}»: ${nation.m('trait').s('desc')}', 'نمط ${st.s('name')}: ${st.s('desc')}'], null);
   }
 
   Widget _asideBox(Widget image, String title, bool free, List<String> lines, Widget? action) => SizedBox(width: 280, child: Column(
@@ -731,15 +740,22 @@ class _StoreScreenState extends State<StoreScreen> {
   Widget build(BuildContext context) {
     final groups = section == 'maps'
         ? [for (final r in REGIONS.l('order').cast<String>()) (REGIONS.m(r).s('name'), REGIONS.m(r).l('cities').cast<String>())]
-        : sideGroups;
+        : section == 'skins'
+            ? [for (final r in REGIONS.l('order').cast<String>()) (REGIONS.m(r).s('name'),
+                [for (final n in REGIONS.m(r).l('nations').cast<String>()) if (_eliteIds.contains('${n}_elite')) '${n}_elite'])]
+            : sideGroups;
     if (region >= groups.length) region = 0;
     final items = groups[region].$2;
     return Scaffold(body: SafeArea(child: Padding(padding: const EdgeInsets.all(10), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Column(children: [
         const Text('المتجر', style: TextStyle(color: gold, fontSize: 20, fontWeight: FontWeight.w800)),
-        for (final (k, label, n) in [('maps', 'الخرائط', 24), ('sides', 'العصابات', _sides.length - 1), ('skins', 'المظاهر', 0)])
+        for (final (k, label, n) in [('maps', 'الخرائط', 24), ('sides', 'العصابات', _nationIds.length + _gangIds.length), ('skins', 'المظاهر', _eliteIds.length)])
           Padding(padding: const EdgeInsets.only(top: 6), child: SizedBox(width: 150, child: ChoiceChip(
-              label: Text('$label ($n)'), selected: section == k, onSelected: k == 'skins' ? null : (_) => setState(() { section = k; region = 0; })))),
+              label: Text('$label ($n)'), selected: section == k, onSelected: (_) => setState(() {
+                section = k; region = 0;
+                if (k == 'skins' && !_isElite(chosenSide)) chosenSide = _eliteIds.first;
+                if (k == 'sides' && _isElite(chosenSide)) chosenSide = 'crows';
+              })))),
         const Spacer(),
         WideButton('رجوع', () => Navigator.pop(context), ghost: true, width: 120),
       ]),

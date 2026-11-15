@@ -159,6 +159,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     setState(() => loadProgress = 0.3);
     final a = await CityArt.load(s.map.city);
     if (mounted) setState(() => loadProgress = 0.7);
+    setUnitSkins(s);
     final pairs = [
       ...atlasPairs(s),
       if (s.mode == 'survival') ('police', gameModes.m('survival').m('riot').s('color')),   // وحدات التدخل بلونها

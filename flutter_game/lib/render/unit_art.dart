@@ -11,6 +11,8 @@ import '../game/realism.dart' show fightStyle, fightBig, hitstopOf;
 import '../game/state.dart';
 import 'batch.dart';
 import 'pose.dart';
+import '../data/rig_sprites.dart';
+import 'rig_art.dart';
 import 'unit_atlas.dart';
 
 final J _CR = COMBAT_REALISM, _ART = UNIT_ART;
@@ -243,6 +245,24 @@ String artKey(Unit unit, [double time = 0]) {
 // أطلس كل وحدة: أمتها، وإلا عصابتها
 String spriteGang(String gang, String? nation) => nation != null && SPRITE_GANGS.containsKey(nation) ? nation : gang;
 
+// مظهر كل لاعب (إعداد المباراة: 'skin' لكل لاعب، 'elite' نخبة أمته) وأمته: لجنود أمته وحدهم
+var _skins = const <String?>[], _nations = const <String?>[];
+void setUnitSkins(MatchState s) {
+  final list = s.settings['players'] as List? ?? const [];
+  _skins = [for (final p in s.players) p.id < list.length && list[p.id] is Map ? (list[p.id] as Map)['skin'] as String? : null];
+  _nations = [for (final p in s.players) p.nation];
+}
+String? skinOf(Unit u) => u.nation != null && u.playerId < _skins.length && _nations[u.playerId] == u.nation ? _skins[u.playerId] : null;
+
+// لوح صور الوحدة: المقطّع أجزاءً (النخبة إن اختارها صاحبها، أو البديل) وإلا القديم
+String? sheetOf(Unit u, [String? skin]) => rigFor(artKey(u), skin)?.sheet ?? describe(artKey(u))?.gang;
+// لوح أمة (ومظهرها): لمن يُجنَّد منها أو ينضم بلون جديد
+String nationSheet(String gang, String? nation, [String? skin]) {
+  final n = spriteGang(gang, nation);
+  if (skin == 'elite' && RIG_SHEETS.containsKey('${n}_elite')) return '${n}_elite';
+  return RIG_SHEETS.containsKey('${n}_rig') ? '${n}_rig' : n;
+}
+
 // صور المباراة عند تحميلها: كل لاعب بعصابته، وما على الخريطة بلونه، ومجنّدو مبانيها بألوان كل من قد يحتلها (3.14).
 // وما يظهر بعدها بلون جديد (أهل قرية انضموا، ترياد...) يضيفه الأطلس وحده (UnitAtlas.missing)
 List<(String, String)> atlasPairs(MatchState s) {
@@ -250,18 +270,23 @@ List<(String, String)> atlasPairs(MatchState s) {
   final kinds = {for (final d in s.map.districts) ...?recruitsAt(d)};
   final policeId = s.players.indexWhere((p) => p.gang == 'police'), main = s.map.districts.any((d) => d.policeMain);
   return [
-    for (final p in s.players) (spriteGang(p.gang, p.nation), p.gang == 'police' ? _ART.s('policeColor') : p.color),   // والمسالمون (الكرنفال وجمهور الديربي)
-    for (final u in s.units) if (describe(artKey(u)) case final d?) (d.gang, artColor(u)),
+    for (final p in s.players)   // والمسالمون (الكرنفال وجمهور الديربي)
+      (nationSheet(p.gang, p.nation, p.id < _skins.length ? _skins[p.id] : null), p.gang == 'police' ? _ART.s('policeColor') : p.color),
+    for (final u in s.units) if (sheetOf(u, skinOf(u)) case final g?) (g, artColor(u)),
     for (final k in kinds)
       if (FEATURES.m('recruits').mm(k) case final R? when R['creature'] == null)
-        for (final c in rivals) (R.ss('gang') ?? spriteGang(nations.m(R.s('nation')).s('style'), R.s('nation')), c),
+        for (final c in rivals) ...[
+          (R.ss('gang') ?? nationSheet(nations.m(R.s('nation')).s('style'), R.s('nation')), c),
+          // بمظهر خاص (ساموراي الدوجو): صورته في لوح أمته القديم
+          if (R.ss('look') != null && R.ss('nation') != null) (spriteGang(nations.m(R.s('nation')).s('style'), R.s('nation')), c),
+        ],
     // من ينضم لمن يحتل حيّه بلونه: أهل القرى، وشرطة المركز الرئيسي في روتنبورغ (فلا يُصبغ أطلس جديد أثناء القتال)
     for (final u in s.units)
       if (s.players[u.playerId].passive || (u.playerId == policeId && main))
-        if (describe(artKey(u)) case final d?) for (final c in rivals) (d.gang, c),
+        if (sheetOf(u) case final g?) for (final c in rivals) (g, c),
     // مقاتلو الترياد بلون من يستدعيهم
     if (s.map.districts.any((d) => d.feature == 'triads'))
-      for (final c in rivals) (spriteGang(nations.m(FEATURES.m('triads').s('nation')).s('style'), FEATURES.m('triads').s('nation')), c),
+      for (final c in rivals) (nationSheet(nations.m(FEATURES.m('triads').s('nation')).s('style'), FEATURES.m('triads').s('nation')), c),
   ];
 }
 
@@ -494,6 +519,7 @@ void _star(TriBatch b, double x, double y, double r, [int rgb = 0xffffff, double
 }
 
 const _shadow = 0x000000;
+final _rj = RigJoints();
 int _hex(String c) => hexRgb(c);
 final _hexCache = <String, int>{};
 
@@ -501,8 +527,9 @@ final _hexCache = <String, int>{};
 void drawOne(TriBatch b, UnitAtlas atlas, Unit unit, String key, double x, double y, double scale, String color, double time,
     bool walking, int ghosts, double alpha, double sub) {
   final ud = describe(key) ?? describe('crow_common')!;
-  final sheet = atlas.at(ud.gang, color);
-  if (sheet == null) { atlas.missing.add((ud.gang, color)); return; }
+  final rig = rigFor(key, skinOf(unit)), gang = rig?.sheet ?? ud.gang;
+  final sheet = atlas.at(gang, color);
+  if (sheet == null) { atlas.missing.add((gang, color)); return; }
   final (ox, oy) = sheet;
   final rt = time + sub, animT = rt + (unit.id % 17) * 0.13;
   final dead = unit.state == 'dead';
@@ -578,8 +605,16 @@ void drawOne(TriBatch b, UnitAtlas atlas, Unit unit, String key, double x, doubl
     }
   }
 
-  final k = _Ctx(b, ud.parts, ox, oy);
-  _spriteBody(k, p, ud);
+  final k = _Ctx(b, rig?.parts ?? ud.parts, ox, oy);
+  if (rig != null) {
+    final j = _rj;
+    drawRig(b, ox, oy, p, rig, !dead && unit.cState != 'down', key.endsWith('_away'), j);
+    k..hipX = j.hipX..hipY = j.hipY..midX = j.midX..midY = j.midY..chestX = j.chestX..chestY = j.chestY..headX = j.headX..headY = j.headY
+      ..a2 = j.a2..pl = j.pl..sbX = j.sbX..sbY = j.sbY..sfX = j.sfX..sfY = j.sfY..hbX = j.hbX..hbY = j.hbY..hfX = j.hfX..hfY = j.hfY
+      ..efX = j.efX..efY = j.efY;
+  } else {
+    _spriteBody(k, p, ud);
+  }
 
   if (sw != null && sw.stop) {
     if (striker == 'w' && ud.weapon) {

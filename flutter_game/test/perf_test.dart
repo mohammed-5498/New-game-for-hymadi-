@@ -1,5 +1,5 @@
 // قياس كلفة الإطار على المعالج (للفحص فقط، لا يدخل الفحص العادي: flutter test test/perf_test.dart)
-// مباراة أربعة لاعبين (أنت وثلاثة بوتات، بضباب الحرب كما في اللعب) بعد دقيقتين ونصف، والكاميرا على أكبر اشتباك: زمن التحديث، وزمن بناء الإطار بأقسامه
+// مباراة أربعة لاعبين (أنت وثلاثة بوتات من الأمم، اثنان بمظهر النخبة؛ بلا ضباب حتى ترى الكاميرا أكبر اشتباك) بعد دقيقتين ونصف، والكاميرا على أكبر اشتباك: زمن التحديث، وزمن بناء الإطار بأقسامه
 @Tags(['perf'])
 library;
 
@@ -24,10 +24,10 @@ void main() {
     addTearDown(tester.view.reset);
     final key = GlobalKey<MatchScreenState>();
     await tester.runAsync(() => tester.pumpWidget(MaterialApp(home: MatchScreen(key: key, settings: {
-      'seed': 777, 'mapSize': 'medium', 'city': 'rio', 'weather': 'night', 'mode': 'conquest', 'maxUnits': 100, 'ff': 240.0, 'watch': true, 'fog': true,
+      'seed': 777, 'mapSize': 'medium', 'city': 'rio', 'weather': 'night', 'mode': 'conquest', 'maxUnits': 100, 'ff': 240.0, 'watch': true, 'fog': false,
       'players': [
         for (var k = 0; k < 4; k++)
-          {'name': 'p$k', 'gang': ['crows', 'hammers', 'vipers', 'scorpions'][k], 'nation': k == 1 ? 'brazil' : null,
+          {'name': 'p$k', 'gang': ['crows', 'hammers', 'vipers', 'scorpions'][k], 'nation': ['yemen', 'saudi', 'egypt', 'japan'][k], 'skin': k.isOdd ? 'elite' : null,
             'color': ['blue', 'red', 'green', 'yellow'][k], 'isHuman': k == 0, 'team': 0, 'difficulty': 'hard'},
       ],
     }))));
