@@ -4423,16 +4423,6 @@
    },
    "images": [
     {
-     "file": "cities/chicago/feature/bank.webp",
-     "group": "feature",
-     "kind": "bank",
-     "w": 400,
-     "h": 362,
-     "ax": 200,
-     "ay": 291,
-     "footprint": 2
-    },
-    {
      "file": "cities/chicago/buildings/brick.webp",
      "group": "building",
      "kind": "brick",
@@ -4510,6 +4500,16 @@
      "h": 106,
      "ax": 154,
      "ay": 59
+    },
+    {
+     "file": "cities/chicago/feature/bank.webp",
+     "group": "feature",
+     "kind": "bank",
+     "footprint": 2,
+     "w": 357,
+     "h": 342,
+     "ax": 178,
+     "ay": 291
     },
     {
      "file": "cities/chicago/economy/tower_rate1.webp",
@@ -4594,6 +4594,50 @@
      "ax": 86,
      "ay": 208,
      "owner": "cities/chicago/economy/tower_all-owner.webp"
+    },
+    {
+     "file": "cities/chicago/economy/hospital_rate1.webp",
+     "group": "economy",
+     "kind": "hospital",
+     "up": "rate1",
+     "w": 139,
+     "h": 197,
+     "ax": 70,
+     "ay": 151,
+     "owner": "cities/chicago/economy/hospital_rate1-owner.webp"
+    },
+    {
+     "file": "cities/chicago/economy/hospital_rate2.webp",
+     "group": "economy",
+     "kind": "hospital",
+     "up": "rate2",
+     "w": 139,
+     "h": 203,
+     "ax": 70,
+     "ay": 151,
+     "owner": "cities/chicago/economy/hospital_rate2-owner.webp"
+    },
+    {
+     "file": "cities/chicago/economy/hospital_radius1.webp",
+     "group": "economy",
+     "kind": "hospital",
+     "up": "radius1",
+     "w": 167,
+     "h": 189,
+     "ax": 98,
+     "ay": 152,
+     "owner": "cities/chicago/economy/hospital_radius1-owner.webp"
+    },
+    {
+     "file": "cities/chicago/economy/hospital_radius2.webp",
+     "group": "economy",
+     "kind": "hospital",
+     "up": "radius2",
+     "w": 195,
+     "h": 191,
+     "ax": 98,
+     "ay": 152,
+     "owner": "cities/chicago/economy/hospital_radius2-owner.webp"
     },
     {
      "file": "cities/chicago/economy/hospital_small.webp",
@@ -4786,6 +4830,28 @@
      "owner": "cities/chicago/walls/level2_gate_right-owner.webp"
     },
     {
+     "file": "cities/chicago/walls/level2_left.webp",
+     "group": "wall",
+     "kind": "left",
+     "level": 2,
+     "w": 106,
+     "h": 90,
+     "ax": 90.5,
+     "ay": 46,
+     "owner": "cities/chicago/walls/level2_left-owner.webp"
+    },
+    {
+     "file": "cities/chicago/walls/level2_right.webp",
+     "group": "wall",
+     "kind": "right",
+     "level": 2,
+     "w": 105,
+     "h": 91,
+     "ax": 14.5,
+     "ay": 47,
+     "owner": "cities/chicago/walls/level2_right-owner.webp"
+    },
+    {
      "file": "cities/chicago/walls/level3_tower.webp",
      "group": "wall",
      "kind": "tower",
@@ -4817,6 +4883,28 @@
      "ax": 16.5,
      "ay": 73,
      "owner": "cities/chicago/walls/level3_gate_right-owner.webp"
+    },
+    {
+     "file": "cities/chicago/walls/level3_left.webp",
+     "group": "wall",
+     "kind": "left",
+     "level": 3,
+     "w": 106,
+     "h": 98,
+     "ax": 90.5,
+     "ay": 54,
+     "owner": "cities/chicago/walls/level3_left-owner.webp"
+    },
+    {
+     "file": "cities/chicago/walls/level3_right.webp",
+     "group": "wall",
+     "kind": "right",
+     "level": 3,
+     "w": 106,
+     "h": 100,
+     "ax": 15.5,
+     "ay": 56,
+     "owner": "cities/chicago/walls/level3_right-owner.webp"
     },
     {
      "file": "cities/_common/yard_1.webp",
@@ -13102,6 +13190,28 @@
      "ax": 16.5,
      "ay": 71,
      "owner": "cities/tenoch/walls/level3_tower-owner.webp"
+    },
+    {
+     "file": "cities/tenoch/walls/level3_gate_left.webp",
+     "group": "wall",
+     "kind": "gate_left",
+     "level": 3,
+     "w": 114,
+     "h": 121,
+     "ax": 97.5,
+     "ay": 73,
+     "owner": "cities/tenoch/walls/level3_gate_left-owner.webp"
+    },
+    {
+     "file": "cities/tenoch/walls/level3_gate_right.webp",
+     "group": "wall",
+     "kind": "gate_right",
+     "level": 3,
+     "w": 114,
+     "h": 121,
+     "ax": 16.5,
+     "ay": 73,
+     "owner": "cities/tenoch/walls/level3_gate_right-owner.webp"
     },
     {
      "file": "cities/tenoch/walls/level3_left.webp",
