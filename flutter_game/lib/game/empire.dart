@@ -109,7 +109,7 @@ void _collectIncome(MatchState state, EmpireState ms) {
   final mul = (ms.incomeMul != 0 ? ms.incomeMul : 1) * TICK_SEC;
   for (final d in state.map.districts) {
     if (d.owner == null || d.capture == null || state.players[d.owner!].neutral) continue;
-    final gain = districtIncome(d) * mul * _botIncome(state.players[d.owner!]) * featureIncomeMul(state, d.owner!) * eventIncomeMul(state, d);
+    final gain = templeIncome(state, d, districtIncome(d)) * mul * _botIncome(state.players[d.owner!]) * featureIncomeMul(state, d.owner!) * eventIncomeMul(state, d);
     ms.points[d.owner!] += gain;
     ms.earned[d.owner!] += gain;
   }
@@ -152,7 +152,7 @@ double productionTime(MatchState state, District district, String kind) {
       (state.story != null && owner != null && owner.team == 2 ? (STORY.l('enemyProduction')[state.story!.level] as num) : 1);
 }
 
-J _unitCost(String kind) => E.m('units').mm(kind) ?? CITY_FEATURES.m('recruits').m(kind);
+J _unitCost(String kind) => E.m('units').mm(kind) ?? FEATURES.m('recruits').m(kind);
 int unitPrice(MatchState state, int playerId, String kind) =>
     jsRound(_unitCost(kind).d('cost') * _classPrice(state.players[playerId], kind) * featureCostMul(state, playerId) * eventCostMul(state));
 double _classPrice(Player player, String kind) {
@@ -337,7 +337,9 @@ void _updateHospitals(MatchState state) {
   for (final d in state.map.districts) {
     if (d.building != 'hospital' || d.owner == null || state.players[d.owner!].neutral) continue;
     final at = tileOf(state.map, d.buildTile!), stats = hospitalStats(d);
-    final amount = stats.perSecond * TICK_SEC, r2 = stats.radius * stats.radius;
+    // كنيسة دبرا برهان (3.14): علاج مستشفيات مالكها أكثر
+    final amount = stats.perSecond * TICK_SEC * (templeOwner(state, 'debre') == d.owner ? 1 + templeNumber('debre', 'heal') : 1),
+        r2 = stats.radius * stats.radius;
     forEachNearby(state, at.i.toDouble(), at.j.toDouble(), stats.radius, (unit) {
       if (unit.playerId != d.owner || !isAlive(unit) || unit.hp >= unit.maxHp) return;
       final dx = unit.x - at.i, dy = unit.y - at.j;
@@ -365,7 +367,7 @@ Result canQueue(MatchState state, int playerId, District? district, String kind)
   final queue = state.empire!.queues[district.id] ?? const [];
   if (kind == 'leader' && _leaderTaken(state, playerId)) return _fail('لعصابتك زعيم');
   if (queue.length >= E.i('queueMax')) return _fail('الطابور ممتلئ');
-  final R = CITY_FEATURES.m('recruits').mm(kind);
+  final R = FEATURES.m('recruits').mm(kind);
   if (R != null && truthy(R['limit']) && _recruitCount(state, playerId, kind) >= R.d('limit')) return _fail(R.s('limitText'));
   if (pointsOf(state, playerId) < unitPrice(state, playerId, kind)) return _fail('النقاط لا تكفي');
   return _ok;
@@ -523,7 +525,7 @@ Result fortifyDistrict(MatchState state, int playerId, int districtId) {
 
 Result empireCommand(MatchState state, int playerId, String a, int d, Object? x) {
   final district = d >= 0 && d < state.map.districts.length ? state.map.districts[d] : null;
-  if (a == 'queue' && (E.m('units').l('order').contains(x) || CITY_FEATURES.m('recruits').has('$x'))) return queueUnit(state, playerId, d, x as String);
+  if (a == 'queue' && (E.m('units').l('order').contains(x) || FEATURES.m('recruits').has('$x'))) return queueUnit(state, playerId, d, x as String);
   if (a == 'triads') return callTriads(state, playerId, d, x as int?);
   if (a == 'bells') return ringBells(state, playerId, d);
   if (a == 'rocket') return launchRocket(state, playerId, d, x as int?);
@@ -542,7 +544,7 @@ double incomeOf(MatchState state, int playerId) {
   double total = 0;
   for (final d in state.map.districts) {
     if (d.owner != playerId || d.capture == null) continue;
-    total += districtIncome(d) * eventIncomeMul(state, d);
+    total += templeIncome(state, d, districtIncome(d)) * eventIncomeMul(state, d);
   }
   return total * (state.empire!.incomeMul != 0 ? state.empire!.incomeMul : 1) * featureIncomeMul(state, playerId);
 }

@@ -553,9 +553,11 @@ bool applyDamage(MatchState state, Unit attacker, Unit target, double amount, [b
   _retaliateIfCloser(state, attacker, target);
   final beats = attacker.creature == null && target.creature == null && _beats[attacker.gang] == target.gang;
   if (beats) amount *= 1 + _counter.d(attacker.gang);
-  if (target.creature == 'troll' && attacker.playerId == buildingOwner(state, 'hunters')) amount *= CITY_FEATURES.m('hunters').d('trollDamage');
+  if (target.creature == 'troll' && (attacker.playerId == buildingOwner(state, 'hunters') || ownsFeature(state, 'hunters', attacker.playerId))) amount *= CITY_FEATURES.m('hunters').d('trollDamage');
   _hitSound(state, attacker, target, amount);
-  var armor = math.min(_maxArmor, target.stats.d('armor') + target.armorBonus);
+  // الباغودا الحديدية (3.14): درع جنود مالكها أعلى
+  var armor = math.min(_maxArmor, target.stats.d('armor') + target.armorBonus +
+      (templeOwner(state, 'pagoda') == target.playerId ? templeNumber('pagoda', 'armor') : 0));
   if (beats && attacker.gang == 'crows') armor *= 1 - _pierce;
   if (!attacker.isSource && state.economy) armor *= 1 - classPierce(state, attacker.playerId);   // ترقية الرامي (2026-11-12)
   var taken = amount * (1 - armor) * target.takenMul;

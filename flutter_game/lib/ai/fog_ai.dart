@@ -9,6 +9,7 @@ import 'dart:typed_data';
 import '../config.dart' show FOG;
 import '../core/cfg.dart';
 import '../core/fmath.dart';
+import '../game/features.dart' show templeOwner, templeNumber;
 import '../game/state.dart';
 
 bool fogOn(MatchState s) => s.settings['fog'] == true;
@@ -43,7 +44,8 @@ void _see(MatchState s, int pid) {
   }
   for (final u in s.units) {
     if (u.state == 'dead' || u.hp <= 0 || !_ally(s, pid, u.playerId)) continue;
-    final r = math.max(FOG.unitSight, u.stats.dz('visionRange')), r2 = r * r;
+    final r = math.max(FOG.unitSight, u.stats.dz('visionRange')) + (templeOwner(s, 'hawa') == u.playerId ? templeNumber('hawa', 'sight') : 0),
+        r2 = r * r;
     final j0 = math.max(0, (u.y - r).floor()), j1 = math.min(n - 1, (u.y + r).ceil());
     final i0 = math.max(0, (u.x - r).floor()), i1 = math.min(n - 1, (u.x + r).ceil());
     for (var j = j0; j <= j1; j++) {

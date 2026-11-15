@@ -7,6 +7,7 @@ import '../data/js_config.dart';
 import '../game/state.dart';
 import 'batch.dart';
 import 'pose.dart' show impactKind;
+import '../game/features.dart' show FEATURES;
 
 final J _CR = COMBAT_REALISM;
 const _projColors = {'stone': 0x9a948c, 'arrow': 0xc8b68a, 'bottle': 0xe8893a};
@@ -304,7 +305,7 @@ void drawStoryMarker(TriBatch b, double i, double j, double r, double time) {
 // هالة المبنى المميز بلون ميزته ونجوم تدور عليها (drawFeatureHalo في featureArt.js)، على الأرض تحت المبنى فيغطي
 // المبنى ما خلفه منها
 void drawFeatureHalos(TriBatch b, MatchState s, double time) {
-  final F = CITY_FEATURES, H = F.m('halo'), n = s.map.n;
+  final F = FEATURES, H = F.m('halo'), n = s.map.n;
   for (final d in s.map.districts) {
     final t = d.featureTile, f = d.feature;
     if (t == null || f == null) continue;

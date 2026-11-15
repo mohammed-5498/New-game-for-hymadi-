@@ -36,13 +36,17 @@ MatchState createMatch(J settings) {
           team: (list[k]['team'] as num?)?.toInt() ?? 0, difficulty: list[k].ss('difficulty') ?? 'medium'),
   ];
   final economy = economyOf(settings);
-  final map = createMap(settings.ss('mapSize') ?? 'medium', players, settings.ss('city') ?? 'random', simRng, specials: !economy, features: economy);
+  final map = createMap(settings.ss('mapSize') ?? 'medium', players, settings.ss('city') ?? 'random', simRng, specials: !economy,
+      features: economy, temples: economy && settings['temples'] == true);
   if (map == null) throw StateError('تعذر توليد خريطة صالحة');
   final feature = economy ? cityFeature(map.city) : null;
   // الشرطة طرف محايد بعد الأحياء المنزلية، ثم طرف الميزة إن احتاجته
   players.add(createPolicePlayer(players));
   final featurePlayer = createFeaturePlayer(players, feature, map.city);
   if (featurePlayer != null) players.add(featurePlayer);
+  // حراس مباني المرتزقة المحايدون (3.14)
+  final guards = map.districts.any((d) => d.merc) ? createGuardsPlayer(players, map.city) : null;
+  if (guards != null) players.add(guards);
   players.addAll(createStoryPlayers(settings, players));
   final weather = settings.ss('weather');
   final state = MatchState(settings: settings, map: map, players: players,

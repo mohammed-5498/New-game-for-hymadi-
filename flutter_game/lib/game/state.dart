@@ -340,6 +340,7 @@ class MatchState {
   int humanId;
   String weather;
   String? feature;
+  final Map<String, int> templeOwners = {};   // مالك كل معبد هذا التحديث (3.14)، يحسبه updateFeatures
   CityEventState? cityEvent;
   StoryState? story;
   List<Firework> fireworks = [];

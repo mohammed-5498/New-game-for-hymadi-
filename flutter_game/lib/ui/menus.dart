@@ -121,7 +121,7 @@ class SetupModel {
       'mapSize': mapSize,
       // مدينة المضيف: مدينة أمة اللاعب الأول بعد حسم العشوائي، أو عشوائي للعصابة الكلاسيكية
       'city': city == 'host' ? hostCity(players[0]['nation'] as String?) : city,
-      'maxUnits': maxUnits, 'players': players, 'fog': fog,
+      'maxUnits': maxUnits, 'players': players, 'fog': fog, 'temples': true,   // المعابد ومباني المرتزقة (3.14)
       'weather': weather == 'random' ? WEATHER_KEYS[math.Random().nextInt(WEATHER_KEYS.length)] : weather,
     };
   }

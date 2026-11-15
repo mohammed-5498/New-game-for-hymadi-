@@ -3,6 +3,7 @@
 import 'dart:math' as math;
 
 import '../audio/sound.dart';
+import '../config.dart' show TEMPLES;
 import '../core/cfg.dart';
 import '../core/fmath.dart';
 import '../data/js_config.dart';
@@ -16,7 +17,14 @@ import 'spatial.dart';
 import 'state.dart';
 import 'units.dart';
 
-final J F = CITY_FEATURES;
+// مزايا المدن ومعها مفاتيح المعابد ومباني المرتزقة الجديدة (3.14، TEMPLES.features في config.dart): تُضاف ولا تغيّر القديم
+J _withTemples(J base, J add) => {
+  ...base,
+  for (final e in add.entries) e.key: e.value is Map && base[e.key] is Map ? <String, Object?>{...base[e.key] as J, ...e.value as J} : e.value,
+};
+final J FEATURES = _withTemples(CITY_FEATURES, TEMPLES['features'] as J);
+final J F = FEATURES;
+final J _T = TEMPLES;
 bool _alive(Unit u) => u.state != 'dead' && u.hp > 0;
 int _tickOf(MatchState s) => jsRound(s.time / TICK_SEC);
 int _ticks(num seconds) => jsRound(seconds / TICK_SEC);
@@ -53,7 +61,7 @@ Player? createFeaturePlayer(List<Player> players, String? feature, String city) 
     ..feature = feature;
 }
 
-Player? featurePlayer(MatchState s) { for (final p in s.players) { if (p.feature != null) return p; } return null; }
+Player? featurePlayer(MatchState s) { for (final p in s.players) { if (p.feature != null && p.feature != 'guards') return p; } return null; }
 
 // مالك مبنى مدينة الأحداث key (12هـ): رقم لاعب من العصابات، أو −1
 int buildingOwner(MatchState s, String key) {
@@ -84,6 +92,7 @@ void _boost(Unit unit, J? extra, [double mul = 1]) {
 
 // --- البداية ---
 void initFeatures(MatchState s) {
+  _initMercGuards(s);
   if (s.feature == 'villages') _initVillages(s);
   if (s.feature == 'cartel') _initCartel(s);
   if (F.m('events').ss(s.map.city) == 'nile') _markBanks(s.map);
@@ -101,6 +110,7 @@ void initFeatures(MatchState s) {
 
 // --- كل تحديث ---
 void updateFeatures(MatchState s) {
+  _updateTemples(s);
   if (s.feature == null) return;
   final building = F.m('buildings').ss(s.map.city);
   if (!s.featureHinted && s.empireHinted && s.notice == null) {
@@ -149,7 +159,8 @@ bool _stormHits(MatchState s, int pid) => stormActive(s) && !(pid >= 0 && buildi
 
 double rangeMul(MatchState s, int pid) => (_stormHits(s, pid) ? F.m('storm').d('rangeMul') : 1) *
     (pid >= 0 && buildingOwner(s, 'observatory') == pid ? F.m('observatory').d('rangeMul') : 1) *
-    (cityEvent(s) == 'typhoon' && eventWindow('typhoon', s.time).on ? F.m('typhoon').d('rangeMul') : 1);
+    (cityEvent(s) == 'typhoon' && eventWindow('typhoon', s.time).on && (pid < 0 || templeOwner(s, 'manmo') != pid)
+        ? F.m('typhoon').d('rangeMul') : 1);
 
 double stormDamageMul(MatchState s, int pid) => _stormHits(s, pid) ? 1 - F.m('storm').d('miss') : 1;
 bool stormMiss(MatchState s, int pid) => _stormHits(s, pid) && random() < F.m('storm').d('miss');
@@ -246,7 +257,8 @@ double? featureValue(District d) {
 
 // ================= الهرم (القاهرة) =================
 double? featureIncome(District d) => d.feature == 'pyramid' ? F.m('pyramid').d('income') : d.feature == 'mine' ? d.mineRate
-    : d.feature == 'bank' ? F.m('bank').d('fee') : d.feature == 'salwa' ? F.m('salwa').d('income') : null;
+    : d.feature == 'bank' ? F.m('bank').d('fee') : d.feature == 'salwa' ? F.m('salwa').d('income')
+    : d.feature == 'mayor' ? _T.m('mayor').d('income') : null;
 
 class FeatureZone {
   final int owner;
@@ -323,7 +335,7 @@ void _updateDojo(MatchState s) {
       _releaseGuards(s, d, D.d('vanishSeconds'));
       if (d.owner == s.humanId) s.notice = Notice('استوليت على الدوجو: جنودك +${jsRound(D.d('damageBonus') * 100)}% ضرر', true, 4);
     }
-    if (d.garrisonOff || s.time < d.nextAt) continue;
+    if (d.garrisonOff || d.merc || s.time < d.nextAt) continue;   // الدوجو الأربعة في الزوايا (3.14) بحراسها الأوائل وحدهم
     if (_countGuards(s, d.id) < D.i('max')) _spawnGuard(s, d, D);
     d.nextAt = s.time + D.d('every');
   }
@@ -408,27 +420,38 @@ void _updateClinics(MatchState s) {
 
 // ================= التجنيد في المباني المميزة =================
 List<String>? recruitsAt(District? d) {
-  if (d == null || d.featureTile == null || d.feature == null) return null;
+  if (d == null || d.feature == null || (d.featureTile == null && !d.merc)) return null;
   final c = F.mm(d.feature!);
-  return c != null && c['recruits'] != null ? c.l('recruits').cast<String>() : null;
+  final base = c != null && c['recruits'] != null ? c.l('recruits').cast<String>() : const <String>[];
+  final extra = d.merc ? _T.m('extraRecruits')[d.feature] as List? : null;   // ما يجنّده مبنى قديم صار مرتزقة (3.14)
+  if (extra == null) return c != null && c['recruits'] != null ? base : null;
+  return [...base, ...extra.cast<String>()];
 }
 
-bool spawnRecruit(MatchState s, Player player, District d, String kind) {
+// وحدة مجنّدة من نوعها في مبنى الحي (للتجنيد ولحراس المرتزقة)، بلا إضافتها
+Unit? _recruitUnit(MatchState s, Player player, District d, String kind) {
   final R = F.m('recruits').m(kind);
   final spots = findFreeTiles(s.map, d.capture!.i, d.capture!.j, SPAWN.i('spotSearchTiles'));
-  if (spots.isEmpty) return false;
+  if (spots.isEmpty) return null;
   final (i, j) = spots[(random() * spots.length).floor()];
-  final creature = R.ss('creature');
+  final creature = R.ss('creature'), gang = R.ss('gang');
   final unit = creature != null ? createUnit(s, player, i, j)
+      : gang != null ? createUnit(s, player, i, j, R.ss('hero'), false, gang)   // عصابة كلاسيكية (المحطِّم في شيكاغو)
       : createUnit(s, player, i, j, R.ss('hero'), false, nations.m(R.s('nation')).s('style'), R.s('nation'));
   if (R.mm('stats') != null) _boost(unit, R.m('stats'));
   if (R.ss('name') != null) unit.name = R.s('name');
   if (R.ss('look') != null) unit.lookKind = R.s('look');
   if (creature != null) _makeCreature(unit, creature, R.d('scale'), R.d('barY'));
   unit.recruitKind = kind;
+  return unit;
+}
+
+bool spawnRecruit(MatchState s, Player player, District d, String kind) {
+  final unit = _recruitUnit(s, player, d, kind);
+  if (unit == null) return false;
   s.units.add(unit);
   applyUpgrades(s, unit);
-  soundAt(s, 'spawn', i.toDouble(), j.toDouble());
+  soundAt(s, 'spawn', unit.x, unit.y);
   return true;
 }
 
@@ -836,7 +859,8 @@ void _burstFireworks(MatchState s, Firework f) {
   final by = _by(rocket ? f.owner! : player!.id);
   forEachNearby(s, f.x, f.y, W.d('radius'), (u) {
     final dx = u.x - f.x, dy = u.y - f.y;
-    if (dx * dx + dy * dy <= r2 && _alive(u) && (!rocket || isEnemyId(s, f.owner!, u.playerId))) hit.add(u);
+    if (dx * dx + dy * dy <= r2 && _alive(u) && (!rocket || isEnemyId(s, f.owner!, u.playerId)) &&
+        (rocket || u.playerId != templeOwner(s, 'heaven'))) hit.add(u);   // معبد السماء (3.14)
   });
   for (final u in hit) { applyDamage(s, by, u, rocket ? F.m('powder').d('damage') : W.d('damage')); }
   soundAt(s, 'fire', f.x, f.y);
@@ -878,7 +902,7 @@ double eventSpeedMul(MatchState s, Unit unit) {
   final ce = s.cityEvent;
   if (ce == null || s.players[unit.playerId].passive) return 1;
   if (ev == 'ash' && ce.ash != null && ce.ash!.on) return _inCloud(ce.ash!.list, unit) ? 1 - F.m('ash').d('slow') : 1;
-  if (ev == 'derby' && ce.derby != null && ce.derby!.on) {
+  if (ev == 'derby' && ce.derby != null && ce.derby!.on && templeOwner(s, 'sanjuan') != unit.playerId) {   // كنيسة سان خوان (3.14)
     return _sq(unit.x - ce.derby!.x) + _sq(unit.y - ce.derby!.y) <= _sq(F.m('derby').d('radius')) ? 1 - F.m('derby').d('jam') : 1;
   }
   if (ev == 'carnival' && ce.dancers != null) {
@@ -1130,7 +1154,7 @@ Wind _pickWind() { final (dx, dy) = _winds[(random() * 4).floor()]; return Wind(
 void _pushWind(MatchState s, Wind w) {
   final map = s.map, step = F.m('typhoon').d('push') * TICK_SEC;
   for (final u in s.units) {
-    if (!_alive(u) || u.creature != null) continue;
+    if (!_alive(u) || u.creature != null || u.playerId == templeOwner(s, 'manmo')) continue;   // معبد مان مو (3.14)
     final nx = u.x + w.dx * step, ny = u.y + w.dy * step;
     if (map.isConnected(jsRound(nx), jsRound(ny))) { u.x = nx; u.y = ny; }
   }
@@ -1612,4 +1636,99 @@ void _updateBank(MatchState s) {
         ? Notice('سرقت البنك: +$loot نقطة', true, 3)
         : Notice('${s.players[d.owner!].gangName} سرقوا البنك: $loot نقطة', false, 3);
   }
+}
+
+// ================= المعابد ومباني المرتزقة (GAME_SPEC 3.14، التطبيق وحده، إعداد 'temples') =================
+// المولّد يضع المعبد (district.temple) ومباني المرتزقة (district.merc). هنا: حراس المرتزقة المحايدون حتى تُحتل،
+// ومالك كل معبد في كل تحديث لمزاياه (templeOwner)
+const _guardless = ['village', 'dojo', 'fortress', 'stable'];   // لها حراسها أو أهلها، أو لا حراس (الإسطبل)
+
+String? _guardKind(String key) {
+  if (_guardless.contains(key)) return null;
+  final k = _T.m('guards').m('kinds').ss(key);
+  if (k != null) return k;
+  final r = F.mm(key)?['recruits'] as List?;
+  return r == null || r.isEmpty ? null : r.first as String;
+}
+
+Player? createGuardsPlayer(List<Player> players, String city) {
+  final pair = TEMPLES_OF[city];
+  if (pair == null || _guardKind(pair) == null) return null;
+  final G = _T.m('guards');
+  return Player(id: players.length, name: G.s('name'), gang: 'crows', gangName: G.s('name'), color: G.s('color'))
+    ..neutral = true
+    ..feature = 'guards';
+}
+final TEMPLES_OF = {for (final e in (TEMPLES['cities'] as J).entries) e.key: (e.value as List)[1] as String};
+
+void _initMercGuards(MatchState s) {
+  Player? player;
+  for (final p in s.players) { if (p.feature == 'guards') player = p; }
+  if (player == null) return;
+  final G = _T.m('guards');
+  for (final d in s.map.districts) {
+    if (!d.merc || d.capture == null) continue;
+    final kind = _guardKind(d.feature!);
+    if (kind == null) continue;
+    final (cx, cy) = d.featureTile != null ? featureCenter(s.map, d) : (d.capture!.i.toDouble(), d.capture!.j.toDouble());
+    for (var k = 0; k < G.i('count'); k++) {
+      final unit = _recruitUnit(s, player, d, kind);
+      if (unit == null) break;
+      _boost(unit, null, G.d('hp'));
+      unit.garrisonOf = d.id;
+      unit.homePost = Point2(cx, cy);
+      unit.leash = G.d('leash');
+      s.units.add(unit);
+    }
+  }
+}
+
+void _updateTemples(MatchState s) {
+  s.templeOwners.clear();
+  var mercs = false;
+  for (final d in s.map.districts) {
+    if (d.merc) mercs = true;
+    if (!d.temple || d.owner == null || s.players[d.owner!].neutral) continue;
+    s.templeOwners[d.feature!] = d.owner!;
+  }
+  if (!mercs) return;
+  for (final d in s.map.districts) {
+    if (!d.merc || d.garrisonOff || d.owner == null || _guardKind(d.feature!) == null) continue;
+    _releaseGuards(s, d, _T.m('guards').d('vanishSeconds'));
+  }
+  _vanishGuards(s);
+}
+
+// مالك المعبد key الآن (لاعب من العصابات)، أو −1
+int templeOwner(MatchState s, String key) => s.templeOwners[key] ?? -1;
+
+// هل يملك pid مبنى من نوع key (المباني الأربعة في الزوايا، كبيت صيادي الترول)
+bool ownsFeature(MatchState s, String key, int pid) {
+  if (pid < 0) return false;
+  for (final d in s.map.districts) { if (d.feature == key && d.owner == pid) return true; }
+  return false;
+}
+
+// دخل الحي بمزايا المعابد: كل قرية لمالك معبد أوام تعطيه نقطة، وأحياء الضفة لمالك معبد آمون أكثر
+double templeIncome(MatchState s, District d, double income) {
+  if (s.templeOwners.isEmpty || d.owner == null) return income;
+  var v = income;
+  if (d.feature == 'village' && templeOwner(s, 'awwam') == d.owner) v += _T.m('awwam').d('perVillage') * E.m('income').d('mul');
+  if (d.bank && templeOwner(s, 'amun') == d.owner) v *= 1 + _T.m('amun').d('bankIncome');
+  return v;
+}
+
+double templeNumber(String key, String field) => _T.m(key).d(field);
+
+// منطقة الكاتدرائية الكبرى لمالكها: جنوده حولها يضربون أسرع
+List<FeatureZone>? catedralZones(MatchState s) {
+  final pid = templeOwner(s, 'catedral');
+  if (pid < 0) return null;
+  for (final d in s.map.districts) {
+    if (d.feature != 'catedral' || d.featureTile == null) continue;
+    final (x, y) = featureCenter(s.map, d);
+    final r = _T.m('catedral').d('radius');
+    return [FeatureZone(pid, x, y, r * r)];
+  }
+  return null;
 }

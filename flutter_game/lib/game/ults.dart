@@ -25,9 +25,12 @@ bool ultReady(Unit unit) => hasUlt(unit) && unit.ultCharge >= _ultMax;
 double _chargeFactor(MatchState state, Unit unit) {
   if (unit.playerId < 0 || unit.playerId >= state.players.length) return 1;
   final player = state.players[unit.playerId];
-  if (player.isHuman || player.neutral) return 1;
+  if (player.neutral) return 1;
+  // معبد سينسو-جي (3.14): ضربات أبطال مالكه تُشحن أسرع
+  final temple = templeOwner(state, 'sensoji') == unit.playerId ? templeNumber('sensoji', 'ultCharge') : 1.0;
+  if (player.isHuman) return temple;
   final lvl = ai.m('levels').mm(player.difficulty);
-  return lvl != null && truthy(lvl['chargeFactor']) ? lvl.d('chargeFactor') : 1;
+  return temple * (lvl != null && truthy(lvl['chargeFactor']) ? lvl.d('chargeFactor') : 1);
 }
 
 void _announceReady(MatchState state, Unit unit) {

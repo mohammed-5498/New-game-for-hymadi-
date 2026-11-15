@@ -570,6 +570,16 @@
      "ax": 89,
      "ay": 97,
      "owner": "cities/_common/yard_3-owner.webp"
+    },
+    {
+     "file": "cities/arab/feature/swords.webp",
+     "group": "feature",
+     "kind": "swords",
+     "w": 380,
+     "h": 283,
+     "ax": 190.4,
+     "ay": 213.3,
+     "footprint": 2
     }
    ]
   },
@@ -1137,6 +1147,16 @@
      "ax": 89,
      "ay": 97,
      "owner": "cities/_common/yard_3-owner.webp"
+    },
+    {
+     "file": "cities/japan/feature/sensoji.webp",
+     "group": "feature",
+     "kind": "sensoji",
+     "w": 377,
+     "h": 412,
+     "ax": 188.3,
+     "ay": 342.9,
+     "footprint": 2
     }
    ]
   },
@@ -1678,6 +1698,26 @@
      "ax": 89,
      "ay": 97,
      "owner": "cities/_common/yard_3-owner.webp"
+    },
+    {
+     "file": "cities/china/feature/kungfu.webp",
+     "group": "feature",
+     "kind": "kungfu",
+     "w": 359,
+     "h": 277,
+     "ax": 180.2,
+     "ay": 207.2,
+     "footprint": 2
+    },
+    {
+     "file": "cities/china/feature/heaven.webp",
+     "group": "feature",
+     "kind": "heaven",
+     "w": 313,
+     "h": 353,
+     "ax": 156.6,
+     "ay": 283.5,
+     "footprint": 2
     }
    ]
   },
@@ -2229,6 +2269,16 @@
      "ax": 89,
      "ay": 97,
      "owner": "cities/_common/yard_3-owner.webp"
+    },
+    {
+     "file": "cities/europe/feature/inn.webp",
+     "group": "feature",
+     "kind": "inn",
+     "w": 361,
+     "h": 321,
+     "ax": 180.9,
+     "ay": 251.1,
+     "footprint": 2
     }
    ]
   },
@@ -2799,6 +2849,16 @@
      "ax": 89,
      "ay": 97,
      "owner": "cities/_common/yard_3-owner.webp"
+    },
+    {
+     "file": "cities/norway/feature/stave.webp",
+     "group": "feature",
+     "kind": "stave",
+     "w": 362,
+     "h": 428,
+     "ax": 181.6,
+     "ay": 358.4,
+     "footprint": 2
     }
    ]
   },
@@ -3328,6 +3388,16 @@
      "ax": 89,
      "ay": 97,
      "owner": "cities/_common/yard_3-owner.webp"
+    },
+    {
+     "file": "cities/hk/feature/manmo.webp",
+     "group": "feature",
+     "kind": "manmo",
+     "w": 371,
+     "h": 297,
+     "ax": 185.6,
+     "ay": 227.5,
+     "footprint": 2
     }
    ]
   },
@@ -3875,6 +3945,16 @@
      "ax": 89,
      "ay": 97,
      "owner": "cities/_common/yard_3-owner.webp"
+    },
+    {
+     "file": "cities/jaipur/feature/hawa.webp",
+     "group": "feature",
+     "kind": "hawa",
+     "w": 373,
+     "h": 381,
+     "ax": 186.3,
+     "ay": 311.9,
+     "footprint": 2
     }
    ]
   },
@@ -4408,6 +4488,26 @@
      "ax": 89,
      "ay": 97,
      "owner": "cities/_common/yard_3-owner.webp"
+    },
+    {
+     "file": "cities/mexico/feature/vaquero.webp",
+     "group": "feature",
+     "kind": "vaquero",
+     "w": 387,
+     "h": 259,
+     "ax": 193.7,
+     "ay": 189.0,
+     "footprint": 2
+    },
+    {
+     "file": "cities/mexico/feature/catedral.webp",
+     "group": "feature",
+     "kind": "catedral",
+     "w": 375,
+     "h": 323,
+     "ax": 187.7,
+     "ay": 253.1,
+     "footprint": 2
     }
    ]
   },
@@ -4936,6 +5036,16 @@
      "ax": 89,
      "ay": 97,
      "owner": "cities/_common/yard_3-owner.webp"
+    },
+    {
+     "file": "cities/chicago/feature/speakeasy.webp",
+     "group": "feature",
+     "kind": "speakeasy",
+     "w": 357,
+     "h": 294,
+     "ax": 178.9,
+     "ay": 224.1,
+     "footprint": 2
     }
    ]
   },
@@ -5790,6 +5900,16 @@
      "ax": 89,
      "ay": 97,
      "owner": "cities/_common/yard_3-owner.webp"
+    },
+    {
+     "file": "cities/yamamah/feature/bedouin.webp",
+     "group": "feature",
+     "kind": "bedouin",
+     "w": 377,
+     "h": 230,
+     "ax": 189.0,
+     "ay": 160.0,
+     "footprint": 2
     }
    ],
    "source": "cities/yamamah/source"
@@ -6337,6 +6457,16 @@
      "ax": 89,
      "ay": 97,
      "owner": "cities/_common/yard_3-owner.webp"
+    },
+    {
+     "file": "cities/shibam/feature/awwam.webp",
+     "group": "feature",
+     "kind": "awwam",
+     "w": 386,
+     "h": 294,
+     "ax": 193.1,
+     "ay": 224.8,
+     "footprint": 2
     }
    ]
   },
@@ -6888,6 +7018,16 @@
      "ax": 89,
      "ay": 97,
      "owner": "cities/_common/yard_3-owner.webp"
+    },
+    {
+     "file": "cities/diriyah/feature/knights.webp",
+     "group": "feature",
+     "kind": "knights",
+     "w": 377,
+     "h": 269,
+     "ax": 189.0,
+     "ay": 199.8,
+     "footprint": 2
     }
    ]
   },
@@ -7420,6 +7560,16 @@
      "ax": 89,
      "ay": 97,
      "owner": "cities/_common/yard_3-owner.webp"
+    },
+    {
+     "file": "cities/cairo/feature/futuwwa.webp",
+     "group": "feature",
+     "kind": "futuwwa",
+     "w": 356,
+     "h": 294,
+     "ax": 178.2,
+     "ay": 224.1,
+     "footprint": 2
     }
    ]
   },
@@ -7954,6 +8104,16 @@
      "ax": 89,
      "ay": 97,
      "owner": "cities/_common/yard_3-owner.webp"
+    },
+    {
+     "file": "cities/kaifeng/feature/pagoda.webp",
+     "group": "feature",
+     "kind": "pagoda",
+     "w": 339,
+     "h": 512,
+     "ax": 169.4,
+     "ay": 442.8,
+     "footprint": 2
     }
    ]
   },
@@ -8510,6 +8670,16 @@
      "ax": 89,
      "ay": 97,
      "owner": "cities/_common/yard_3-owner.webp"
+    },
+    {
+     "file": "cities/gyeongju/feature/koreanCamp.webp",
+     "group": "feature",
+     "kind": "koreanCamp",
+     "w": 376,
+     "h": 234,
+     "ax": 188.3,
+     "ay": 164.7,
+     "footprint": 2
     }
    ]
   },
@@ -9034,6 +9204,16 @@
      "ax": 89,
      "ay": 97,
      "owner": "cities/_common/yard_3-owner.webp"
+    },
+    {
+     "file": "cities/paris/feature/apache.webp",
+     "group": "feature",
+     "kind": "apache",
+     "w": 339,
+     "h": 280,
+     "ax": 169.4,
+     "ay": 210.6,
+     "footprint": 2
     }
    ]
   },
@@ -9567,6 +9747,16 @@
      "ax": 89,
      "ay": 97,
      "owner": "cities/_common/yard_3-owner.webp"
+    },
+    {
+     "file": "cities/birmingham/feature/boys.webp",
+     "group": "feature",
+     "kind": "boys",
+     "w": 358,
+     "h": 424,
+     "ax": 178.9,
+     "ay": 354.4,
+     "footprint": 2
     }
    ]
   },
@@ -10120,6 +10310,16 @@
      "ax": 89,
      "ay": 97,
      "owner": "cities/_common/yard_3-owner.webp"
+    },
+    {
+     "file": "cities/rothenburg/feature/watchinn.webp",
+     "group": "feature",
+     "kind": "watchinn",
+     "w": 346,
+     "h": 362,
+     "ax": 173.5,
+     "ay": 292.3,
+     "footprint": 2
     }
    ]
   },
@@ -10663,6 +10863,16 @@
      "ax": 89,
      "ay": 97,
      "owner": "cities/_common/yard_3-owner.webp"
+    },
+    {
+     "file": "cities/gondar/feature/debre.webp",
+     "group": "feature",
+     "kind": "debre",
+     "w": 383,
+     "h": 299,
+     "ax": 191.7,
+     "ay": 229.5,
+     "footprint": 2
     }
    ]
   },
@@ -11201,6 +11411,16 @@
      "ax": 89,
      "ay": 97,
      "owner": "cities/_common/yard_3-owner.webp"
+    },
+    {
+     "file": "cities/kano/feature/kanoCamp.webp",
+     "group": "feature",
+     "kind": "kanoCamp",
+     "w": 361,
+     "h": 234,
+     "ax": 180.9,
+     "ay": 164.7,
+     "footprint": 2
     }
    ]
   },
@@ -11723,6 +11943,26 @@
      "ax": 89,
      "ay": 97,
      "owner": "cities/_common/yard_3-owner.webp"
+    },
+    {
+     "file": "cities/meroe/feature/nubian.webp",
+     "group": "feature",
+     "kind": "nubian",
+     "w": 389,
+     "h": 229,
+     "ax": 195.1,
+     "ay": 159.3,
+     "footprint": 2
+    },
+    {
+     "file": "cities/meroe/feature/amun.webp",
+     "group": "feature",
+     "kind": "amun",
+     "w": 377,
+     "h": 275,
+     "ax": 188.3,
+     "ay": 205.2,
+     "footprint": 2
     }
    ]
   },
@@ -12232,6 +12472,16 @@
      "ax": 89,
      "ay": 97,
      "owner": "cities/_common/yard_3-owner.webp"
+    },
+    {
+     "file": "cities/rio/feature/capoeira.webp",
+     "group": "feature",
+     "kind": "capoeira",
+     "w": 379,
+     "h": 230,
+     "ax": 189.7,
+     "ay": 160.0,
+     "footprint": 2
     }
    ]
   },
@@ -12743,6 +12993,16 @@
      "ax": 89,
      "ay": 97,
      "owner": "cities/_common/yard_3-owner.webp"
+    },
+    {
+     "file": "cities/laboca/feature/sanjuan.webp",
+     "group": "feature",
+     "kind": "sanjuan",
+     "w": 371,
+     "h": 380,
+     "ax": 185.6,
+     "ay": 310.5,
+     "footprint": 2
     }
    ]
   },
@@ -13265,6 +13525,26 @@
      "ax": 89,
      "ay": 97,
      "owner": "cities/_common/yard_3-owner.webp"
+    },
+    {
+     "file": "cities/tenoch/feature/eagles.webp",
+     "group": "feature",
+     "kind": "eagles",
+     "w": 352,
+     "h": 282,
+     "ax": 176.2,
+     "ay": 212.6,
+     "footprint": 2
+    },
+    {
+     "file": "cities/tenoch/feature/mayor.webp",
+     "group": "feature",
+     "kind": "mayor",
+     "w": 392,
+     "h": 331,
+     "ax": 196.4,
+     "ay": 261.9,
+     "footprint": 2
     }
    ]
   }

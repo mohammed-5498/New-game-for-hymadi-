@@ -39,7 +39,7 @@ void _applyDamageBonuses(MatchState state) {
   final outnumbered = [for (final p in players) outnumberedMods(p)];
   final duel = [for (final p in players) duelMods(p)];
   final pyramids = pyramidZones(state);
-  final statues = statueZones(state);
+  final statues = statueZones(state), catedrals = catedralZones(state);
   final units = state.units;
   for (var k = 0; k < units.length; k++) {
     final unit = units[k];
@@ -91,6 +91,7 @@ void _applyDamageBonuses(MatchState state) {
       multiplier += _statue.d('damage');
       speed = _statue.d('attackSpeed');
     }
+    if (catedrals != null && inZone(catedrals, unit)) speed = math.max(speed, templeNumber('catedral', 'attackSpeed'));   // 3.14
     unit.auraSpeed = speed;
     if (unit.rallyUntil > state.time) multiplier += _cathedral.d('damage');
     if (unit.gang == 'scorpions' && unit.creature == null) multiplier += hordeBonus(state, unit);
@@ -215,7 +216,8 @@ void _applyHealing(MatchState state) {
 
 void _medicHeal(MatchState state, Unit medic) {
   final h = medic.stats.m('heal');
-  final radius = h.d('radius'), perSecond = h.d('perSecond');
+  final radius = h.d('radius'),
+      perSecond = h.d('perSecond') * (templeOwner(state, 'debre') == medic.playerId ? 1 + templeNumber('debre', 'heal') : 1);   // 3.14
   Unit? patient;
   double worst = 0;
   final radiusSq = radius * radius;

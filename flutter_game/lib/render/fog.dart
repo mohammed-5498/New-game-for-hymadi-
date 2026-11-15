@@ -11,6 +11,7 @@ import '../config.dart' show FOG;
 import '../core/cfg.dart';
 import '../core/fmath.dart';
 import '../data/js_config.dart';
+import '../game/features.dart' show templeOwner, templeNumber;
 import '../game/state.dart';
 
 class Fog {
@@ -60,7 +61,8 @@ class Fog {
     // رصد الجنود: دائرة حول كل جندي، وحافتها تتدرج على soft (الركن (a, b) في الموضع (a − ½, b − ½))
     for (final u in s.units) {
       if (u.state == 'dead' || !friendly(s, u.playerId)) continue;
-      final r = math.max(FOG.unitSight, u.stats.dz('visionRange')), reach = r + soft / 2;
+      final r = math.max(FOG.unitSight, u.stats.dz('visionRange')) + (templeOwner(s, 'hawa') == u.playerId ? templeNumber('hawa', 'sight') : 0),
+          reach = r + soft / 2;   // هوا محل (3.14): جنود مالكه يرون أبعد
       final b0 = math.max(0, (u.y + 0.5 - reach).floor()), b1 = math.min(n, (u.y + 0.5 + reach).ceil());
       final a0 = math.max(0, (u.x + 0.5 - reach).floor()), a1 = math.min(n, (u.x + 0.5 + reach).ceil());
       for (var b = b0; b <= b1; b++) {

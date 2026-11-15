@@ -190,6 +190,7 @@ void _endPoints(MatchState state) {
 // ================= 9.5.4 ملك الحي =================
 // التلة: الأقرب لمركز الخريطة من الأحياء بـ 6 مربعات فأكثر، لا منزلية ولا مركز شرطة ولا حي ميزة
 District? pickHill(GameMap map) {
+  for (final d in map.districts) { if (d.temple) return d; }   // المعبد هو التلة (3.14)
   final center = (map.n - 1) / 2;
   District? best;
   var bestDist = double.infinity;

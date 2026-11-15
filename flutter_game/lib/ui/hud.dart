@@ -336,15 +336,15 @@ class _EmpireMenu extends StatelessWidget {
     var hasQueue = false;
     // مبنى ميزة المدينة (القسم 3.11): ما يعطيه، وخانات التجنيد والترياد والصاروخ والأجراس
     String? info;
-    if (d.featureTile != null && d.feature != null) {
-      info = CITY_FEATURES.m('desc').ss(d.feature!);
+    if ((d.featureTile != null || d.merc) && d.feature != null) {
+      info = FEATURES.m('desc').ss(d.feature!);
       for (final kind in recruitsAt(d) ?? const <String>[]) {
-        final R = CITY_FEATURES.m('recruits').m(kind);
+        final R = FEATURES.m('recruits').m(kind);
         hasQueue = true;
         slot(R.ss('name') ?? kind, unitPrice(s, pid, kind), canQueue(s, pid, d, kind), () => screen.empire('queue', did, kind),
             icon: Icons.person_add, count: queue.where((x) => x.kind == kind).length);
       }
-      final F = CITY_FEATURES;
+      final F = FEATURES;
       if (d.feature == 'triads') {
         slot('هجوم الترياد', F.m('triads').i('cost'), canCallTriads(s, pid, d),
             () => screen.startPick('triads', did, 'المس حياً لعدوك ليهجم عليه الترياد'), icon: Icons.groups,

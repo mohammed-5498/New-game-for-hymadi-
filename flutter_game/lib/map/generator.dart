@@ -42,6 +42,7 @@ class District {
   int? progressOwner;
   int? featureTile;
   bool featureBig = false;
+  bool temple = false, merc = false;   // معبد الوسط ومباني المرتزقة في الزوايا (3.14، إعداد 'temples')
   List<int> adj = [];          // الأحياء المجاورة (منطقة الحي، nations.dart)
   // ما تضيفه المباراة (capture.js وempire.js...)
   String? tintColor;
@@ -122,17 +123,17 @@ String resolveCity(String city, Rng rnd) =>
 
 // specials: false بلا أحياء مميزة (كل مباراة على الاقتصاد)، features: مزايا المدن (القسم 3.11)
 GameMap? createMap(String sizeKey, List<MapPlayer> players, String city, Rng rnd,
-    {bool specials = true, bool features = false}) {
+    {bool specials = true, bool features = false, bool temples = false}) {
   final size = MAP_SIZES[sizeKey] ?? MAP_SIZES['medium']!;
   final cityKey = resolveCity(city, rnd);
   for (var attempt = 0; attempt < MAP_GEN.maxTries; attempt++) {
-    final map = _buildMap(size, players, cityKey, rnd, specials, features);
+    final map = _buildMap(size, players, cityKey, rnd, specials, features, temples);
     if (map != null) return map;
   }
   return null;
 }
 
-GameMap? _buildMap(MapSize size, List<MapPlayer> players, String cityKey, Rng rnd, bool specials, bool features) {
+GameMap? _buildMap(MapSize size, List<MapPlayer> players, String cityKey, Rng rnd, bool specials, bool features, bool temples) {
   final map = GameMap(size);
   map.city = cityKey;
   map.seed = rnd.below(1000000000);
@@ -150,6 +151,7 @@ GameMap? _buildMap(MapSize size, List<MapPlayer> players, String cityKey, Rng rn
   if (specials) _assignSpecialDistricts(map, districts, size, rnd);
   _assignPoliceDistricts(map, districts, size, rnd);
   if (features) _assignFeatures(map, districts, size, rnd);
+  if (features && temples) _assignTemples(map, districts);
   _fillDistricts(map, districts, rnd);
   map.districts = districts;
   final walls = CITIES.walls[cityKey];
@@ -417,7 +419,13 @@ const FEATURE_BUILDINGS = {'pyramid': 'center', 'khartoum': 'center', 'dojo': 'c
   'fortress': 'spread', 'policeHQ': 'center', 'clock': 'center', 'complex': 'center', 'statue': 'center',
   'mercs': 'spread', 'souk': 'center', 'triads': 'center', 'stable': 'center', 'cathedral': 'center', 'mine': 'center',
   'bank': 'center', 'salwa': 'center', 'observatory': 'center', 'kanoGate': 'center', 'arch': 'center',
-  'khan': 'center', 'powder': 'center', 'hunters': 'center'};
+  'khan': 'center', 'powder': 'center', 'hunters': 'center',
+  // المعابد ومباني المرتزقة الجديدة (3.14): كتل 2×2 تضعها _assignTemples
+  'awwam': 'center', 'sensoji': 'center', 'heaven': 'center', 'manmo': 'center', 'hawa': 'center', 'pagoda': 'center',
+  'stave': 'center', 'debre': 'center', 'amun': 'center', 'catedral': 'center', 'sanjuan': 'center', 'mayor': 'center',
+  'bedouin': 'corner', 'swords': 'corner', 'knights': 'corner', 'futuwwa': 'corner', 'kungfu': 'corner', 'koreanCamp': 'corner',
+  'inn': 'corner', 'apache': 'corner', 'boys': 'corner', 'watchinn': 'corner', 'kanoCamp': 'corner', 'nubian': 'corner',
+  'vaquero': 'corner', 'speakeasy': 'corner', 'capoeira': 'corner', 'eagles': 'corner'};
 const DISTRICT_FEATURE = {'pyramid': 'pyramid', 'villages': 'village', 'dojo': 'dojo', 'clinic': 'clinic',
   'fortress': 'fortress', 'khartoum': 'khartoum', 'policeHQ': 'policeHQ', 'clock': 'clock', 'cartel': 'complex',
   'statue': 'statue', 'mercs': 'mercs', 'souk': 'souk', 'triads': 'triads', 'elephants': 'stable',
@@ -450,6 +458,53 @@ void _assignFeatures(GameMap map, List<District> districts, MapSize size, Rng rn
     return;
   }
   for (final d in _spread(candidates, count, rnd)) { _markFeature(d, feature); }
+}
+
+// المعابد ومباني المرتزقة (GAME_SPEC 3.14، التطبيق وحده): المعبد في الحي الأقرب للوسط، ومبنى مرتزقة في الحي الأقرب لكل
+// زاوية (لا قاعدة لاعب)، وما بقي من مبنى المدينة القديم (ورشة البارود، منجم الفضة، برج الخرطوم، المجمع وكارتله) في الحي التالي
+// للوسط. بلا أرقام عشوائية، بعد _assignFeatures: مبنى المدينة القديم يُرفع من مكانه إلا إن كان هو المعبد
+void _assignTemples(GameMap map, List<District> districts) {
+  final pair = TEMPLES_CITIES[map.city];
+  if (pair == null) return;
+  final (temple, mercs) = pair;
+  final old = cityFeatureBuilding(map.city);
+  if (old != null && old != temple) {
+    for (final d in districts) {
+      if (d.feature == old || (old == 'complex' && d.feature == 'cartel')) { d.feature = null; d.region = 'neutral'; }
+    }
+  }
+  bool free(District d, bool block) => d.capturable && !d.isHome && !d.police && d.special == null && d.feature == null &&
+      (!block || (d.tiles.length >= CITY_FEATURES.blockTiles && _hasBlock(map, d)));
+  District? nearest(double ci, double cj, bool block) {
+    District? best;
+    var bestD = double.infinity;
+    for (final d in districts) {
+      if (!free(d, block)) continue;
+      final dist = hypot(d.cx - ci, d.cy - cj);
+      if (dist < bestD) { bestD = dist; best = d; }
+    }
+    return best;
+  }
+  final ci = (map.land - 1) / 2, cj = (map.n - 1) / 2;
+  final t = old == temple ? districts.where((d) => d.feature == temple).firstOrNull : nearest(ci, cj, true);
+  if (t != null) {
+    if (t.feature == null) _markFeature(t, temple);
+    t.temple = true;
+  }
+  if (old != null && old != temple && old != mercs) {
+    final d = nearest(ci, cj, FEATURE_BUILDINGS[old] != null);
+    if (d != null) {
+      _markFeature(d, old);
+      if (old == 'complex') _markCartel(districts, d, CITY_FEATURES.place['cartel']!.neighbors!);
+    }
+  }
+  final block = FEATURE_BUILDINGS[mercs] != null, last = map.land - 1.0, far = map.n - 1.0;
+  for (final (a, b) in [(0.0, 0.0), (last, 0.0), (0.0, far), (last, far)]) {
+    final d = nearest(a, b, block);
+    if (d == null) continue;
+    _markFeature(d, mercs);
+    d.merc = true;
+  }
 }
 
 void _markFeature(District district, String feature) {

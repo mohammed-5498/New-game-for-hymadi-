@@ -153,3 +153,111 @@ const CITY_FEATURES = (
     'mercs': (count: (small: 2, medium: 3, large: 4), minHomeDistance: 5, neighbors: null),
   },
 );
+
+// --- المعابد ومباني المرتزقة (GAME_SPEC 3.14، بطلب المستخدم، 2026-11-15؛ في التطبيق وحده، بإعداد المباراة 'temples') ---
+// لكل مدينة: المعبد في الحي الأقرب للوسط، والمرتزقة في الحي الأقرب لكل زاوية من الأربع، وما بقي من مبانيها القديمة
+// (extra) في الحي التالي للوسط. والمفاتيح الجديدة تُضاف إلى CITY_FEATURES (features: الأسماء والوصف والألوان والقيم والتجنيد)
+const TEMPLES = <String, Object?>{
+  // المدينة: [المعبد، المرتزقة]
+  'cities': <String, Object?>{
+    'yamamah': ['khan', 'bedouin'], 'arab': ['souk', 'swords'], 'shibam': ['awwam', 'village'], 'diriyah': ['salwa', 'knights'],
+    'cairo': ['pyramid', 'futuwwa'], 'japan': ['sensoji', 'dojo'], 'china': ['heaven', 'kungfu'], 'hk': ['manmo', 'triads'],
+    'jaipur': ['hawa', 'stable'], 'kaifeng': ['pagoda', 'clinic'], 'gyeongju': ['observatory', 'koreanCamp'],
+    'europe': ['cathedral', 'inn'], 'norway': ['stave', 'hunters'], 'paris': ['arch', 'apache'], 'birmingham': ['clock', 'boys'],
+    'rothenburg': ['policeHQ', 'watchinn'], 'gondar': ['debre', 'fortress'], 'kano': ['kanoGate', 'kanoCamp'],
+    'meroe': ['amun', 'nubian'], 'mexico': ['catedral', 'vaquero'], 'chicago': ['bank', 'speakeasy'], 'rio': ['statue', 'capoeira'],
+    'laboca': ['sanjuan', 'mercs'], 'tenoch': ['mayor', 'eagles'],
+  },
+
+  // حراس مباني المرتزقة المحايدون حتى تُحتل (إلا القرى والدوجو والحصن: لها حراسها)، بنوع أول ما تجنّده
+  'guards': <String, Object?>{'count': 3, 'leash': 6, 'vanishSeconds': 5, 'name': 'المرتزقة', 'color': '#6b5a45',
+    'hp': 1.25, 'kinds': <String, Object?>{'triads': 'triadGuard', 'clinic': 'doctor', 'hunters': 'trollHunter', 'mercs': 'blade'}},
+  // ما تجنّده مباني المرتزقة القديمة إضافة لما تجنّده الآن
+  'extraRecruits': <String, Object?>{'village': ['janbiya'], 'hunters': ['trollHunter']},
+  // مزايا المعابد الجديدة
+  'awwam': <String, Object?>{'perVillage': 1.0},
+  'sensoji': <String, Object?>{'ultCharge': 1.25},
+  'hawa': <String, Object?>{'sight': 2.0},
+  'pagoda': <String, Object?>{'armor': 0.1},
+  'debre': <String, Object?>{'heal': 0.3},
+  'amun': <String, Object?>{'bankIncome': 0.5},
+  'catedral': <String, Object?>{'radius': 6, 'attackSpeed': 0.1},
+  'mayor': <String, Object?>{'income': 3},
+  'features': <String, Object?>{
+    'names': <String, Object?>{
+      'awwam': 'معبد أوام', 'sensoji': 'معبد سينسو-جي', 'heaven': 'معبد السماء', 'manmo': 'معبد مان مو', 'hawa': 'هوا محل',
+      'pagoda': 'الباغودا الحديدية', 'stave': 'كنيسة الألواح', 'debre': 'كنيسة دبرا برهان', 'amun': 'معبد آمون',
+      'catedral': 'الكاتدرائية الكبرى', 'sanjuan': 'كنيسة سان خوان', 'mayor': 'تمبلو مايور',
+      'bedouin': 'مضارب البدو', 'swords': 'دار السيوف', 'knights': 'مجلس الفرسان', 'futuwwa': 'بيت الفتوات',
+      'kungfu': 'دار الكونغ فو', 'koreanCamp': 'معسكر قطاع الطرق', 'inn': 'نُزل المرتزقة', 'apache': 'حانة الأباتشي',
+      'boys': 'مصنع الفتيان', 'watchinn': 'نُزل الحارس الليلي', 'kanoCamp': 'معسكر قطاع الطرق', 'nubian': 'مخيم رماة النوبة',
+      'vaquero': 'مزرعة الفاكيروس', 'speakeasy': 'الحانة السرية', 'capoeira': 'مدرسة الكابويرا', 'eagles': 'بيت النسر والجاغوار',
+    },
+    'desc': <String, Object?>{
+      'awwam': 'معبد أوام: كل قرية يملكها مالكه تعطيه نقطة في الثانية', 'sensoji': 'معبد سينسو-جي: ضربات أبطال مالكه تُشحن أسرع 25%',
+      'heaven': 'معبد السماء: الألعاب النارية لا تمس جنود مالكه', 'manmo': 'معبد مان مو: الإعصار لا يدفع جنود مالكه ولا يقصّر مداهم',
+      'hawa': 'هوا محل: جنود مالكه يرون أبعد بمربعين في ضباب الحرب', 'pagoda': 'الباغودا الحديدية: درع جنود مالكه +10',
+      'stave': 'كنيسة الألواح: الثلج لا يبطئ جنود مالكه', 'debre': 'كنيسة دبرا برهان: علاج معالجي مالكه ومستشفياته +30%',
+      'amun': 'معبد آمون: دخل أحياء الضفة لمالكه +50%', 'catedral': 'الكاتدرائية الكبرى: جنود مالكه حولها يضربون أسرع 10%',
+      'sanjuan': 'كنيسة سان خوان: جمهور الديربي لا يبطئ جنود مالكه', 'mayor': 'تمبلو مايور: 3 نقاط في الثانية، والكارتل حوله',
+      'bedouin': 'مضارب البدو: يحرسها البدو، ومن يحتلها يجنّد قوّاسي البدو', 'swords': 'دار السيوف: من يحتلها يجنّد النفّاطين',
+      'knights': 'مجلس الفرسان: من يحتله يجنّد القوّاسين', 'futuwwa': 'بيت الفتوات: من يحتله يجنّد أصحاب النبّوت',
+      'kungfu': 'دار الكونغ فو: من يحتلها يجنّد معلّمي الكونغ فو', 'koreanCamp': 'معسكر قطاع الطرق: من يحتله يجنّدهم',
+      'inn': 'نُزل المرتزقة: من يحتله يجنّد اللاندسكنخت', 'apache': 'حانة الأباتشي: من يحتلها يجنّد الأباتشي',
+      'boys': 'مصنع الفتيان: من يحتله يجنّد فتيان سمول هيث', 'watchinn': 'نُزل الحارس الليلي: من يحتله يجنّد حاملي المطرد',
+      'kanoCamp': 'معسكر قطاع الطرق: من يحتله يجنّد الملاكمين', 'nubian': 'مخيم رماة النوبة: من يحتله يجنّد رماة النوبة',
+      'vaquero': 'مزرعة الفاكيروس: من يحتلها يجنّد محاربي النسر', 'speakeasy': 'الحانة السرية: من يحتلها يجنّد المحطِّمين',
+      'capoeira': 'مدرسة الكابويرا: من يحتلها يجنّد راقصي الكابويرا', 'eagles': 'بيت النسر والجاغوار: من يحتله يجنّد محاربي الجاغوار',
+    },
+    'colors': <String, Object?>{
+      'awwam': '235,200,130', 'sensoji': '232,70,86', 'heaven': '120,170,255', 'manmo': '255,120,90', 'hawa': '255,140,190',
+      'pagoda': '170,150,140', 'stave': '200,150,100', 'debre': '150,214,96', 'amun': '255,206,84', 'catedral': '255,214,120',
+      'sanjuan': '120,190,255', 'mayor': '47,190,175',
+      'bedouin': '235,185,95', 'swords': '230,170,70', 'knights': '235,200,130', 'futuwwa': '225,140,80', 'kungfu': '255,105,60',
+      'koreanCamp': '160,195,255', 'inn': '200,160,110', 'apache': '235,95,110', 'boys': '240,205,120', 'watchinn': '95,160,240',
+      'kanoCamp': '225,140,80', 'nubian': '255,150,60', 'vaquero': '200,215,230', 'speakeasy': '120,230,150', 'capoeira': '140,230,120',
+      'eagles': '150,214,96',
+    },
+    'botValue': <String, Object?>{
+      'awwam': 3, 'sensoji': 3, 'heaven': 3, 'manmo': 3, 'hawa': 3, 'pagoda': 3, 'stave': 3, 'debre': 3, 'amun': 3, 'catedral': 3,
+      'sanjuan': 3, 'mayor': 3,
+      'bedouin': 2, 'swords': 2, 'knights': 2, 'futuwwa': 2, 'kungfu': 2, 'koreanCamp': 2, 'inn': 2, 'apache': 2, 'boys': 2,
+      'watchinn': 2, 'kanoCamp': 2, 'nubian': 2, 'vaquero': 2, 'speakeasy': 2, 'capoeira': 2, 'eagles': 2,
+    },
+    // ما تجنّده مباني المرتزقة الجديدة
+    'bedouin': <String, Object?>{'recruits': ['bedouinArcher']}, 'swords': <String, Object?>{'recruits': ['naffat']},
+    'knights': <String, Object?>{'recruits': ['knightArcher']}, 'futuwwa': <String, Object?>{'recruits': ['nabboot']},
+    'kungfu': <String, Object?>{'recruits': ['kungfuMaster']}, 'koreanCamp': <String, Object?>{'recruits': ['koreanBandit']},
+    'inn': <String, Object?>{'recruits': ['landsknecht']}, 'apache': <String, Object?>{'recruits': ['apacheFighter']},
+    'boys': <String, Object?>{'recruits': ['smallHeath']}, 'watchinn': <String, Object?>{'recruits': ['halberd']},
+    'kanoCamp': <String, Object?>{'recruits': ['boxer']}, 'nubian': <String, Object?>{'recruits': ['nubianArcher']},
+    'vaquero': <String, Object?>{'recruits': ['eagleWarrior']}, 'speakeasy': <String, Object?>{'recruits': ['crusher']},
+    'capoeira': <String, Object?>{'recruits': ['capoeirista']}, 'eagles': <String, Object?>{'recruits': ['jaguar']},
+    'recruits': <String, Object?>{
+      'bedouinArcher': <String, Object?>{'name': 'قوّاس البدو', 'cost': 35, 'seconds': 7, 'nation': 'saudi', 'hero': 'sniper'},
+      'naffat': <String, Object?>{'name': 'النفّاط', 'cost': 40, 'seconds': 8, 'nation': 'saudi', 'hero': 'firebomber'},
+      'janbiya': <String, Object?>{'name': 'مقاتل الجنبية', 'cost': 15, 'seconds': 4, 'nation': 'yemen', 'hero': null},
+      'knightArcher': <String, Object?>{'name': 'القوّاس', 'cost': 35, 'seconds': 7, 'nation': 'saudi', 'hero': 'sniper'},
+      'nabboot': <String, Object?>{'name': 'صاحب النبّوت', 'cost': 45, 'seconds': 8, 'nation': 'egypt', 'hero': 'smasher'},
+      'kungfuMaster': <String, Object?>{'name': 'معلّم الكونغ فو', 'cost': 45, 'seconds': 8, 'nation': 'china', 'hero': 'boss'},
+      'koreanBandit': <String, Object?>{'name': 'قاطع طريق', 'cost': 15, 'seconds': 4, 'nation': 'korea', 'hero': null},
+      'landsknecht': <String, Object?>{'name': 'لاندسكنخت', 'cost': 20, 'seconds': 5, 'nation': 'germany', 'hero': null},
+      'trollHunter': <String, Object?>{'name': 'صياد الترول', 'cost': 50, 'seconds': 9, 'nation': 'germany', 'hero': 'smasher'},
+      'apacheFighter': <String, Object?>{'name': 'أباتشي', 'cost': 15, 'seconds': 4, 'nation': 'france', 'hero': null},
+      'smallHeath': <String, Object?>{'name': 'فتى سمول هيث', 'cost': 15, 'seconds': 4, 'nation': 'britain', 'hero': null},
+      'halberd': <String, Object?>{'name': 'حامل المطرد', 'cost': 40, 'seconds': 8, 'nation': 'germany', 'hero': 'armored'},
+      'boxer': <String, Object?>{'name': 'الملاكم', 'cost': 40, 'seconds': 8, 'nation': 'nigeria', 'hero': 'smasher'},
+      'nubianArcher': <String, Object?>{'name': 'رامي النوبة', 'cost': 35, 'seconds': 7, 'nation': 'sudan', 'hero': 'sniper'},
+      'eagleWarrior': <String, Object?>{'name': 'محارب النسر', 'cost': 40, 'seconds': 8, 'nation': 'mexico', 'hero': 'firebomber'},
+      'crusher': <String, Object?>{'name': 'المحطِّم', 'cost': 45, 'seconds': 8, 'gang': 'hammers', 'hero': 'smasher'},
+      'capoeirista': <String, Object?>{'name': 'راقص الكابويرا', 'cost': 40, 'seconds': 8, 'nation': 'brazil', 'hero': 'dual'},
+      'jaguar': <String, Object?>{'name': 'محارب الجاغوار', 'cost': 40, 'seconds': 8, 'nation': 'mexico', 'hero': 'sniper'},
+      'triadGuard': <String, Object?>{'name': 'مقاتل الترياد', 'cost': 0, 'seconds': 0, 'nation': 'china', 'hero': 'boss'},
+    },
+  },
+};
+
+// المدينة ← (المعبد، المرتزقة) للمولّد
+final TEMPLES_CITIES = <String, (String, String)>{
+  for (final e in (TEMPLES['cities'] as Map<String, Object?>).entries) e.key: ((e.value as List)[0] as String, (e.value as List)[1] as String),
+};
