@@ -34,9 +34,11 @@ class Decor {
   bool _isLane(int k) => map.type[k] == tDot && (map.kind[k] == 'lane_i' || map.kind[k] == 'lane_j');
 
   // --- الأرض: طبقة chunkCache.drawGround ---
-  void groundMarks(Vec v) {
+  // at: الطبقة التي يُرسم فيها ما على المربع (i، j)، فتُقسم الأرض شرائح تُرسم الظاهرة منها وحدها
+  void groundMarks(Vec Function(int i, int j) at) {
     for (var j = 0; j < map.n; j++) {
       for (var i = 0; i < map.n; i++) {
+        final v = at(i, j);
         final k = map.idx(i, j), x = (i - j) * TILE_HALF_W, y = (i + j) * TILE_HALF_H;
         if (map.road[k] == 1) {
           _roadSurface(v, i, j, x, y);
@@ -54,6 +56,7 @@ class Decor {
     // المعابد والمرتزقة وما بقي من مبنى المدينة (3.14): رصفها وحافتها ومنصة مبناها
     for (var j = 0; j < map.n; j++) {
       for (var i = 0; i < map.n; i++) {
+        final v = at(i, j);
         final k = map.idx(i, j), d = _squareOf(k);
         if (d != null) _squareGround(v, d, i, j, (i - j) * TILE_HALF_W, (i + j) * TILE_HALF_H);
       }
@@ -61,6 +64,7 @@ class Decor {
     // خطوط منتصف الشوارع
     for (var j = 0; j < map.n; j++) {
       for (var i = 0; i < map.n; i++) {
+        final v = at(i, j);
         final d = map.dash[map.idx(i, j)], x = (i - j) * TILE_HALF_W, y = (i + j) * TILE_HALF_H;
         const c = '#c9bd85';
         if (d == 1) v.ln(x - 4, y - 2, x + 4, y + 2, c, 1);

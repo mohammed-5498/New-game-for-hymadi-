@@ -678,6 +678,8 @@ void _mark(String k) {
 class _MatchPainter extends CustomPainter {
   final MatchScreenState v;
   _MatchPainter(this.v) : super(repaint: v.frame);
+  static final _clips = Expando<TriClip>();
+  static final _unitStep = 1 / PACE.unitHz - 0.002;
 
   final _rows = <List<Unit>>[];
 
@@ -717,7 +719,7 @@ class _MatchPainter extends CustomPainter {
     b.reset();
     _mark('sortUnits');
     layer.paint(canvas, art.image, c.y - halfH, c.y + halfH, onGround: () {
-      _borders(b, s);
+      _drawBorders(canvas, b, s, img);
       for (final f in s.fires) { drawFire(b, f, time); }
       for (final z in s.zones) { drawZone(b, z, time); }
       if (s.feature != null) drawFeatureGround(b, s, time);
@@ -733,11 +735,22 @@ class _MatchPainter extends CustomPainter {
             (s.modeState as ModeState?)?.blocked ?? false);
       }
       final row = _rows[d];
+      _mark('city+flags');
       if (row.isNotEmpty) {
         row.sort((p, q) => (p.x + p.y).compareTo(q.x + q.y));
-        _mark('city+flags');
         for (final u in row) {
-          drawUnit(b, atlas, u, alpha, c.z, time, crowded);
+          // شكل الجندي (وضعيته وأجزاؤه) يُحسب unitHz مرة في الثانية، وبينها يُعاد رسمه المحفوظ بمكانه الجديد
+          final i = u.prevX + (u.x - u.prevX) * alpha, j = u.prevY + (u.y - u.prevY) * alpha;
+          final x = (i - j) * TILE_HALF_W, y = (i + j) * TILE_HALF_H, clip = _clips[u] ??= TriClip();
+          final age = time - clip.t;
+          if (age >= 0 && age < _unitStep && clip.z == c.z) {
+            b.replay(clip, x - clip.x, y - clip.y);
+          } else {
+            final from = b.count;
+            drawUnit(b, atlas, u, alpha, c.z, time, crowded);
+            b.keep(clip, from);
+            clip..x = x..y = y..t = time..z = c.z;
+          }
           if (u.cargo && u.state != 'dead') {
             final i = u.prevX + (u.x - u.prevX) * alpha, j = u.prevY + (u.y - u.prevY) * alpha;
             drawCargo(b, (i - j) * TILE_HALF_W, (i + j) * TILE_HALF_H);
@@ -795,6 +808,25 @@ class _MatchPainter extends CustomPainter {
 
   // حدود الأحياء المملوكة بلون مالكها (CAPTURE.border)
   static final _edges = Expando<List<List<double>>>();
+  // حدود الأحياء رؤوساً جاهزة تُبنى حين يتغير لون حي أو شدته (الاستيلاء)، وتُرسم كل إطار بلا حساب
+  ui.Vertices? _borderV;
+  int _borderSig = 0;
+  GameMap? _borderMap;
+  void _drawBorders(Canvas canvas, TriBatch b, MatchState s, ui.Image img) {
+    var sig = 0;
+    for (final d in s.map.districts) {
+      if (d.tintColor != null && d.tintMix > 0) sig = Object.hash(sig, d.id, d.tintColor, d.tintMix);
+    }
+    if (_borderV == null || sig != _borderSig || _borderMap != s.map) {
+      _borderV?.dispose();
+      _borders(b, s);
+      _borderV = b.bake();
+      _borderSig = sig;
+      _borderMap = s.map;
+    }
+    TriBatch.drawBaked(canvas, img, _borderV!);
+  }
+
   void _borders(TriBatch b, MatchState s) {
     final m = s.map;
     final edges = _edges[m] ??= _buildEdges(m);
@@ -830,11 +862,18 @@ class _MatchPainter extends CustomPainter {
     return out;
   }
 
-  Iterable<District> _flagsAt(MatchState s, int d) sync* {
-    for (final x in s.map.districts) {
-      final c = x.capture;
-      if (c != null && c.i + c.j == d) yield x;
-    }
+  // أعلام كل صف عمق: نقاط الاستيلاء لا تتحرك، فتُجمع مرة لكل خريطة (لا بحث في الأحياء كلها مع كل صف وكل إطار)
+  final _flagRows = Expando<List<List<District>>>();
+  List<District> _flagsAt(MatchState s, int d) {
+    final rows = _flagRows[s.map] ??= () {
+      final out = List.generate(2 * s.map.n, (_) => <District>[]);
+      for (final x in s.map.districts) {
+        final c = x.capture;
+        if (c != null) out[c.i + c.j].add(x);
+      }
+      return out;
+    }();
+    return d < rows.length ? rows[d] : const [];
   }
 
   // علم الحي: سارية وراية بلون المالك (أو محايدة)، وحلقة تقدم الاستيلاء

@@ -155,8 +155,10 @@ class _It {
 // ما يتبدل في المباراة (مباني الاقتصاد وترقياتها، وساحة التدريب، وقطع السور) خانات ثابتة تتبدل صورتها في مكانها
 // (والفارغة مستطيل صفري لا يُرسم)، فلا تُبنى الطبقة كلها مع كل بناء أو ترقية أو تحصين
 class CityLayer {
-  ui.Vertices ground;
-  final ui.Vertices? marks;          // خطوط الشوارع والأرصفة وممرات المشاة ورصف الممرات وحلقة الدوار
+  // الأرض وخطوطها (الشوارع والأرصفة وممرات المشاة ورصف الممرات وحلقة الدوار) شرائح من band صفوف عمق، تُرسم الظاهرة منها وحدها
+  static const band = 6;
+  final List<ui.Vertices?> ground, marks;
+  final Int32List _slot, _bandStart;   // مكان رؤوس كل مربع في مصفوفة الأرض (مرتبة بالشرائح)، وأول مربع في كل شريحة
   final List<ui.Vertices?> rows;     // زينة كل صف
   final Int32List rowStart;          // أول صورة لكل صف في xf وrects (والأخير = العدد)
   final Float32List xf, rects;       // لكل صورة: التحويل (scos, ssin, tx, ty) ومستطيلها في الأطلس
@@ -174,7 +176,7 @@ class CityLayer {
   final Int32List _slotItem, _slotMask, _slotLevel;
   final Float32List lift;            // لكل مربع: ارتفاع ما عليه فوق ركنه الخلفي (ضباب الحرب)
   final Float32List wide;            // ونصف عرض صورته من وسطه (المبنى المميز 2×2 أعرض من مربعه)
-  CityLayer._(this.ground, this.marks, this.rows, this.rowStart, this.xf, this.rects, this._pos, this._baseCol, this._col,
+  CityLayer._(this.ground, this.marks, this._slot, this._bandStart, this.rows, this.rowStart, this.xf, this.rects, this._pos, this._baseCol, this._col,
       this._tileDistrict, this._spriteDistrict, this.spriteCol, this._isMask, this.lights, this._tileItem, this._tileMask,
       this._tileSprite, this._slots, this._slotPos, this._slotItem, this._slotMask, this._slotLevel, this.lift, this.wide) {
     tinted = _isMask.contains(1);
@@ -209,9 +211,10 @@ class CityLayer {
     final pos = Float32List(n * n * 12), col = Int32List(n * n * 6), base = Int32List(n * n), tileD = Int32List(n * n), lift = Float32List(n * n),
         wide = Float32List(n * n)..fillRange(0, n * n, TILE_HALF_W);
     final items = <_It>[];
-    final decor = Decor(map), markVec = Vec(), rowVecs = List.generate(depths, (_) => Vec());
+    final bands = (depths + band - 1) ~/ band;
+    final decor = Decor(map), markVecs = List.generate(bands, (_) => Vec()), rowVecs = List.generate(depths, (_) => Vec());
     final capture = {for (final d in map.districts) if (d.capture != null) map.idx(d.capture!.i, d.capture!.j)};
-    decor.groundMarks(markVec);
+    decor.groundMarks((i, j) => markVecs[(i + j) ~/ band]);
     for (var j = 0; j < n; j++) {
       for (var i = 0; i < n; i++) {
         final k = map.idx(i, j);
@@ -290,8 +293,20 @@ class CityLayer {
       final c = dist.capture;
       if (c != null) lift[c.j * n + c.i] = math.max(lift[c.j * n + c.i], 24 - TILE_HALF_H);
     }
-    final layer = CityLayer._(ui.Vertices.raw(ui.VertexMode.triangles, pos, colors: col), markVec.build(),
-        [for (final v in rowVecs) v.build()], rowStart, xf, rects, pos, base, col, tileD, spriteD, spriteCol, isMask,
+    // رؤوس الأرض مرتبة بالشرائح (عدّ ثم توزيع)، ومكان كل مربع فيها
+    final slot = Int32List(n * n), bandStart = Int32List(bands + 1);
+    for (var k = 0; k < n * n; k++) { bandStart[(k % n + k ~/ n) ~/ band + 1]++; }
+    for (var b = 0; b < bands; b++) { bandStart[b + 1] += bandStart[b]; }
+    final next = Int32List.fromList(bandStart), gpos = Float32List(n * n * 12), gcol = Int32List(n * n * 6);
+    for (var k = 0; k < n * n; k++) {
+      final m = next[(k % n + k ~/ n) ~/ band]++;
+      slot[k] = m;
+      gpos.setRange(m * 12, m * 12 + 12, pos, k * 12);
+      gcol.setRange(m * 6, m * 6 + 6, col, k * 6);
+    }
+    final layer = CityLayer._([for (var b = 0; b < bands; b++) _band(gpos, gcol, bandStart, b)], [for (final v in markVecs) v.build()],
+        slot, bandStart,
+        [for (final v in rowVecs) v.build()], rowStart, xf, rects, gpos, base, gcol, tileD, spriteD, spriteCol, isMask,
         mapLights(map, decor.lights), tileItem, tileMask, tileImg, slots, Float32List.fromList(slotPos), slotItem, slotMask,
         Int32List(slots.length), lift, wide);
     layer.refreshWalls(map, art);
@@ -337,15 +352,19 @@ class CityLayer {
       if (_applied[id] != amount[id]) { _applied[id] = amount[id]; changed.add(id); }
     }
     if (changed.isEmpty) return;
+    final n = math.sqrt(_baseCol.length).round(), dirty = <int>{};
     for (var k = 0; k < _baseCol.length; k++) {
       final id = _tileDistrict[k];
       if (id < 0 || !changed.contains(id)) continue;
       final (owner, a) = amount[id];
       final c = owner == null || a <= 0 ? _baseCol[k] : oklabTint(_baseCol[k], hex(owner), a * groundAlpha, groundChroma).toSigned(32);
-      _col.fillRange(k * 6, k * 6 + 6, c);
+      _col.fillRange(_slot[k] * 6, _slot[k] * 6 + 6, c);
+      dirty.add((k % n + k ~/ n) ~/ band);
     }
-    ground.dispose();
-    ground = ui.Vertices.raw(ui.VertexMode.triangles, _pos, colors: _col);
+    for (final b in dirty) {          // الشرائح التي تغيّر فيها لون وحدها
+      ground[b]?.dispose();
+      ground[b] = _band(_pos, _col, _bandStart, b);
+    }
     tinted = false;
     for (var m = 0; m < spriteCol.length; m++) {
       final id = _spriteDistrict[m];
@@ -365,10 +384,16 @@ class CityLayer {
 
   // top وbottom: حدا الشاشة بوحدات العالم. onGround بعد الأرض (الظلال والحدود والنار)، وafterRow(d) بعد كل صف
   // (الجنود الواقفون فيه: يغطيهم ما أمامهم من مبانٍ ولا يغطيهم ما خلفهم)
+  static ui.Vertices? _band(Float32List pos, Int32List col, Int32List start, int b) => start[b + 1] == start[b] ? null
+      : ui.Vertices.raw(ui.VertexMode.triangles, Float32List.sublistView(pos, start[b] * 12, start[b + 1] * 12),
+          colors: Int32List.sublistView(col, start[b] * 6, start[b + 1] * 6));
+
   void paint(ui.Canvas canvas, ui.Image atlas, double top, double bottom,
       {void Function()? onGround, void Function(int d)? afterRow}) {
-    canvas.drawVertices(ground, ui.BlendMode.dst, _paint);
-    if (marks != null) canvas.drawVertices(marks!, ui.BlendMode.dst, _paint);
+    // الأرض ثم خطوطها، للشرائح الظاهرة وحدها (حلقة الدوار وحافة الساحات تتجاوز مربعها قليلاً: هامش 48)
+    bool seen(int b) => (b * band - 1) * TILE_HALF_H - 48 <= bottom && ((b + 1) * band + 1) * TILE_HALF_H + 48 >= top;
+    for (var b = 0; b < ground.length; b++) { if (ground[b] != null && seen(b)) canvas.drawVertices(ground[b]!, ui.BlendMode.dst, _paint); }
+    for (var b = 0; b < marks.length; b++) { if (marks[b] != null && seen(b)) canvas.drawVertices(marks[b]!, ui.BlendMode.dst, _paint); }
     onGround?.call();
     for (var d = 0; d < rows.length; d++) {
       final y = d * TILE_HALF_H;
@@ -385,8 +410,8 @@ class CityLayer {
   }
 
   void dispose() {
-    ground.dispose();
-    marks?.dispose();
+    for (final g in ground) { g?.dispose(); }
+    for (final m in marks) { m?.dispose(); }
     for (final r in rows) { r?.dispose(); }
   }
 }

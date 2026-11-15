@@ -10,7 +10,6 @@ import 'package:gangcity/game/empire.dart';
 import 'package:gangcity/game/modes.dart';
 import 'package:gangcity/game/spawn.dart';
 import 'package:gangcity/game/victory.dart';
-import 'package:gangcity/game/state.dart';
 import 'package:gangcity/render/city_layer.dart';
 import 'package:gangcity/ui/match_screen.dart';
 import 'package:gangcity/ui/prefs.dart';
@@ -45,10 +44,12 @@ void main() {
     // تسخين: أول 400 إطار يبنيها مترجم وضع الفحص (لا يوجد في التطبيق)، ثم القياس
     for (var k = 0; k < 400; k++) { updateMatch(s); await tester.pump(const Duration(milliseconds: 17)); }
     probe.clear();
+    // كما في التطبيق: تحديث منطقي كل ثلاثة إطارات (20 في الثانية و60 إطاراً)، والإطارات بينها بنسبة alpha
     for (var k = 0; k < 400; k++) {
       sw.reset();
-      updateMatch(s);
-      sims.add(sw.elapsedMicroseconds);
+      if (k % 3 == 0) updateMatch(s);
+      key.currentState!.alpha = (k % 3) / 3;
+      if (k % 3 == 0) sims.add(sw.elapsedMicroseconds);
       final before = Map.of(probe);
       sw.reset();
       await tester.pump(const Duration(milliseconds: 17));

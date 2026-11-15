@@ -114,19 +114,30 @@ class TriBatch {
     quad(x1 + nx - tx, y1 + ny - ty, x2 + nx + tx, y2 + ny + ty, x2 - nx + tx, y2 - ny + ty, x1 - nx - tx, y1 - ny - ty, rgb, al);
   }
 
+  // جيب وجيب تمام الدائرة الكاملة لكل عدد قطع، مرة واحدة (الحلقات والأقراص كل إطار)
+  static final _circles = <int, Float64List>{};
+  static Float64List _circle(int seg) => _circles[seg] ??= Float64List(seg * 2 + 2)
+    ..setAll(0, [for (var k = 0; k <= seg; k++) ...[math.cos(k / seg * 2 * math.pi), math.sin(k / seg * 2 * math.pi)]]);
+
   void ellipse(double cx, double cy, double rx, double ry, int rgb, [double al = 1, int seg = 12]) {
+    final t = _circle(seg);
     for (var k = 0; k < seg; k++) {
-      final a0 = k / seg * 2 * math.pi, a1 = (k + 1) / seg * 2 * math.pi;
-      tri(cx, cy, cx + math.cos(a0) * rx, cy + math.sin(a0) * ry, cx + math.cos(a1) * rx, cy + math.sin(a1) * ry, rgb, al);
+      tri(cx, cy, cx + t[k * 2] * rx, cy + t[k * 2 + 1] * ry, cx + t[k * 2 + 2] * rx, cy + t[k * 2 + 3] * ry, rgb, al);
     }
   }
 
   // حلقة بيضاوية بعرض w (dash: طول القطعة وفراغها بالراديان، 0 بلا تقطيع)
   void ring(double cx, double cy, double rx, double ry, double w, int rgb, [double al = 1, int seg = 20, double from = 0, double to = 2 * math.pi, int dash = 0]) {
+    final full = from == 0 && to == 2 * math.pi, t = full ? _circle(seg) : null;
     for (var k = 0; k < seg; k++) {
       if (dash > 0 && (k ~/ dash).isOdd) continue;
-      final a0 = from + (to - from) * k / seg, a1 = from + (to - from) * (k + 1) / seg;
-      final c0 = math.cos(a0), s0 = math.sin(a0), c1 = math.cos(a1), s1 = math.sin(a1);
+      final double c0, s0, c1, s1;
+      if (t != null) {
+        c0 = t[k * 2]; s0 = t[k * 2 + 1]; c1 = t[k * 2 + 2]; s1 = t[k * 2 + 3];
+      } else {
+        final a0 = from + (to - from) * k / seg, a1 = from + (to - from) * (k + 1) / seg;
+        c0 = math.cos(a0); s0 = math.sin(a0); c1 = math.cos(a1); s1 = math.sin(a1);
+      }
       final h = w / 2;
       quad(cx + c0 * (rx - h), cy + s0 * (ry - h), cx + c0 * (rx + h), cy + s0 * (ry + h),
           cx + c1 * (rx + h), cy + s1 * (ry + h), cx + c1 * (rx - h), cy + s1 * (ry - h), rgb, al);
@@ -141,7 +152,42 @@ class TriBatch {
     }
   }
 
+  // نسخة من رؤوس رسمٍ مضى (من from حتى الآن)، ثم إعادته بإزاحة: الجندي يُحسب شكله مرة ويُعاد بمكانه الجديد
+  int get count => _n;
+  void keep(TriClip c, int from) {
+    final m = _n - from;
+    if (c.col.length < m) {
+      c.pos = Float32List(m * 2 + 64);
+      c.uv = Float32List(m * 2 + 64);
+      c.col = Int32List(m + 32);
+    }
+    c.pos.setRange(0, m * 2, _pos, from * 2);
+    c.uv.setRange(0, m * 2, _uv, from * 2);
+    c.col.setRange(0, m, _col, from);
+    c.n = m;
+  }
+  void replay(TriClip c, double dx, double dy) {
+    _grow(c.n);
+    final p = _pos, q = c.pos, o = _n * 2;
+    for (var k = 0; k < c.n * 2; k += 2) { p[o + k] = q[k] + dx; p[o + k + 1] = q[k + 1] + dy; }
+    _uv.setRange(o, o + c.n * 2, c.uv);
+    _col.setRange(_n, _n + c.n, c.col);
+    _n += c.n;
+  }
+
+  // ما في الدفعة رؤوساً ثابتة في ذاكرة كرت الشاشة (تُنسخ عند إنشائها)، تُرسم كل إطار بلا حساب: حدود الأحياء حتى يتغير مالك
+  ui.Vertices bake() {
+    final v = ui.Vertices.raw(ui.VertexMode.triangles, Float32List.sublistView(_pos, 0, _n * 2),
+        textureCoordinates: Float32List.sublistView(_uv, 0, _n * 2), colors: Int32List.sublistView(_col, 0, _n));
+    _n = 0;
+    return v;
+  }
+  static void drawBaked(ui.Canvas canvas, ui.Image atlas, ui.Vertices v) => canvas.drawVertices(v, ui.BlendMode.modulate, _paintOf(atlas));
+
   static final _paints = Expando<ui.Paint>();
+  static ui.Paint _paintOf(ui.Image atlas) => _paints[atlas] ??= (ui.Paint()
+      ..shader = ui.ImageShader(atlas, ui.TileMode.clamp, ui.TileMode.clamp, Float64List.fromList(
+          [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]), filterQuality: ui.FilterQuality.medium));
   void flush(ui.Canvas canvas, ui.Image atlas) {
     if (_n == 0) return;
     final paint = _paints[atlas] ??= (ui.Paint()
@@ -153,6 +199,14 @@ class TriBatch {
     v.dispose();
     _n = 0;
   }
+}
+
+// رسم محفوظ: رؤوسه، ومكان صاحبه وزمنه وتقريب الكاميرا حين حُسب
+class TriClip {
+  Float32List pos = Float32List(0), uv = Float32List(0);
+  Int32List col = Int32List(0);
+  int n = 0;
+  double x = 0, y = 0, t = -1e9, z = 0;
 }
 
 int hexRgb(String hex) {
