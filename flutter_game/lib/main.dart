@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'audio/sound.dart';
 import 'core/cfg.dart';
 import 'data/js_config.dart';
+import 'ui/crash_report.dart';
 import 'ui/match_screen.dart';
 import 'ui/menus.dart';
 import 'ui/migrate.dart';
@@ -16,6 +17,7 @@ Future<void> main() async {
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
   SystemChrome.setPreferredOrientations([DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]);
   await Prefs.init();
+  watchDartErrors();          // أخطاء كود اللعبة تُحفظ وتُعرض عند الفتح التالي (ui/crash_report.dart، 2.1.5)
   await migrateOldSave();     // أول تشغيل فوق اللعبة القديمة: إحصائياتها وتقدمها وإعداداتها (ui/migrate.dart)
   Settings.load();
   await GameSound.init();

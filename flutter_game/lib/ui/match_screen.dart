@@ -233,8 +233,13 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     ];
     final u = await buildUnitAtlas(pairs);
     await WeatherFx.init();
-    warmMatchArt(s);
-    warmUnitArt(s, u, batch);
+    // التسخين لا يوقف المباراة أبداً إن فشل شيء فيه (2.1.5): يُترك والرسم يكمل كما كان
+    try {
+      warmMatchArt(s);
+      warmUnitArt(s, u, batch);
+    } catch (_) {
+      batch.reset();
+    }
     batch.whiteU = 1.5; batch.whiteV = 1.5;
     if (!mounted) return;
     final z = (settings['zoom'] as num?)?.toDouble();

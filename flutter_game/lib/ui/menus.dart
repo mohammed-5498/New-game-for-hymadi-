@@ -22,6 +22,7 @@ import '../net/session.dart';
 import 'lan_screen.dart';
 import 'migrate.dart' show migrated;
 import 'match_screen.dart';
+import 'crash_report.dart';
 import 'prefs.dart';
 import 'story_screen.dart';
 import 'widgets.dart';
@@ -229,6 +230,16 @@ class MainMenu extends StatefulWidget {
 }
 
 class _MainMenuState extends State<MainMenu> {
+  // سبب آخر إغلاق للعبة إن كان غير عادي: يُعرض مرة عند أول ظهور للقائمة (ui/crash_report.dart، 2.1.5)
+  static bool _reported = false;
+  @override
+  void initState() {
+    super.initState();
+    if (_reported) return;
+    _reported = true;
+    pendingCrashReport().then((text) { if (text != null && mounted) showCrashReport(context, text); });
+  }
+
   Future<void> _go(Widget screen) => Navigator.of(context).push(PageRouteBuilder(pageBuilder: (_, _, _) => screen,
       transitionDuration: Duration(milliseconds: UI.i('fadeMs')),
       transitionsBuilder: (_, a, _, child) => FadeTransition(opacity: a, child: child)));
