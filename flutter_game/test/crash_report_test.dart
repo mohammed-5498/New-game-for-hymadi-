@@ -1,5 +1,6 @@
 // نافذة سبب الإغلاق تُعرض بلا أخطاء تخطيط (2.1.5)
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gangcity/ui/crash_report.dart';
 
@@ -14,6 +15,15 @@ void main() {
     await tester.tap(find.text('x'));
     await tester.pumpAndSettle();
     expect(find.text('سبب إغلاق اللعبة آخر مرة'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    // حافظة ترفض (سامسونج، 2.1.6): لا خطأ، والنافذة تطلب التصوير
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'Clipboard.setData') throw PlatformException(code: 'error', message: 'does not belong to 10811');
+      return null;
+    });
+    await tester.tap(find.text('نسخ'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('تعذر النسخ'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

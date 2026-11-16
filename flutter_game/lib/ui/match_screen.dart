@@ -32,6 +32,7 @@ import '../render/unit_atlas.dart';
 import '../render/weather_art.dart';
 import '../render/empire_art.dart';
 import '../render/fog.dart';
+import 'crash_report.dart' show crumb;
 import 'hud.dart';
 import 'menus.dart';
 import 'prefs.dart';
@@ -175,6 +176,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
 
   @override
   void dispose() {
+    crumb('القوائم');
     GameSound.matchSilence(false);
     GameSound.menuMusic(true);
     _lanSub?.cancel();
@@ -223,8 +225,13 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     }
     s.running = true;
     _recorded = false;
+    _crumbInfo = _matchInfo(s);
+    _crumbT0 = s.time;
+    _crumbs = 0;
+    _crumb('تجهيز المباراة');
     setState(() => loadProgress = 0.3);
     final a = await CityArt.load(s.map.city);
+    _crumb('صور المدينة');
     if (mounted) setState(() => loadProgress = 0.7);
     setUnitSkins(s);
     final pairs = [
@@ -232,6 +239,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
       if (s.mode == 'survival') ('police', gameModes.m('survival').m('riot').s('color')),   // وحدات التدخل بلونها
     ];
     final u = await buildUnitAtlas(pairs);
+    _crumb('أطلس الجنود ${u.image.width}x${u.image.height}');
     await WeatherFx.init();
     // التسخين لا يوقف المباراة أبداً إن فشل شيء فيه (2.1.5): يُترك والرسم يكمل كما كان
     try {
@@ -241,6 +249,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
       batch.reset();
     }
     batch.whiteU = 1.5; batch.whiteV = 1.5;
+    _crumb('التسخين');
     if (!mounted) return;
     final z = (settings['zoom'] as num?)?.toDouble();
     // للفحص: الكاميرا على مربع (i،j) أو على المعبد
@@ -275,6 +284,17 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     });
     GameSound.matchSilence(false, s.map.city);
     _ticker.start();
+    _crumb('أول إطار');
+  }
+
+  // آخر خطوة بإعداد المباراة (ui/crash_report.dart، 2.1.6): إن انهارت اللعبة تظهر في نافذة سبب الإغلاق عند فتحها التالي
+  String _crumbInfo = '';
+  double _crumbT0 = 0;
+  int _crumbs = 0;
+  void _crumb(String step) => crumb('$step • $_crumbInfo');
+  String _matchInfo(MatchState s) {
+    final sides = [for (final p in (settings['players'] as List? ?? const [])) if (p is Map) '${p['nation'] ?? p['gang']}${p['skin'] != null ? '-${p['skin']}' : ''}'];
+    return '${s.map.city} ${settings['mapSize']} ${s.mode} ${sides.join('،')} معابد=${settings['temples'] == true} ضباب=${settings['fog'] == true} ${s.weather}';
   }
 
   // اللعب المحلي: إعادة المزامنة تستبدل المباراة كلها، والمضيف يعود إلى الغرفة، أو ينقطع الاتصال به
@@ -436,6 +456,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
   void _onTick(Duration now) {
     final s = state;
     if (s == null) return;
+    if (_crumbs < 2 && s.time - _crumbT0 > const [3, 20][_crumbs]) _crumb('تعمل منذ ${const [3, 20][_crumbs++]} ث');
     _growAtlas();
     var dt = _last == Duration.zero ? 0.0 : (now - _last).inMicroseconds / 1e6;
     _last = now;
