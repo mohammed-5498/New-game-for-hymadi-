@@ -79,7 +79,21 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
   void toggleMeter() {
     meter.value = meter.value == null ? 'يقيس...' : null;
     _mAt = 0;
+    // انشغال الخيط خارج الإطارات (2.1.4): مؤقت كل 10 ملي ث، وتأخره عن موعده = ما أوقف الخيط بين الإطارات (صوت، ذاكرة...)
+    _lagTimer?.cancel();
+    _lagTimer = null;
+    if (meter.value != null) {
+      var last = _mw.elapsedMicroseconds;
+      _lagTimer = Timer.periodic(const Duration(milliseconds: 10), (_) {
+        final now = _mw.elapsedMicroseconds, late = now - last - 10000;
+        last = now;
+        if (late > _mLag) _mLag = late;
+        if (late > 8000) _mLagSum += late;
+      });
+    }
   }
+  Timer? _lagTimer;
+  int _mLag = 0, _mLagSum = 0;
   // الزمن والنقاط في الشريط العلوي: كل منهما يتحدث وحده حين يتغير نصه، لا مع الواجهة كلها (2.1.2)
   final clockText = ValueNotifier<String>(''), pointsText = ValueNotifier<(int, String)?>(null);
   int _clockSec = -1, _taps = 0, _tapAt = 0;
@@ -109,7 +123,9 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
       'رسمه (كرت الشاشة) ${ms(_mRaster, _mTimed, _mRasterMax)} ملي ث',
       'رسم المشهد ${ms(_mPaint, _mPaints, _mPaintMax)} • المنطق ${ms(_mSim, _mTicks, _mSimMax)} ملي ث',
       'الجنود $alive (ظاهر $visibleUnits) • تقريب ${s.camera.z.toStringAsFixed(1)}',
+      'توقف الخيط بين الإطارات: أقصى ${(_mLag / 1000).toStringAsFixed(1)} ملي ث • مجموعه ${(_mLagSum / 1000).round()} في الثانية',
     ].join('\n');
+    _mLag = _mLagSum = 0;
     _mAt = now;
     _mFrames = _mTimed = _mSlow = _mBuild = _mBuildMax = _mRaster = _mRasterMax = 0;
     _mTicks = _mSim = _mSimMax = _mPaints = _mPaint = _mPaintMax = 0;
@@ -164,6 +180,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     _lanSub?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     SchedulerBinding.instance.removeTimingsCallback(_timings);
+    _lagTimer?.cancel();
     meter.dispose(); clockText.dispose(); pointsText.dispose();
     _rest?.cancel();
     _ticker.dispose();

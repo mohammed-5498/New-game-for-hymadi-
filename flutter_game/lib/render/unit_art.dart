@@ -6,7 +6,7 @@ import 'dart:math' as math;
 import '../core/cfg.dart';
 import '../data/js_config.dart';
 import '../data/unit_sprites.dart';
-import '../game/features.dart' show FEATURES, recruitsAt;
+import '../game/features.dart' show FEATURES, recruitsAt, recruitSample;
 import '../game/realism.dart' show fightStyle, fightBig, hitstopOf;
 import '../game/state.dart';
 import '../game/units.dart' show createUnit;
@@ -700,6 +700,12 @@ void warmUnitArt(MatchState s, UnitAtlas atlas, TriBatch b) {
       if (u.creature == null)
         createUnit(s, s.players[u.playerId], 0, 0, u.hero, u.champion, u.gang, u.nation)
           ..lookKind = u.lookKind..artColor = u.artColor..artScale = u.artScale,
+    // ومن قد يأتي لاحقاً (2.1.4): الشرطة وضابطها، ومجنَّدو المباني المميزة ومباني المرتزقة لأي لاعب يحتلها
+    for (final p in s.players)
+      if (p.gang == 'police') ...[createUnit(s, p, 0, 0), createUnit(s, p, 0, 0, 'captain')],
+    if (s.players.where((p) => !p.neutral).firstOrNull case final p?)
+      for (final kind in {for (final d in s.map.districts) ...?recruitsAt(d)})
+        if (FEATURES.m('recruits').mm(kind)?['creature'] == null) recruitSample(s, p, kind),
   ];
   s.nextUnitId = id0;
   final t = s.time;

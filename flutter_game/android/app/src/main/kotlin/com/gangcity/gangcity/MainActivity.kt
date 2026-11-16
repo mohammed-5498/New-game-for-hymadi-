@@ -6,6 +6,7 @@ import android.media.SoundPool
 import android.net.wifi.WifiManager
 import android.os.Bundle
 import android.os.Handler
+import android.os.HandlerThread
 import android.os.Looper
 import android.view.WindowManager
 import android.webkit.WebView
@@ -17,13 +18,24 @@ import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
     private var lock: WifiManager.MulticastLock? = null
-    private var pool: SoundPool? = null
+    private var pool: SoundPool? = null   // لا يمسه إلا خيط الصوت
+    // خيط خاص بالصوت (2.1.4): منذ Flutter 3.29 يعمل كود Dart على خيط أندرويد الرئيسي نفسه، فكان كل صوت في القتال
+    // (SoundPool.play، وإيقاف أقدم صوت حين تمتلئ الأصوات) يوقف تجهيز الإطار حتى يرد نظام الصوت. الآن يُرسل الطلب ويعود فوراً
+    private val sfxThread = HandlerThread("gangcity-sfx").apply { start() }
+    private val sfx = Handler(sfxThread.looper)
+    private val main = Handler(Looper.getMainLooper())
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // 60 إطاراً بدل 90 أو 120 في الشاشات السريعة: نصف عمل المعالج وكرت الشاشة والبطارية (القسم 18.1)
         window.attributes = window.attributes.apply { preferredRefreshRate = 60f }
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)   // الشاشة لا تنطفئ أثناء اللعب (كـ platform.js)
+    }
+
+    override fun onDestroy() {
+        sfx.post { pool?.release(); pool = null }
+        sfxThread.quitSafely()
+        super.onDestroy()
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -36,23 +48,28 @@ class MainActivity : FlutterActivity() {
                 when (call.method) {
                     "load" -> {
                         val voices = call.argument<Int>("voices") ?: 24
-                        val p = pool ?: SoundPool.Builder().setMaxStreams(voices).setAudioAttributes(AudioAttributes.Builder()
-                            .setUsage(AudioAttributes.USAGE_GAME).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
-                            .build().also { pool = it }
-                        val loader = FlutterInjector.instance().flutterLoader()
-                        val ids = call.argument<List<String>>("paths")!!.map { path ->
-                            try { assets.openFd(loader.getLookupKeyForAsset(path)).use { p.load(it, 1) } } catch (_: Exception) { 0 }
+                        val paths = call.argument<List<String>>("paths")!!
+                        sfx.post {
+                            val p = pool ?: SoundPool.Builder().setMaxStreams(voices).setAudioAttributes(AudioAttributes.Builder()
+                                .setUsage(AudioAttributes.USAGE_GAME).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
+                                .build().also { pool = it }
+                            val loader = FlutterInjector.instance().flutterLoader()
+                            val ids = paths.map { path ->
+                                try { assets.openFd(loader.getLookupKeyForAsset(path)).use { p.load(it, 1) } } catch (_: Exception) { 0 }
+                            }
+                            main.post { result.success(ids) }
                         }
-                        result.success(ids)
                     }
                     "play" -> {
                         val a = call.arguments as List<*>
-                        val v = (a[1] as Number).toFloat()
-                        pool?.play((a[0] as Number).toInt(), v, v, (a[3] as Number).toInt(), 0, (a[2] as Number).toFloat().coerceIn(0.5f, 2f))
+                        val id = (a[0] as Number).toInt(); val v = (a[1] as Number).toFloat()
+                        val rate = (a[2] as Number).toFloat().coerceIn(0.5f, 2f); val pri = (a[3] as Number).toInt()
+                        sfx.post { pool?.play(id, v, v, pri, 0, rate) }
                         result.success(null)
                     }
                     "hold" -> {
-                        if (call.arguments == true) pool?.autoPause() else pool?.autoResume()
+                        val on = call.arguments == true
+                        sfx.post { if (on) pool?.autoPause() else pool?.autoResume() }
                         result.success(null)
                     }
                     else -> result.notImplemented()

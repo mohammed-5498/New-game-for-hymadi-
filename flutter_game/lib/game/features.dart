@@ -430,10 +430,17 @@ List<String>? recruitsAt(District? d) {
 
 // وحدة مجنّدة من نوعها في مبنى الحي (للتجنيد ولحراس المرتزقة)، بلا إضافتها
 Unit? _recruitUnit(MatchState s, Player player, District d, String kind) {
-  final R = F.m('recruits').m(kind);
   final spots = findFreeTiles(s.map, d.capture!.i, d.capture!.j, SPAWN.i('spotSearchTiles'));
   if (spots.isEmpty) return null;
   final (i, j) = spots[(random() * spots.length).floor()];
+  return _buildRecruit(s, player, i, j, kind);
+}
+
+// شكل مجنَّد بلا مكان ولا عشوائية: لتسخين رسمه قبل المباراة (warmUnitArt، 2.1.4)
+Unit recruitSample(MatchState s, Player player, String kind) => _buildRecruit(s, player, 0, 0, kind);
+
+Unit _buildRecruit(MatchState s, Player player, int i, int j, String kind) {
+  final R = F.m('recruits').m(kind);
   final creature = R.ss('creature'), gang = R.ss('gang');
   final unit = creature != null ? createUnit(s, player, i, j)
       : gang != null ? createUnit(s, player, i, j, R.ss('hero'), false, gang)   // عصابة كلاسيكية (المحطِّم في شيكاغو)
