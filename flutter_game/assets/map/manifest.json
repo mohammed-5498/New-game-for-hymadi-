@@ -26,30 +26,30 @@
      "file": "cities/arab/props/palm_1.webp",
      "group": "prop",
      "kind": "palm",
-     "w": 95,
-     "h": 127,
-     "ax": 58,
-     "ay": 125,
+     "w": 80,
+     "h": 105,
+     "ax": 51.5,
+     "ay": 103,
      "variant": 1
     },
     {
      "file": "cities/arab/props/palm_2.webp",
      "group": "prop",
      "kind": "palm",
-     "w": 94,
-     "h": 136,
-     "ax": 47,
-     "ay": 136,
+     "w": 80,
+     "h": 105,
+     "ax": 51.5,
+     "ay": 103,
      "variant": 2
     },
     {
      "file": "cities/arab/props/palm_3.webp",
      "group": "prop",
      "kind": "palm",
-     "w": 94,
-     "h": 127,
-     "ax": 36,
-     "ay": 125,
+     "w": 80,
+     "h": 105,
+     "ax": 51.5,
+     "ay": 103,
      "variant": 3
     },
     {
@@ -580,6 +580,52 @@
      "ax": 190.4,
      "ay": 213.3,
      "footprint": 2
+    },
+    {
+     "file": "cities/arab/decor/corner_souk_1.webp",
+     "w": 44,
+     "h": 69,
+     "ax": 21.5,
+     "ay": 57,
+     "group": "decor",
+     "kind": "corner_souk",
+     "variant": 1
+    },
+    {
+     "file": "cities/arab/ground/road.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "road"
+    },
+    {
+     "file": "cities/arab/ground/road2.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "road2"
+    },
+    {
+     "file": "cities/arab/ground/ground.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "ground"
+    },
+    {
+     "file": "cities/arab/ground/plaza.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "plaza"
     }
    ]
   },
@@ -598,40 +644,40 @@
      "file": "cities/japan/props/cherry_1.webp",
      "group": "prop",
      "kind": "cherry",
-     "w": 101,
-     "h": 139,
-     "ax": 57,
-     "ay": 116,
+     "w": 100,
+     "h": 135,
+     "ax": 56.5,
+     "ay": 113,
      "variant": 1
     },
     {
      "file": "cities/japan/props/cherry_2.webp",
      "group": "prop",
      "kind": "cherry",
-     "w": 93,
-     "h": 139,
-     "ax": 41,
-     "ay": 116,
+     "w": 100,
+     "h": 135,
+     "ax": 56.5,
+     "ay": 113,
      "variant": 2
     },
     {
      "file": "cities/japan/props/cherry_3.webp",
      "group": "prop",
      "kind": "cherry",
-     "w": 101,
-     "h": 142,
-     "ax": 57,
-     "ay": 116,
+     "w": 100,
+     "h": 135,
+     "ax": 56.5,
+     "ay": 113,
      "variant": 3
     },
     {
      "file": "cities/japan/props/lantern_1.webp",
      "group": "prop",
      "kind": "lantern",
-     "w": 38,
-     "h": 78,
-     "ax": 19,
-     "ay": 61,
+     "w": 36,
+     "h": 74,
+     "ax": 17.5,
+     "ay": 57,
      "variant": 1
     },
     {
@@ -1157,6 +1203,52 @@
      "ax": 188.3,
      "ay": 342.9,
      "footprint": 2
+    },
+    {
+     "file": "cities/japan/decor/corner_dojo_1.webp",
+     "w": 38,
+     "h": 78,
+     "ax": 19.5,
+     "ay": 70,
+     "group": "decor",
+     "kind": "corner_dojo",
+     "variant": 1
+    },
+    {
+     "file": "cities/japan/ground/road.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "road"
+    },
+    {
+     "file": "cities/japan/ground/road2.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "road2"
+    },
+    {
+     "file": "cities/japan/ground/ground.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "ground"
+    },
+    {
+     "file": "cities/japan/ground/plaza.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "plaza"
     }
    ]
   },
@@ -1175,20 +1267,20 @@
      "file": "cities/china/props/willow_1.webp",
      "group": "prop",
      "kind": "willow",
-     "w": 76,
-     "h": 116,
-     "ax": 38,
-     "ay": 116,
+     "w": 74,
+     "h": 112,
+     "ax": 36.5,
+     "ay": 110,
      "variant": 1
     },
     {
      "file": "cities/china/props/lanterns_1.webp",
      "group": "prop",
      "kind": "lanterns",
-     "w": 114,
-     "h": 119,
-     "ax": 57,
-     "ay": 100,
+     "w": 116,
+     "h": 116,
+     "ax": 57.5,
+     "ay": 96,
      "variant": 1
     },
     {
@@ -1718,6 +1810,52 @@
      "ax": 156.6,
      "ay": 283.5,
      "footprint": 2
+    },
+    {
+     "file": "cities/china/decor/corner_powder_1.webp",
+     "w": 38,
+     "h": 78,
+     "ax": 19.5,
+     "ay": 70,
+     "group": "decor",
+     "kind": "corner_powder",
+     "variant": 1
+    },
+    {
+     "file": "cities/china/ground/road.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "road"
+    },
+    {
+     "file": "cities/china/ground/road2.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "road2"
+    },
+    {
+     "file": "cities/china/ground/ground.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "ground"
+    },
+    {
+     "file": "cities/china/ground/plaza.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "plaza"
     }
    ]
   },
@@ -1736,20 +1874,20 @@
      "file": "cities/europe/props/tree_1.webp",
      "group": "prop",
      "kind": "tree",
-     "w": 82,
-     "h": 114,
-     "ax": 49,
-     "ay": 114,
+     "w": 81,
+     "h": 110,
+     "ax": 48.5,
+     "ay": 109,
      "variant": 1
     },
     {
      "file": "cities/europe/props/tree_2.webp",
      "group": "prop",
      "kind": "tree",
-     "w": 82,
-     "h": 114,
-     "ax": 38,
-     "ay": 114,
+     "w": 81,
+     "h": 110,
+     "ax": 48.5,
+     "ay": 109,
      "variant": 2
     },
     {
@@ -2279,6 +2417,72 @@
      "ax": 180.9,
      "ay": 251.1,
      "footprint": 2
+    },
+    {
+     "file": "cities/europe/decor/roadprop_1.webp",
+     "w": 16,
+     "h": 79,
+     "ax": -45.5,
+     "ay": 65,
+     "group": "decor",
+     "kind": "roadprop",
+     "variant": 1
+    },
+    {
+     "file": "cities/europe/decor/local_1.webp",
+     "w": 45,
+     "h": 60,
+     "ax": 22.5,
+     "ay": 57,
+     "group": "decor",
+     "kind": "local",
+     "variant": 1
+    },
+    {
+     "file": "cities/europe/decor/corner_cathedral_1.webp",
+     "w": 50,
+     "h": 63,
+     "ax": 24.5,
+     "ay": 60,
+     "group": "decor",
+     "kind": "corner_cathedral",
+     "variant": 1
+    },
+    {
+     "file": "cities/europe/ground/road.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "road"
+    },
+    {
+     "file": "cities/europe/ground/road2.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "road2"
+    },
+    {
+     "file": "cities/europe/ground/ground.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "ground"
+    },
+    {
+     "file": "cities/europe/ground/plaza.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "plaza"
     }
    ]
   },
@@ -2859,6 +3063,61 @@
      "ax": 181.6,
      "ay": 358.4,
      "footprint": 2
+    },
+    {
+     "file": "cities/norway/decor/corner_hunters_1.webp",
+     "w": 30,
+     "h": 58,
+     "ax": 14.5,
+     "ay": 49,
+     "group": "decor",
+     "kind": "corner_hunters",
+     "variant": 1
+    },
+    {
+     "file": "cities/norway/ground/road.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "road"
+    },
+    {
+     "file": "cities/norway/ground/road2.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "road2"
+    },
+    {
+     "file": "cities/norway/ground/ground.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "ground"
+    },
+    {
+     "file": "cities/norway/ground/plaza.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "plaza"
+    },
+    {
+     "file": "cities/norway/ground/water.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "water"
     }
    ]
   },
@@ -2877,9 +3136,9 @@
      "file": "cities/hk/props/banyan_1.webp",
      "group": "prop",
      "kind": "banyan",
-     "w": 120,
-     "h": 135,
-     "ax": 60,
+     "w": 118,
+     "h": 136,
+     "ax": 58.5,
      "ay": 135,
      "variant": 1
     },
@@ -3398,6 +3657,112 @@
      "ax": 185.6,
      "ay": 227.5,
      "footprint": 2
+    },
+    {
+     "file": "cities/hk/decor/roadprop_1.webp",
+     "w": 66,
+     "h": 25,
+     "ax": 33.5,
+     "ay": 7,
+     "group": "decor",
+     "kind": "roadprop",
+     "variant": 1
+    },
+    {
+     "file": "cities/hk/decor/roadprop_2.webp",
+     "w": 79,
+     "h": 27,
+     "ax": 63.5,
+     "ay": 7,
+     "group": "decor",
+     "kind": "roadprop",
+     "variant": 2
+    },
+    {
+     "file": "cities/hk/decor/lamp_1.webp",
+     "w": 17,
+     "h": 75,
+     "ax": 8.5,
+     "ay": 72,
+     "group": "decor",
+     "kind": "lamp",
+     "variant": 1
+    },
+    {
+     "file": "cities/hk/decor/stree_1.webp",
+     "w": 54,
+     "h": 78,
+     "ax": 27.5,
+     "ay": 77,
+     "group": "decor",
+     "kind": "stree",
+     "variant": 1
+    },
+    {
+     "file": "cities/hk/decor/car_1.webp",
+     "w": 81,
+     "h": 70,
+     "ax": 40.5,
+     "ay": 37,
+     "group": "decor",
+     "kind": "car",
+     "variant": 1
+    },
+    {
+     "file": "cities/hk/decor/island_1.webp",
+     "w": 256,
+     "h": 253,
+     "ax": 128,
+     "ay": 224,
+     "group": "decor",
+     "kind": "island",
+     "variant": 1
+    },
+    {
+     "file": "cities/hk/decor/corner_triads_1.webp",
+     "w": 23,
+     "h": 81,
+     "ax": 2.5,
+     "ay": 77,
+     "group": "decor",
+     "kind": "corner_triads",
+     "variant": 1
+    },
+    {
+     "file": "cities/hk/ground/road.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "road"
+    },
+    {
+     "file": "cities/hk/ground/road2.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "road2"
+    },
+    {
+     "file": "cities/hk/ground/ground.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "ground"
+    },
+    {
+     "file": "cities/hk/ground/plaza.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "plaza"
     }
    ]
   },
@@ -3416,20 +3781,20 @@
      "file": "cities/jaipur/props/neem_1.webp",
      "group": "prop",
      "kind": "neem",
-     "w": 112,
-     "h": 127,
-     "ax": 57,
-     "ay": 127,
+     "w": 111,
+     "h": 129,
+     "ax": 57.5,
+     "ay": 126,
      "variant": 1
     },
     {
      "file": "cities/jaipur/props/neem_2.webp",
      "group": "prop",
      "kind": "neem",
-     "w": 112,
-     "h": 127,
-     "ax": 57,
-     "ay": 127,
+     "w": 111,
+     "h": 129,
+     "ax": 57.5,
+     "ay": 126,
      "variant": 2
     },
     {
@@ -3955,6 +4320,72 @@
      "ax": 186.3,
      "ay": 311.9,
      "footprint": 2
+    },
+    {
+     "file": "cities/jaipur/decor/roadprop_1.webp",
+     "w": 158,
+     "h": 102,
+     "ax": 78.5,
+     "ay": 94,
+     "group": "decor",
+     "kind": "roadprop",
+     "variant": 1
+    },
+    {
+     "file": "cities/jaipur/decor/car_1.webp",
+     "w": 77,
+     "h": 70,
+     "ax": 38.5,
+     "ay": 38,
+     "group": "decor",
+     "kind": "car",
+     "variant": 1
+    },
+    {
+     "file": "cities/jaipur/decor/corner_stable_1.webp",
+     "w": 28,
+     "h": 63,
+     "ax": 13.5,
+     "ay": 60,
+     "group": "decor",
+     "kind": "corner_stable",
+     "variant": 1
+    },
+    {
+     "file": "cities/jaipur/ground/road.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "road"
+    },
+    {
+     "file": "cities/jaipur/ground/road2.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "road2"
+    },
+    {
+     "file": "cities/jaipur/ground/ground.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "ground"
+    },
+    {
+     "file": "cities/jaipur/ground/plaza.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "plaza"
     }
    ]
   },
@@ -4508,6 +4939,42 @@
      "ax": 187.7,
      "ay": 253.1,
      "footprint": 2
+    },
+    {
+     "file": "cities/mexico/ground/road.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "road"
+    },
+    {
+     "file": "cities/mexico/ground/road2.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "road2"
+    },
+    {
+     "file": "cities/mexico/ground/ground.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "ground"
+    },
+    {
+     "file": "cities/mexico/ground/plaza.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "plaza"
     }
    ]
   },
@@ -5046,6 +5513,92 @@
      "ax": 178.9,
      "ay": 224.1,
      "footprint": 2
+    },
+    {
+     "file": "cities/chicago/decor/roadprop_1.webp",
+     "w": 51,
+     "h": 28,
+     "ax": 25.5,
+     "ay": 14,
+     "group": "decor",
+     "kind": "roadprop",
+     "variant": 1
+    },
+    {
+     "file": "cities/chicago/decor/local_1.webp",
+     "w": 38,
+     "h": 55,
+     "ax": 19.5,
+     "ay": 47,
+     "group": "decor",
+     "kind": "local",
+     "variant": 1
+    },
+    {
+     "file": "cities/chicago/decor/stree_1.webp",
+     "w": 54,
+     "h": 78,
+     "ax": 27.5,
+     "ay": 77,
+     "group": "decor",
+     "kind": "stree",
+     "variant": 1
+    },
+    {
+     "file": "cities/chicago/decor/car_1.webp",
+     "w": 83,
+     "h": 70,
+     "ax": 41.5,
+     "ay": 37,
+     "group": "decor",
+     "kind": "car",
+     "variant": 1
+    },
+    {
+     "file": "cities/chicago/decor/corner_bank_1.webp",
+     "w": 26,
+     "h": 113,
+     "ax": 13.5,
+     "ay": 108,
+     "group": "decor",
+     "kind": "corner_bank",
+     "variant": 1
+    },
+    {
+     "file": "cities/chicago/ground/road.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "road"
+    },
+    {
+     "file": "cities/chicago/ground/road2.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "road2"
+    },
+    {
+     "file": "cities/chicago/ground/ground.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "ground"
+    },
+    {
+     "file": "cities/chicago/ground/plaza.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "plaza"
     }
    ]
   },
@@ -5910,6 +6463,52 @@
      "ax": 189.0,
      "ay": 160.0,
      "footprint": 2
+    },
+    {
+     "file": "cities/yamamah/decor/corner_khan_1.webp",
+     "w": 49,
+     "h": 72,
+     "ax": 24.5,
+     "ay": 69,
+     "group": "decor",
+     "kind": "corner_khan",
+     "variant": 1
+    },
+    {
+     "file": "cities/yamamah/ground/road.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "road"
+    },
+    {
+     "file": "cities/yamamah/ground/road2.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "road2"
+    },
+    {
+     "file": "cities/yamamah/ground/ground.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "ground"
+    },
+    {
+     "file": "cities/yamamah/ground/plaza.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "plaza"
     }
    ],
    "source": "cities/yamamah/source"
@@ -6467,6 +7066,42 @@
      "ax": 193.1,
      "ay": 224.8,
      "footprint": 2
+    },
+    {
+     "file": "cities/shibam/ground/road.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "road"
+    },
+    {
+     "file": "cities/shibam/ground/road2.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "road2"
+    },
+    {
+     "file": "cities/shibam/ground/ground.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "ground"
+    },
+    {
+     "file": "cities/shibam/ground/plaza.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "plaza"
     }
    ]
   },
@@ -6485,30 +7120,30 @@
      "file": "cities/diriyah/props/palm_1.webp",
      "group": "prop",
      "kind": "palm",
-     "w": 143,
-     "h": 144,
-     "ax": 74,
-     "ay": 133,
+     "w": 124,
+     "h": 139,
+     "ax": 64.5,
+     "ay": 127,
      "variant": 1
     },
     {
      "file": "cities/diriyah/props/palm_2.webp",
      "group": "prop",
      "kind": "palm",
-     "w": 143,
-     "h": 146,
-     "ax": 63,
-     "ay": 134,
+     "w": 124,
+     "h": 139,
+     "ax": 64.5,
+     "ay": 127,
      "variant": 2
     },
     {
      "file": "cities/diriyah/props/palm_3.webp",
      "group": "prop",
      "kind": "palm",
-     "w": 110,
-     "h": 146,
-     "ax": 52,
-     "ay": 134,
+     "w": 124,
+     "h": 139,
+     "ax": 64.5,
+     "ay": 127,
      "variant": 3
     },
     {
@@ -7028,6 +7663,62 @@
      "ax": 189.0,
      "ay": 199.8,
      "footprint": 2
+    },
+    {
+     "file": "cities/diriyah/decor/roadprop_1.webp",
+     "w": 17,
+     "h": 67,
+     "ax": -39.5,
+     "ay": 54,
+     "group": "decor",
+     "kind": "roadprop",
+     "variant": 1
+    },
+    {
+     "file": "cities/diriyah/decor/corner_salwa_1.webp",
+     "w": 49,
+     "h": 72,
+     "ax": 24.5,
+     "ay": 69,
+     "group": "decor",
+     "kind": "corner_salwa",
+     "variant": 1
+    },
+    {
+     "file": "cities/diriyah/ground/road.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "road"
+    },
+    {
+     "file": "cities/diriyah/ground/road2.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "road2"
+    },
+    {
+     "file": "cities/diriyah/ground/ground.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "ground"
+    },
+    {
+     "file": "cities/diriyah/ground/plaza.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "plaza"
     }
    ]
   },
@@ -7046,10 +7737,10 @@
      "file": "cities/cairo/props/tree_1.webp",
      "group": "prop",
      "kind": "tree",
-     "w": 82,
-     "h": 114,
-     "ax": 44,
-     "ay": 114,
+     "w": 80,
+     "h": 109,
+     "ax": 42.5,
+     "ay": 107,
      "variant": 1
     },
     {
@@ -7570,6 +8261,62 @@
      "ax": 178.2,
      "ay": 224.1,
      "footprint": 2
+    },
+    {
+     "file": "cities/cairo/decor/roadprop_1.webp",
+     "w": 15,
+     "h": 88,
+     "ax": -40.5,
+     "ay": 73,
+     "group": "decor",
+     "kind": "roadprop",
+     "variant": 1
+    },
+    {
+     "file": "cities/cairo/decor/corner_pyramid_1.webp",
+     "w": 29,
+     "h": 119,
+     "ax": 14.5,
+     "ay": 111,
+     "group": "decor",
+     "kind": "corner_pyramid",
+     "variant": 1
+    },
+    {
+     "file": "cities/cairo/ground/road.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "road"
+    },
+    {
+     "file": "cities/cairo/ground/road2.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "road2"
+    },
+    {
+     "file": "cities/cairo/ground/ground.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "ground"
+    },
+    {
+     "file": "cities/cairo/ground/plaza.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "plaza"
     }
    ]
   },
@@ -7588,10 +8335,10 @@
      "file": "cities/kaifeng/props/willow_1.webp",
      "group": "prop",
      "kind": "willow",
-     "w": 76,
-     "h": 116,
-     "ax": 38,
-     "ay": 116,
+     "w": 74,
+     "h": 112,
+     "ax": 36.5,
+     "ay": 110,
      "variant": 1
     },
     {
@@ -8114,6 +8861,61 @@
      "ax": 169.4,
      "ay": 442.8,
      "footprint": 2
+    },
+    {
+     "file": "cities/kaifeng/decor/boat_1.webp",
+     "w": 88,
+     "h": 29,
+     "ax": 46.5,
+     "ay": 13,
+     "group": "decor",
+     "kind": "boat",
+     "variant": 1
+    },
+    {
+     "file": "cities/kaifeng/ground/road.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "road"
+    },
+    {
+     "file": "cities/kaifeng/ground/road2.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "road2"
+    },
+    {
+     "file": "cities/kaifeng/ground/ground.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "ground"
+    },
+    {
+     "file": "cities/kaifeng/ground/plaza.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "plaza"
+    },
+    {
+     "file": "cities/kaifeng/ground/water.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "water"
     }
    ]
   },
@@ -8132,30 +8934,30 @@
      "file": "cities/gyeongju/props/pine_1.webp",
      "group": "prop",
      "kind": "pine",
-     "w": 93,
-     "h": 125,
-     "ax": 57,
-     "ay": 122,
+     "w": 92,
+     "h": 123,
+     "ax": 56.5,
+     "ay": 119,
      "variant": 1
     },
     {
      "file": "cities/gyeongju/props/pine_2.webp",
      "group": "prop",
      "kind": "pine",
-     "w": 93,
-     "h": 122,
-     "ax": 46,
-     "ay": 122,
+     "w": 92,
+     "h": 123,
+     "ax": 56.5,
+     "ay": 119,
      "variant": 2
     },
     {
      "file": "cities/gyeongju/props/pine_3.webp",
      "group": "prop",
      "kind": "pine",
-     "w": 93,
-     "h": 125,
-     "ax": 35,
-     "ay": 122,
+     "w": 92,
+     "h": 123,
+     "ax": 56.5,
+     "ay": 119,
      "variant": 3
     },
     {
@@ -8680,6 +9482,62 @@
      "ax": 188.3,
      "ay": 164.7,
      "footprint": 2
+    },
+    {
+     "file": "cities/gyeongju/decor/roadprop_1.webp",
+     "w": 24,
+     "h": 47,
+     "ax": -36.5,
+     "ay": 32,
+     "group": "decor",
+     "kind": "roadprop",
+     "variant": 1
+    },
+    {
+     "file": "cities/gyeongju/decor/corner_observatory_1.webp",
+     "w": 38,
+     "h": 78,
+     "ax": 19.5,
+     "ay": 70,
+     "group": "decor",
+     "kind": "corner_observatory",
+     "variant": 1
+    },
+    {
+     "file": "cities/gyeongju/ground/road.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "road"
+    },
+    {
+     "file": "cities/gyeongju/ground/road2.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "road2"
+    },
+    {
+     "file": "cities/gyeongju/ground/ground.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "ground"
+    },
+    {
+     "file": "cities/gyeongju/ground/plaza.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "plaza"
     }
    ]
   },
@@ -8698,20 +9556,20 @@
      "file": "cities/paris/props/ptree_1.webp",
      "group": "prop",
      "kind": "ptree",
-     "w": 82,
-     "h": 136,
-     "ax": 49,
-     "ay": 119,
+     "w": 81,
+     "h": 116,
+     "ax": 48.5,
+     "ay": 98,
      "variant": 1
     },
     {
      "file": "cities/paris/props/ptree_2.webp",
      "group": "prop",
      "kind": "ptree",
-     "w": 82,
-     "h": 136,
-     "ax": 38,
-     "ay": 119,
+     "w": 81,
+     "h": 116,
+     "ax": 48.5,
+     "ay": 98,
      "variant": 2
     },
     {
@@ -9214,6 +10072,62 @@
      "ax": 169.4,
      "ay": 210.6,
      "footprint": 2
+    },
+    {
+     "file": "cities/paris/decor/local_1.webp",
+     "w": 45,
+     "h": 60,
+     "ax": 22.5,
+     "ay": 57,
+     "group": "decor",
+     "kind": "local",
+     "variant": 1
+    },
+    {
+     "file": "cities/paris/decor/corner_arch_1.webp",
+     "w": 26,
+     "h": 113,
+     "ax": 13.5,
+     "ay": 108,
+     "group": "decor",
+     "kind": "corner_arch",
+     "variant": 1
+    },
+    {
+     "file": "cities/paris/ground/road.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "road"
+    },
+    {
+     "file": "cities/paris/ground/road2.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "road2"
+    },
+    {
+     "file": "cities/paris/ground/ground.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "ground"
+    },
+    {
+     "file": "cities/paris/ground/plaza.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "plaza"
     }
    ]
   },
@@ -9232,10 +10146,10 @@
      "file": "cities/birmingham/props/lamp_1.webp",
      "group": "prop",
      "kind": "lamp",
-     "w": 18,
-     "h": 112,
-     "ax": 9,
-     "ay": 98,
+     "w": 15,
+     "h": 77,
+     "ax": 7.5,
+     "ay": 63,
      "variant": 1
     },
     {
@@ -9757,6 +10671,91 @@
      "ax": 178.9,
      "ay": 354.4,
      "footprint": 2
+    },
+    {
+     "file": "cities/birmingham/decor/boat_1.webp",
+     "w": 122,
+     "h": 67,
+     "ax": 63.5,
+     "ay": 38,
+     "group": "decor",
+     "kind": "boat",
+     "variant": 1
+    },
+    {
+     "file": "cities/birmingham/decor/roadprop_1.webp",
+     "w": 16,
+     "h": 82,
+     "ax": -45.5,
+     "ay": 68,
+     "group": "decor",
+     "kind": "roadprop",
+     "variant": 1
+    },
+    {
+     "file": "cities/birmingham/decor/car_1.webp",
+     "w": 83,
+     "h": 70,
+     "ax": 41.5,
+     "ay": 37,
+     "group": "decor",
+     "kind": "car",
+     "variant": 1
+    },
+    {
+     "file": "cities/birmingham/decor/corner_clock_1.webp",
+     "w": 26,
+     "h": 113,
+     "ax": 13.5,
+     "ay": 108,
+     "group": "decor",
+     "kind": "corner_clock",
+     "variant": 1
+    },
+    {
+     "file": "cities/birmingham/ground/road.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "road"
+    },
+    {
+     "file": "cities/birmingham/ground/road2.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "road2"
+    },
+    {
+     "file": "cities/birmingham/ground/ground.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "ground"
+    },
+    {
+     "file": "cities/birmingham/ground/plaza.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "plaza"
+    },
+    {
+     "file": "cities/birmingham/ground/water.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "water"
     }
    ]
   },
@@ -9775,20 +10774,20 @@
      "file": "cities/rothenburg/props/rtree_1.webp",
      "group": "prop",
      "kind": "rtree",
-     "w": 82,
-     "h": 114,
-     "ax": 49,
-     "ay": 114,
+     "w": 81,
+     "h": 110,
+     "ax": 48.5,
+     "ay": 109,
      "variant": 1
     },
     {
      "file": "cities/rothenburg/props/rtree_2.webp",
      "group": "prop",
      "kind": "rtree",
-     "w": 82,
-     "h": 114,
-     "ax": 38,
-     "ay": 114,
+     "w": 81,
+     "h": 110,
+     "ax": 48.5,
+     "ay": 109,
      "variant": 2
     },
     {
@@ -10320,6 +11319,52 @@
      "ax": 173.5,
      "ay": 292.3,
      "footprint": 2
+    },
+    {
+     "file": "cities/rothenburg/decor/roadprop_1.webp",
+     "w": 16,
+     "h": 79,
+     "ax": -45.5,
+     "ay": 65,
+     "group": "decor",
+     "kind": "roadprop",
+     "variant": 1
+    },
+    {
+     "file": "cities/rothenburg/ground/road.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "road"
+    },
+    {
+     "file": "cities/rothenburg/ground/road2.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "road2"
+    },
+    {
+     "file": "cities/rothenburg/ground/ground.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "ground"
+    },
+    {
+     "file": "cities/rothenburg/ground/plaza.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "plaza"
     }
    ]
   },
@@ -10338,30 +11383,30 @@
      "file": "cities/gondar/props/acacia_1.webp",
      "group": "prop",
      "kind": "acacia",
-     "w": 120,
-     "h": 113,
-     "ax": 71,
-     "ay": 108,
+     "w": 119,
+     "h": 110,
+     "ax": 69.5,
+     "ay": 105,
      "variant": 1
     },
     {
      "file": "cities/gondar/props/acacia_2.webp",
      "group": "prop",
      "kind": "acacia",
-     "w": 120,
-     "h": 113,
-     "ax": 60,
-     "ay": 108,
+     "w": 119,
+     "h": 110,
+     "ax": 69.5,
+     "ay": 105,
      "variant": 2
     },
     {
      "file": "cities/gondar/props/acacia_3.webp",
      "group": "prop",
      "kind": "acacia",
-     "w": 120,
-     "h": 113,
-     "ax": 49,
-     "ay": 108,
+     "w": 119,
+     "h": 110,
+     "ax": 69.5,
+     "ay": 105,
      "variant": 3
     },
     {
@@ -10873,6 +11918,62 @@
      "ax": 191.7,
      "ay": 229.5,
      "footprint": 2
+    },
+    {
+     "file": "cities/gondar/decor/roadprop_1.webp",
+     "w": 30,
+     "h": 21,
+     "ax": -17.5,
+     "ay": 7,
+     "group": "decor",
+     "kind": "roadprop",
+     "variant": 1
+    },
+    {
+     "file": "cities/gondar/decor/corner_fortress_1.webp",
+     "w": 30,
+     "h": 58,
+     "ax": 14.5,
+     "ay": 49,
+     "group": "decor",
+     "kind": "corner_fortress",
+     "variant": 1
+    },
+    {
+     "file": "cities/gondar/ground/road.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "road"
+    },
+    {
+     "file": "cities/gondar/ground/road2.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "road2"
+    },
+    {
+     "file": "cities/gondar/ground/ground.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "ground"
+    },
+    {
+     "file": "cities/gondar/ground/plaza.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "plaza"
     }
    ]
   },
@@ -11421,6 +12522,62 @@
      "ax": 180.9,
      "ay": 164.7,
      "footprint": 2
+    },
+    {
+     "file": "cities/kano/decor/roadprop_1.webp",
+     "w": 128,
+     "h": 28,
+     "ax": 63.5,
+     "ay": 82,
+     "group": "decor",
+     "kind": "roadprop",
+     "variant": 1
+    },
+    {
+     "file": "cities/kano/decor/corner_kanoGate_1.webp",
+     "w": 30,
+     "h": 58,
+     "ax": 14.5,
+     "ay": 49,
+     "group": "decor",
+     "kind": "corner_kanoGate",
+     "variant": 1
+    },
+    {
+     "file": "cities/kano/ground/road.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "road"
+    },
+    {
+     "file": "cities/kano/ground/road2.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "road2"
+    },
+    {
+     "file": "cities/kano/ground/ground.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "ground"
+    },
+    {
+     "file": "cities/kano/ground/plaza.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "plaza"
     }
    ]
   },
@@ -11439,30 +12596,30 @@
      "file": "cities/meroe/props/palm_1.webp",
      "group": "prop",
      "kind": "palm",
-     "w": 95,
-     "h": 137,
-     "ax": 58,
-     "ay": 135,
+     "w": 76,
+     "h": 116,
+     "ax": 46.5,
+     "ay": 113,
      "variant": 1
     },
     {
      "file": "cities/meroe/props/palm_2.webp",
      "group": "prop",
      "kind": "palm",
-     "w": 94,
-     "h": 136,
-     "ax": 47,
-     "ay": 136,
+     "w": 76,
+     "h": 116,
+     "ax": 46.5,
+     "ay": 113,
      "variant": 2
     },
     {
      "file": "cities/meroe/props/palm_3.webp",
      "group": "prop",
      "kind": "palm",
-     "w": 94,
-     "h": 138,
-     "ax": 36,
-     "ay": 136,
+     "w": 76,
+     "h": 116,
+     "ax": 46.5,
+     "ay": 113,
      "variant": 3
     },
     {
@@ -11963,6 +13120,71 @@
      "ax": 188.3,
      "ay": 205.2,
      "footprint": 2
+    },
+    {
+     "file": "cities/meroe/decor/boat_1.webp",
+     "w": 88,
+     "h": 29,
+     "ax": 46.5,
+     "ay": 13,
+     "group": "decor",
+     "kind": "boat",
+     "variant": 1
+    },
+    {
+     "file": "cities/meroe/decor/corner_khartoum_1.webp",
+     "w": 30,
+     "h": 58,
+     "ax": 14.5,
+     "ay": 49,
+     "group": "decor",
+     "kind": "corner_khartoum",
+     "variant": 1
+    },
+    {
+     "file": "cities/meroe/ground/road.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "road"
+    },
+    {
+     "file": "cities/meroe/ground/road2.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "road2"
+    },
+    {
+     "file": "cities/meroe/ground/ground.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "ground"
+    },
+    {
+     "file": "cities/meroe/ground/plaza.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "plaza"
+    },
+    {
+     "file": "cities/meroe/ground/water.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "water"
     }
    ]
   },
@@ -12482,6 +13704,52 @@
      "ax": 189.7,
      "ay": 160.0,
      "footprint": 2
+    },
+    {
+     "file": "cities/rio/decor/corner_statue_1.webp",
+     "w": 49,
+     "h": 72,
+     "ax": 24.5,
+     "ay": 69,
+     "group": "decor",
+     "kind": "corner_statue",
+     "variant": 1
+    },
+    {
+     "file": "cities/rio/ground/road.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "road"
+    },
+    {
+     "file": "cities/rio/ground/road2.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "road2"
+    },
+    {
+     "file": "cities/rio/ground/ground.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "ground"
+    },
+    {
+     "file": "cities/rio/ground/plaza.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "plaza"
     }
    ]
   },
@@ -12500,10 +13768,10 @@
      "file": "cities/laboca/props/crane_1.webp",
      "group": "prop",
      "kind": "crane",
-     "w": 128,
-     "h": 201,
-     "ax": 36,
-     "ay": 187,
+     "w": 127,
+     "h": 199,
+     "ax": 35.5,
+     "ay": 184,
      "variant": 1
     },
     {
@@ -13003,6 +14271,91 @@
      "ax": 185.6,
      "ay": 310.5,
      "footprint": 2
+    },
+    {
+     "file": "cities/laboca/decor/boat_1.webp",
+     "w": 123,
+     "h": 77,
+     "ax": 62.5,
+     "ay": 48,
+     "group": "decor",
+     "kind": "boat",
+     "variant": 1
+    },
+    {
+     "file": "cities/laboca/decor/roadprop_1.webp",
+     "w": 9,
+     "h": 61,
+     "ax": -49.5,
+     "ay": 47,
+     "group": "decor",
+     "kind": "roadprop",
+     "variant": 1
+    },
+    {
+     "file": "cities/laboca/decor/car_1.webp",
+     "w": 83,
+     "h": 70,
+     "ax": 41.5,
+     "ay": 37,
+     "group": "decor",
+     "kind": "car",
+     "variant": 1
+    },
+    {
+     "file": "cities/laboca/decor/corner_mercs_1.webp",
+     "w": 27,
+     "h": 71,
+     "ax": 4.5,
+     "ay": 67,
+     "group": "decor",
+     "kind": "corner_mercs",
+     "variant": 1
+    },
+    {
+     "file": "cities/laboca/ground/road.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "road"
+    },
+    {
+     "file": "cities/laboca/ground/road2.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "road2"
+    },
+    {
+     "file": "cities/laboca/ground/ground.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "ground"
+    },
+    {
+     "file": "cities/laboca/ground/plaza.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "plaza"
+    },
+    {
+     "file": "cities/laboca/ground/water.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "water"
     }
    ]
   },
@@ -13545,8 +14898,310 @@
      "ax": 196.4,
      "ay": 261.9,
      "footprint": 2
+    },
+    {
+     "file": "cities/tenoch/decor/boat_1.webp",
+     "w": 88,
+     "h": 29,
+     "ax": 46.5,
+     "ay": 13,
+     "group": "decor",
+     "kind": "boat",
+     "variant": 1
+    },
+    {
+     "file": "cities/tenoch/ground/road.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "road"
+    },
+    {
+     "file": "cities/tenoch/ground/road2.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "road2"
+    },
+    {
+     "file": "cities/tenoch/ground/ground.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "ground"
+    },
+    {
+     "file": "cities/tenoch/ground/plaza.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "plaza"
+    },
+    {
+     "file": "cities/tenoch/ground/water.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49,
+     "group": "ground",
+     "kind": "water"
     }
    ]
   }
+ },
+ "common": {
+  "images": [
+   {
+    "file": "cities/_common/decor/lamp.webp",
+    "w": 17,
+    "h": 74,
+    "ax": 8.5,
+    "ay": 71,
+    "group": "decor",
+    "kind": "lamp"
+   },
+   {
+    "file": "cities/_common/decor/planter.webp",
+    "w": 34,
+    "h": 47,
+    "ax": 16.5,
+    "ay": 39,
+    "group": "decor",
+    "kind": "planter"
+   },
+   {
+    "file": "cities/_common/decor/bench.webp",
+    "w": 29,
+    "h": 31,
+    "ax": 15.5,
+    "ay": 22,
+    "group": "decor",
+    "kind": "bench"
+   },
+   {
+    "file": "cities/_common/decor/stree.webp",
+    "w": 54,
+    "h": 82,
+    "ax": 27.5,
+    "ay": 80,
+    "group": "decor",
+    "kind": "stree"
+   },
+   {
+    "file": "cities/_common/decor/spalm.webp",
+    "w": 64,
+    "h": 84,
+    "ax": 33.5,
+    "ay": 80,
+    "group": "decor",
+    "kind": "spalm"
+   },
+   {
+    "file": "cities/_common/decor/car.webp",
+    "w": 83,
+    "h": 70,
+    "ax": 41.5,
+    "ay": 37,
+    "group": "decor",
+    "kind": "car"
+   },
+   {
+    "file": "cities/_common/decor/barrel.webp",
+    "w": 32,
+    "h": 58,
+    "ax": 15.5,
+    "ay": 52,
+    "group": "decor",
+    "kind": "barrel"
+   },
+   {
+    "file": "cities/_common/decor/oil.webp",
+    "w": 39,
+    "h": 16,
+    "ax": 16.5,
+    "ay": 1,
+    "group": "decor",
+    "kind": "oil"
+   },
+   {
+    "file": "cities/_common/decor/rubble.webp",
+    "w": 47,
+    "h": 27,
+    "ax": 20.5,
+    "ay": 6,
+    "group": "decor",
+    "kind": "rubble"
+   },
+   {
+    "file": "cities/_common/decor/sandbags.webp",
+    "w": 61,
+    "h": 38,
+    "ax": 37.5,
+    "ay": 26,
+    "group": "decor",
+    "kind": "sandbags"
+   },
+   {
+    "file": "cities/_common/mark/side_i1.webp",
+    "w": 119,
+    "h": 59,
+    "ax": 20.5,
+    "ay": 10,
+    "group": "mark",
+    "kind": "side_i1"
+   },
+   {
+    "file": "cities/_common/mark/side_j1.webp",
+    "w": 119,
+    "h": 59,
+    "ax": 98.5,
+    "ay": 10,
+    "group": "mark",
+    "kind": "side_j1"
+   },
+   {
+    "file": "cities/_common/mark/side_i0.webp",
+    "w": 119,
+    "h": 59,
+    "ax": 98.5,
+    "ay": 49,
+    "group": "mark",
+    "kind": "side_i0"
+   },
+   {
+    "file": "cities/_common/mark/side_j0.webp",
+    "w": 119,
+    "h": 59,
+    "ax": 20.5,
+    "ay": 49,
+    "group": "mark",
+    "kind": "side_j0"
+   },
+   {
+    "file": "cities/_common/mark/cross_i.webp",
+    "w": 123,
+    "h": 66,
+    "ax": 61.5,
+    "ay": 33,
+    "group": "mark",
+    "kind": "cross_i"
+   },
+   {
+    "file": "cities/_common/mark/cross_j.webp",
+    "w": 123,
+    "h": 66,
+    "ax": 61.5,
+    "ay": 33,
+    "group": "mark",
+    "kind": "cross_j"
+   },
+   {
+    "file": "cities/_common/mark/dash1.webp",
+    "w": 51,
+    "h": 28,
+    "ax": 25.5,
+    "ay": 14,
+    "group": "mark",
+    "kind": "dash1"
+   },
+   {
+    "file": "cities/_common/mark/dash2.webp",
+    "w": 51,
+    "h": 28,
+    "ax": 25.5,
+    "ay": 14,
+    "group": "mark",
+    "kind": "dash2"
+   },
+   {
+    "file": "cities/_common/mark/dash3.webp",
+    "w": 50,
+    "h": 28,
+    "ax": 73.5,
+    "ay": -10,
+    "group": "mark",
+    "kind": "dash3"
+   },
+   {
+    "file": "cities/_common/mark/dash4.webp",
+    "w": 50,
+    "h": 28,
+    "ax": -23.5,
+    "ay": -10,
+    "group": "mark",
+    "kind": "dash4"
+   },
+   {
+    "file": "cities/_common/mark/crack.webp",
+    "w": 79,
+    "h": 21,
+    "ax": 45.5,
+    "ay": 6,
+    "group": "mark",
+    "kind": "crack"
+   },
+   {
+    "file": "cities/_common/mark/lane_i.webp",
+    "w": 180,
+    "h": 89,
+    "ax": 90.5,
+    "ay": 44,
+    "group": "mark",
+    "kind": "lane_i"
+   },
+   {
+    "file": "cities/_common/mark/lane_j.webp",
+    "w": 180,
+    "h": 89,
+    "ax": 90.5,
+    "ay": 44,
+    "group": "mark",
+    "kind": "lane_j"
+   },
+   {
+    "file": "cities/_common/mark/fplaza.webp",
+    "w": 128,
+    "h": 64,
+    "ax": 63.5,
+    "ay": 32,
+    "group": "mark",
+    "kind": "fplaza"
+   },
+   {
+    "file": "cities/_common/mark/grass.webp",
+    "w": 67,
+    "h": 32,
+    "ax": 30.5,
+    "ay": 15,
+    "group": "mark",
+    "kind": "grass"
+   },
+   {
+    "file": "cities/_common/mark/gravel.webp",
+    "w": 82,
+    "h": 34,
+    "ax": 38.5,
+    "ay": 14,
+    "group": "mark",
+    "kind": "gravel"
+   },
+   {
+    "file": "cities/_common/mark/ring.webp",
+    "w": 416,
+    "h": 211,
+    "ax": 208,
+    "ay": 154,
+    "group": "mark",
+    "kind": "ring"
+   }
+  ]
  }
 }

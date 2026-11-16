@@ -67,6 +67,8 @@ class CityArt {
     return (s, mid == null || own == null ? 1.0 : own.h / mid.h);
   }
 
+  int count(String group, String kind) => _byKind['$group/$kind']?.length ?? 0;
+
   Sprite? piece(String group, String kind, int level) => _byKind['$group/$kind']?.where((s) => s.level == level).firstOrNull;
 
   bool has(String kind) => _byKind.containsKey('building/$kind') || _byKind.containsKey('prop/$kind');

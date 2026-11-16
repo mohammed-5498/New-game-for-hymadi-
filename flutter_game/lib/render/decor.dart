@@ -7,6 +7,7 @@ import 'dart:math' as math;
 import '../config.dart';
 import '../data/cities.dart';
 import '../map/generator.dart';
+import 'city_art.dart';
 import 'colors.dart';
 import 'vec.dart';
 import 'weather_art.dart' show Light;
@@ -22,13 +23,29 @@ class Decor {
   final CityTheme theme;
   final OpenCity? open;
   final String region;
-  Decor(this.map)
+  // صور الزينة والأرضيات (GAME_SPEC 18.6): ما له صورة في أطلس المدينة يُضاف صورةً، ما على الأرض في شريحته (onMark)
+  // وما يقوم فوق المربع في صفه (onItem)، وإلا رُسم بالكود كما كان
+  final CityArt? art;
+  void Function(Sprite s, double x, double y, int i, int j)? onMark, onItem;
+  Decor(this.map, [this.art])
       : city = map.city,
         theme = CITY_THEMES[map.city]!,
         open = CITIES.open[map.city],
         region = REGIONS.order.firstWhere((r) => REGIONS.cities[r]!.contains(map.city), orElse: () => 'arabic');
 
   double h(int i, int j, int k) => hsh(i, j, k, map.seed);
+  Sprite? _s(String group, String kind, [int variant = 1]) => art?.find(group, kind, variant);
+  bool _put(void Function(Sprite, double, double, int, int)? to, String group, String kind, double x, double y, int i, int j, [int variant = 1]) {
+    final s = to == null ? null : _s(group, kind, variant);
+    if (s == null) return false;
+    to!(s, x, y, i, j);
+    return true;
+  }
+  bool _mark(String kind, double x, double y, int i, int j) => _put(onMark, 'mark', kind, x, y, i, j);
+  bool _item(String kind, double x, double y, int i, int j, [int variant = 1]) => _put(onItem, 'decor', kind, x, y, i, j, variant);
+  // نسخة بالتجزئة من نسخ صورة (القوارب وزينة الشارع)
+  int _variant(String kind, int i, int j, int salt) => 1 + (h(i, j, salt) * (art?.count('decor', kind) ?? 1)).floor();
+  final _probe = Vec();
   // إضاءة الليل الثابتة (collectStatics في chunkCache.js): برميل النار، وأعمدة الممرات، وأضواء الدوار
   final lights = <Light>[];
   bool _isLane(int k) => map.type[k] == tDot && (map.kind[k] == 'lane_i' || map.kind[k] == 'lane_j');
@@ -45,11 +62,12 @@ class Decor {
         } else if (_isLane(k)) {
           _lanePaving(v, i, j, x, y);
         } else if (map.kind[k] == 'fplaza' && _squareOf(k) == null) {
+          if (_mark('fplaza', x, y, i, j)) continue;
           v.stroke([[x - 12, y], [x, y - 6], [x + 12, y], [x, y + 6], [x - 12, y]], 'rgba(255,226,150,0.32)', 0.6);
           v.ln(x - 6, y - 3, x + 6, y + 3, 'rgba(255,226,150,0.32)', 0.6);
           v.ln(x + 6, y - 3, x - 6, y + 3, 'rgba(255,226,150,0.32)', 0.6);
         } else if (map.type[k] == tY && _roundaboutAnchor(i, j)) {
-          v.ring(x, y - 9, 38, 19, 'rgba(240,236,224,0.7)', 0.9, [4, 3]);
+          if (!_mark('ring', x, y, i, j)) v.ring(x, y - 9, 38, 19, 'rgba(240,236,224,0.7)', 0.9, [4, 3]);
         }
       }
     }
@@ -67,6 +85,7 @@ class Decor {
         final v = at(i, j);
         final d = map.dash[map.idx(i, j)], x = (i - j) * TILE_HALF_W, y = (i + j) * TILE_HALF_H;
         const c = '#c9bd85';
+        if (d >= 1 && d <= 4 && _mark('dash$d', x, y, i, j)) continue;
         if (d == 1) v.ln(x - 4, y - 2, x + 4, y + 2, c, 1);
         if (d == 2) v.ln(x + 4, y - 2, x - 4, y + 2, c, 1);
         if (d == 3) v.ln(x - 13, y + 2.5, x - 5, y + 6.5, c, 1);
@@ -79,10 +98,10 @@ class Decor {
     if (open != null) {
       _sidewalks(v, i, j, x, y);
       final dash = map.dash[map.idx(i, j)];
-      if (dash == 6 || dash == 7) _crosswalk(v, dash == 6, x, y);
+      if ((dash == 6 || dash == 7) && !_mark(dash == 6 ? 'cross_i' : 'cross_j', x, y, i, j)) _crosswalk(v, dash == 6, x, y);
     }
-    _themeTile(v, i, j, x, y);
-    if (h(i, j, 201) < 0.35) {
+    if (_s('ground', 'road') == null) _themeTile(v, i, j, x, y);   // نقش الشارع في صورته
+    if (h(i, j, 201) < 0.35 && !_mark('crack', x, y, i, j)) {
       v.stroke([[x - 8, y - 1], [x - 3, y + 1.5], [x + 1, y], [x + 6, y + 2.5]], 'rgba(20,16,12,0.35)', 0.5);
     }
   }
@@ -94,6 +113,7 @@ class Decor {
       if (!map.inBounds(a, b)) continue;
       final k = map.idx(a, b);
       if (map.road[k] == 1 || map.type[k] == tY) continue;
+      if (_mark('side_${da != 0 ? 'i' : 'j'}${da + db > 0 ? 1 : 0}', x, y, i, j)) continue;
       List<double> p(double u, double w) => _at(x, y, da != 0 ? da * u : w, db != 0 ? db * u : w);
       final e1 = p(0.5, -0.5), e2 = p(0.5, 0.5), e3 = p(0.5 - f, 0.5), e4 = p(0.5 - f, -0.5);
       v.poly([e1, e2, e3, e4], 'rgba(255,255,255,0.16)');
@@ -110,6 +130,7 @@ class Decor {
 
   void _lanePaving(Vec v, int i, int j, double x, double y) {
     final alongI = map.kind[map.idx(i, j)] == 'lane_i';
+    if (_mark(alongI ? 'lane_i' : 'lane_j', x, y, i, j)) return;
     List<double> p(double u, double w) => alongI ? _at(x, y, u, w) : _at(x, y, w, u);
     for (final u in const [-0.25, 0.25]) { final s = p(u, -0.42), e = p(u, 0.42); v.ln(s[0], s[1], e[0], e[1], 'rgba(0,0,0,0.13)', 0.5); }
     for (final w in const [-0.42, 0.42]) { final s = p(-0.5, w), e = p(0.5, w); v.ln(s[0], s[1], e[0], e[1], 'rgba(255,255,255,0.24)', 0.7); }
@@ -155,14 +176,14 @@ class Decor {
       } else if (_isLane(k)) {
         _laneDecor(v, i, j, x, y);
       } else if (h(i, j, 210) < 0.4) {
-        _streetDebris(v, x, y, i, j + 99);
+        _streetDebris(v, x, y, i, j, 99);
       } else if (map.districtAt[k] >= 0) {
         _detailGround(v, i, j, x, y);
       }
       return;
     }
     if (type == tY && _roundaboutAnchor(i, j)) {
-      _roundaboutIsland(v, x, y);
+      if (!_item('island', x, y, i, j)) _roundaboutIsland(v, x, y);
       final cy = y - 9;
       if (city == 'paris') {
         for (final an in const [-0.62, -2.52, 0.3, math.pi - 0.3]) {   // PARIS_LAMPS
@@ -179,26 +200,33 @@ class Decor {
   }
 
   // حطام الشارع (streetDebris): سيارة محطمة أو برميل نار أو بقعة أو ركام أو أكياس رمل
-  void _streetDebris(Vec v, double x, double y, int i, int j) {
+  // salt: إزاحة بذرة المربع (أرض الحي غير الشارع)، والصورة في مكان المربع نفسه
+  void _streetDebris(Vec v, double x, double y, int i, int tj, [int salt = 0]) {
+    final j = tj + salt;
     final r = h(i, j, 20);
     if (r >= 0.07 && r < 0.12) lights.add(Light(x, y - 7, 34, 0xff963c, 0.65));   // برميل النار (debrisLight)
     if (r < 0.07) {
       if (city == 'yamamah') return;                       // عربة اليمامة صورة (لاحقاً)
+      if (_item('car', x, y, i, tj)) return;
       final car = theme.car ?? const ['#6b4f3a', '#85624a', '#57402f'];
       v.box(x, y + 2, 8, 4, 4, car[0], car[1], car[2]);
       v.box(x + 1, y - 2, 4, 2, 3, '#2f2c29', '#3d3936', '#34302c');
       v.alpha = 0.3; v.el(x + 2, y - 6, 4, 2.5, '#2a2724'); v.alpha = 1;
     } else if (r < 0.12) {
+      if (_item('barrel', x, y, i, tj)) return;
       v.glow(x, y - 6, 14, 'rgba(255,150,60,0.38)');
       v.rc(x - 2.5, y - 5, 5, 6, '#4f4337');
       v.poly([[x - 3, y - 5], [x, y - 13], [x + 3, y - 5]], '#e8893a');
       v.poly([[x - 1.5, y - 5], [x, y - 9], [x + 1.5, y - 5]], '#f2c14e');
     } else if (r < 0.24) {
+      if (_put(onMark, 'decor', 'oil', x, y, i, tj)) return;
       v.el(x + (h(i, j, 21) - 0.5) * 8, y + 1, 3.4, 1.5, 'rgba(28,24,20,0.45)');
     } else if (r < 0.3) {
+      if (_item('rubble', x, y, i, tj)) return;
       v.poly([[x - 4, y + 2], [x, y - 1], [x + 5, y + 2], [x, y + 4]], theme.debris ?? '#8a8074');
       v.circ(x + 3, y, 0.9, '#5a524a');
     } else if (r < 0.33) {
+      if (_item('sandbags', x, y, i, tj)) return;
       for (var k = 0; k < 3; k++) { v.el(x - 5 + k * 3.6, y + 1 - k * 1.8, 2.2, 1.3, '#9c8a62'); }
       for (var k = 0; k < 2; k++) { v.el(x - 3.2 + k * 3.6, y - 1.6 - k * 1.8, 2.2, 1.3, '#b09c72'); }
     }
@@ -209,6 +237,11 @@ class Decor {
     var seq = 0;
     double rnd() => h(i, j, 700 + (seq++ % 97));
     final arid = region == 'arabic' || region == 'african' || city == 'tenoch' || city == 'mexico';
+    // صورة الحصى أو العشب لنحو نصف المربعات (الصورة واحدة، فلا تتكرر في كل مربع)
+    if (_s('mark', arid ? 'gravel' : 'grass') != null && onMark != null) {
+      if (h(i, j, 711) < 0.45) _mark(arid ? 'gravel' : 'grass', x, y, i, j);
+      return;
+    }
     for (var k = 0; k < 4; k++) {
       final dx = (rnd() - 0.5) * 22, dy = (rnd() - 0.5) * 10;
       if (dx.abs() / 18 + dy.abs() / 9 > 0.8) continue;
@@ -236,6 +269,7 @@ class Decor {
       final t = map.type[map.idx(a, b)];
       if (map.road[map.idx(a, b)] == 0 && (t == tH || t == tR)) {
         final p = da != 0 ? _at(x, y, -0.36, 0) : _at(x, y, 0, -0.36);
+        if (_item(theme.tree == 'palm' ? 'spalm' : 'stree', p[0], p[1], i, j)) return;
         if (theme.tree == 'palm') { streetPalm(v, p[0], p[1], i, j); return; }
         final c = _tree[city] ?? _tree['europe']!;
         v.el(p[0], p[1] + 0.6, 4.2, 1.8, 'rgba(0,0,0,0.22)');
@@ -267,9 +301,10 @@ class Decor {
     final side = h(i, j, 521) < 0.5 ? -0.3 : 0.3, u = (h(i, j, 522) - 0.5) * 0.5;
     final p = map.kind[map.idx(i, j)] == 'lane_i' ? _at(x, y, u, side) : _at(x, y, side, u);
     final px = p[0], py = p[1];
+    if (kind == 'lamp') lights.add(Light(px, py - 15, 24, city == 'hk' ? 0x7fe8ff : 0xffdc96, 0.5));
+    if (_item(const {'lamp', 'planter', 'bench'}.contains(kind) ? kind : 'local', px, py, i, j)) return;
     switch (kind) {
       case 'lamp':
-        lights.add(Light(px, py - 15, 24, city == 'hk' ? 0x7fe8ff : 0xffdc96, 0.5));
         v.ln(px, py, px, py - 14, '#2b2825', 0.9);
         v.poly([[px - 1.7, py - 14], [px, py - 17.2], [px + 1.7, py - 14], [px, py - 13]], '#2b2825');
         v.rc(px - 0.9, py - 15.8, 1.8, 1.7, _lampGlow[city] ?? '#f2d58a');
@@ -557,6 +592,7 @@ class Decor {
     if (d == null || !d.featureBig || d.featureTile == null) return;
     final i0 = d.featureTile! % map.n - 1, j0 = d.featureTile! ~/ map.n - 1;
     if (!((i == i0 - 1 || i == i0 + 2) && (j == j0 - 1 || j == j0 + 2))) return;
+    if (_item('corner_${d.feature}', x, y, i, j)) return;
     _plazaProp(v, d.feature!, x, y, i, j);
   }
 
@@ -650,7 +686,18 @@ class Decor {
     v.rc(x - 1, y - 16.4, 2, 1.6, '#f2d58a');
   }
 
+  // زينة شارع المدينة: صورتها حيث كان الكود يرسمها (يُجرَّب رسمها في مسودة لمعرفة ذلك)
   void _roadProp(Vec v, int i, int j, double x, double y) {
+    if (onItem != null && _s('decor', 'roadprop') != null) {
+      _probe.clear();
+      _roadPropCode(_probe, i, j, x, y);
+      if (!_probe.isEmpty) _item('roadprop', x, y, i, j, _variant('roadprop', i, j, 431));
+      return;
+    }
+    _roadPropCode(v, i, j, x, y);
+  }
+
+  void _roadPropCode(Vec v, int i, int j, double x, double y) {
     switch (city) {
       case 'europe': case 'rothenburg':
         if ((i * 7 + j * 5) % 7 == 0) {
@@ -747,7 +794,20 @@ class Decor {
     const waves = {'norway': 0.18, 'kaifeng': 0.2, 'birmingham': 0.14, 'meroe': 0.2, 'laboca': 0.12, 'tenoch': 0.2};
     final a = waves[city];
     if (a == null) return;
-    for (var k = 0; k < 3; k++) { v.ln(x - 8 + k * 5, y - 2 + k * 1.5, x - 3 + k * 5, y - 0.5 + k * 1.5, 'rgba(255,255,255,$a)', 0.6); }
+    // الماء صورة بموجه (فلا خطوط موج)، والقارب أو ما يطفو صورته حيث كان يُرسم
+    if (_s('ground', 'water') == null || onItem == null) {
+      for (var k = 0; k < 3; k++) { v.ln(x - 8 + k * 5, y - 2 + k * 1.5, x - 3 + k * 5, y - 0.5 + k * 1.5, 'rgba(255,255,255,$a)', 0.6); }
+    }
+    if (onItem != null && _s('decor', 'boat') != null) {
+      _probe.clear();
+      _afloat(_probe, i, j, x, y);
+      if (!_probe.isEmpty) _item('boat', x, y, i, j, _variant('boat', i, j, 333));
+      return;
+    }
+    _afloat(v, i, j, x, y);
+  }
+
+  void _afloat(Vec v, int i, int j, double x, double y) {
     switch (city) {
       case 'norway':
         final r = h(i, j, 320);

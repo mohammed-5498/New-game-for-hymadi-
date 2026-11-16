@@ -144,10 +144,29 @@ String? _firstBuilding(String city, CityArt art) {
 // صورة في الطبقة قبل ترتيبها بالعمق: لمربع (k) أو لخانة سور (slot)، وmask قناع رايات المالك فوق صورتها
 class _It {
   final int depth, i, order, did, k, slot;
-  final bool mask;
+  final bool mask, decor;
   final Sprite? s;
   final double x, y, scale;
-  _It(this.depth, this.i, this.order, this.s, this.x, this.y, this.scale, this.did, this.k, {this.mask = false, this.slot = -1});
+  _It(this.depth, this.i, this.order, this.s, this.x, this.y, this.scale, this.did, this.k, {this.mask = false, this.slot = -1, this.decor = false});
+}
+
+// صورة أرض المربع (18.6): الشارع بنقشيه المتعاقبين، والماء، والساحة والممرات وساحة المبنى المميز، وأرض الحي لما سواها
+String _groundKind(GameMap map, int i, int j, int k) {
+  final type = map.type[k], kind = map.kind[k];
+  if (map.road[k] == 1 || type == tY) return (i + j) % 2 == 1 ? 'road' : 'road2';
+  if (type == tWater) return 'water';
+  if (type == tP || kind == 'fplaza' || (type == tDot && (kind == 'lane_i' || kind == 'lane_j'))) return 'plaza';
+  return 'ground';
+}
+
+// لون يُضرب في صورة الأرض (ولونها base) فيصير متوسطها لون المربع c: أغمق بنسبته. والأفتح منها (الثلج، وبقع ثلج
+// النرويجية) تبقى الصورة خافتة فوق لونه المسطح، إلا في الصبغ (faint: false) فيُقص الأفتح
+int _modulate(int c, int base, {bool faint = true}) {
+  double ch(int s) => ((c >> s) & 255) / math.max(1, (base >> s) & 255);
+  final r = ch(16), g = ch(8), b = ch(0);
+  if (faint && math.max(r, math.max(g, b)) > 1.04) return 0x59FFFFFF.toSigned(32);
+  int q(double v) => (math.min(1.0, v) * 255).round();
+  return (0xFF000000 | q(r) << 16 | q(g) << 8 | q(b)).toSigned(32);
 }
 
 // الطبقة صفوف بالعمق (d = i + j): لكل صف زينته القائمة (شبكة مثلثات) ثم صوره (من الأطلس)، فيقف عمود الإنارة
@@ -176,9 +195,16 @@ class CityLayer {
   final Int32List _slotItem, _slotMask, _slotLevel;
   final Float32List lift;            // لكل مربع: ارتفاع ما عليه فوق ركنه الخلفي (ضباب الحرب)
   final Float32List wide;            // ونصف عرض صورته من وسطه (المبنى المميز 2×2 أعرض من مربعه)
+  // صور الأرض (18.6): صورة لكل مربع بترتيب رؤوس الأرض نفسه (_slot)، تُضرب في لونها: نسبة لون المربع إلى لون صورته
+  // (_gBase) مصبوغاً بلون المالك (_gCol). وصور العلامات (الأرصفة والخطوط...) لكل شريحة فوقها
+  final Float32List? _gXf, _gRect;
+  final Int32List? _gBase, _gCol;
+  final Int32List? _gKindBase;       // لون صورة أرض كل مربع (موضعه في الشرائح)
+  final List<(Float32List, Float32List)?> _markSprites;
   CityLayer._(this.ground, this.marks, this._slot, this._bandStart, this.rows, this.rowStart, this.xf, this.rects, this._pos, this._baseCol, this._col,
       this._tileDistrict, this._spriteDistrict, this.spriteCol, this._isMask, this.lights, this._tileItem, this._tileMask,
-      this._tileSprite, this._slots, this._slotPos, this._slotItem, this._slotMask, this._slotLevel, this.lift, this.wide) {
+      this._tileSprite, this._slots, this._slotPos, this._slotItem, this._slotMask, this._slotLevel, this.lift, this.wide,
+      this._gXf, this._gRect, this._gBase, this._gCol, this._gKindBase, this._markSprites) {
     tinted = _isMask.contains(1);
   }
 
@@ -212,9 +238,15 @@ class CityLayer {
         wide = Float32List(n * n)..fillRange(0, n * n, TILE_HALF_W);
     final items = <_It>[];
     final bands = (depths + band - 1) ~/ band;
-    final decor = Decor(map), markVecs = List.generate(bands, (_) => Vec()), rowVecs = List.generate(depths, (_) => Vec());
+    final decor = Decor(map, art), markVecs = List.generate(bands, (_) => Vec()), rowVecs = List.generate(depths, (_) => Vec());
     final capture = {for (final d in map.districts) if (d.capture != null) map.idx(d.capture!.i, d.capture!.j)};
+    // صور العلامات في شريحتها، وصور الزينة القائمة مع صفها (بعد صورة المربع نفسه)
+    final markList = List.generate(bands, (_) => <(Sprite, double, double)>[]);
+    decor.onMark = (s, x, y, i, j) => markList[(i + j) ~/ band].add((s, x, y));
+    decor.onItem = (s, x, y, i, j) => items.add(_It(i + j, i, 3, s, x, y, 1, -1, map.idx(i, j), decor: true));
     decor.groundMarks((i, j) => markVecs[(i + j) ~/ band]);
+    final gSprite = List<Sprite?>.filled(n * n, null), gMod = Int32List(n * n), gKind = Int32List(n * n);
+    final c = art.colors;
     for (var j = 0; j < n; j++) {
       for (var i = 0; i < n; i++) {
         final k = map.idx(i, j);
@@ -223,6 +255,12 @@ class CityLayer {
                             x, y - TILE_HALF_H, x, y + TILE_HALF_H, x - TILE_HALF_W, y]);
         base[k] = groundColor(map, art, i, j, weather).toSigned(32);
         col.fillRange(k * 6, k * 6 + 6, base[k]);
+        final gk = _groundKind(map, i, j, k), gs = art.find('ground', gk);
+        if (gs != null && c[gk] != null) {
+          gSprite[k] = gs;
+          gKind[k] = hex(c[gk]!).toSigned(32);
+          gMod[k] = _modulate(base[k], gKind[k]);
+        }
         tileD[k] = map.road[k] == 1 || map.type[k] == tWater || map.type[k] == tY ? -1 : map.districtAt[k];
         final s = tileSprite(map, art, i, j, state), did = map.road[k] == 1 ? -1 : map.districtAt[k];
         // مربعات الأحياء خانات بقناع (قد يُبنى فيها مبنى اقتصاد)، وساحة العلم خانة ولو فارغة (ساحة التدريب)
@@ -280,7 +318,7 @@ class CityLayer {
       if (it.mask) { isMask[m] = 1; spriteCol[m] = 0; }
       if (it.slot >= 0) {
         (it.mask ? slotMask : slotItem)[it.slot] = m;
-      } else {
+      } else if (!it.decor) {
         (it.mask ? tileMask : tileItem)[it.k] = m;
         tileImg[it.k] = it.s;
       }
@@ -298,17 +336,33 @@ class CityLayer {
     for (var k = 0; k < n * n; k++) { bandStart[(k % n + k ~/ n) ~/ band + 1]++; }
     for (var b = 0; b < bands; b++) { bandStart[b + 1] += bandStart[b]; }
     final next = Int32List.fromList(bandStart), gpos = Float32List(n * n * 12), gcol = Int32List(n * n * 6);
+    final hasGround = gSprite.any((g) => g != null);
+    final gXf = hasGround ? Float32List(n * n * 4) : null, gRect = hasGround ? Float32List(n * n * 4) : null;
+    final gBase = hasGround ? Int32List(n * n) : null, gKindBase = hasGround ? Int32List(n * n) : null;
     for (var k = 0; k < n * n; k++) {
       final m = next[(k % n + k ~/ n) ~/ band]++;
       slot[k] = m;
       gpos.setRange(m * 12, m * 12 + 12, pos, k * 12);
       gcol.setRange(m * 6, m * 6 + 6, col, k * 6);
+      if (hasGround) {
+        _place(gXf!, gRect!, lift, wide, m, gSprite[k], (k % n - k ~/ n) * TILE_HALF_W, (k % n + k ~/ n) * TILE_HALF_H, 1, art.px, false, -1, n);
+        gBase![m] = gMod[k];
+        gKindBase![m] = gKind[k];
+      }
     }
+    final markSprites = <(Float32List, Float32List)?>[
+      for (final list in markList)
+        if (list.isEmpty) null else () {
+          final mx = Float32List(list.length * 4), mr = Float32List(list.length * 4);
+          for (var q = 0; q < list.length; q++) { _place(mx, mr, lift, wide, q, list[q].$1, list[q].$2, list[q].$3, 1, art.px, false, -1, n); }
+          return (mx, mr);
+        }(),
+    ];
     final layer = CityLayer._([for (var b = 0; b < bands; b++) _band(gpos, gcol, bandStart, b)], [for (final v in markVecs) v.build()],
         slot, bandStart,
         [for (final v in rowVecs) v.build()], rowStart, xf, rects, gpos, base, gcol, tileD, spriteD, spriteCol, isMask,
         mapLights(map, decor.lights), tileItem, tileMask, tileImg, slots, Float32List.fromList(slotPos), slotItem, slotMask,
-        Int32List(slots.length), lift, wide);
+        Int32List(slots.length), lift, wide, gXf, gRect, gBase, gBase == null ? null : Int32List.fromList(gBase), gKindBase, markSprites);
     layer.refreshWalls(map, art);
     return layer;
   }
@@ -359,6 +413,9 @@ class CityLayer {
       final (owner, a) = amount[id];
       final c = owner == null || a <= 0 ? _baseCol[k] : oklabTint(_baseCol[k], hex(owner), a * groundAlpha, groundChroma).toSigned(32);
       _col.fillRange(_slot[k] * 6, _slot[k] * 6 + 6, c);
+      final g = _gCol, m = _slot[k];
+      // صورة الأرض بلون المربع المصبوغ، والخافتة (الثلج) كما هي: لونها المسطح تحتها مصبوغ
+      if (g != null && (_gBase![m] >> 24 & 255) == 255) g[m] = owner == null || a <= 0 ? _gBase[m] : _modulate(c, _gKindBase![m], faint: false);
       dirty.add((k % n + k ~/ n) ~/ band);
     }
     for (final b in dirty) {          // الشرائح التي تغيّر فيها لون وحدها
@@ -394,7 +451,19 @@ class CityLayer {
     bool seen(int b) => (b * band - 1) * TILE_HALF_H - 48 <= bottom && ((b + 1) * band + 1) * TILE_HALF_H + 48 >= top;
     // skip: المدينة مخفية (مفتاح عدّاد الأداء)، وما فوقها يُرسم كما هو
     for (var b = 0; b < ground.length && !skip; b++) { if (ground[b] != null && seen(b)) canvas.drawVertices(ground[b]!, ui.BlendMode.dst, _paint); }
+    // صور الأرض فوق لونها المسطح (يسد ما بين حوافها)، ثم العلامات بالكود وصورها
+    final gx = _gXf;
+    for (var b = 0; b < ground.length && !skip && gx != null; b++) {
+      if (!seen(b) || _bandStart[b + 1] == _bandStart[b]) continue;
+      final w = _gViews[b] ??= (Float32List.sublistView(gx, _bandStart[b] * 4, _bandStart[b + 1] * 4),
+          Float32List.sublistView(_gRect!, _bandStart[b] * 4, _bandStart[b + 1] * 4), Int32List.sublistView(_gCol!, _bandStart[b], _bandStart[b + 1]));
+      canvas.drawRawAtlas(atlas, w.$1, w.$2, w.$3, ui.BlendMode.modulate, null, _atlasPaint);
+    }
     for (var b = 0; b < marks.length && !skip; b++) { if (marks[b] != null && seen(b)) canvas.drawVertices(marks[b]!, ui.BlendMode.dst, _paint); }
+    for (var b = 0; b < _markSprites.length && !skip; b++) {
+      final w = _markSprites[b];
+      if (w != null && seen(b)) canvas.drawRawAtlas(atlas, w.$1, w.$2, null, null, null, _atlasPaint);
+    }
     onGround?.call();
     for (var d = 0; d < rows.length; d++) {
       final y = d * TILE_HALF_H;
@@ -413,6 +482,7 @@ class CityLayer {
   }
 
   late final _views = List<(Float32List, Float32List, Int32List)?>.filled(rows.length, null);
+  late final _gViews = List<(Float32List, Float32List, Int32List)?>.filled(ground.length, null);
 
   void dispose() {
     for (final g in ground) { g?.dispose(); }

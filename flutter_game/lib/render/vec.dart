@@ -31,6 +31,7 @@ class Vec {
 
   bool get isEmpty => _pos.isEmpty;
   int get length => _pos.length;
+  void clear() { _pos.clear(); _col.clear(); alpha = 1; }
   // أعلى نقطة (أصغر y) فيما أُضيف بعد from: ارتفاع زينة المربع لضباب الحرب
   double minY(int from) {
     var m = double.infinity;

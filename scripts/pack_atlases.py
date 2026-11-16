@@ -16,8 +16,11 @@ META = ('group', 'kind', 'variant', 'size', 'level', 'footprint', 'up')
 man = json.load(open(os.path.join(ROOT, 'manifest.json')))
 os.makedirs(OUT, exist_ok=True)
 for city, entry in man['cities'].items():
+    # الزينة والعلامات العامة (18.6، manifest.common) في كل أطلس، إلا ما للمدينة صورة منه
+    own = {(r['group'], r['kind']) for r in entry['images']}
+    images = entry['images'] + [r for r in man.get('common', {}).get('images', []) if (r['group'], r['kind']) not in own]
     # قناع رايات المالك (owner) صورة بجانب صورته في الأطلس، بمقاسها نفسه
-    recs = entry['images'] + [{'file': r['owner'], 'w': r['w'], 'h': r['h'], '_of': r} for r in entry['images'] if r.get('owner')]
+    recs = images + [{'file': r['owner'], 'w': r['w'], 'h': r['h'], '_of': r} for r in images if r.get('owner')]
     recs = sorted(recs, key=lambda r: -r['h'])
     x, y, row = PAD, PAD, 0
     for r in recs:
