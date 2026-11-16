@@ -68,6 +68,53 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
   late final Ticker _ticker;
   bool _growing = false;
 
+  // عدّاد الأداء (2.1.2، ثلاث لمسات على شريط الزمن): من أزمنة إطارات الجهاز نفسه وزمن المنطق والرسم، مرة كل ثانية،
+  // ومفاتيح تخفي طبقة واحدة لمعرفة الثقيل منها (المدينة والجنود والضباب والطقس). null: مخفي
+  final meter = ValueNotifier<String?>(null);
+  bool hideCity = false, hideUnits = false, hideFog = false, hideWeather = false;
+  int visibleUnits = 0;
+  int _mAt = 0, _mFrames = 0, _mTimed = 0, _mSlow = 0, _mBuild = 0, _mBuildMax = 0, _mRaster = 0, _mRasterMax = 0;
+  int _mTicks = 0, _mSim = 0, _mSimMax = 0, _mPaints = 0, _mPaint = 0, _mPaintMax = 0;
+  final _mw = Stopwatch()..start();
+  void toggleMeter() {
+    meter.value = meter.value == null ? 'يقيس...' : null;
+    _mAt = 0;
+  }
+  // الزمن والنقاط في الشريط العلوي: كل منهما يتحدث وحده حين يتغير نصه، لا مع الواجهة كلها (2.1.2)
+  final clockText = ValueNotifier<String>(''), pointsText = ValueNotifier<(int, String)?>(null);
+  int _clockSec = -1, _taps = 0, _tapAt = 0;
+  void tapClock() {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    _taps = now - _tapAt < 600 ? _taps + 1 : 1;
+    _tapAt = now;
+    if (_taps >= 3) { _taps = 0; toggleMeter(); }
+  }
+  void _liveTexts(MatchState s) {
+    if (s.time.floor() != _clockSec) { _clockSec = s.time.floor(); clockText.value = '${clock(s.time)} • ${cityShort(s.map.city)}'; }
+    final h = s.humanId;
+    pointsText.value = h >= 0 && s.empire != null ? (s.empire!.points[h].floor(), incomeOf(s, h).toStringAsFixed(1)) : null;
+  }
+  void notePaint(int us) { _mPaints++; _mPaint += us; if (us > _mPaintMax) _mPaintMax = us; }
+  void _meterTick(MatchState s) {
+    _mFrames++;
+    final now = _mw.elapsedMilliseconds;
+    if (_mAt == 0) { _mAt = now; return; }
+    if (now - _mAt < 1000) return;
+    String ms(int sum, int n, int max) => '${n == 0 ? '-' : (sum / n / 1000).toStringAsFixed(1)} (أقصى ${(max / 1000).toStringAsFixed(1)})';
+    final sec = (now - _mAt) / 1000, heavy = DateTime.now().millisecondsSinceEpoch <= _heavyUntil;
+    final alive = s.units.where((u) => u.state != 'dead').length;
+    meter.value = [
+      'الإطارات ${(_mFrames / sec).round()}/ث • متأخرة $_mSlow من $_mTimed • ${heavy ? '30 ثابتة' : 'حتى ${_targetFps(s).round()}'}',
+      'تجهيز الإطار (المعالج) ${ms(_mBuild, _mTimed, _mBuildMax)} ملي ث',
+      'رسمه (كرت الشاشة) ${ms(_mRaster, _mTimed, _mRasterMax)} ملي ث',
+      'رسم المشهد ${ms(_mPaint, _mPaints, _mPaintMax)} • المنطق ${ms(_mSim, _mTicks, _mSimMax)} ملي ث',
+      'الجنود $alive (ظاهر $visibleUnits) • تقريب ${s.camera.z.toStringAsFixed(1)}',
+    ].join('\n');
+    _mAt = now;
+    _mFrames = _mTimed = _mSlow = _mBuild = _mBuildMax = _mRaster = _mRasterMax = 0;
+    _mTicks = _mSim = _mSimMax = _mPaints = _mPaint = _mPaintMax = 0;
+  }
+
   // وحدة بلون لا صورة له في الأطلس (أهل قرية انضموا، ترياد بلون مالكها...): تُصبغ صورتها وحدها وتُضاف، وما فيه يبقى
   void _growAtlas() {
     final u = units;
@@ -117,6 +164,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     _lanSub?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     SchedulerBinding.instance.removeTimingsCallback(_timings);
+    meter.dispose(); clockText.dispose(); pointsText.dispose();
     _rest?.cancel();
     _ticker.dispose();
     layer?.dispose();
@@ -329,6 +377,15 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
   // أزمنة إطارات الجهاز نفسه (يرسلها المحرك كل ثانية تقريباً): إن لم يلحق بـ 60 فـ 30 ثابتة بدل إطارات متفاوتة
   int _heavyUntil = 0;
   void _timings(List<ui.FrameTiming> list) {
+    if (meter.value != null) {
+      for (final t in list) {
+        final b = t.buildDuration.inMicroseconds, r = t.rasterDuration.inMicroseconds;
+        _mTimed++; _mBuild += b; _mRaster += r;
+        if (b > _mBuildMax) _mBuildMax = b;
+        if (r > _mRasterMax) _mRasterMax = r;
+        if (math.max(b, r) > 16700) _mSlow++;
+      }
+    }
     if (list.length < 8) return;
     final slow = list.where((t) => math.max(t.buildDuration.inMicroseconds, t.rasterDuration.inMicroseconds) > PACE.slowMs * 1000).length;
     if (slow > list.length * PACE.slowShare) _heavyUntil = DateTime.now().millisecondsSinceEpoch + PACE.heavyMs;
@@ -370,9 +427,12 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
       var ticks = 0;
       while (_acc >= TICK_SEC) {
         if (++ticks > PACE.maxTicks) { _acc = TICK_SEC; break; }   // لا يُلحق الإطار المتأخر بأكثر (تبطؤ اللعبة لحظة بدل أن تتجمد)
-        final pr = perfProbe, t0 = pr == null ? 0 : _clockUs();
+        final pr = perfProbe, t0 = _clockUs();
         updateMatch(s);
-        if (pr != null) pr['tickSim'] = (pr['tickSim'] ?? 0) + _clockUs() - t0;
+        final took = _clockUs() - t0;
+        if (pr != null) pr['tickSim'] = (pr['tickSim'] ?? 0) + took;
+        _mTicks++; _mSim += took;
+        if (took > _mSimMax) _mSimMax = took;
         _acc -= TICK_SEC;
         if (++_ticks % 10 == 0) hud.value++;   // الواجهة مرتين في الثانية (واللمس يحدّثها فوراً)
         if (s.matchResult != null) { _ended(s); hud.value++; break; }
@@ -412,6 +472,8 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     _retint(s);
     if (pr != null) pr['retint'] = (pr['retint'] ?? 0) + _clockUs() - t0;
     frame.value++;
+    _liveTexts(s);
+    if (meter.value != null) _meterTick(s);
     _rest?.cancel();
     _rest = restTicker(_ticker, _targetFps(s), context);
   }
@@ -713,6 +775,7 @@ class _MatchPainter extends CustomPainter {
     if (s == null || layer == null || art == null || atlas == null) return;
     final c = s.camera, b = v.batch, alpha = v.alpha, img = atlas.image;
     final time = s.time + alpha * TICK_SEC;
+    final p0 = v.meter.value != null ? _clockUs() : 0;
     if (perfProbe != null) _sw..reset()..start();
     canvas.save();
     canvas.translate(size.width / 2, size.height / 2);
@@ -738,10 +801,11 @@ class _MatchPainter extends CustomPainter {
       if (u.state == 'attacking' || (u.selected && u.state == 'moving')) busy = true;
     }
     if (busy) v.markActive();   // قتال ظاهر أو جنودك المحددون يمشون: 60 إطاراً
+    v.visibleUnits = visible;
     final crowded = visible > COMBAT_REALISM.m('lod').i('fullUnits');
     b.reset();
     _mark('sortUnits');
-    layer.paint(canvas, art.image, c.y - halfH, c.y + halfH, onGround: () {
+    layer.paint(canvas, art.image, c.y - halfH, c.y + halfH, skip: v.hideCity, onGround: () {
       _drawBorders(canvas, b, s, img);
       for (final f in s.fires) { drawFire(b, f, time); }
       for (final z in s.zones) { drawZone(b, z, time); }
@@ -761,7 +825,7 @@ class _MatchPainter extends CustomPainter {
       }
       final row = _rows[d];
       _mark('city+flags');
-      if (row.isNotEmpty) {
+      if (row.isNotEmpty && !v.hideUnits) {
         row.sort((p, q) => (p.x + p.y).compareTo(q.x + q.y));
         for (final u in row) {
           // شكل الجندي (وضعيته وأجزاؤه) يُحسب unitHz مرة في الثانية، وبينها يُعاد رسمه المحفوظ بمكانه الجديد
@@ -786,7 +850,7 @@ class _MatchPainter extends CustomPainter {
       b.flush(canvas, img);
       _mark('flush');
     });
-    fog?.paint(canvas, left, right, top, bottom);   // ضباب الحرب فوق المدينة كلها، وما بعده يُرسم لما يُرى وحده
+    if (!v.hideFog) fog?.paint(canvas, left, right, top, bottom);   // ضباب الحرب فوق المدينة كلها، وما بعده يُرسم لما يُرى وحده
     for (final shot in s.projectiles) { if (sees(shot.x, shot.y)) drawProjectile(b, shot, alpha); }
     drawEmpireShots(b, s, alpha, fog == null ? null : (u) => fog.friendly(s, u.playerId) || fog.sees(u.x, u.y));
     drawFlagArrows(b, s, time, left, right, top, bottom, fog?.sees);
@@ -809,10 +873,12 @@ class _MatchPainter extends CustomPainter {
     if (Settings.pops) _drawPops(canvas, s, sees);
     _mark('pops');
     canvas.restore();
-    v.weather.paint(canvas, size, s, layer.lights, v.frameDt, Settings.gfx, fog == null ? null : (wx, wy) {
-      final (i, j) = v.worldToTile(wx, wy);
-      return fog.sees(i, j) ? 1.0 : fog.known(i, j) ? 1 - FOG.explored : 0.0;
-    });   // الطقس والإضاءة فوق المشهد
+    if (!v.hideWeather) {
+      v.weather.paint(canvas, size, s, layer.lights, v.frameDt, Settings.gfx, fog == null ? null : (wx, wy) {
+        final (i, j) = v.worldToTile(wx, wy);
+        return fog.sees(i, j) ? 1.0 : fog.known(i, j) ? 1 - FOG.explored : 0.0;
+      });   // الطقس والإضاءة فوق المشهد
+    }
     _mark('weather');
     // الشارات والطابور والمدى والراية فوق طبقة الليل لتُقرأ دائماً
     canvas.save();
@@ -829,6 +895,7 @@ class _MatchPainter extends CustomPainter {
       canvas.drawRect(r, Paint()..color = const Color(0x33F3EAD6));
       canvas.drawRect(r, Paint()..color = const Color(0xCCF3EAD6)..style = PaintingStyle.stroke..strokeWidth = 1);
     }
+    if (p0 != 0) v.notePaint(_clockUs() - p0);
   }
 
   // حدود الأحياء المملوكة بلون مالكها (CAPTURE.border)

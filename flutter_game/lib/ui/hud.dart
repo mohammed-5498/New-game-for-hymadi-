@@ -17,7 +17,6 @@ import '../game/victory.dart';
 import '../map/generator.dart' show District;
 import '../map/sizes.dart';
 import 'match_screen.dart';
-import 'menus.dart' show cityShort;
 import 'prefs.dart';
 import 'widgets.dart';
 
@@ -35,18 +34,22 @@ class MatchHud extends StatelessWidget {
       final s = screen.state!;
       final me = s.humanId >= 0 ? s.players[s.humanId] : null;
       final bar = modeBar(s);
-      final points = me != null && s.empire != null ? s.empire!.points[me.id].floor() : null, income = points == null ? '' : incomeOf(s, me!.id).toStringAsFixed(1);
       return Stack(children: [
-        // الصف الأعلى: الزمن والمدينة والنقاط يساراً، والأزرار يميناً، وشريط الطور في المساحة بينهما وحدها (يصغر ولا يتداخل)
+        // الصف الأعلى: الزمن والمدينة والنقاط يساراً، والأزرار يميناً، وشريط الطور في المساحة بينهما وحدها (يصغر ولا يتداخل).
+        // الزمن والنقاط يتحدث كل منهما وحده (clockText وpointsText)، وثلاث لمسات على الزمن تفتح عدّاد الأداء
         Positioned(top: 6, left: 6, right: 6, child: Row(textDirection: TextDirection.ltr, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          _Memo('clock', clock(s.time), () => RepaintBoundary(child: _Box(child: Text('${clock(s.time)} • ${cityShort(s.map.city)}', style: const TextStyle(color: ink, fontSize: 12))))),
-          if (points != null) ...[
+          _Memo('clock', 0, () => GestureDetector(onTap: screen.tapClock, child: RepaintBoundary(child: ValueListenableBuilder<String>(
+              valueListenable: screen.clockText,
+              builder: (_, t, _) => _Box(child: Text(t, style: const TextStyle(color: ink, fontSize: 12))))))),
+          if (me != null && s.empire != null) ...[
             const SizedBox(width: 4),
-            _Memo('points', '$points|$income', () => _Box(child: Row(mainAxisSize: MainAxisSize.min, children: [
-              const Icon(Icons.toll, size: 14, color: gold), const SizedBox(width: 3),
-              Text('$points', style: const TextStyle(color: gold, fontSize: 13, fontWeight: FontWeight.w700)),
-              Text('  +$income/ث', style: const TextStyle(color: dim, fontSize: 11)),
-            ]))),
+            _Memo('points', 0, () => RepaintBoundary(child: ValueListenableBuilder<(int, String)?>(
+                valueListenable: screen.pointsText,
+                builder: (_, p, _) => _Box(child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  const Icon(Icons.toll, size: 14, color: gold), const SizedBox(width: 3),
+                  Text('${p?.$1 ?? 0}', style: const TextStyle(color: gold, fontSize: 13, fontWeight: FontWeight.w700)),
+                  Text('  +${p?.$2 ?? '0'}/ث', style: const TextStyle(color: dim, fontSize: 11)),
+                ]))))),
           ],
           Expanded(child: _Memo('bar', bar == null ? '' : '${bar.text}|${bar.alarm}|${[for (final (c, r, m) in bar.bars) '$c${(r * 150).round()}$m'].join()}',
               () => Center(child: bar != null ? FittedBox(fit: BoxFit.scaleDown, child: _ModeBarBox(bar)) : const SizedBox()))),
@@ -75,6 +78,9 @@ class MatchHud extends StatelessWidget {
         _Memo('groups', _groupSig(s), () => Positioned(right: 8, top: 0, bottom: 0, child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
           for (var g = 1; g <= 5; g++) _Group(screen, g),
         ])))),
+        // عدّاد الأداء: يتحدث وحده مرة في الثانية
+        _Memo('meter', 0, () => Positioned(left: 6, bottom: 6, child: ValueListenableBuilder<String?>(valueListenable: screen.meter,
+            builder: (_, t, _) => t == null ? const SizedBox.shrink() : RepaintBoundary(child: _Meter(screen, t))))),
         if (screen.menuDistrict != null) Positioned(left: 0, right: 0, bottom: 8, child: Center(child: _EmpireMenu(screen, screen.menuDistrict!))),
         if (screen.paused && s.matchResult == null) Positioned.fill(child: _Pause(screen)),
         if (s.matchResult != null) Positioned.fill(child: _End(screen, s.matchResult!)),
@@ -188,8 +194,11 @@ class _PowerState extends State<_Power> {
         for (final (l, v) in powerFolded ? col.summary.take(1) : col.summary) Text('$l: $v', style: const TextStyle(color: ink, fontSize: 11.5)),
       ]));
     }
+    // كل سطر يُبنى حين يتغير ما يعرضه وحده (2.1.2)
     return _Box(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      for (final p in s.players) if (!p.neutral && (!powerFolded || p.id == s.humanId)) Padding(
+      for (final p in s.players) if (!p.neutral && (!powerFolded || p.id == s.humanId)) _Memo('row${p.id}',
+        '${isPlayerAlive(s, p.id)}|${ownedDistricts(s, p.id).length}|${countUnits(s, p.id)}|${col == null ? '' : col.show(col.value(p.id))}|'
+        '${col?.bar == null ? '' : (col!.bar!(p.id) * 34).round()}|${s.mode}', () => Padding(
         padding: const EdgeInsets.symmetric(vertical: 1),
         child: Opacity(opacity: isPlayerAlive(s, p.id) ? 1 : 0.4, child: Row(mainAxisSize: MainAxisSize.min, children: [
           Container(width: 8, height: 8, decoration: BoxDecoration(color: colorOf(p.color), shape: BoxShape.circle)),
@@ -211,8 +220,44 @@ class _PowerState extends State<_Power> {
                 backgroundColor: const Color(0x55000000))),
           ],
         ])),
-      ),
+      )),
     ]));
+  }
+}
+
+// عدّاد الأداء (2.1.2): أرقامه، ومفاتيح تخفي طبقة واحدة لمعرفة الثقيل منها على هذا الجوال
+class _Meter extends StatefulWidget {
+  final MatchScreenState screen;
+  final String text;
+  const _Meter(this.screen, this.text);
+  @override
+  State<_Meter> createState() => _MeterState();
+}
+
+class _MeterState extends State<_Meter> {
+  Widget _sw(String label, bool hidden, VoidCallback flip) => GestureDetector(
+      onTap: () => setState(flip),
+      child: Container(margin: const EdgeInsets.only(left: 4), padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+          decoration: BoxDecoration(color: hidden ? const Color(0xFF5A2A22) : const Color(0xFF3A2E22), borderRadius: BorderRadius.circular(6)),
+          child: Text(hidden ? 'بلا $label' : label, style: TextStyle(color: hidden ? const Color(0xFFFFB0A0) : ink, fontSize: 10.5))));
+
+  @override
+  Widget build(BuildContext context) {
+    final v = widget.screen;
+    return Container(
+      padding: const EdgeInsets.all(6),
+      decoration: BoxDecoration(color: const Color(0xD0120E0A), borderRadius: BorderRadius.circular(8)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+        Text(widget.text, style: const TextStyle(color: ink, fontSize: 10.5, height: 1.35)),
+        const SizedBox(height: 4),
+        Row(mainAxisSize: MainAxisSize.min, children: [
+          _sw('المدينة', v.hideCity, () => v.hideCity = !v.hideCity),
+          _sw('الجنود', v.hideUnits, () => v.hideUnits = !v.hideUnits),
+          _sw('الضباب', v.hideFog, () => v.hideFog = !v.hideFog),
+          _sw('الطقس', v.hideWeather, () => v.hideWeather = !v.hideWeather),
+        ]),
+      ]),
+    );
   }
 }
 

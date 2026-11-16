@@ -382,6 +382,8 @@ class MatchState {
   // الشبكة المكانية (spatial.dart)
   final unitHash = <int, List<Unit>>{};
   final unitCells = <(int, int, List<Unit>)>[];   // الخلايا المشغولة مرتبة (spatial.dart)
+  List<List<Unit>?> unitGrid = const [];          // الدلاء بأرقام الخلايا داخل الخريطة (spatial.dart)
+  int gridW = 0;
   double unitHashTime = -1;
   MoveMarker? moveMarker;
   // اللعب المحلي (net/lockstep.dart): كاميرات اللاعبين وعدّاد التحديثات ومولّد المباراة، ودور هذا الجهاز

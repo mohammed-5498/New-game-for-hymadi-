@@ -389,15 +389,16 @@ class CityLayer {
           colors: Int32List.sublistView(col, start[b] * 6, start[b + 1] * 6));
 
   void paint(ui.Canvas canvas, ui.Image atlas, double top, double bottom,
-      {void Function()? onGround, void Function(int d)? afterRow}) {
+      {void Function()? onGround, void Function(int d)? afterRow, bool skip = false}) {
     // الأرض ثم خطوطها، للشرائح الظاهرة وحدها (حلقة الدوار وحافة الساحات تتجاوز مربعها قليلاً: هامش 48)
     bool seen(int b) => (b * band - 1) * TILE_HALF_H - 48 <= bottom && ((b + 1) * band + 1) * TILE_HALF_H + 48 >= top;
-    for (var b = 0; b < ground.length; b++) { if (ground[b] != null && seen(b)) canvas.drawVertices(ground[b]!, ui.BlendMode.dst, _paint); }
-    for (var b = 0; b < marks.length; b++) { if (marks[b] != null && seen(b)) canvas.drawVertices(marks[b]!, ui.BlendMode.dst, _paint); }
+    // skip: المدينة مخفية (مفتاح عدّاد الأداء)، وما فوقها يُرسم كما هو
+    for (var b = 0; b < ground.length && !skip; b++) { if (ground[b] != null && seen(b)) canvas.drawVertices(ground[b]!, ui.BlendMode.dst, _paint); }
+    for (var b = 0; b < marks.length && !skip; b++) { if (marks[b] != null && seen(b)) canvas.drawVertices(marks[b]!, ui.BlendMode.dst, _paint); }
     onGround?.call();
     for (var d = 0; d < rows.length; d++) {
       final y = d * TILE_HALF_H;
-      if (y < top - _down || y - _up > bottom) { if (afterRow != null && y >= top - 60 && y - 60 <= bottom) afterRow(d); continue; }
+      if (skip || y < top - _down || y - _up > bottom) { if (afterRow != null && y >= top - 60 && y - 60 <= bottom) afterRow(d); continue; }
       final row = rows[d];
       if (row != null) canvas.drawVertices(row, ui.BlendMode.dst, _paint);
       final a = rowStart[d], b = rowStart[d + 1];
