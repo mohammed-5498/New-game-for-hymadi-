@@ -25,6 +25,7 @@ void main() {
     tester.view.devicePixelRatio = 2.625;
     addTearDown(tester.view.reset);
     final key = GlobalKey<MatchScreenState>();
+    MatchScreenState.noHeavy = true;
     // المعركة الكبيرة كما في جوال المستخدم: PERF_CITY=gondar PERF_SIZE=large PERF_FF=600 PERF_ZOOM=1.2 PERF_TEMPLES=1
     final env = Platform.environment;
     await tester.runAsync(() => tester.pumpWidget(MaterialApp(home: MatchScreen(key: key, settings: {
@@ -33,7 +34,7 @@ void main() {
       'players': [
         for (var k = 0; k < 4; k++)
           {'name': 'p$k', 'gang': ['crows', 'hammers', 'vipers', 'scorpions'][k], 'nation': ['yemen', 'saudi', 'egypt', 'japan'][k], 'skin': k.isOdd ? 'elite' : null,
-            'color': ['blue', 'red', 'green', 'yellow'][k], 'isHuman': k == 0, 'team': 0, 'difficulty': 'hard'},
+            'color': ['blue', 'red', 'green', 'yellow'][k], 'isHuman': k == 0 && env['PERF_SPECTATE'] != '1', 'team': 0, 'difficulty': 'hard'},
       ],
     }))));
     await tester.runAsync(() async {
@@ -103,6 +104,8 @@ void main() {
       final o = [...v]..sort();
       return 'avg ${(v.reduce((a, b) => a + b) / v.length / 1000).toStringAsFixed(2)} p95 ${(o[(o.length * 0.95).floor()] / 1000).toStringAsFixed(2)} max ${(o.last / 1000).toStringAsFixed(2)}';
     }
+    // ignore: avoid_print
+    print('ended ${s.matchResult?.reason} time ${s.time.toStringAsFixed(0)}');
     // ignore: avoid_print
     print('units ${s.units.where((u) => u.state != 'dead').length}  sim [${stat(sims)}]  frame [${stat(frames)}]  sections: '
         '${probe.map((k, v) => MapEntry(k, (v / 400 / 1000).toStringAsFixed(2)))}');

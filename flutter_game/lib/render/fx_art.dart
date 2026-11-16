@@ -304,15 +304,23 @@ void drawStoryMarker(TriBatch b, double i, double j, double r, double time) {
 
 // هالة المبنى المميز بلون ميزته ونجوم تدور عليها (drawFeatureHalo في featureArt.js)، على الأرض تحت المبنى فيغطي
 // المبنى ما خلفه منها
-void drawFeatureHalos(TriBatch b, MatchState s, double time) {
+// لون هالة كل ميزة محسوب مرة (كان نصاً يُقسم ويُقرأ لكل هالة في كل إطار)
+final _haloRgb = <String, int?>{};
+void drawFeatureHalos(TriBatch b, MatchState s, double time,
+    [double left = -1e9, double right = 1e9, double top = -1e9, double bottom = 1e9]) {
   final F = FEATURES, H = F.m('halo'), n = s.map.n;
   for (final d in s.map.districts) {
     final t = d.featureTile, f = d.feature;
     if (t == null || f == null) continue;
-    final col = F.m('colors').ss(f);
-    if (col == null) continue;
-    final p = col.split(',').map(int.parse).toList(), rgb = (p[0] << 16) | (p[1] << 8) | p[2];
+    final rgb = _haloRgb.putIfAbsent(f, () {
+      final col = F.m('colors').ss(f);
+      if (col == null) return null;
+      final p = col.split(',').map(int.parse).toList();
+      return (p[0] << 16) | (p[1] << 8) | p[2];
+    });
+    if (rgb == null) continue;
     final (x, y0) = _iso((t % n).toDouble(), (t ~/ n).toDouble());
+    if (x < left - 200 || x > right + 200 || y0 < top - 120 || y0 > bottom + 120) continue;   // خارج الشاشة
     final k = d.featureBig ? 1.0 : 0.55, y = d.featureBig ? y0 - TILE_HALF_H : y0;
     final rx = H.d('radius') * TILE_HALF_W * k, ry = H.d('radius') * TILE_HALF_H * k;
     final pulse = 1 - H.d('pulse') + H.d('pulse') * (0.5 + 0.5 * math.sin(time * H.d('speed') + d.id));

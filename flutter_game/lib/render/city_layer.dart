@@ -403,12 +403,16 @@ class CityLayer {
       if (row != null) canvas.drawVertices(row, ui.BlendMode.dst, _paint);
       final a = rowStart[d], b = rowStart[d + 1];
       if (b > a) {
-        canvas.drawRawAtlas(atlas, Float32List.sublistView(xf, a * 4, b * 4), Float32List.sublistView(rects, a * 4, b * 4),
-            tinted ? Int32List.sublistView(spriteCol, a, b) : null, tinted ? ui.BlendMode.modulate : null, null, _atlasPaint);
+        // نوافذ الصف على مصفوفات الصور تُصنع مرة (كانت ثلاثاً لكل صف في كل إطار)، والمصفوفات نفسها تتبدل في مكانها
+        final w = _views[d] ??= (Float32List.sublistView(xf, a * 4, b * 4), Float32List.sublistView(rects, a * 4, b * 4),
+            Int32List.sublistView(spriteCol, a, b));
+        canvas.drawRawAtlas(atlas, w.$1, w.$2, tinted ? w.$3 : null, tinted ? ui.BlendMode.modulate : null, null, _atlasPaint);
       }
       afterRow?.call(d);
     }
   }
+
+  late final _views = List<(Float32List, Float32List, Int32List)?>.filled(rows.length, null);
 
   void dispose() {
     for (final g in ground) { g?.dispose(); }

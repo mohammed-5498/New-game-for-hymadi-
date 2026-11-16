@@ -33,7 +33,8 @@ int hqTier(MatchState s, District d) {
 }
 
 // --- على الأرض قبل الجنود ---
-void drawEmpireHalos(TriBatch b, MatchState s, double time) {
+void drawEmpireHalos(TriBatch b, MatchState s, double time,
+    [double left = -1e9, double right = 1e9, double top = -1e9, double bottom = 1e9]) {
   if (!s.economy) return;
   final H = _E.m('baseHalo'), V = _E.m('evolve'), A = V.m('aura');
   final pulse = 1 - H.d('pulse') + H.d('pulse') * (0.5 + 0.5 * math.sin(time * H.d('speed')));
@@ -42,6 +43,7 @@ void drawEmpireHalos(TriBatch b, MatchState s, double time) {
     final bt = d.buildTile;
     if (bt == null || d.building == null) continue;
     final (x, y) = _w(bt % s.map.n, bt ~/ s.map.n);
+    if (x < left - 200 || x > right + 200 || y < top - 120 || y > bottom + 120) continue;   // خارج الشاشة (بهامش أكبر حلقة)
     if (d.building == 'hospital' && (d.blv['radius'] ?? 0) > 0) {
       final r = hospitalStats(d).radius, beat = 1 - A.d('pulse') + A.d('pulse') * (0.5 + 0.5 * math.sin(time * A.d('speed')));
       b.ring(x, y, r * TILE_HALF_W * _sqrt2, r * TILE_HALF_H * _sqrt2, A.d('width'), _rgbList(A.s('color')),
@@ -83,19 +85,22 @@ void drawFlagArrows(TriBatch b, MatchState s, double time, double left, double r
   final hill = s.mode == 'king' && s.modeState != null ? modeOf(s).hillId : -1;
   final half = math.max(A.d('half'), A.d('minScreen') / s.camera.z), bob = math.sin(time * A.d('bobSpeed')) * A.d('bob');
   final glow = _rgbList(M.s('glow')), core = _rgb(M.s('color'));
+  // الأرقام تُقرأ مرة لا لكل علم (2.1.3)
+  final lift = A.d('lift'), gScale = A.d('glowScale'), gAlpha = A.d('glowAlpha') * pulse, eScale = A.d('edgeScale');
   for (final d in s.map.districts) {
     final c = d.capture;
-    if (c == null || d.id == hill || (known != null && !known(c.i.toDouble(), c.j.toDouble()))) continue;
+    if (c == null || d.id == hill) continue;
     final (x, y) = _w(c.i, c.j);
     if (x < left || x > right || y < top || y > bottom) continue;
-    final tip0 = y - A.d('lift') + bob, cy = tip0 - half * 1.15;
+    if (known != null && !known(c.i.toDouble(), c.j.toDouble())) continue;
+    final tip0 = y - lift + bob, cy = tip0 - half * 1.15;
     void arrow(double k, int rgb, double al) {
       final ks = half * k, tip = cy + (tip0 - cy) * k, neck = tip - ks * 1.1, end = tip - ks * 2.3, w = ks * 0.38;
       b.tri(x, tip, x + ks, neck, x - ks, neck, rgb, al);
       b.quad(x - w, neck, x + w, neck, x + w, end, x - w, end, rgb, al);
     }
-    arrow(A.d('glowScale'), glow, A.d('glowAlpha') * pulse);
-    arrow(A.d('edgeScale'), 0x462d08, 0.85);
+    arrow(gScale, glow, gAlpha);
+    arrow(eScale, 0x462d08, 0.85);
     arrow(1, core, 1);
   }
 }
@@ -163,22 +168,33 @@ void _icon(TriBatch b, String kind, double x, double y, double s, String city) {
   return null;
 }
 
+final _badges = Expando<TriClip>();
 void drawEmpireMarks(TriBatch b, MatchState s, CityArt art, int? openDistrict, double left, double right, double top, double bottom,
     [bool Function(double, double)? known]) {
   final e = s.empire;
   if (!s.economy || e == null) return;
   final z = s.camera.z, B = _E.m('badge'), n = s.map.n;
   bool seen(double x, double y) => x > left && x < right && y > top && y < bottom + 60;
-  // الشارات لكل مبنى ظاهر في كل الأحياء (لك ولخصومك)
+  // الشارات لكل مبنى ظاهر في كل الأحياء (لك ولخصومك). شكل الشارة لا يتغير حتى يتغير التقريب أو المالك أو المبنى أو
+  // مستواه: يُحسب مرة ويُعاد كما هو (2.1.3)
   for (final d in s.map.districts) {
     if (d.building == null || d.buildTile == null) continue;
     if (known != null && !known((d.buildTile! % n).toDouble(), (d.buildTile! ~/ n).toDouble())) continue;   // ضباب الحرب
+    final sig = ((d.owner ?? -1) + 2) * 1000003.0 + s.mapVersion * 7.0 + (d.building == 'hq' ? hqTier(s, d) : 0);
+    final kept = _badges[d];
+    if (kept != null && kept.z == z && kept.t == sig) {
+      if (seen(kept.x, kept.y)) b.replay(kept, 0, 0);
+      continue;
+    }
     final (x, roof, cy, r) = badgeOf(s, art, d);
     if (!seen(x, roof)) continue;
+    final from = b.count;
     b.line(x, roof + 1, x, cy + r, math.max(1.1, 1.6 / z), 0x2b2825);
     b.ellipse(x, cy, r, r, 0x20170d, 0.9, 18);
     b.ring(x, cy, r, r, r * 0.24, d.owner != null ? hexRgb(s.players[d.owner!].color) : _rgb(B.s('neutral')), 1, 18);
     _icon(b, d.building!, x, cy, r * 0.6, s.map.city);
+    b.keep(_badges[d] ??= TriClip(), from);
+    _badges[d]!..x = x..y = roof..z = z..t = sig;
   }
   // شريط الإنتاج ونقاط الطابور فوق مبانيك (والتجنيد في المباني المميزة فوقها)
   e.queues.forEach((id, queue) {

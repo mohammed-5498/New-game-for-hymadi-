@@ -376,6 +376,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
 
   // أزمنة إطارات الجهاز نفسه (يرسلها المحرك كل ثانية تقريباً): إن لم يلحق بـ 60 فـ 30 ثابتة بدل إطارات متفاوتة
   int _heavyUntil = 0;
+  static bool noHeavy = false;   // للفحص: perf_test يقيس كل إطار (وضع الفحص أبطأ من الجوال فيدخل الـ 30 الثابتة)
   void _timings(List<ui.FrameTiming> list) {
     if (meter.value != null) {
       for (final t in list) {
@@ -386,7 +387,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
         if (math.max(b, r) > 16700) _mSlow++;
       }
     }
-    if (list.length < 8) return;
+    if (list.length < 8 || noHeavy) return;
     final slow = list.where((t) => math.max(t.buildDuration.inMicroseconds, t.rasterDuration.inMicroseconds) > PACE.slowMs * 1000).length;
     if (slow > list.length * PACE.slowShare) _heavyUntil = DateTime.now().millisecondsSinceEpoch + PACE.heavyMs;
   }
@@ -404,7 +405,10 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
 
   void markActive() {
     _activeUntil = DateTime.now().millisecondsSinceEpoch + PACE.activeMs;
-    if (_ticker.muted) { _rest?.cancel(); wakeTicker(_ticker, context); }
+    // يوقظ الرسم فوراً إلا إن كان الحد 30 مقصوداً (الجهاز لا يلحق، أو توفير البطارية، أو الإيقاف): كان القتال الظاهر
+    // يوقظه مع كل إطار فلا يثبت الـ 30 في المعارك (2.1.3)
+    final s = state;
+    if (_ticker.muted && (s == null || _targetFps(s) >= 60)) { _rest?.cancel(); wakeTicker(_ticker, context); }
   }
 
   void _onTick(Duration now) {
@@ -810,8 +814,8 @@ class _MatchPainter extends CustomPainter {
       for (final f in s.fires) { drawFire(b, f, time); }
       for (final z in s.zones) { drawZone(b, z, time); }
       if (s.feature != null) drawFeatureGround(b, s, time);
-      drawFeatureHalos(b, s, time);
-      drawEmpireHalos(b, s, time);
+      drawFeatureHalos(b, s, time, left, right, top, bottom);
+      drawEmpireHalos(b, s, time, left, right, top, bottom);
       for (final u in s.units) { if (u.state != 'dead' && truthy(u.stats['aura']) && u.playerId == s.humanId) drawAura(b, u, alpha); }
       b.flush(canvas, img);
     }, afterRow: (d) {
@@ -969,14 +973,24 @@ class _MatchPainter extends CustomPainter {
   }
 
   // علم الحي: سارية وراية بلون المالك (أو محايدة)، وحلقة تقدم الاستيلاء
+  static final _flagBase = Expando<TriClip>();
   void _flag(TriBatch b, MatchState s, District d, double time) {
     final c = d.capture!;
     final x = (c.i - c.j) * TILE_HALF_W, y = (c.i + c.j) * TILE_HALF_H;
     final owner = d.owner != null ? s.players[d.owner!] : null;
     final col = owner != null ? hexRgb(owner.gang == 'police' ? UNIT_ART.s('policeColor') : owner.color) : (d.police ? 0x8fa6c4 : 0xe8e2d6);
-    b.ellipse(x, y, 3.2, 1.5, 0x000000, 0.3);
-    b.ring(x, y, 4.2, 2.1, 0.8, 0xffd34d, 0.85);
-    b.line(x, y, x, y - 22, 1, 0x4a3a2a);
+    // ظل العلم وحلقته وساريته لا تتغير: تُحسب مرة وتُعاد كما هي (2.1.3)، والراية وحلقة التقدم كل إطار
+    final base = _flagBase[d];
+    if (base != null && base.x == x && base.y == y) {
+      b.replay(base, 0, 0);
+    } else {
+      final from = b.count;
+      b.ellipse(x, y, 3.2, 1.5, 0x000000, 0.3);
+      b.ring(x, y, 4.2, 2.1, 0.8, 0xffd34d, 0.85);
+      b.line(x, y, x, y - 22, 1, 0x4a3a2a);
+      b.keep(_flagBase[d] ??= TriClip(), from);
+      _flagBase[d]!..x = x..y = y;
+    }
     final wv = math.sin(time * 3 + c.i) * 0.8;
     b.quad(x, y - 22, x + 10, y - 20 + wv, x + 10, y - 15 + wv, x, y - 16, col);
     if (d.progress > 0 && d.progress < 100 && d.progressOwner != null) {
