@@ -256,7 +256,9 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     final at = settings['cam'] as String?;
     if (at != null) {
       final t = at == 'temple' ? s.map.districts.where((d) => d.temple).firstOrNull?.capture : null;
-      final p = at.split(','), ci = t?.i.toDouble() ?? double.parse(p[0]), cj = t?.j.toDouble() ?? double.parse(p[1]);
+      // beast: على الترول أو الفارس الأسود (للفحص بعد ff)
+      final m = at == 'beast' ? s.units.where((u) => u.creature == 'troll' || u.blackKnight).firstOrNull : null;
+      final p = at.split(','), ci = m?.x ?? t?.i.toDouble() ?? double.parse(p[0]), cj = m?.y ?? t?.j.toDouble() ?? double.parse(p[1]);
       s.camera.x = (ci - cj) * TILE_HALF_W;
       s.camera.y = (ci + cj) * TILE_HALF_H;
     }

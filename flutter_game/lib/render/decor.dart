@@ -206,8 +206,8 @@ class Decor {
     final r = h(i, j, 20);
     if (r >= 0.07 && r < 0.12) lights.add(Light(x, y - 7, 34, 0xff963c, 0.65));   // برميل النار (debrisLight)
     if (r < 0.07) {
-      if (city == 'yamamah') return;                       // عربة اليمامة صورة (لاحقاً)
-      if (_item('car', x, y, i, tj)) return;
+      if (_item('car', x, y, i, tj)) return;               // واليمامة عربة خشبية بصورتها
+      if (city == 'yamamah') return;
       final car = theme.car ?? const ['#6b4f3a', '#85624a', '#57402f'];
       v.box(x, y + 2, 8, 4, 4, car[0], car[1], car[2]);
       v.box(x + 1, y - 2, 4, 2, 3, '#2f2c29', '#3d3936', '#34302c');
@@ -691,7 +691,9 @@ class Decor {
     if (onItem != null && _s('decor', 'roadprop') != null) {
       _probe.clear();
       _roadPropCode(_probe, i, j, x, y);
-      if (!_probe.isEmpty) _item('roadprop', x, y, i, j, _variant('roadprop', i, j, 431));
+      // باريس: مدخل المترو (1) أو عمود الإنارة (2) كما يختار رسمها، والبقية بالتجزئة
+      final v = city == 'paris' ? ((i * 7 + j * 5) % 9 == 0 ? 1 : 2) : _variant('roadprop', i, j, 431);
+      if (!_probe.isEmpty) _item('roadprop', x, y, i, j, v);
       return;
     }
     _roadPropCode(v, i, j, x, y);
@@ -801,10 +803,17 @@ class Decor {
     if (onItem != null && _s('decor', 'boat') != null) {
       _probe.clear();
       _afloat(_probe, i, j, x, y);
-      if (!_probe.isEmpty) _item('boat', x, y, i, j, _variant('boat', i, j, 333));
+      if (!_probe.isEmpty) _item('boat', x, y, i, j, _boatVariant(i, j));
       return;
     }
     _afloat(v, i, j, x, y);
+  }
+
+  // صورة ما يطفو بشكله في الرسم: النرويجية جليد (1) وقارب شراعي (2) وطوف (3)، وحيث صورتان فالأولى تموجات الماء
+  // والقارب الثانية (كايفنغ ومروي وتينوتشتيتلان)
+  int _boatVariant(int i, int j) {
+    if (city == 'norway') { final r = h(i, j, 320); return r < 0.3 ? 3 : r < 0.55 ? 2 : 1; }
+    return art?.count('decor', 'boat') ?? 1;
   }
 
   void _afloat(Vec v, int i, int j, double x, double y) {

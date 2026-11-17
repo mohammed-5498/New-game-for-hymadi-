@@ -9,11 +9,12 @@ import 'dart:ui' as ui;
 import 'package:flutter/services.dart' show rootBundle;
 
 import '../core/cfg.dart';
+import '../data/beast_frames.dart';
 import '../data/rig_sprites.dart';
 import '../data/unit_sprites.dart';
 
 // لوح صور: القديم المقطّع من وضعية T، أو المقطّع أجزاءً منفصلة (البديل والنخبة)
-J? sheetInfo(String gang) => (SPRITE_GANGS[gang] ?? RIG_SHEETS[gang]) as J?;
+J? sheetInfo(String gang) => (SPRITE_GANGS[gang] ?? RIG_SHEETS[gang] ?? BEAST_SHEETS[gang]) as J?;
 
 class UnitAtlas {
   final ui.Image image;

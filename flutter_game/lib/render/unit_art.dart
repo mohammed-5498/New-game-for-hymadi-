@@ -11,7 +11,9 @@ import '../game/realism.dart' show fightStyle, fightBig, hitstopOf;
 import '../game/state.dart';
 import '../game/units.dart' show createUnit;
 import 'batch.dart';
+import 'beast_art.dart';
 import 'pose.dart';
+import '../data/beast_frames.dart' show BEASTS;
 import '../data/rig_sprites.dart';
 import 'rig_art.dart';
 import 'unit_atlas.dart';
@@ -285,6 +287,9 @@ List<(String, String)> atlasPairs(MatchState s) {
     for (final u in s.units)
       if (s.players[u.playerId].passive || (u.playerId == policeId && main))
         if (sheetOf(u) case final g?) for (final c in rivals) (g, c),
+    // الترول الثلجي في النرويجية والفارس الأسود في الأوروبية بصورهما (beast_art.dart، لا تُصبغ)
+    if (s.feature == 'troll') ('ice_troll', '#ffffff'),
+    if (CITY_FEATURES.m('events').ss(s.map.city) == 'knight') ('black_knight', '#ffffff'),
     // مقاتلو الترياد بلون من يستدعيهم
     if (s.map.districts.any((d) => d.feature == 'triads'))
       for (final c in rivals) (nationSheet(nations.m(FEATURES.m('triads').s('nation')).s('style'), FEATURES.m('triads').s('nation')), c),
@@ -529,14 +534,25 @@ void drawOne(TriBatch b, UnitAtlas atlas, Unit unit, String key, double x, doubl
     bool walking, int ghosts, double alpha, double sub) {
   final ud = describe(key) ?? describe('crow_common')!;
   final rig = rigFor(key, skinOf(unit)), gang = rig?.sheet ?? ud.gang;
-  final sheet = atlas.at(gang, color);
-  if (sheet == null) { atlas.missing.add((gang, color)); return; }
-  final (ox, oy) = sheet;
   final rt = time + sub, animT = rt + (unit.id % 17) * 0.13;
   final dead = unit.state == 'dead';
   final style = fightStyle(unit), big = fightBig(unit);
   final sw = dead ? null : _swingOf(unit, rt, ud, style, big, sub);
   final deadT = dead ? COMBAT.d('deathTime') - (unit.deathTimer - sub) : 0.0;
+  // الترول الثلجي والفارس الأسود (2.2.1): حركاتهما الجاهزة بحالة الوحدة، والموت كله في زمن موت الجندي ثم يخفت
+  final beast = unit.creature == 'troll' ? 'ice_troll' : unit.blackKnight ? 'black_knight' : null;
+  if (beast != null) {
+    final dt = COMBAT.d('deathTime');
+    final (clip, bt) = dead ? ('death', BEASTS[beast]!.clips['death']!.$1 * math.min(1.0, deadT / (dt * 0.8)))
+        : sw != null && sw.key != 'block' ? ('attack', sw.a * BEASTS[beast]!.clips['attack']!.$1)
+        : unit.cState == 'block' ? ('block', 0.45) : walking ? ('walk', animT) : ('idle', animT);
+    final fade = dead && deadT > dt * 0.85 ? math.max(0.0, 1 - (deadT - dt * 0.85) / (dt * 0.15)) : 1.0;
+    if (drawBeast(b, atlas, beast, clip, bt, x, y, unit.facing.toDouble(), 1, alpha * fade)) return;
+  }
+  // لوح الشخصية في الأطلس (والترول والفارس بلوحيهما قبله، فلا ينتظران لوح شكلهما القديم)
+  final sheet = atlas.at(gang, color);
+  if (sheet == null) { atlas.missing.add((gang, color)); return; }
+  final (ox, oy) = sheet;
   final pose = dead ? blendPose(unit, 'dead', deathPose(unit.deathFront, deadT), rt, _blend.d('react'))
       : _poseOf(unit, rt, animT, walking, sw, style, big, sub);
   final p = sw != null && sw.key == 'punch' ? pose : _twoHand(ud, pose);
