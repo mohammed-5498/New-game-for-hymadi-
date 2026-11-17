@@ -25,6 +25,9 @@ class Fog {
   Fog(this.n, this.me, this.lift, this.wide)
       : seen = Uint8List(n * n), now = Uint8List(n * n), vis = Float32List((n + 1) * (n + 1)), dark = Float32List((n + 1) * (n + 1));
 
+  // لا تُدمج هذه الثلاث في من يستدعيها (2.2.2): مترجم Dart كان يرفع قراءة n وseen وطول seen من داخل الحلقة إلى قبلها،
+  // قبل فحص fog != null، فإذا كان الضباب مطفأً (fog = null) قرأ عنواناً عشوائياً وأُغلقت اللعبة في أول إطار
+  @pragma('vm:never-inline')
   bool friendly(MatchState s, int pid) {
     if (pid == me) return true;
     final a = s.players[pid].team;
@@ -32,10 +35,12 @@ class Fog {
   }
 
   // هل يُرى الموضع (بإحداثيات المربعات) الآن؟ وهل استُكشف؟
+  @pragma('vm:never-inline')
   bool sees(double i, double j) {
     final a = jsRound(i), b = jsRound(j);
     return a >= 0 && b >= 0 && a < n && b < n && now[b * n + a] == 1;
   }
+  @pragma('vm:never-inline')
   bool known(double i, double j) {
     final a = jsRound(i), b = jsRound(j);
     return a >= 0 && b >= 0 && a < n && b < n && seen[b * n + a] == 1;
