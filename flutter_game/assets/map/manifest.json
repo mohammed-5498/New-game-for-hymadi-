@@ -5,6 +5,11 @@
   "halfW": 18,
   "halfH": 9
  },
+ "relief": {
+  "drop": 3.0,
+  "sub": 5,
+  "note": "الأرض البارزة (18.10أ): الشارع والماء أخفض من أرض الأحياء والرصيف بـ drop (وحدات العالم)، والرصيف خُمس المربع (sub). غيّرهما ثم أعد ground_drafts.py --force وpack_atlases.py"
+ },
  "note": "ax, ay: نقطة الارتكاز بالبكسل داخل الصورة (وسط المربع). owner: قناع رايات المالك (رمادي بإضاءتها، يُضرب فيه لون المالك). up: ترقية البرج والمستشفى (rate1 وrate2 وdamage1 وdamage2 وradius1 وradius2 وall) ومستوى القاعدة (tier1-3)",
  "tint": {
   "roofTint": 0.45,
@@ -626,6 +631,24 @@
      "ay": 49,
      "group": "ground",
      "kind": "plaza"
+    },
+    {
+     "file": "cities/arab/ground/sidewalk.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49.0,
+     "group": "ground",
+     "kind": "sidewalk"
+    },
+    {
+     "file": "cities/arab/ground/curb.webp",
+     "w": 109,
+     "h": 16,
+     "ax": 0,
+     "ay": 0,
+     "group": "ground",
+     "kind": "curb"
     }
    ]
   },
@@ -1249,6 +1272,24 @@
      "ay": 49,
      "group": "ground",
      "kind": "plaza"
+    },
+    {
+     "file": "cities/japan/ground/sidewalk.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49.0,
+     "group": "ground",
+     "kind": "sidewalk"
+    },
+    {
+     "file": "cities/japan/ground/curb.webp",
+     "w": 109,
+     "h": 16,
+     "ax": 0,
+     "ay": 0,
+     "group": "ground",
+     "kind": "curb"
     }
    ]
   },
@@ -1856,6 +1897,24 @@
      "ay": 49,
      "group": "ground",
      "kind": "plaza"
+    },
+    {
+     "file": "cities/china/ground/sidewalk.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49.0,
+     "group": "ground",
+     "kind": "sidewalk"
+    },
+    {
+     "file": "cities/china/ground/curb.webp",
+     "w": 109,
+     "h": 16,
+     "ax": 0,
+     "ay": 0,
+     "group": "ground",
+     "kind": "curb"
     }
    ]
   },
@@ -2483,6 +2542,24 @@
      "ay": 49,
      "group": "ground",
      "kind": "plaza"
+    },
+    {
+     "file": "cities/europe/ground/sidewalk.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49.0,
+     "group": "ground",
+     "kind": "sidewalk"
+    },
+    {
+     "file": "cities/europe/ground/curb.webp",
+     "w": 109,
+     "h": 16,
+     "ax": 0,
+     "ay": 0,
+     "group": "ground",
+     "kind": "curb"
     }
    ]
   },
@@ -3158,6 +3235,24 @@
      "ay": 49,
      "group": "ground",
      "kind": "water"
+    },
+    {
+     "file": "cities/norway/ground/sidewalk.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49.0,
+     "group": "ground",
+     "kind": "sidewalk"
+    },
+    {
+     "file": "cities/norway/ground/curb.webp",
+     "w": 109,
+     "h": 16,
+     "ax": 0,
+     "ay": 0,
+     "group": "ground",
+     "kind": "curb"
     }
    ]
   },
@@ -3803,6 +3898,24 @@
      "ay": 49,
      "group": "ground",
      "kind": "plaza"
+    },
+    {
+     "file": "cities/hk/ground/sidewalk.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49.0,
+     "group": "ground",
+     "kind": "sidewalk"
+    },
+    {
+     "file": "cities/hk/ground/curb.webp",
+     "w": 109,
+     "h": 16,
+     "ax": 0,
+     "ay": 0,
+     "group": "ground",
+     "kind": "curb"
     }
    ]
   },
@@ -4426,6 +4539,24 @@
      "ay": 49,
      "group": "ground",
      "kind": "plaza"
+    },
+    {
+     "file": "cities/jaipur/ground/sidewalk.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49.0,
+     "group": "ground",
+     "kind": "sidewalk"
+    },
+    {
+     "file": "cities/jaipur/ground/curb.webp",
+     "w": 109,
+     "h": 16,
+     "ax": 0,
+     "ay": 0,
+     "group": "ground",
+     "kind": "curb"
     }
    ]
   },
@@ -5035,6 +5166,24 @@
      "ay": 49,
      "group": "ground",
      "kind": "plaza"
+    },
+    {
+     "file": "cities/mexico/ground/sidewalk.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49.0,
+     "group": "ground",
+     "kind": "sidewalk"
+    },
+    {
+     "file": "cities/mexico/ground/curb.webp",
+     "w": 109,
+     "h": 16,
+     "ax": 0,
+     "ay": 0,
+     "group": "ground",
+     "kind": "curb"
     }
    ]
   },
@@ -5659,6 +5808,24 @@
      "ay": 49,
      "group": "ground",
      "kind": "plaza"
+    },
+    {
+     "file": "cities/chicago/ground/sidewalk.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49.0,
+     "group": "ground",
+     "kind": "sidewalk"
+    },
+    {
+     "file": "cities/chicago/ground/curb.webp",
+     "w": 109,
+     "h": 16,
+     "ax": 0,
+     "ay": 0,
+     "group": "ground",
+     "kind": "curb"
     }
    ]
   },
@@ -6579,6 +6746,24 @@
      "ay": 49,
      "group": "ground",
      "kind": "plaza"
+    },
+    {
+     "file": "cities/yamamah/ground/sidewalk.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49.0,
+     "group": "ground",
+     "kind": "sidewalk"
+    },
+    {
+     "file": "cities/yamamah/ground/curb.webp",
+     "w": 109,
+     "h": 16,
+     "ax": 0,
+     "ay": 0,
+     "group": "ground",
+     "kind": "curb"
     }
    ],
    "source": "cities/yamamah/source"
@@ -7192,6 +7377,24 @@
      "ay": 49,
      "group": "ground",
      "kind": "plaza"
+    },
+    {
+     "file": "cities/shibam/ground/sidewalk.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49.0,
+     "group": "ground",
+     "kind": "sidewalk"
+    },
+    {
+     "file": "cities/shibam/ground/curb.webp",
+     "w": 109,
+     "h": 16,
+     "ax": 0,
+     "ay": 0,
+     "group": "ground",
+     "kind": "curb"
     }
    ]
   },
@@ -7809,6 +8012,24 @@
      "ay": 49,
      "group": "ground",
      "kind": "plaza"
+    },
+    {
+     "file": "cities/diriyah/ground/sidewalk.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49.0,
+     "group": "ground",
+     "kind": "sidewalk"
+    },
+    {
+     "file": "cities/diriyah/ground/curb.webp",
+     "w": 109,
+     "h": 16,
+     "ax": 0,
+     "ay": 0,
+     "group": "ground",
+     "kind": "curb"
     }
    ]
   },
@@ -8407,6 +8628,24 @@
      "ay": 49,
      "group": "ground",
      "kind": "plaza"
+    },
+    {
+     "file": "cities/cairo/ground/sidewalk.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49.0,
+     "group": "ground",
+     "kind": "sidewalk"
+    },
+    {
+     "file": "cities/cairo/ground/curb.webp",
+     "w": 109,
+     "h": 16,
+     "ax": 0,
+     "ay": 0,
+     "group": "ground",
+     "kind": "curb"
     }
    ]
   },
@@ -9036,6 +9275,24 @@
      "ay": 49,
      "group": "ground",
      "kind": "water"
+    },
+    {
+     "file": "cities/kaifeng/ground/sidewalk.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49.0,
+     "group": "ground",
+     "kind": "sidewalk"
+    },
+    {
+     "file": "cities/kaifeng/ground/curb.webp",
+     "w": 109,
+     "h": 16,
+     "ax": 0,
+     "ay": 0,
+     "group": "ground",
+     "kind": "curb"
     }
    ]
   },
@@ -9658,6 +9915,24 @@
      "ay": 49,
      "group": "ground",
      "kind": "plaza"
+    },
+    {
+     "file": "cities/gyeongju/ground/sidewalk.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49.0,
+     "group": "ground",
+     "kind": "sidewalk"
+    },
+    {
+     "file": "cities/gyeongju/ground/curb.webp",
+     "w": 109,
+     "h": 16,
+     "ax": 0,
+     "ay": 0,
+     "group": "ground",
+     "kind": "curb"
     }
    ]
   },
@@ -10288,6 +10563,24 @@
      "ay": 49,
      "group": "ground",
      "kind": "plaza"
+    },
+    {
+     "file": "cities/paris/ground/sidewalk.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49.0,
+     "group": "ground",
+     "kind": "sidewalk"
+    },
+    {
+     "file": "cities/paris/ground/curb.webp",
+     "w": 109,
+     "h": 16,
+     "ax": 0,
+     "ay": 0,
+     "group": "ground",
+     "kind": "curb"
     }
    ]
   },
@@ -10916,6 +11209,24 @@
      "ay": 49,
      "group": "ground",
      "kind": "water"
+    },
+    {
+     "file": "cities/birmingham/ground/sidewalk.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49.0,
+     "group": "ground",
+     "kind": "sidewalk"
+    },
+    {
+     "file": "cities/birmingham/ground/curb.webp",
+     "w": 109,
+     "h": 16,
+     "ax": 0,
+     "ay": 0,
+     "group": "ground",
+     "kind": "curb"
     }
    ]
   },
@@ -11555,6 +11866,24 @@
      "ay": 49,
      "group": "ground",
      "kind": "plaza"
+    },
+    {
+     "file": "cities/rothenburg/ground/sidewalk.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49.0,
+     "group": "ground",
+     "kind": "sidewalk"
+    },
+    {
+     "file": "cities/rothenburg/ground/curb.webp",
+     "w": 109,
+     "h": 16,
+     "ax": 0,
+     "ay": 0,
+     "group": "ground",
+     "kind": "curb"
     }
    ]
   },
@@ -12164,6 +12493,24 @@
      "ay": 49,
      "group": "ground",
      "kind": "plaza"
+    },
+    {
+     "file": "cities/gondar/ground/sidewalk.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49.0,
+     "group": "ground",
+     "kind": "sidewalk"
+    },
+    {
+     "file": "cities/gondar/ground/curb.webp",
+     "w": 109,
+     "h": 16,
+     "ax": 0,
+     "ay": 0,
+     "group": "ground",
+     "kind": "curb"
     }
    ]
   },
@@ -12768,6 +13115,24 @@
      "ay": 49,
      "group": "ground",
      "kind": "plaza"
+    },
+    {
+     "file": "cities/kano/ground/sidewalk.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49.0,
+     "group": "ground",
+     "kind": "sidewalk"
+    },
+    {
+     "file": "cities/kano/ground/curb.webp",
+     "w": 109,
+     "h": 16,
+     "ax": 0,
+     "ay": 0,
+     "group": "ground",
+     "kind": "curb"
     }
    ]
   },
@@ -13395,6 +13760,24 @@
      "ay": 49,
      "group": "ground",
      "kind": "water"
+    },
+    {
+     "file": "cities/meroe/ground/sidewalk.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49.0,
+     "group": "ground",
+     "kind": "sidewalk"
+    },
+    {
+     "file": "cities/meroe/ground/curb.webp",
+     "w": 109,
+     "h": 16,
+     "ax": 0,
+     "ay": 0,
+     "group": "ground",
+     "kind": "curb"
     }
    ]
   },
@@ -13970,6 +14353,24 @@
      "ay": 49,
      "group": "ground",
      "kind": "plaza"
+    },
+    {
+     "file": "cities/rio/ground/sidewalk.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49.0,
+     "group": "ground",
+     "kind": "sidewalk"
+    },
+    {
+     "file": "cities/rio/ground/curb.webp",
+     "w": 109,
+     "h": 16,
+     "ax": 0,
+     "ay": 0,
+     "group": "ground",
+     "kind": "curb"
     }
    ]
   },
@@ -14576,6 +14977,24 @@
      "ay": 49,
      "group": "ground",
      "kind": "water"
+    },
+    {
+     "file": "cities/laboca/ground/sidewalk.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49.0,
+     "group": "ground",
+     "kind": "sidewalk"
+    },
+    {
+     "file": "cities/laboca/ground/curb.webp",
+     "w": 109,
+     "h": 16,
+     "ax": 0,
+     "ay": 0,
+     "group": "ground",
+     "kind": "curb"
     }
    ]
   },
@@ -15203,6 +15622,24 @@
      "ay": 49,
      "group": "ground",
      "kind": "water"
+    },
+    {
+     "file": "cities/tenoch/ground/sidewalk.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49.0,
+     "group": "ground",
+     "kind": "sidewalk"
+    },
+    {
+     "file": "cities/tenoch/ground/curb.webp",
+     "w": 109,
+     "h": 16,
+     "ax": 0,
+     "ay": 0,
+     "group": "ground",
+     "kind": "curb"
     }
    ]
   }

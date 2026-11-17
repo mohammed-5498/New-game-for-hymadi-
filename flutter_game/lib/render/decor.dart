@@ -17,6 +17,9 @@ const _tau = 6.2831853;
 // نقطة على المربع بإحداثياته (a على i، b على j، من −0.5 إلى 0.5) حول مركزه
 List<double> _at(double x, double y, double a, double b) => [x + (a - b) * 18, y + (a + b) * 9];
 
+// الشارع (والدوار) والماء: أخفض من أرض الأحياء والرصيف (18.10أ)
+bool lowGround(GameMap map, int k) => map.road[k] == 1 || map.type[k] == tY || map.type[k] == tWater;
+
 class Decor {
   final GameMap map;
   final String city;
@@ -49,6 +52,18 @@ class Decor {
   // إضاءة الليل الثابتة (collectStatics في chunkCache.js): برميل النار، وأعمدة الممرات، وأضواء الدوار
   final lights = <Light>[];
   bool _isLane(int k) => map.type[k] == tDot && (map.kind[k] == 'lane_i' || map.kind[k] == 'lane_j');
+  // الأرض البارزة (18.10أ): الشارع والماء أخفض بـ drop، فما على أرضهما (خطوطه وحطامه وقواربه) يُرسم أخفض
+  late final double drop = art?.relief ?? 0;
+  double _dz(int k) => lowGround(map, k) ? drop : 0;
+  // المربع أعلى من الشارع (أرض حي)، وما خلف حافة الخريطة الخلفية أيضاً فللشارع عندها رصيف
+  bool upper(int i, int j) => i < 0 || j < 0 || (map.inBounds(i, j) && !lowGround(map, map.idx(i, j)));
+  // وسط الرصيف الخلفي لمربع شارع (عند جاره -i أو -j)، أو null بلا رصيف خلفه (تقاطع)
+  List<double>? _onSide(int i, int j, double x, double y, int salt) {
+    final a = upper(i - 1, j), b = upper(i, j - 1);
+    if (!a && !b) return null;
+    final w = 0.5 - 0.5 / GROUND.sub;
+    return a && (!b || h(i, j, salt) < 0.5) ? _at(x, y, -w, 0) : _at(x, y, 0, -w);
+  }
 
   // --- الأرض: طبقة chunkCache.drawGround ---
   // at: الطبقة التي يُرسم فيها ما على المربع (i، j)، فتُقسم الأرض شرائح تُرسم الظاهرة منها وحدها
@@ -58,7 +73,7 @@ class Decor {
         final v = at(i, j);
         final k = map.idx(i, j), x = (i - j) * TILE_HALF_W, y = (i + j) * TILE_HALF_H;
         if (map.road[k] == 1) {
-          _roadSurface(v, i, j, x, y);
+          _roadSurface(v, i, j, x, y + drop);
         } else if (_isLane(k)) {
           _lanePaving(v, i, j, x, y);
         } else if (map.kind[k] == 'fplaza' && _squareOf(k) == null) {
@@ -67,7 +82,7 @@ class Decor {
           v.ln(x - 6, y - 3, x + 6, y + 3, 'rgba(255,226,150,0.32)', 0.6);
           v.ln(x + 6, y - 3, x - 6, y + 3, 'rgba(255,226,150,0.32)', 0.6);
         } else if (map.type[k] == tY && _roundaboutAnchor(i, j)) {
-          if (!_mark('ring', x, y, i, j)) v.ring(x, y - 9, 38, 19, 'rgba(240,236,224,0.7)', 0.9, [4, 3]);
+          if (!_mark('ring', x, y + drop, i, j)) v.ring(x, y + drop - 9, 38, 19, 'rgba(240,236,224,0.7)', 0.9, [4, 3]);
         }
       }
     }
@@ -83,7 +98,7 @@ class Decor {
     for (var j = 0; j < map.n; j++) {
       for (var i = 0; i < map.n; i++) {
         final v = at(i, j);
-        final d = map.dash[map.idx(i, j)], x = (i - j) * TILE_HALF_W, y = (i + j) * TILE_HALF_H;
+        final k = map.idx(i, j), d = map.dash[k], x = (i - j) * TILE_HALF_W, y = (i + j) * TILE_HALF_H + _dz(k);
         const c = '#c9bd85';
         if (d >= 1 && d <= 4 && _mark('dash$d', x, y, i, j)) continue;
         if (d == 1) v.ln(x - 4, y - 2, x + 4, y + 2, c, 1);
@@ -96,28 +111,12 @@ class Decor {
 
   void _roadSurface(Vec v, int i, int j, double x, double y) {
     if (open != null) {
-      _sidewalks(v, i, j, x, y);
       final dash = map.dash[map.idx(i, j)];
       if ((dash == 6 || dash == 7) && !_mark(dash == 6 ? 'cross_i' : 'cross_j', x, y, i, j)) _crosswalk(v, dash == 6, x, y);
     }
     if (_s('ground', 'road') == null) _themeTile(v, i, j, x, y);   // نقش الشارع في صورته
     if (h(i, j, 201) < 0.35 && !_mark('crack', x, y, i, j)) {
       v.stroke([[x - 8, y - 1], [x - 3, y + 1.5], [x + 1, y], [x + 6, y + 2.5]], 'rgba(20,16,12,0.35)', 0.5);
-    }
-  }
-
-  void _sidewalks(Vec v, int i, int j, double x, double y) {
-    const f = 0.2;
-    for (final (da, db) in const [(-1, 0), (1, 0), (0, -1), (0, 1)]) {
-      final a = i + da, b = j + db;
-      if (!map.inBounds(a, b)) continue;
-      final k = map.idx(a, b);
-      if (map.road[k] == 1 || map.type[k] == tY) continue;
-      if (_mark('side_${da != 0 ? 'i' : 'j'}${da + db > 0 ? 1 : 0}', x, y, i, j)) continue;
-      List<double> p(double u, double w) => _at(x, y, da != 0 ? da * u : w, db != 0 ? db * u : w);
-      final e1 = p(0.5, -0.5), e2 = p(0.5, 0.5), e3 = p(0.5 - f, 0.5), e4 = p(0.5 - f, -0.5);
-      v.poly([e1, e2, e3, e4], 'rgba(255,255,255,0.16)');
-      v.ln(e4[0], e4[1], e3[0], e3[1], 'rgba(0,0,0,0.28)', 0.6);
     }
   }
 
@@ -166,7 +165,7 @@ class Decor {
     if (map.road[k] == 1) {
       if (map.dash[k] >= 5 || map.kind[k] != null) return;     // حلقة الدوار وممرات المشاة نظيفة، والبوابة صورة
       if (open?.roadProp != false) _roadProp(v, i, j, x, y);
-      _streetDebris(v, x, y, i, j);
+      _streetDebris(v, x, y + drop, i, j);
       if (open != null) _streetTree(v, i, j, x, y);
       return;
     }
@@ -196,7 +195,7 @@ class Decor {
         lights..add(Light(x, y - 39, 46, 0xff6ebe, 0.45))..add(Light(x, y - 12, 34, 0x78dcff, 0.3));
       }
     }
-    if (type == tWater) _water(v, i, j, x, y);
+    if (type == tWater) _water(v, i, j, x, y + drop);
   }
 
   // حطام الشارع (streetDebris): سيارة محطمة أو برميل نار أو بقعة أو ركام أو أكياس رمل
@@ -514,40 +513,15 @@ class Decor {
     return out;
   }();
 
-  // الرصف بطابع الحي، وحافة حجر على محيطه، ومنصة داكنة تحت المبنى فيجلس عليها لا فوق الأرض
+  // الرصف بطابع الحي. وحافته رصيف الأرض البارزة وظل المبنى عند قاعدته (18.10أ) بدل الحافة والمنصة الداكنة وبقع الأرض
   void _squareGround(Vec v, District d, int i, int j, double x, double y) {
-    final k = map.idx(i, j), temple = d.temple, merc = d.merc;
-    if (map.kind[k] == 'fplaza' || map.type[k] == tP) {
-      if (temple) {
-        if ((i + j) % 2 == 0) v.poly([[x - 9, y], [x, y - 4.5], [x + 9, y], [x, y + 4.5]], 'rgba(255,236,170,0.22)');
-        v.stroke([[x - 18, y], [x, y - 9], [x + 18, y], [x, y + 9], [x - 18, y]], 'rgba(120,88,40,0.28)', 0.6);
-      } else if (merc) {
-        for (var n = 0; n < 5; n++) {
-          final a = h(i, j, 520 + n) - 0.5, b = h(i, j, 530 + n) - 0.5, p = _at(x, y, a * 0.8, b * 0.8);
-          v.el(p[0], p[1], 2.6 + h(i, j, 540 + n) * 1.6, 1.3 + h(i, j, 550 + n) * 0.8, 'rgba(60,42,26,0.22)');
-        }
-      } else {
-        v.stroke([[x - 12, y], [x, y - 6], [x + 12, y], [x, y + 6], [x - 12, y]], 'rgba(255,226,150,0.32)', 0.6);
-      }
-    }
-    // الحافة: ضلع كل مربع لا يجاوره مربع من حيه
-    final rim = temple ? '#f3dfa0' : merc ? '#b89b72' : '#eadcb6', shade = 'rgba(40,28,16,0.5)';
-    bool out(int a, int b) => !map.inBounds(a, b) || map.districtAt[map.idx(a, b)] != d.id;
-    void edge(double x1, double y1, double x2, double y2, double ox, double oy) {
-      v.ln(x1, y1, x2, y2, shade, 2.2);
-      v.ln(x1 + ox, y1 + oy, x2 + ox, y2 + oy, rim, 1.3);
-    }
-    if (out(i + 1, j)) edge(x + 18, y, x, y + 9, -1.2, -0.6);
-    if (out(i - 1, j)) edge(x, y - 9, x - 18, y, 1.2, 0.6);
-    if (out(i, j + 1)) edge(x - 18, y, x, y + 9, 1.2, -0.6);
-    if (out(i, j - 1)) edge(x, y - 9, x + 18, y, -1.2, 0.6);
-    // المنصة: مرة واحدة عند أعلى مربعات الكتلة (المبنى في المربع الأمامي منها)
-    final f = d.featureTile!, fi = f % map.n, fj = f ~/ map.n;
-    if (i == fi - 1 && j == fj - 1) {
-      const g = 3.0;
-      final top = [x, y - 9 - g], right = [x + 36 + g * 2, y + 9], bottom = [x, y + 27 + g], left = [x - 36 - g * 2, y + 9];
-      v.poly([top, right, bottom, left], temple ? 'rgba(92,70,36,0.42)' : 'rgba(52,38,24,0.4)');
-      v.stroke([top, right, bottom, left, top], rim, 1.1);
+    final k = map.idx(i, j);
+    if (map.kind[k] != 'fplaza' && map.type[k] != tP) return;
+    if (d.temple) {
+      if ((i + j) % 2 == 0) v.poly([[x - 9, y], [x, y - 4.5], [x + 9, y], [x, y + 4.5]], 'rgba(255,236,170,0.22)');
+      v.stroke([[x - 18, y], [x, y - 9], [x + 18, y], [x, y + 9], [x - 18, y]], 'rgba(120,88,40,0.28)', 0.6);
+    } else if (!d.merc) {
+      v.stroke([[x - 12, y], [x, y - 6], [x + 12, y], [x, y + 6], [x - 12, y]], 'rgba(255,226,150,0.32)', 0.6);
     }
   }
 
@@ -687,16 +661,25 @@ class Decor {
   }
 
   // زينة شارع المدينة: صورتها حيث كان الكود يرسمها (يُجرَّب رسمها في مسودة لمعرفة ذلك)
+  // ما يقوم على عمود (إنارة ومشاعل وأعلام) يقف على الرصيف الخلفي للمربع لا وسط الشارع (18.10أ)، والزينة المعلّقة
+  // فوق الشارع وما على أرضه في مكانه أخفض مع الشارع
+  static const _posts = {'europe', 'rothenburg', 'cairo', 'kaifeng', 'gyeongju', 'paris', 'birmingham', 'laboca', 'diriyah', 'meroe', 'rio', 'tenoch'};
   void _roadProp(Vec v, int i, int j, double x, double y) {
     if (onItem != null && _s('decor', 'roadprop') != null) {
       _probe.clear();
       _roadPropCode(_probe, i, j, x, y);
+      if (_probe.isEmpty) return;
       // باريس: مدخل المترو (1) أو عمود الإنارة (2) كما يختار رسمها، والبقية بالتجزئة
-      final v = city == 'paris' ? ((i * 7 + j * 5) % 9 == 0 ? 1 : 2) : _variant('roadprop', i, j, 431);
-      if (!_probe.isEmpty) _item('roadprop', x, y, i, j, v);
+      final n = city == 'paris' ? ((i * 7 + j * 5) % 9 == 0 ? 1 : 2) : _variant('roadprop', i, j, 431);
+      if (!_posts.contains(city)) { _item('roadprop', x, y + drop, i, j, n); return; }
+      final at = _onSide(i, j, x, y, 433), s = _s('decor', 'roadprop', n)!;
+      if (at == null) return;
+      // قاعدة العمود أسفل وسط الصورة: تُنقل الصورة فتقف قاعدته على الرصيف
+      final px = art!.px;
+      _item('roadprop', at[0] - (s.w / 2 - s.ax) / px, at[1] - (s.h - s.ay) / px + 0.4, i, j, n);
       return;
     }
-    _roadPropCode(v, i, j, x, y);
+    _roadPropCode(v, i, j, x, y + drop);
   }
 
   void _roadPropCode(Vec v, int i, int j, double x, double y) {

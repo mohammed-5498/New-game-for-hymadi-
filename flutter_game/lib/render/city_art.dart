@@ -24,11 +24,12 @@ class CityArt {
   final String city;
   final ui.Image image;
   final double px, scale;              // بكسل الأطلس لكل وحدة عالم، وحجم المبنى العادي في المدن المفتوحة
+  final double relief;                 // كم الشارع والماء أخفض من الأحياء والرصيف (18.10أ)، و0 بلا قطع الرصيف في الأطلس
   final Map<String, String?> colors;   // ground وroad وroad2 وplaza وwater
   final List<Sprite> sprites;
   final Map<String, List<Sprite>> _byKind = {};
 
-  CityArt._(this.city, this.image, this.px, this.scale, this.colors, this.sprites) {
+  CityArt._(this.city, this.image, this.px, this.scale, this.relief, this.colors, this.sprites) {
     for (final s in sprites) { (_byKind['${s.group}/${s.kind}'] ??= []).add(s); }
     for (final list in _byKind.values) { list.sort((a, b) => a.variant - b.variant); }
   }
@@ -40,6 +41,7 @@ class CityArt {
     final image = (await codec.getNextFrame()).image;
     codec.dispose();
     return CityArt._(city, image, (meta['pxPerUnit'] as num).toDouble(), (meta['scale'] as num).toDouble(),
+        ((meta['relief'] ?? 0) as num).toDouble(),
         (meta['colors'] as Map).cast<String, String?>(),
         [for (final s in meta['sprites']) Sprite(s as Map<String, dynamic>)]);
   }

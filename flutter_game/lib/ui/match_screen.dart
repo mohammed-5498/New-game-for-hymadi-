@@ -252,10 +252,10 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     _crumb('التسخين');
     if (!mounted) return;
     final z = (settings['zoom'] as num?)?.toDouble();
-    // للفحص: الكاميرا على مربع (i،j) أو على المعبد
+    // للفحص: الكاميرا على مربع (i،j) أو على المعبد أو أول مبنى مرتزقة
     final at = settings['cam'] as String?;
     if (at != null) {
-      final t = at == 'temple' ? s.map.districts.where((d) => d.temple).firstOrNull?.capture : null;
+      final t = at == 'temple' || at == 'merc' ? s.map.districts.where((d) => at == 'merc' ? d.merc : d.temple).firstOrNull?.capture : null;
       // beast: على الترول أو الفارس الأسود (للفحص بعد ff)
       final m = at == 'beast' ? s.units.where((u) => u.creature == 'troll' || u.blackKnight).firstOrNull : null;
       final p = at.split(','), ci = m?.x ?? t?.i.toDouble() ?? double.parse(p[0]), cj = m?.y ?? t?.j.toDouble() ?? double.parse(p[1]);
@@ -621,7 +621,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     final f = fog;
     for (final u in s.units) {
       if (u.state == 'dead' || (f != null && !f.friendly(s, u.playerId) && !f.sees(u.x, u.y))) continue;
-      final q = toScreen(s, (u.x - u.y) * TILE_HALF_W, (u.x + u.y) * TILE_HALF_H - 8 * s.camera.z / 2.2, size);
+      final q = toScreen(s, (u.x - u.y) * TILE_HALF_W, (u.x + u.y) * TILE_HALF_H + (layer?.drop(u.x, u.y) ?? 0) - 8 * s.camera.z / 2.2, size);
       final d = (q - p).distance;
       if (d < bestD) { bestD = d; best = u; }
     }
@@ -861,7 +861,13 @@ class _MatchPainter extends CustomPainter {
       if (s.feature != null) drawFeatureGround(b, s, time);
       drawFeatureHalos(b, s, time, left, right, top, bottom);
       drawEmpireHalos(b, s, time, left, right, top, bottom);
-      for (final u in s.units) { if (u.state != 'dead' && truthy(u.stats['aura']) && u.playerId == s.humanId) drawAura(b, u, alpha); }
+      for (final u in s.units) {
+        if (u.state != 'dead' && truthy(u.stats['aura']) && u.playerId == s.humanId) {
+          b..save()..translate(0, layer.drop(u.x, u.y));
+          drawAura(b, u, alpha);
+          b.restore();
+        }
+      }
       b.flush(canvas, img);
     }, afterRow: (d) {
       for (final fl in _flagsAt(s, d)) {
@@ -878,21 +884,21 @@ class _MatchPainter extends CustomPainter {
         row.sort((p, q) => (p.x + p.y).compareTo(q.x + q.y));
         for (final u in row) {
           // شكل الجندي (وضعيته وأجزاؤه) يُحسب unitHz مرة في الثانية، وبينها يُعاد رسمه المحفوظ بمكانه الجديد
-          final i = u.prevX + (u.x - u.prevX) * alpha, j = u.prevY + (u.y - u.prevY) * alpha;
-          final x = (i - j) * TILE_HALF_W, y = (i + j) * TILE_HALF_H, clip = _clips[u] ??= TriClip();
+          // وقدماه أخفض في الشارع (الأرض البارزة 18.10أ)
+          final i = u.prevX + (u.x - u.prevX) * alpha, j = u.prevY + (u.y - u.prevY) * alpha, dz = layer.drop(i, j);
+          final x = (i - j) * TILE_HALF_W, y = (i + j) * TILE_HALF_H + dz, clip = _clips[u] ??= TriClip();
           final age = time - clip.t;
           if (age >= 0 && age < _unitStep && clip.z == c.z) {
             b.replay(clip, x - clip.x, y - clip.y);
           } else {
             final from = b.count;
+            b..save()..translate(0, dz);
             drawUnit(b, atlas, u, alpha, c.z, time, crowded);
+            b.restore();
             b.keep(clip, from);
             clip..x = x..y = y..t = time..z = c.z;
           }
-          if (u.cargo && u.state != 'dead') {
-            final i = u.prevX + (u.x - u.prevX) * alpha, j = u.prevY + (u.y - u.prevY) * alpha;
-            drawCargo(b, (i - j) * TILE_HALF_W, (i + j) * TILE_HALF_H);
-          }
+          if (u.cargo && u.state != 'dead') drawCargo(b, x, y);
         }
       }
       _mark('units');
@@ -905,17 +911,23 @@ class _MatchPainter extends CustomPainter {
     drawFlagArrows(b, s, time, left, right, top, bottom, fog?.sees);
     for (final fx in s.fx) {
       if (!sees(fx.x, fx.y)) continue;
-      final gx = (fx.x - fx.y) * TILE_HALF_W, gy = (fx.x + fx.y) * TILE_HALF_H;
+      final gx = (fx.x - fx.y) * TILE_HALF_W, gy = (fx.x + fx.y) * TILE_HALF_H + layer.drop(fx.x, fx.y);
       drawImpact(b, fx, gx, gy, UNIT_ART.d('scale'), fx.t + alpha * TICK_SEC);
     }
-    for (final cl in s.clashes) { if (sees(cl.x, cl.y)) drawClash(b, (cl.x - cl.y) * TILE_HALF_W, (cl.x + cl.y) * TILE_HALF_H - 8, cl.t); }
+    for (final cl in s.clashes) { if (sees(cl.x, cl.y)) drawClash(b, (cl.x - cl.y) * TILE_HALF_W, (cl.x + cl.y) * TILE_HALF_H - 8 + layer.drop(cl.x, cl.y), cl.t); }
     for (final fx in s.ultFx) { drawUltFx(b, fx); }
     if (s.feature != null) drawFeatureOver(b, s, time);
     if (s.story != null) {
       final tp = targetPoint(s);
       if (tp != null) drawStoryMarker(b, tp.$1, tp.$2, tp.$3, time);
     }
-    for (final u in s.units) { if (u.selected && u.state != 'dead') drawSelectionRing(b, u, alpha); }
+    for (final u in s.units) {
+      if (u.selected && u.state != 'dead') {
+        b..save()..translate(0, layer.drop(u.x, u.y));
+        drawSelectionRing(b, u, alpha);
+        b.restore();
+      }
+    }
     if (s.moveMarker != null) drawMoveMarker(b, s.moveMarker!);
     b.flush(canvas, img);
     _mark('fx');

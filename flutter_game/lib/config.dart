@@ -96,6 +96,12 @@ const PACE = (calmFps: 30.0, activeMs: 2000, menuFps: 20.0, unitHz: 30.0,   // u
 // bake: دقة صورة الضباب الجاهزة (مقابل وحدات العالم): تُرسم مع كل حساب (every) ويعرضها كل إطار كما هي
 const FOG = (unitSight: 6.0, soft: 2.0, explored: 0.84, minLift: 10.0, blur: 6.0, every: 0.1, key: 'gangcity.matchFog', bake: 0.5);
 
+// --- الأرض البارزة والأرصفة (18.10أ) ---
+// الشارع والماء أخفض من أرض الأحياء والرصيف (relief.drop في manifest.json وأطلس كل مدينة، وsub خُمس المربع للرصيف).
+// shadow: عتمة ظل قاعدة المبنى على ما حوله، وshadowIn/Mid/Out: حلقاته بنسبة نصف مربعه (عتمة كاملة بين الأولى والثانية
+// وتخفت حتى الثالثة). edge: عمق حافة الخريطة الأمامية. snow: كم يبيضّ الرصيف والحافة في الثلج، وrain: كم يغمقان في المطر
+const GROUND = (sub: 5, shadow: 0.3, shadowIn: 0.78, shadowMid: 1.0, shadowOut: 1.2, edge: 9.0, snow: 0.4, rain: 0.8);
+
 // --- الكاميرا ---
 const CAMERA = (minZoom: 0.8, maxZoom: 4.5, startZoom: 2.2);
 
