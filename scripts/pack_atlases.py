@@ -72,6 +72,52 @@ def relief(sidewalk, curb):
     return out
 
 
+def platform(im):
+    """سُمك منصة المبنى المميز (18.10، بطلب المستخدم: "تقص أرضيتها وتترك المبنى"): أسفل الصورة حافتا المنصة على
+    شكل V، وفوقهما وجهاها الجانبيان ثم سطحها الأفتح. لكل عمود على الحافة: أول قفزة إضاءة صعوداً من أسفله، والسُمك
+    وسيطها. يعيد (أسفل الصورة، عمود رأس V، السُمك) أو None بلا منصة واضحة"""
+    w, h = im.size
+    px = im.load()
+    lum = lambda p: 0.3 * p[0] + 0.59 * p[1] + 0.11 * p[2]
+    low = [max((y for y in range(h) if px[x, y][3] > 128), default=-1) for x in range(w)]
+    bottom = max(low)
+    cand = [x for x in range(w) if low[x] >= bottom - 1]
+    cx = cand[len(cand) // 2]
+    xs = [x for x in range(w) if low[x] >= 0]
+    ds = []
+    for x in list(range(xs[0] + 6, cx - 8, 2)) + list(range(cx + 8, xs[-1] - 6, 2)):
+        y0 = low[x]
+        if abs(y0 - (bottom - abs(x - cx) * 0.5)) > 4: continue      # حافة المنصة وحدها (ميلها نصف)
+        best, at = 0, None
+        for d in range(4, 34):
+            y = y0 - d
+            if y < 1 or px[x, y][3] < 200: break
+            j = lum(px[x, y - 1]) - lum(px[x, y + 1])
+            if j > best: best, at = j, d
+        if at and best > 18: ds.append(at)
+    if len(ds) < 6: return None
+    t = sorted(ds)[len(ds) // 2]
+    return None if t < 6 else (bottom, cx, min(t, FLAT_MAX))
+
+
+FLAT_MAX = 18      # الأبراج الرفيعة تُقرأ أسمك من حقيقتها: لا يُقص أكثر من هذا
+
+
+def flatten(im, cut):
+    """يُمحى ما تحت حافتي سطح المنصة الأماميتين (وجهاها الجانبيان وظلها)، بحافة ناعمة بكسلاً"""
+    bottom, cx, t = cut
+    im = im.copy()
+    px = im.load()
+    for x in range(im.width):
+        lim = bottom - t - abs(x - cx) * 0.5
+        for y in range(max(0, int(lim)), im.height):
+            k = min(1.0, max(0.0, y - lim))
+            if k > 0:
+                r, g, b, a = px[x, y]
+                px[x, y] = (r, g, b, round(a * (1 - k)))
+    return im
+
+
 os.makedirs(OUT, exist_ok=True)
 for city, entry in man['cities'].items():
     # الزينة والعلامات العامة (18.6، manifest.common) في كل أطلس، إلا ما للمدينة صورة منه
@@ -83,8 +129,18 @@ for city, entry in man['cities'].items():
     images = [r for r in images if not (r['group'] == 'ground' and r['kind'] in ('sidewalk', 'curb'))]
     made = relief(src['sidewalk'], src['curb']) if RELIEF and len(src) == 2 else []
     images += [dict(r, file=f'relief/{r["kind"]}', _img=im) for r, im in made]
+    # المباني المميزة (المعابد والمرتزقة ومباني المدن) بلا جانبي منصتها، وتنزل بسُمكها فيقع سطحها على الأرض
+    for n, r in enumerate(images):
+        if r['group'] != 'feature' or not RELIEF: continue
+        im = Image.open(os.path.join(ROOT, r['file'])).convert('RGBA')
+        cut = platform(im)
+        if cut is None: continue
+        r = images[n] = dict(r, _img=flatten(im, cut), ay=r['ay'] - cut[2])
+        if r.get('owner'):
+            images[n]['_owner'] = flatten(Image.open(os.path.join(ROOT, r['owner'])).convert('RGBA'), cut)
     # قناع رايات المالك (owner) صورة بجانب صورته في الأطلس، بمقاسها نفسه
-    recs = images + [{'file': r['owner'], 'w': r['w'], 'h': r['h'], '_of': r} for r in images if r.get('owner')]
+    recs = images + [{'file': r['owner'], 'w': r['w'], 'h': r['h'], '_of': r, **({'_img': r['_owner']} if '_owner' in r else {})}
+                     for r in images if r.get('owner')]
     recs = sorted(recs, key=lambda r: -r['h'])
     x, y, row = PAD, PAD, 0
     for r in recs:
@@ -102,7 +158,7 @@ for city, entry in man['cities'].items():
         atlas.paste(im, r['_at'])
     for r in recs:
         if '_of' in r: continue
-        key = r['file'] if '_img' in r else r['file'].split('/', 2)[2].rsplit('.', 1)[0]
+        key = r['file'] if r['file'].startswith('relief/') else r['file'].split('/', 2)[2].rsplit('.', 1)[0]
         s = {'key': key, **{k: r[k] for k in META if k in r}, 'r': [r['_at'][0], r['_at'][1], r['w'], r['h'], r['ax'], r['ay']]}
         m = next((o['_at'] for o in recs if o.get('_of') is r), None)
         if m: s['m'] = list(m)

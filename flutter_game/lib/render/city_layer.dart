@@ -27,6 +27,9 @@ final _regionHint = <String, (int, double)>{
 };
 const _featureSmall = 0.55;   // المبنى المميز في حي ضيق (مربع واحد): الرسم نفسه مصغّراً (SMALL في featureArt.js)
 
+// معلم المنطقة (placeMonument): مبنى عادي قرب الوسط حل محله المعلم. وقد يقع مربعه في ساحة معبد فلا يبقى مبنى
+bool isMonument(GameMap map, int k) => map.type[k] == tH && map.kind[k] == 'monument';
+
 // الطقس قبل صبغ المالك (الثلج لا يخفي لونه)
 int groundColor(GameMap map, CityArt art, int i, int j, [String weather = 'day']) {
   final k = map.idx(i, j), type = map.type[k], c = art.colors;
@@ -39,12 +42,14 @@ int groundColor(GameMap map, CityArt art, int i, int j, [String weather = 'day']
 
 int _groundOf(GameMap map, CityArt art, int i, int j, int k, int type, Map<String, String?> c) {
   if (map.road[k] == 1 || type == tY) return hex((i + j) % 2 == 1 ? c['road']! : c['road2']!);
-  if (type == tP) return hex(c['plaza']!);
-  var color = hex(c['ground']!);
   final kind = map.kind[k];
+  // ساحة العلم في حي المبنى المميز بلون ساحته (2.3.1: كانت رمادية وسط أرض المعبد)، والمعلم على منصة مرصوفة
+  final square = type == tP && (map.districtOf(i, j)?.featureBig ?? false);
+  if ((type == tP && !square) || isMonument(map, k)) return hex(c['plaza']!);
+  var color = hex(c['ground']!);
   if (type == tDot && (kind == 'lane_i' || kind == 'lane_j')) {
     color = mix(color, hex(c['plaza']!), 0.8);                    // ممر مرصوف بين صفوف المباني
-  } else if (kind == 'fplaza') {
+  } else if (kind == 'fplaza' || square) {
     // ساحة المبنى المميز، والمعبد بحجر ذهبي والمرتزقة بأرض مدكوكة (3.14)
     final d = map.districtOf(i, j);
     color = mix(hex(c['plaza']!), hex(d != null && d.temple ? '#e9cf88' : d != null && d.merc ? '#8f7252' : '#d9c79c'),
@@ -69,6 +74,11 @@ int _groundOf(GameMap map, CityArt art, int i, int j, int k, int type, Map<Strin
     return s == null ? null : (s, 1, 0);
   }
   if (type == tR) {
+    // أطلال أقل (بطلب المستخدم، 2.3.1): يبقى أطلالاً GROUND.ruins منها، والباقي بيت من بيوت المدينة (رسم فقط: كلاهما لا يُمشى عليه)
+    if (hsh(i, j, 640, map.seed) >= GROUND.ruins) {
+      final s = _houseFor(map, art, i, j);
+      if (s != null) return (s, art.scale, 0);
+    }
     final s = art.find('ruin', 'ruin', v);
     return s == null ? null : (s, 1, 0);
   }
@@ -133,6 +143,17 @@ String? _upOf(District d, String kind) {
   return lv == 0 ? null : '$key$lv';
 }
 
+// بيت مكان الأطلال: نوع من pool المدينة بوزنه (له صورة)، ونسخته بالتجزئة
+Sprite? _houseFor(GameMap map, CityArt art, int i, int j) {
+  final kinds = [for (final (k, w) in CITY_THEMES[map.city]!.pool) if (k != null && k != '.' && k != 'ruin' && art.find('building', k) != null) (k, w)];
+  if (kinds.isEmpty) return null;
+  var r = hsh(i, j, 641, map.seed) * kinds.fold(0.0, (a, e) => a + e.$2);
+  for (final (k, w) in kinds) {
+    if ((r -= w) < 0) return art.find('building', k, (i + j) % 3 + 1);
+  }
+  return art.find('building', kinds.last.$1, (i + j) % 3 + 1);
+}
+
 // أول نوع مبنى في pool المدينة له صورة: للمربعات المردومة بلا نوع (firstBuilding في cityRender.js)
 String? _firstBuilding(String city, CityArt art) {
   for (final (kind, _) in CITY_THEMES[city]!.pool) {
@@ -155,7 +176,7 @@ String _groundKind(GameMap map, int i, int j, int k) {
   final type = map.type[k], kind = map.kind[k];
   if (map.road[k] == 1 || type == tY) return (i + j) % 2 == 1 ? 'road' : 'road2';
   if (type == tWater) return 'water';
-  if (type == tP || kind == 'fplaza' || (type == tDot && (kind == 'lane_i' || kind == 'lane_j'))) return 'plaza';
+  if (type == tP || kind == 'fplaza' || isMonument(map, k) || (type == tDot && (kind == 'lane_i' || kind == 'lane_j'))) return 'plaza';
   return 'ground';
 }
 
@@ -208,11 +229,12 @@ class CityLayer {
   final Uint8List? _level;
   final double reliefDrop;
   final ui.Paint _reliefPaint;
+  final _Margin? _margin;
   CityLayer._(this.ground, this.marks, this._slot, this._bandStart, this.rows, this.rowStart, this.xf, this.rects, this._pos, this._baseCol, this._col,
       this._tileDistrict, this._spriteDistrict, this.spriteCol, this._isMask, this.lights, this._tileItem, this._tileMask,
       this._tileSprite, this._slots, this._slotPos, this._slotItem, this._slotMask, this._slotLevel, this.lift, this.wide,
       this._gXf, this._gRect, this._gBase, this._gCol, this._gKindBase, this._markSprites,
-      this._reliefSprites, this._reliefVec, this._level, this.reliefDrop, this._reliefPaint) {
+      this._reliefSprites, this._reliefVec, this._level, this.reliefDrop, this._reliefPaint, this._margin) {
     tinted = _isMask.contains(1);
   }
 
@@ -243,7 +265,12 @@ class CityLayer {
   factory CityLayer(GameMap map, CityArt art, [String weather = 'day', MatchState? state]) {
     final n = map.n, depths = 2 * n - 1, drop = art.relief;
     final dz = Float32List(n * n);   // الشارع والماء أخفض (18.10أ)
-    if (drop > 0) { for (var k = 0; k < n * n; k++) { if (lowGround(map, k)) dz[k] = drop; } }
+    if (drop > 0) {
+      for (var k = 0; k < n * n; k++) {
+        if (lowGround(map, k)) dz[k] = drop;
+        if (isMonument(map, k)) dz[k] = -2 * drop;   // المعلم على منصة بدرجتين أعلى من حيه (2.3.1)
+      }
+    }
     final pos = Float32List(n * n * 12), col = Int32List(n * n * 6), base = Int32List(n * n), tileD = Int32List(n * n), lift = Float32List(n * n),
         wide = Float32List(n * n)..fillRange(0, n * n, TILE_HALF_W);
     final items = <_It>[];
@@ -272,18 +299,14 @@ class CityLayer {
           gKind[k] = hex(c[gk]!).toSigned(32);
           gMod[k] = _modulate(base[k], gKind[k]);
         }
-        tileD[k] = map.road[k] == 1 || map.type[k] == tWater || map.type[k] == tY ? -1 : map.districtAt[k];
+        tileD[k] = map.road[k] == 1 || map.type[k] == tWater || map.type[k] == tY || isMonument(map, k) ? -1 : map.districtAt[k];
         final s = tileSprite(map, art, i, j, state), did = map.road[k] == 1 ? -1 : map.districtAt[k];
         // مربعات الأحياء خانات بقناع (قد يُبنى فيها مبنى اقتصاد)، وساحة العلم خانة ولو فارغة (ساحة التدريب)
         if (s != null || capture.contains(k)) {
           items.add(_It(i + j, i, 0, s?.$1, x, y + dz[k] + (s?.$3 ?? 0), s?.$2 ?? 1, did, k));
-          if (did >= 0) items.add(_It(i + j, i, 0, s?.$1, x, y + (s?.$3 ?? 0), s?.$2 ?? 1, did, k, mask: true));
+          if (did >= 0) items.add(_It(i + j, i, 0, s?.$1, x, y + dz[k] + (s?.$3 ?? 0), s?.$2 ?? 1, did, k, mask: true));
         }
-        if (s != null && dz[k] == 0 && _built.contains(map.type[k])) {
-          // ظل قاعدة المبنى (18.10أ): وسطه ونصف عرضه، والمبنى المميز 2×2 من وسط كتلته
-          final big = map.type[k] == tF && (map.districtOf(i, j)?.featureBig ?? false);
-          bases.add(big ? (x, y - TILE_HALF_H, 2.0) : (x, y, s.$2 * (map.type[k] == tF ? _featureSmall : 1)));
-        }
+        if (s != null && dz[k] == 0 && _built.contains(map.type[k])) bases.add((x, y, s.$2));   // ظل قاعدة المبنى (18.10أ)
         final from = rowVecs[i + j].length;
         decor.tileDecor(rowVecs[i + j], i, j);
         // ارتفاع ما على المربع فوق ركنه الخلفي (ضباب الحرب يغطيه كله): الزينة هنا، والصورة بعد ترتيبها
@@ -380,7 +403,7 @@ class CityLayer {
         [for (final v in rowVecs) v.build()], rowStart, xf, rects, gpos, base, gcol, tileD, spriteD, spriteCol, isMask,
         mapLights(map, decor.lights), tileItem, tileMask, tileImg, slots, Float32List.fromList(slotPos), slotItem, slotMask,
         Int32List(slots.length), lift, wide, gXf, gRect, gBase, gBase == null ? null : Int32List.fromList(gBase), gKindBase, markSprites,
-        rs, rv, level, drop, _weatherPaint(weather));
+        rs, rv, level, drop, _weatherPaint(weather), drop > 0 ? _Margin(map, art, weather) : null);
     layer.refreshWalls(map, art);
     return layer;
   }
@@ -468,6 +491,7 @@ class CityLayer {
     // الأرض ثم خطوطها، للشرائح الظاهرة وحدها (حلقة الدوار وحافة الساحات تتجاوز مربعها قليلاً: هامش 48)
     bool seen(int b) => (b * band - 1) * TILE_HALF_H - 48 <= bottom && ((b + 1) * band + 1) * TILE_HALF_H + 48 >= top;
     // skip: المدينة مخفية (مفتاح عدّاد الأداء)، وما فوقها يُرسم كما هو
+    if (!skip) _margin?.paint(canvas, atlas, false);
     for (var b = 0; b < ground.length && !skip; b++) { if (ground[b] != null && seen(b)) canvas.drawVertices(ground[b]!, ui.BlendMode.dst, _paint); }
     // صور الأرض فوق لونها المسطح (يسد ما بين حوافها)، ثم العلامات بالكود وصورها
     final gx = _gXf;
@@ -477,6 +501,7 @@ class CityLayer {
           Float32List.sublistView(_gRect!, _bandStart[b] * 4, _bandStart[b + 1] * 4), Int32List.sublistView(_gCol!, _bandStart[b], _bandStart[b + 1]));
       canvas.drawRawAtlas(atlas, w.$1, w.$2, w.$3, ui.BlendMode.modulate, null, _atlasPaint);
     }
+    if (!skip) _margin?.paint(canvas, atlas, true);
     for (var b = 0; b < marks.length && !skip; b++) { if (marks[b] != null && seen(b)) canvas.drawVertices(marks[b]!, ui.BlendMode.dst, _paint); }
     for (var b = 0; b < _markSprites.length && !skip; b++) {
       final w = _markSprites[b];
@@ -523,11 +548,71 @@ class CityLayer {
     for (final m in marks) { m?.dispose(); }
     for (final r in rows) { r?.dispose(); }
     for (final v in _reliefVec) { v?.dispose(); }
+    _margin?.dispose();
   }
 }
 
-// مربعات المباني (لها ظل قاعدة): البيوت والأطلال والقاعدة والشرطة والبرج والمستشفى والمبنى المميز
-const _built = {tH, tR, tQ, tN, 0x54, 0x4D, tF};
+// هامش الخريطة (2.3.1، بطلب المستخدم: الحواف كانت مقصوصة والمباني تخرج عنها): أرض المدينة أغمق قليلاً بعرض
+// GROUND.margin مربعات حول الخريطة، بلا مبانٍ ولا يمشي فيها أحد، وجانبها الأمامي تراب يغمق إلى أسفل. يُرسم خلفيها قبل الأرض
+// وأماميها بعد صور الأرض (يغطي ما نزل من الشارع والماء عند الحافة)
+class _Margin {
+  final List<ui.Vertices?> mesh;                       // [الخلفي، الأمامي]
+  final List<(Float32List, Float32List, Int32List)?> images;
+  final ui.Vertices? edge;
+  _Margin._(this.mesh, this.images, this.edge);
+
+  factory _Margin(GameMap map, CityArt art, String weather) {
+    final n = map.n, m = GROUND.margin, c = art.colors;
+    var col = mix(hex(c['ground']!), 0x000000, 0.1);
+    if (weather == 'snow') col = mix(col, hex('#eef2f5'), 0.72);
+    if (weather == 'rain') col = mix(col, hex('#2a2f36'), 0.2);
+    final g = art.find('ground', 'ground'), mod = g == null ? 0 : _modulate(col, hex(c['ground']!));
+    final vecs = [Vec(), Vec()], spr = [<double>[], <double>[]];
+    final c32 = (0xFF000000 | col).toSigned(32);
+    for (var j = -m; j < n + m; j++) {
+      for (var i = -m; i < n + m; i++) {
+        if (map.inBounds(i, j)) continue;
+        final front = i >= n || j >= n ? 1 : 0, x = (i - j) * TILE_HALF_W, y = (i + j) * TILE_HALF_H;
+        vecs[front]
+          ..tri(x, y - TILE_HALF_H - 0.4, x + TILE_HALF_W + 0.8, y, x, y + TILE_HALF_H + 0.4, c32)
+          ..tri(x, y - TILE_HALF_H - 0.4, x, y + TILE_HALF_H + 0.4, x - TILE_HALF_W - 0.8, y, c32);
+        if (g != null) spr[front].addAll([x, y]);
+      }
+    }
+    (Float32List, Float32List, Int32List)? pack(List<double> p) {
+      if (g == null || p.isEmpty) return null;
+      final count = p.length ~/ 2, xf = Float32List(count * 4), rects = Float32List(count * 4), none = Float32List(0);
+      for (var q = 0; q < count; q++) { CityLayer._place(xf, rects, none, none, q, g, p[q * 2], p[q * 2 + 1], 1, art.px, false, -1, n); }
+      return (xf, rects, Int32List(count)..fillRange(0, count, mod));
+    }
+    // الجانب الأمامي: تراب بلون الأرض أغمق، والأيمن أغمق كوجوه الحافة
+    final e = Vec(), d = GROUND.edge, top = mix(col, hex('#3b2e22'), 0.6), bottom = 0x140f0b;
+    int a(int c) => (0xFF000000 | c).toSigned(32);
+    for (var t = -m; t < n + m; t++) {
+      for (final right in const [true, false]) {
+        final a0 = right ? n + m - 0.5 : t - 0.5, b0 = right ? t - 0.5 : n + m - 0.5, a1 = right ? a0 : a0 + 1, b1 = right ? b0 + 1 : b0;
+        final x0 = (a0 - b0) * TILE_HALF_W, y0 = (a0 + b0) * TILE_HALF_H, x1 = (a1 - b1) * TILE_HALF_W, y1 = (a1 + b1) * TILE_HALF_H;
+        final t0 = a(right ? mix(top, 0x000000, 0.2) : top), b = a(bottom);
+        e..tri(x0, y0, x1, y1, x1, y1 + d, t0, t0, b)..tri(x0, y0, x1, y1 + d, x0, y0 + d, t0, b, b);
+      }
+    }
+    return _Margin._([vecs[0].build(), vecs[1].build()], [pack(spr[0]), pack(spr[1])], e.build());
+  }
+
+  static final _paint = ui.Paint(), _atlasPaint = ui.Paint()..filterQuality = ui.FilterQuality.medium;
+  void paint(ui.Canvas canvas, ui.Image atlas, bool front) {
+    final k = front ? 1 : 0, w = images[k];
+    if (mesh[k] != null) canvas.drawVertices(mesh[k]!, ui.BlendMode.dst, _paint);
+    if (w != null) canvas.drawRawAtlas(atlas, w.$1, w.$2, w.$3, ui.BlendMode.modulate, null, _atlasPaint);
+    if (front && edge != null) canvas.drawVertices(edge!, ui.BlendMode.dst, _paint);
+  }
+
+  void dispose() { for (final v in mesh) { v?.dispose(); } edge?.dispose(); }
+}
+
+// مربعات المباني (لها ظل قاعدة): البيوت والأطلال والقاعدة والشرطة والبرج والمستشفى. والمبنى المميز بلا ظل: منصته مقصوصة
+// على الأرض (pack_atlases.py)، والمعلم على منصته
+const _built = {tH, tR, tQ, tN, 0x54, 0x4D};
 
 // الرصيف والحافة يبيضّان في الثلج ويغمقان في المطر (أرض المدينة كذلك في groundColor)
 ui.Paint _weatherPaint(String weather) {
@@ -555,7 +640,7 @@ ui.Paint _weatherPaint(String weather) {
   for (var j = 0; j < n; j++) {
     for (var i = 0; i < n; i++) {
       final k = map.idx(i, j);
-      if (dz[k] == 0) continue;
+      if (dz[k] <= 0) continue;                              // أرض الحي، ومنصة المعلم (أعلى منها)
       for (var b = 0; b < sub; b++) { level.fillRange((j * sub + b) * side + i * sub, (j * sub + b) * side + i * sub + sub, 1); }
       if (map.type[k] == tWater) continue;                  // الماء بلا رصيف (ضفته في 18.10ج)
       final x = (i - j) * TILE_HALF_W, y = (i + j) * TILE_HALF_H, list = tops[bandOf(i, j)];
@@ -591,17 +676,28 @@ ui.Paint _weatherPaint(String weather) {
       }
     }
   }
-  // حافة الخريطة الأمامية: جانب قطعة الأرض كلها، يغمق إلى أسفل (والأيمن أغمق كوجوه الحافة)
-  final edge = GROUND.edge;
-  for (var t = 0; t < n; t++) {
-    for (final right in const [true, false]) {
-      final i = right ? n - 1 : t, j = right ? t : n - 1, k = map.idx(i, j);
-      final a0 = right ? n - 0.5 : t - 0.5, b0 = right ? t - 0.5 : n - 0.5, a1 = right ? a0 : a0 + 1, b1 = right ? b0 + 1 : b0;
-      final x0 = (a0 - b0) * TILE_HALF_W, y0 = (a0 + b0) * TILE_HALF_H, x1 = (a1 - b1) * TILE_HALF_W, y1 = (a1 + b1) * TILE_HALF_H;
-      final top = right ? 0xFF2F2821 : 0xFF3D342B, bottom = 0xFF0E0C0A;
-      vecs[bandOf(i, j)]
-        ..tri(x0, y0 + dz[k], x1, y1 + dz[k], x1, y1 + edge, top, top, bottom)
-        ..tri(x0, y0 + dz[k], x1, y1 + edge, x0, y0 + edge, top, bottom, bottom);
+  // هامش الخريطة الخلفي أرض أعلى من الماء عند الحافة الخلفية: وجه ضفته عليه
+  for (var t = 0; t < side; t++) {
+    if (level[t * side] == 1 && fi[t % sub] != null) {
+      final a = -0.5, b = t / sub - 0.5;
+      faces[bandOf(0, t ~/ sub)].add((fi[t % sub]!, (a - b) * TILE_HALF_W, (a + b) * TILE_HALF_H));
+    }
+    if (level[t] == 1 && fj[t % sub] != null) {
+      final a = t / sub - 0.5, b = -0.5;
+      faces[bandOf(t ~/ sub, 0)].add((fj[t % sub]!, (a - b) * TILE_HALF_W, (a + b) * TILE_HALF_H));
+    }
+  }
+  // منصة المعلم (2.3.1): وجهاها الأماميان من أعلاها إلى أرض الحي والرصيف حولها
+  final up = art.relief;
+  for (var k = 0; k < n * n; k++) {
+    if (dz[k] >= 0) continue;
+    final i = k % n, j = k ~/ n, list = faces[bandOf(i, j)];
+    final ri = !(map.inBounds(i + 1, j) && dz[map.idx(i + 1, j)] < 0), rj = !(map.inBounds(i, j + 1) && dz[map.idx(i, j + 1)] < 0);
+    for (var row = 2; row >= 1; row--) {                    // درجتان: العليا ثم السفلى أمامها
+      for (var s = 0; s < sub; s++) {
+        if (ri && fi[s] != null) { final a = i + 0.5, b = j - 0.5 + s / sub; list.add((fi[s]!, (a - b) * TILE_HALF_W, (a + b) * TILE_HALF_H - up * row)); }
+        if (rj && fj[s] != null) { final a = i - 0.5 + s / sub, b = j + 0.5; list.add((fj[s]!, (a - b) * TILE_HALF_W, (a + b) * TILE_HALF_H - up * row)); }
+      }
     }
   }
   // ظل قاعدة كل مبنى على ما حوله

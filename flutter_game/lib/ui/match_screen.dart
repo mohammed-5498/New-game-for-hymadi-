@@ -258,7 +258,9 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
       final t = at == 'temple' || at == 'merc' ? s.map.districts.where((d) => at == 'merc' ? d.merc : d.temple).firstOrNull?.capture : null;
       // beast: على الترول أو الفارس الأسود (للفحص بعد ff)
       final m = at == 'beast' ? s.units.where((u) => u.creature == 'troll' || u.blackKnight).firstOrNull : null;
-      final p = at.split(','), ci = m?.x ?? t?.i.toDouble() ?? double.parse(p[0]), cj = m?.y ?? t?.j.toDouble() ?? double.parse(p[1]);
+      final mo = at == 'monument' ? [for (var k = 0; k < s.map.n * s.map.n; k++) if (isMonument(s.map, k)) k].firstOrNull ?? -1 : -1;   // المعلم
+      final p = at.split(','), ci = m?.x ?? t?.i.toDouble() ?? (mo >= 0 ? (mo % s.map.n).toDouble() : double.parse(p[0]));
+      final cj = m?.y ?? t?.j.toDouble() ?? (mo >= 0 ? (mo ~/ s.map.n).toDouble() : double.parse(p[1]));
       s.camera.x = (ci - cj) * TILE_HALF_W;
       s.camera.y = (ci + cj) * TILE_HALF_H;
     }
@@ -998,6 +1000,7 @@ class _MatchPainter extends CustomPainter {
     final out = [for (final _ in m.districts) <double>[]];
     for (final d in m.districts) {
       for (final (i, j) in d.tiles) {
+        if (isMonument(m, m.idx(i, j))) continue;   // المعلم على منصته خارج حدود الحي (2.3.1)
         final x = (i - j) * W, y = (i + j) * H;
         void edge(int ni, int nj, double x1, double y1, double x2, double y2) {
           if (m.inBounds(ni, nj) && m.districtAt[m.idx(ni, nj)] == d.id) return;

@@ -134,7 +134,9 @@ void _announceCapture(MatchState state, District district) {
   final player = state.players[district.owner!];
   final mine = district.owner == state.humanId;
   if (mine) sound(district.feature != null || district.building != null ? 'capture_special' : 'capture_done');
-  if (!mine && state.notice != null && state.notice!.keep) return;
+  // رسائل "فلان استولى على حي" أُزيلت (بطلب المستخدم، 2.3.1: مزعجة بلا فائدة)، وتبقى رسالة استيلائك على حي مميز
+  if (!mine || district.special == null) return;
+  if (state.notice != null && state.notice!.keep) return;
   final name = district.special != null ? _specialName(district.special!) : 'حي';
   state.notice = Notice(
       mine ? 'استوليت على $name'

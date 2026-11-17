@@ -56,7 +56,7 @@ class Decor {
   late final double drop = art?.relief ?? 0;
   double _dz(int k) => lowGround(map, k) ? drop : 0;
   // المربع أعلى من الشارع (أرض حي)، وما خلف حافة الخريطة الخلفية أيضاً فللشارع عندها رصيف
-  bool upper(int i, int j) => i < 0 || j < 0 || (map.inBounds(i, j) && !lowGround(map, map.idx(i, j)));
+  bool upper(int i, int j) => !map.inBounds(i, j) || !lowGround(map, map.idx(i, j));   // خارج الخريطة أرض (هامشها)
   // وسط الرصيف الخلفي لمربع شارع (عند جاره -i أو -j)، أو null بلا رصيف خلفه (تقاطع)
   List<double>? _onSide(int i, int j, double x, double y, int salt) {
     final a = upper(i - 1, j), b = upper(i, j - 1);
@@ -115,7 +115,7 @@ class Decor {
       if ((dash == 6 || dash == 7) && !_mark(dash == 6 ? 'cross_i' : 'cross_j', x, y, i, j)) _crosswalk(v, dash == 6, x, y);
     }
     if (_s('ground', 'road') == null) _themeTile(v, i, j, x, y);   // نقش الشارع في صورته
-    if (h(i, j, 201) < 0.35 && !_mark('crack', x, y, i, j)) {
+    if (h(i, j, 201) < STREET.crack && !_mark('crack', x, y, i, j)) {
       v.stroke([[x - 8, y - 1], [x - 3, y + 1.5], [x + 1, y], [x + 6, y + 2.5]], 'rgba(20,16,12,0.35)', 0.5);
     }
   }
@@ -202,9 +202,10 @@ class Decor {
   // salt: إزاحة بذرة المربع (أرض الحي غير الشارع)، والصورة في مكان المربع نفسه
   void _streetDebris(Vec v, double x, double y, int i, int tj, [int salt = 0]) {
     final j = tj + salt;
-    final r = h(i, j, 20);
+    final r = h(i, j, 20) / STREET.debris;
     if (r >= 0.07 && r < 0.12) lights.add(Light(x, y - 7, 34, 0xff963c, 0.65));   // برميل النار (debrisLight)
     if (r < 0.07) {
+      if (!STREET.cars.contains(city)) return;            // لا سيارات في المدن القديمة
       if (_item('car', x, y, i, tj)) return;               // واليمامة عربة خشبية بصورتها
       if (city == 'yamamah') return;
       final car = theme.car ?? const ['#6b4f3a', '#85624a', '#57402f'];
@@ -238,7 +239,7 @@ class Decor {
     final arid = region == 'arabic' || region == 'african' || city == 'tenoch' || city == 'mexico';
     // صورة الحصى أو العشب لنحو نصف المربعات (الصورة واحدة، فلا تتكرر في كل مربع)
     if (_s('mark', arid ? 'gravel' : 'grass') != null && onMark != null) {
-      if (h(i, j, 711) < 0.45) _mark(arid ? 'gravel' : 'grass', x, y, i, j);
+      if (h(i, j, 711) < STREET.grass) _mark(arid ? 'gravel' : 'grass', x, y, i, j);
       return;
     }
     for (var k = 0; k < 4; k++) {
@@ -294,7 +295,7 @@ class Decor {
   static const _lampGlow = {'hk': '#7fe8ff', 'chicago': '#f2d58a', 'europe': '#f2d58a'};
 
   void _laneDecor(Vec v, int i, int j, double x, double y) {
-    final hv = h(i, j, 520);
+    final hv = h(i, j, 520) / STREET.lane;
     final kind = hv < 0.3 ? 'lamp' : hv < 0.5 ? 'planter' : hv < 0.6 ? 'bench' : hv < 0.72 ? _laneLocal[city] : null;
     if (kind == null) return;
     final side = h(i, j, 521) < 0.5 ? -0.3 : 0.3, u = (h(i, j, 522) - 0.5) * 0.5;
@@ -665,6 +666,7 @@ class Decor {
   // فوق الشارع وما على أرضه في مكانه أخفض مع الشارع
   static const _posts = {'europe', 'rothenburg', 'cairo', 'kaifeng', 'gyeongju', 'paris', 'birmingham', 'laboca', 'diriyah', 'meroe', 'rio', 'tenoch'};
   void _roadProp(Vec v, int i, int j, double x, double y) {
+    if (STREET.noHang.contains(city)) return;
     if (onItem != null && _s('decor', 'roadprop') != null) {
       _probe.clear();
       _roadPropCode(_probe, i, j, x, y);
@@ -691,7 +693,7 @@ class Decor {
           v.rc(x + 9, y - 16.6, 2, 1.8, '#f2d58a');
         }
       case 'hk':
-        if (h(i, j, 430) < 0.35) {
+        if (h(i, j, 430) < STREET.neon) {
           final c = css(_neon[(h(i, j, 431) * 6).floor()]);
           v.el(x + (h(i, j, 432) - 0.5) * 10, y + 1, 6, 2.4, 'rgba(${(c >> 16) & 255},${(c >> 8) & 255},${c & 255},0.28)');
         }

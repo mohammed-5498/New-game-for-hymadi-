@@ -8,6 +8,7 @@ import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
+import android.os.HandlerThread
 import android.os.Looper
 import android.view.WindowManager
 import android.webkit.WebView
@@ -20,8 +21,14 @@ import java.io.File
 
 class MainActivity : FlutterActivity() {
     private var lock: WifiManager.MulticastLock? = null
-    private var pool: SoundPool? = null
+    private var pool: SoundPool? = null   // لا يمسه إلا خيط الصوت
+    // خيط خاص بالصوت (2.1.4، وأعيد في 2.3.1): منذ Flutter 3.29 يعمل كود Dart على خيط أندرويد الرئيسي نفسه، فكان كل صوت في
+    // القتال (SoundPool.play) يوقف تجهيز الإطار حتى يرد نظام الصوت. أُلغي في 2.1.6 ظناً أنه سبب الانهيار، والسبب كان الضباب (2.2.2)
+    private val sfxThread = HandlerThread("gangcity-sfx").apply { start() }
+    private val sfx = Handler(sfxThread.looper)
     private val main = Handler(Looper.getMainLooper())
+    // ما يُرسل لخيط الصوت لا يُغلق اللعبة أبداً إن فشل (2.1.5): يُسجَّل ويُترك
+    private fun onSfx(job: () -> Unit) { sfx.post { try { job() } catch (e: Throwable) { note("sfx", e) } } }
     private fun note(where: String, e: Throwable) {
         try { File(filesDir, "last_error.txt").writeText("$where: ${e.stackTraceToString().take(6000)}") } catch (_: Throwable) { }
     }
@@ -46,6 +53,12 @@ class MainActivity : FlutterActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)   // الشاشة لا تنطفئ أثناء اللعب (كـ platform.js)
     }
 
+    override fun onDestroy() {
+        onSfx { pool?.release(); pool = null }
+        sfxThread.quitSafely()
+        super.onDestroy()
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         val messenger = flutterEngine.dartExecutor.binaryMessenger
@@ -56,23 +69,32 @@ class MainActivity : FlutterActivity() {
                 when (call.method) {
                     "load" -> {
                         val voices = call.argument<Int>("voices") ?: 24
-                        val p = pool ?: SoundPool.Builder().setMaxStreams(voices).setAudioAttributes(AudioAttributes.Builder()
-                            .setUsage(AudioAttributes.USAGE_GAME).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
-                            .build().also { pool = it }
-                        val loader = FlutterInjector.instance().flutterLoader()
-                        val ids = call.argument<List<String>>("paths")!!.map { path ->
-                            try { assets.openFd(loader.getLookupKeyForAsset(path)).use { p.load(it, 1) } } catch (_: Exception) { 0 }
+                        val paths = call.argument<List<String>>("paths")!!
+                        onSfx {
+                            var ids = paths.map { 0 }   // يرد دائماً (ولو فشل) فلا تنتظر اللعبة عند فتحها
+                            try {
+                                val p = pool ?: SoundPool.Builder().setMaxStreams(voices).setAudioAttributes(AudioAttributes.Builder()
+                                    .setUsage(AudioAttributes.USAGE_GAME).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
+                                    .build().also { pool = it }
+                                val loader = FlutterInjector.instance().flutterLoader()
+                                ids = paths.map { path ->
+                                    try { assets.openFd(loader.getLookupKeyForAsset(path)).use { p.load(it, 1) } } catch (_: Exception) { 0 }
+                                }
+                            } finally {
+                                main.post { result.success(ids) }
+                            }
                         }
-                        result.success(ids)
                     }
                     "play" -> {
                         val a = call.arguments as List<*>
-                        val v = (a[1] as Number).toFloat()
-                        pool?.play((a[0] as Number).toInt(), v, v, (a[3] as Number).toInt(), 0, (a[2] as Number).toFloat().coerceIn(0.5f, 2f))
+                        val id = (a[0] as Number).toInt(); val v = (a[1] as Number).toFloat()
+                        val rate = (a[2] as Number).toFloat().coerceIn(0.5f, 2f); val pri = (a[3] as Number).toInt()
+                        onSfx { pool?.play(id, v, v, pri, 0, rate) }
                         result.success(null)
                     }
                     "hold" -> {
-                        if (call.arguments == true) pool?.autoPause() else pool?.autoResume()
+                        val on = call.arguments == true
+                        onSfx { if (on) pool?.autoPause() else pool?.autoResume() }
                         result.success(null)
                     }
                     else -> result.notImplemented()

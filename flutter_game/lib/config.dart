@@ -100,7 +100,16 @@ const FOG = (unitSight: 6.0, soft: 2.0, explored: 0.84, minLift: 10.0, blur: 6.0
 // الشارع والماء أخفض من أرض الأحياء والرصيف (relief.drop في manifest.json وأطلس كل مدينة، وsub خُمس المربع للرصيف).
 // shadow: عتمة ظل قاعدة المبنى على ما حوله، وshadowIn/Mid/Out: حلقاته بنسبة نصف مربعه (عتمة كاملة بين الأولى والثانية
 // وتخفت حتى الثالثة). edge: عمق حافة الخريطة الأمامية. snow: كم يبيضّ الرصيف والحافة في الثلج، وrain: كم يغمقان في المطر
-const GROUND = (sub: 5, shadow: 0.3, shadowIn: 0.78, shadowMid: 1.0, shadowOut: 1.2, edge: 9.0, snow: 0.4, rain: 0.8);
+// margin: أرض خارج حدود الخريطة بعرض مربعين (رسم فقط، لا يمشي فيها أحد) فلا تخرج المباني عن الأرض ولا تنقطع الحافة.
+// ruins: نسبة ما يبقى أطلالاً من مربعات الأطلال (والباقي بيوت المدينة، 2.3.1)
+const GROUND = (sub: 5, shadow: 0.3, shadowIn: 0.78, shadowMid: 1.0, shadowOut: 1.2, edge: 9.0, snow: 0.4, rain: 0.8, margin: 2, ruins: 0.3);
+
+// زينة الشوارع أقل كثيراً (بطلب المستخدم، 2.3.1): debris نسبة ما يبقى من حطام الشارع والأرض (سيارات وبراميل وبقع وركام
+// وأكياس رمل)، وcrack شقوق الشارع، وneon بقع نيون هونغ كونغ، وlane زينة ممرات المدن المفتوحة، وgrass الحصى والعشب على أرض
+// الحي. cars: المدن الحديثة وما له صورة سيارة من المستخدم، ولا سيارات في غيرها. noHang: زينة معلّقة فوق الشارع بلا أعمدة لا تُرسم
+const STREET = (debris: 0.3, crack: 0.12, neon: 0.1, lane: 0.5, grass: 0.25,
+    cars: {'chicago', 'europe', 'paris', 'birmingham', 'laboca', 'rio', 'mexico', 'hk', 'jaipur', 'norway', 'yamamah'},
+    noHang: {'kano', 'shibam'});
 
 // --- الكاميرا ---
 const CAMERA = (minZoom: 0.8, maxZoom: 4.5, startZoom: 2.2);
