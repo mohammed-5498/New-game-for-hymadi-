@@ -15,6 +15,7 @@ import '../game/spawn.dart';
 import '../game/state.dart';
 import '../game/victory.dart';
 import '../map/generator.dart' show District;
+import '../map/parks.dart' show fortifiable;
 import '../map/sizes.dart';
 import 'match_screen.dart';
 import 'prefs.dart';
@@ -504,8 +505,11 @@ class _EmpireMenu extends StatelessWidget {
       }
     }
     final fort = nextFort(d, s, pid), fmax = EMPIRE.m('fortify').l('costs').length;
-    slot('سور', fort?.cost, canFortify(s, pid, d), () => screen.empire('fortify', did, null), icon: Icons.fort, level: d.fort, max: fmax,
-        perks: [('castle', '+${_pct(EMPIRE.m('fortify').l('capture')[next(d.fort, fmax) - 1] as num)}')]);
+    // لا خانة سور للمعبد والمرتزقة والحدائق (2.4.1)
+    if (fortifiable(s.map, d)) {
+      slot('سور', fort?.cost, canFortify(s, pid, d), () => screen.empire('fortify', did, null), icon: Icons.fort, level: d.fort, max: fmax,
+          perks: [('castle', '+${_pct(EMPIRE.m('fortify').l('capture')[next(d.fort, fmax) - 1] as num)}')]);
+    }
     final stats = _statsChips(s, d);
     final item = queue.isEmpty ? null : queue.first;
     final done = item == null ? 0.0 : math.min(1.0, item.t / productionTime(s, d, item.kind));

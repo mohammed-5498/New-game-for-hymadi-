@@ -6,6 +6,7 @@ import json
 import math
 import os
 
+import numpy as np
 from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'flutter_game', 'assets', 'map')
@@ -13,6 +14,9 @@ OUT = os.path.join(ROOT, 'atlas')
 WIDTH = 2048      # عرض الأطلس (والحد 4096 للضلع: كل الجوالات تقبله)
 PAD = 6           # فراغ شفاف حول كل صورة: لا تختلط الجارتان في مستويات التصغير
 META = ('group', 'kind', 'variant', 'size', 'level', 'footprint', 'up')
+# ما يبرز من صورة المبنى أمام ضلعي مربعه الأماميين (+i و+j) بأجزاء المربع (2.4.1): العتبات والمظلات والبسطات. يستعمله الرسم ليبعد
+# المبنى عن الرصيف والسور بقدره (tileSprite في city_layer.dart)
+REACH = ('building', 'economy', 'ruin', 'prop')
 
 man = json.load(open(os.path.join(ROOT, 'manifest.json')))
 PX = man['pxPerUnit']
@@ -116,6 +120,15 @@ def shear(im, ax, ay, k):
     return out, ay + off
 
 
+def reach(im, ax, ay):
+    """(أبعد ما يبلغه المعتم على i، وعلى j) ناقص نصف مربع: صفر أو أقل حين لا يبرز شيء عن معيّن المربع"""
+    a = np.asarray(im.getchannel('A')) >= 128
+    ys, xs = np.nonzero(a)
+    if len(xs) == 0: return [0, 0]
+    dx, dy = (xs - ax) / (18 * PX), (ys - ay) / (9 * PX)
+    return [round(float(((dx + dy) / 2).max()) - 0.5, 3), round(float(((dy - dx) / 2).max()) - 0.5, 3)]
+
+
 def flatten(im, cut):
     """يُمحى ما تحت حافتي سطح المنصة الأماميتين (وجهاها الجانبيان وظلها)، بحافة ناعمة بكسلاً"""
     bottom, cx, t = cut
@@ -179,6 +192,8 @@ for city, entry in man['cities'].items():
         if '_of' in r: continue
         key = r['file'] if r['file'].startswith('relief/') else r['file'].split('/', 2)[2].rsplit('.', 1)[0]
         s = {'key': key, **{k: r[k] for k in META if k in r}, 'r': [r['_at'][0], r['_at'][1], r['w'], r['h'], r['ax'], r['ay']]}
+        if r.get('group') in REACH:
+            s['e'] = reach(r['_img'] if '_img' in r else Image.open(os.path.join(ROOT, r['file'])).convert('RGBA'), r['ax'], r['ay'])
         m = next((o['_at'] for o in recs if o.get('_of') is r), None)
         if m: s['m'] = list(m)
         sprites.append(s)

@@ -4,7 +4,8 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:gangcity/config.dart' show CITIES, RETIRED_CITIES;
+import 'package:gangcity/config.dart' show CITIES, RETIRED_CITIES, TEMPLES_CITIES;
+import 'package:gangcity/map/generator.dart' show cityFeatureBuilding, tF;
 import 'package:gangcity/core/fmath.dart';
 import 'package:gangcity/game/combat.dart' show isEnemyId;
 import 'package:gangcity/game/features.dart';
@@ -66,8 +67,19 @@ void main() {
           }
         }
         final temple = s.map.districts.firstWhere((d) => d.temple);
-        expect(temple.tiles.length, 16, reason: why);
-        expect(s.map.districts.where((d) => d.merc).every((d) => d.tiles.length == 16), isTrue, reason: why);
+        // خانات المعبد والمرتزقة 3×3 بمبناها في مربعها الأوسط (2.4.1)، و4×4 حين لا تتسع لها الخريطة بشوارع بعرض واحد، وما بقي
+        // من مبنى المدينة لا يختفي في أي حجم
+        expect([9, 16], contains(temple.tiles.length), reason: why);
+        final mercSizes = s.map.districts.where((d) => d.merc).map((d) => d.tiles.length).toSet();
+        expect(mercSizes.length == 1 && [9, 16].contains(mercSizes.first), isTrue, reason: '$why $mercSizes');
+        if (temple.tiles.length == 9) {
+          expect(temple.featureTile, temple.tiles.map((t) => m.idx(t.$1, t.$2)).firstWhere((k) => m.type[k] == tF), reason: why);
+          expect(hypot(temple.cx - temple.featureTile! % m.n, temple.cy - temple.featureTile! ~/ m.n), lessThan(0.01), reason: '$why وسط الخانة');
+        }
+        final old = cityFeatureBuilding(city), pair = TEMPLES_CITIES[city]!;
+        if (old != null && old != pair.$1 && old != pair.$2) {
+          expect(m.districts.any((d) => d.feature == old && d.featureTile != null), isTrue, reason: '$why: $old');
+        }
         final homes = s.map.districts.where((d) => d.isHome).toList();
         expect(homes.length, np, reason: why);
         expect(homes.every((d) => d.tiles.length == 16), isTrue, reason: why);

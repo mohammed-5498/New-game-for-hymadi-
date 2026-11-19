@@ -11,13 +11,15 @@ class Sprite {
   final String? size, up;              // up: ترقية البرج والمستشفى (rate1، damage2، all...) ومستوى القاعدة (tier1-3)
   final double x, y, w, h, ax, ay;
   final double? mx, my;                // قناع رايات المالك في الأطلس (بمقاس الصورة)، أو null
+  final double pi, pj;                 // ما يبرز أمام ضلعي المربع +i و+j بأجزاء المربع (العتبات والمظلات، pack_atlases.py)
   Sprite(Map<String, dynamic> j)
       : key = j['key'], group = j['group'], kind = j['kind'], variant = j['variant'] ?? 1, level = j['level'] ?? 0,
         size = j['size'], up = j['up'],
         x = (j['r'][0] as num).toDouble(), y = (j['r'][1] as num).toDouble(),
         w = (j['r'][2] as num).toDouble(), h = (j['r'][3] as num).toDouble(),
         ax = (j['r'][4] as num).toDouble(), ay = (j['r'][5] as num).toDouble(),
-        mx = (j['m']?[0] as num?)?.toDouble(), my = (j['m']?[1] as num?)?.toDouble();
+        mx = (j['m']?[0] as num?)?.toDouble(), my = (j['m']?[1] as num?)?.toDouble(),
+        pi = (j['e']?[0] as num?)?.toDouble() ?? 0, pj = (j['e']?[1] as num?)?.toDouble() ?? 0;
 }
 
 class CityArt {

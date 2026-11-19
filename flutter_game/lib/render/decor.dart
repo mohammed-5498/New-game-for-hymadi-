@@ -5,9 +5,9 @@
 import 'dart:math' as math;
 
 import '../config.dart';
-import '../core/fmath.dart' show hypot;
 import '../data/cities.dart';
 import '../map/generator.dart';
+import '../map/parks.dart';
 import 'city_art.dart';
 import 'colors.dart';
 import 'vec.dart';
@@ -18,58 +18,21 @@ const _tau = 6.2831853;
 // نقطة على المربع بإحداثياته (a على i، b على j، من −0.5 إلى 0.5) حول مركزه
 List<double> _at(double x, double y, double a, double b) => [x + (a - b) * 18, y + (a + b) * 9];
 
-// معلم المنطقة في حديقة (2.4.0، بطلب المستخدم: "معالم المدن... يجب وضعهم في أماكن خاصة مثل الحدائق لأنها زينة ومعلم وليست
-// مبنى"): مربع شجرة في وسط أقرب حديقة لوسط الخريطة، وفي هونغ كونغ وباريس وروتنبورغ جزيرة دوارها حين لا دوار (المعابد مكانه).
-// رسم فقط: مكان المعلم القديم (placeMonument في المولّد) بيت من بيوت المدينة
-final _monuments = Expando<int>();
-int monumentTile(GameMap map) => _monuments[map] ??= () {
-  final theme = CITY_THEMES[map.city];
-  if (theme == null || (!theme.monument && map.type.contains(tY))) return -1;
-  final parks = parksOf(map).map((id) => map.districts[id]).toList();
-  final c = (map.n - 1) / 2;
-  parks.sort((a, b) => (hypot(a.cx - c, a.cy - c)).compareTo(hypot(b.cx - c, b.cy - c)));
-  return parks.isEmpty ? -1 : parkCenter(map, parks.first);
-}();
-bool isMonument(GameMap map, int k) => k >= 0 && k == monumentTile(map);
-
-// المعلم ووسط كل حديقة (نافورة أو بئر): زينة لا تُصبغ بلون المالك
-bool parkPiece(GameMap map, int k) {
-  final id = map.districtAt[k];
-  return isMonument(map, k) || (id >= 0 && parksOf(map).contains(id) && k == parkCenter(map, map.districts[id]));
+// المبنى المميز: مقياس صورته وإزاحتها على مربعه. الكتلة 2×2 حول وسطها (ملتقى مربعاتها، أعلى من مربعها الأمامي بـ TILE_HALF_H)،
+// وخانة 3×3 بمربع واحد في وسطها (2.4.1) أكبر من مبنى الحي الضيق (SMALL في featureArt.js)
+const _featureSmall = 0.55;
+(double, double) featureArt(District d) {
+  if (d.featureBig) return (GROUND.feature, -TILE_HALF_H * (1 - GROUND.feature));
+  final k = _plot(d) ? GROUND.plot : _featureSmall * GROUND.feature;
+  return (k, TILE_HALF_H * k);
 }
 
-// وسط الحديقة: مربع الشجرة الأقرب لمركزها (للمعلم أو النافورة أو البئر)
-int parkCenter(GameMap map, District d) {
-  var best = -1;
-  var bestD = double.infinity;
-  for (final (i, j) in d.tiles) {
-    final k = map.idx(i, j), dist = hypot(i - d.cx, j - d.cy);
-    if (map.type[k] == tH && dist < bestD) { bestD = dist; best = k; }
-  }
-  return best;
+bool _plot(District d) {
+  if (d.tiles.length != 9) return false;
+  var i0 = 1 << 30, j0 = 1 << 30, i1 = -1, j1 = -1;
+  for (final (i, j) in d.tiles) { i0 = math.min(i0, i); j0 = math.min(j0, j); i1 = math.max(i1, i); j1 = math.max(j1, j); }
+  return i1 - i0 == 2 && j1 - j0 == 2;
 }
-
-// الحدائق (2.3.2، بطلب المستخدم: "أشجار وأعمدة إنارة تنفع حديقة منتزه"): أحياء عادية تُرسم حدائق، شجرة مكان كل بيت وأرضها
-// أخضر، وإنارتها ومقاعدها على ممراتها (decor.dart). رسم فقط: المربعات وأنواعها والاستيلاء كما هي. حي صغير أو متوسط بلا مبنى
-// مميز ولا قاعدة ولا معلم، بعيد عن الحدائق الأخرى، واحدة لكل GROUND.parkEvery من ضلع الخريطة
-final _parks = Expando<Set<int>>();
-Set<int> parksOf(GameMap map) => _parks[map] ??= () {
-  final n = map.n, out = <int>{};
-  bool plain(District d) => d.capture != null && !d.temple && !d.merc && d.feature == null && d.special == null && !d.police &&
-      !d.isHome && d.tiles.length >= 4 && d.tiles.length <= 16 && d.tiles.every((t) {
-        final k = map.idx(t.$1, t.$2), ty = map.type[k];
-        return ty == tH || ty == tR || ty == tDot || ty == tP;
-      }) && d.tiles.where((t) => map.type[map.idx(t.$1, t.$2)] == tH).length >= 3;
-  final cand = [for (final d in map.districts) if (plain(d)) d]
-    ..sort((a, b) => hsh(a.id, 7, 650, map.seed).compareTo(hsh(b.id, 7, 650, map.seed)));
-  for (final d in cand) {
-    if (out.length >= math.max(1, n ~/ GROUND.parkEvery)) break;
-    final c = d.capture!;
-    if (out.any((o) { final e = map.districts[o].capture!; return (e.i - c.i).abs() + (e.j - c.j).abs() < n / 3; })) continue;
-    out.add(d.id);
-  }
-  return out;
-}();
 
 // وسط الحديقة بئر في المدن العربية والأفريقية، ونافورة في غيرها
 bool parkWell(GameMap map) {
@@ -140,8 +103,6 @@ class Decor {
           v.stroke([[x - 12, y], [x, y - 6], [x + 12, y], [x, y + 6], [x - 12, y]], 'rgba(255,226,150,0.32)', 0.6);
           v.ln(x - 6, y - 3, x + 6, y + 3, 'rgba(255,226,150,0.32)', 0.6);
           v.ln(x + 6, y - 3, x - 6, y + 3, 'rgba(255,226,150,0.32)', 0.6);
-        } else if (isMonument(map, k)) {
-          _monumentKerb(v, x, y);
         } else if (map.type[k] == tY && _roundaboutAnchor(i, j)) {
           if (!_mark('ring', x, y + drop, i, j)) v.ring(x, y + drop - 9, 38, 19, 'rgba(240,236,224,0.7)', 0.9, [4, 3]);
         }
@@ -227,15 +188,7 @@ class Decor {
 
   // --- محتوى المربع: drawCityTile في cityRender.js ---
   void tileDecor(Vec v, int i, int j) {
-    final k = map.idx(i, j), x = (i - j) * TILE_HALF_W, y = (i + j) * TILE_HALF_H;
-    final plot = map.road[k] == 1 ? null : _squareOf(k);
-    if (plot != null) _plotKerb(v, plot, i, j, x, y, back: true);
-    _tileDecor(v, i, j, k, x, y);
-    if (plot != null) _plotKerb(v, plot, i, j, x, y, back: false);
-  }
-
-  void _tileDecor(Vec v, int i, int j, int k, double x, double y) {
-    final type = map.type[k];
+    final k = map.idx(i, j), x = (i - j) * TILE_HALF_W, y = (i + j) * TILE_HALF_H, type = map.type[k];
     if (map.road[k] == 1) {
       if (map.dash[k] >= 5 || map.kind[k] != null) return;     // حلقة الدوار وممرات المشاة نظيفة، والبوابة صورة
       if (open?.roadProp != false) _roadProp(v, i, j, x, y);
@@ -549,14 +502,14 @@ class Decor {
     final id = map.districtAt[k];
     if (id < 0 || map.road[k] != 0) return null;
     final d = map.districts[id];
-    return d.featureBig && d.featureTile != null && (d.temple || d.merc || _boxes.containsKey(id)) ? d : null;
+    return d.featureTile != null && (d.temple || d.merc || _boxes.containsKey(id)) ? d : null;
   }
   // حدود كل حي مربع (i0، j0، i1، j1): ما بقي من مبنى المدينة القديم مربع أيضاً إن كانت حدوده مستطيلاً ممتلئاً
   late final Map<int, (int, int, int, int)> _boxes = () {
     final out = <int, (int, int, int, int)>{};
     final temples = map.districts.any((d) => d.temple);
     for (final d in map.districts) {
-      if (!d.featureBig || d.tiles.isEmpty || !temples) continue;
+      if (d.featureTile == null || d.tiles.isEmpty || !temples) continue;
       var i0 = 1 << 30, j0 = 1 << 30, i1 = -1, j1 = -1;
       for (final (i, j) in d.tiles) { i0 = math.min(i0, i); j0 = math.min(j0, j); i1 = math.max(i1, i); j1 = math.max(j1, j); }
       if ((i1 - i0 + 1) * (j1 - j0 + 1) == d.tiles.length) out[d.id] = (i0, j0, i1, j1);
@@ -573,49 +526,6 @@ class Decor {
       v.stroke([[x - 18, y], [x, y - 9], [x + 18, y], [x, y + 9], [x - 18, y]], 'rgba(120,88,40,0.28)', 0.6);
     } else if (!d.merc) {
       v.stroke([[x - 12, y], [x, y - 6], [x + 12, y], [x, y + 6], [x - 12, y]], 'rgba(255,226,150,0.32)', 0.6);
-    }
-  }
-
-  // حافة الساحة (2.4.0، بطلب المستخدم: "حسّن حدودها وجمّلها"): سور منخفض حول حي المعبد والمرتزقة وما بقي من مبنى المدينة،
-  // بمدخل في وسط كل ضلع وأعمدة في الأركان وعلى جانبي المدخل. حجر فاتح للمعبد، وخشب داكن للمرتزقة، وحجر رملي لغيرهما.
-  // الضلعان الخلفيان قبل زينة المربع (back) والأماميان بعدها، فيغطي الأمامي ما خلفه
-  static const _kerbT = 0.09, _kerbH = 2.2, _postH = 4.4;
-  void _plotKerb(Vec v, District d, int i, int j, double x, double y, {required bool back}) {
-    final b = _boxes[d.id] ?? _bbox(d);
-    final (top, face, side, cap) = d.temple ? ('#e2d5b8', '#b9a888', '#9c8c6e', '#f0d68a')
-        : d.merc ? ('#7d5c3c', '#5c4229', '#4a3420', '#c8963c') : ('#d6c09a', '#ad9670', '#927c58', '#e8cf8a');
-    List<double> p(double a, double c, [double up = 0]) { final q = _at(x, y, a, c); return [q[0], q[1] - up]; }
-    // المقطع على الضلع (من u0 إلى u1 بإحداثي المربع) بلا المدخل: وسط الضلع بعرض مربع
-    List<(double, double)> runs(int pos, int len) {
-      final g0 = len / 2 - 0.5 - pos - 0.5, g1 = g0 + 1;
-      final out = <(double, double)>[];
-      if (g0 > -0.5) out.add((-0.5, math.min(0.5, g0)));
-      if (g1 < 0.5) out.add((math.max(-0.5, g1), 0.5));
-      return [for (final r in out) if (r.$2 - r.$1 > 0.01) r];
-    }
-    void post(double a, double c) {
-      final q = _at(x, y, a, c);
-      v.box(q[0], q[1], 1.5, 0.75, _postH, side, face, top);
-      v.box(q[0], q[1] - _postH, 1.8, 0.9, 0.8, side, face, cap);
-    }
-    bool out(int a, int c) => !map.inBounds(a, c) || map.districtAt[map.idx(a, c)] != d.id;
-    // (المحور على i؟، جهة الضلع ±0.5، موضع المربع على الضلع وطوله، والضلع خارج الحي)
-    final edges = [(true, -0.5, j - b.$2, b.$4 - b.$2 + 1, out(i - 1, j)), (false, -0.5, i - b.$1, b.$3 - b.$1 + 1, out(i, j - 1)),
-                   (true, 0.5, j - b.$2, b.$4 - b.$2 + 1, out(i + 1, j)), (false, 0.5, i - b.$1, b.$3 - b.$1 + 1, out(i, j + 1))];
-    for (final (alongJ, e, pos, len, isOut) in edges) {
-      if (!isOut || (e < 0) != back) continue;
-      final inner = e > 0 ? e - _kerbT : e + _kerbT;
-      List<double> at(double n, double u, [double up = 0]) => alongJ ? p(n, u, up) : p(u, n, up);
-      for (final (u0, u1) in runs(pos, len)) {
-        // وجه السور الظاهر: الخارجي للضلعين الأماميين والداخلي للخلفيين، ثم سطحه
-        final f = e > 0 ? e : inner;
-        v.poly([at(f, u0, _kerbH), at(f, u1, _kerbH), at(f, u1), at(f, u0)], e > 0 ? face : side);
-        v.poly([at(e, u0, _kerbH), at(e, u1, _kerbH), at(inner, u1, _kerbH), at(inner, u0, _kerbH)], top);
-        for (final u in [u0, u1]) {
-          final corner = (u == -0.5 && pos == 0) || (u == 0.5 && pos == len - 1), gate = u > -0.5 && u < 0.5;
-          if (corner || gate) { final m = (e + inner) / 2; alongJ ? post(m, u) : post(u, m); }
-        }
-      }
     }
   }
 
@@ -804,8 +714,9 @@ class Decor {
   void _parkDecor(Vec v, int i, int j, double x, double y, int k) {
     final id = map.districtAt[k], type = map.type[k];
     if (k == parkCenter(map, map.districts[id])) {
+      // وسط الحديقة صورته من city_layer.dart (المعلم أو البئر أو نافورة المستخدم)، والنافورة بالكود إن لم تكن صورة
       if (!isMonument(map, k) && (!parkWell(map) || _s('prop', 'well') == null)) {
-        _fountain(v, x, y, 11);
+        if (_s('decor', 'fountain') == null) _fountain(v, x, y, 11);
         lights.add(Light(x, y - 8, 26, 0xbfe6ff, 0.3));
       }
       return;
@@ -830,25 +741,6 @@ class Decor {
     } else if (h(i, j, 661) < 0.6) {
       final p = _at(x, y, 0.2, -0.3);
       _item('bench', p[0], p[1], i, j);
-    }
-  }
-
-  // حافة المعلم (2.3.2، بطلب المستخدم: "منطقة لحالها بحدود بسيطة"): إطار حجري منخفض حول مربعه بلون ساحة المدينة،
-  // وأرضه مرصوفة (city_layer.dart) خارج حدود الحي ولا تُصبغ
-  void _monumentKerb(Vec v, double x, double y) {
-    final plaza = hex(art?.colors['plaza'] ?? '#b8ae9c');
-    String css6(int c) => '#${(c & 0xFFFFFF).toRadixString(16).padLeft(6, '0')}';
-    final top = css6(mix(plaza, 0xffffff, 0.35)), face = css6(mix(plaza, 0x000000, 0.35)), hgt = 1.4;
-    const cx = [0.0, 1.0, 0.0, -1.0], cy = [-1.0, 0.0, 1.0, 0.0];   // أعلى ويمين وأسفل ويسار
-    List<double> p(double r, int c, [double up = 0]) => [x + cx[c] * TILE_HALF_W * r, y + cy[c] * TILE_HALF_H * r - up];
-    const r1 = 0.84, r2 = 0.97;
-    for (var c = 0; c < 4; c++) {
-      final d = (c + 1) % 4;
-      v.poly([p(r1, c, hgt), p(r1, d, hgt), p(r2, d, hgt), p(r2, c, hgt)], top);
-    }
-    for (final c in const [1, 2]) {                       // الوجهان الأماميان: من اليمين إلى الأسفل ومنه إلى اليسار
-      final d = (c + 1) % 4;
-      v.poly([p(r2, c, hgt), p(r2, d, hgt), p(r2, d), p(r2, c)], face);
     }
   }
 

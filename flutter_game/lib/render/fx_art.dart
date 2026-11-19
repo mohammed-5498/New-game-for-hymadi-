@@ -8,6 +8,7 @@ import '../game/state.dart';
 import 'batch.dart';
 import 'pose.dart' show impactKind;
 import '../game/features.dart' show FEATURES;
+import 'decor.dart' show featureArt;
 
 final J _CR = COMBAT_REALISM;
 const _projColors = {'stone': 0x9a948c, 'arrow': 0xc8b68a, 'bottle': 0xe8893a};
@@ -321,7 +322,7 @@ void drawFeatureHalos(TriBatch b, MatchState s, double time,
     if (rgb == null) continue;
     final (x, y0) = _iso((t % n).toDouble(), (t ~/ n).toDouble());
     if (x < left - 200 || x > right + 200 || y0 < top - 120 || y0 > bottom + 120) continue;   // خارج الشاشة
-    final k = d.featureBig ? 1.0 : 0.55, y = d.featureBig ? y0 - TILE_HALF_H : y0;
+    final k = featureArt(d).$1, y = d.featureBig ? y0 - TILE_HALF_H : y0;   // بمقياس صورة المبنى
     final rx = H.d('radius') * TILE_HALF_W * k, ry = H.d('radius') * TILE_HALF_H * k;
     final pulse = 1 - H.d('pulse') + H.d('pulse') * (0.5 + 0.5 * math.sin(time * H.d('speed') + d.id));
     b.ellipse(x, y, rx, ry, rgb, 0.08 * pulse, 32);

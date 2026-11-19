@@ -15,6 +15,7 @@ import '../map/sizes.dart';
 import 'city_art.dart';
 import 'colors.dart';
 import 'decor.dart';
+import '../map/parks.dart';
 import 'empire_art.dart' show hqTier;
 import 'vec.dart';
 import 'weather_art.dart';
@@ -25,7 +26,6 @@ final _regionHint = <String, (int, double)>{
   'special': (hex('#bba565'), 0.22),
   'feature': (hex(CITY_FEATURES.ground.$1), CITY_FEATURES.ground.$2),
 };
-const _featureSmall = 0.55;   // المبنى المميز في حي ضيق (مربع واحد): الرسم نفسه مصغّراً (SMALL في featureArt.js)
 
 // الطقس قبل صبغ المالك (الثلج لا يخفي لونه)
 int groundColor(GameMap map, CityArt art, int i, int j, [String weather = 'day']) {
@@ -41,8 +41,8 @@ int _groundOf(GameMap map, CityArt art, int i, int j, int k, int type, Map<Strin
   if (map.road[k] == 1 || type == tY) return hex((i + j) % 2 == 1 ? c['road']! : c['road2']!);
   final kind = map.kind[k];
   // ساحة العلم في حي المبنى المميز بلون ساحته (2.3.1: كانت رمادية وسط أرض المعبد)، والمعلم على منصة مرصوفة
-  final square = type == tP && (map.districtOf(i, j)?.featureBig ?? false);
-  if ((type == tP && !square) || isMonument(map, k)) return hex(c['plaza']!);
+  final fd = map.districtOf(i, j), square = type == tP && fd != null && fd.featureTile != null && (fd.featureBig || fd.temple || fd.merc);
+  if (type == tP && !square) return hex(c['plaza']!);
   var color = hex(c['ground']!);
   if (type == tDot && (kind == 'lane_i' || kind == 'lane_j')) {
     color = mix(color, hex(c['plaza']!), 0.8);                    // ممر مرصوف بين صفوف المباني
@@ -80,18 +80,27 @@ int _groundOf(GameMap map, CityArt art, int i, int j, int k, int type, Map<Strin
   }
   final park = (type == tH || type == tR) && parksOf(map).contains(map.districtAt[k]);
   if (park && k == parkCenter(map, map.districts[map.districtAt[k]])) {
-    // وسط الحديقة: بئر في المدن العربية والأفريقية (من زينة اليمامة)، ونافورة في غيرها (decor.dart)
+    // وسط الحديقة: بئر في المدن العربية والأفريقية (من زينة اليمامة)، ونافورة من صور المستخدم في غيرها (2.4.1: كانت بالكود)،
+    // نافورتا شيكاغو وروتنبورغ بالتناوب، بمقياس يسعه مربعه
     final w = parkWell(map) ? art.find('prop', 'well') : null;
-    return w == null ? null : (w, art.scale, 0, 0);
+    if (w != null) return (w, art.scale, 0, 0);
+    final f = art.find('decor', 'fountain', 1 + map.districtAt[k] % math.max(1, art.count('decor', 'fountain')));
+    return f == null ? null : (f, math.min(1.0, GROUND.fountain * 2 * TILE_HALF_W * art.px / f.w), 0, 0);
   }
   final s = park ? _parkTree(map, art, i, j) : _tileSprite(map, art, i, j, state);
   if (s == null) return null;
   if (park || !_built.contains(type)) return (s.$1, s.$2, 0, s.$3);
-  final id = map.districtAt[k], shift = math.max(0.0, GROUND.yard - (1 - GROUND.inset) / 2);
+  final id = map.districtAt[k], sc = s.$2 * GROUND.inset;
   bool out(int a, int b) => !map.inBounds(a, b) || lowGround(map, map.idx(a, b)) || map.districtAt[map.idx(a, b)] != id;
-  double away(bool lo, bool hi) => lo == hi ? 0 : lo ? shift : -shift;
-  final da = away(out(i - 1, j), out(i + 1, j)), db = away(out(i, j - 1), out(i, j + 1));
-  return (s.$1, s.$2 * GROUND.inset, (da - db) * TILE_HALF_W, s.$3 + (da + db) * TILE_HALF_H);
+  // يبتعد عن الضلع الأمامي المطل على الخارج بقدر ما يبرز منه (العتبات والمظلات، 2.4.1: كانت تخرج إلى الرصيف وأمام السور) حتى
+  // GROUND.yardMax، ويتقدم عن الخلفي حتى يبقى الفناء، وبينهما إن كان الضلعان خارجيين
+  double away(bool lo, bool hi, double reach) {
+    final front = hi ? math.max(-GROUND.yardMax, math.min(0.0, 0.5 - GROUND.yard - sc * (0.5 + reach))) : 0.0;
+    final back = lo ? math.max(0.0, sc * 0.5 - (0.5 - GROUND.yard)) : 0.0;
+    return hi && lo ? (front + back) / 2 : front + back;
+  }
+  final da = away(out(i - 1, j), out(i + 1, j), s.$1.pi), db = away(out(i, j - 1), out(i, j + 1), s.$1.pj);
+  return (s.$1, sc, (da - db) * TILE_HALF_W, s.$3 + (da + db) * TILE_HALF_H);
 }
 
 // شجرة الحديقة: شجرة المدينة (نخيلها أو كرزها...) أو شجرة الرصيف، بنسخة بالتجزئة
@@ -154,10 +163,9 @@ int _groundOf(GameMap map, CityArt art, int i, int j, int k, int type, Map<Strin
   if (type == tF && district?.feature != null) {
     final s = art.find('feature', district!.feature!);
     if (s == null) return null;
-    // الكتلة 2×2 من مربعها الأمامي، أصغر حول وسطها (ملتقى مربعاتها الأربعة، أعلى من مربعها الأمامي بـ TILE_HALF_H)، والحي
-    // الضيق: الرسم نفسه مصغّراً بلا إزاحة الكتلة
-    final f = GROUND.feature;
-    return district.featureBig ? (s, f, -TILE_HALF_H * (1 - f)) : (s, _featureSmall * f, TILE_HALF_H * _featureSmall * f);
+    // الكتلة 2×2 من مربعها الأمامي حول وسطها، وخانة 3×3 والحي الضيق بمربع واحد (featureArt في decor.dart)
+    final (k, dy) = featureArt(district);
+    return (s, k, dy);
   }
   // ساحة علم حي القاعدة: ساحة تدريب بمستواها (hqYard في empireBuildings.js)
   if (type == tP && state != null && district != null && district.building == 'hq' &&
@@ -215,7 +223,7 @@ String _groundKind(GameMap map, int i, int j, int k) {
   final type = map.type[k], kind = map.kind[k];
   if (map.road[k] == 1 || type == tY) return (i + j) % 2 == 1 ? 'road' : 'road2';
   if (type == tWater) return 'water';
-  if (type == tP || kind == 'fplaza' || isMonument(map, k) || (type == tDot && (kind == 'lane_i' || kind == 'lane_j'))) return 'plaza';
+  if (type == tP || kind == 'fplaza' || (type == tDot && (kind == 'lane_i' || kind == 'lane_j'))) return 'plaza';
   return 'ground';
 }
 
@@ -337,7 +345,7 @@ class CityLayer {
           gKind[k] = hex(c[gk]!).toSigned(32);
           gMod[k] = _modulate(base[k], gKind[k]);
         }
-        tileD[k] = map.road[k] == 1 || map.type[k] == tWater || map.type[k] == tY || isMonument(map, k) ? -1 : map.districtAt[k];
+        tileD[k] = map.road[k] == 1 || map.type[k] == tWater || map.type[k] == tY ? -1 : map.districtAt[k];
         final s = tileSprite(map, art, i, j, state), did = map.road[k] == 1 || parkPiece(map, k) ? -1 : map.districtAt[k];
         final sx = x + (s?.$3 ?? 0), sy = y + dz[k] + (s?.$4 ?? 0);
         // مربعات الأحياء خانات بقناع (قد يُبنى فيها مبنى اقتصاد)، وساحة العلم خانة ولو فارغة (ساحة التدريب)
@@ -472,9 +480,12 @@ class CityLayer {
       final lv = map.districts[did].fort;
       if (_slotLevel[id] == lv) continue;
       _slotLevel[id] = lv;
-      final s = lv > 0 ? art.piece('wall', kind, lv) : null, x = _slotPos[id * 3], y = _slotPos[id * 3 + 1], k = _slotPos[id * 3 + 2].toInt();
-      _put(_slotItem[id], s, x, y, 1, art.px, k, map.n);
-      _put(_slotMask[id], s, x, y, 1, art.px, k, map.n);
+      // عمود الركن في كل مستوى (2.4.1: كان من المستوى 2، فيظهر في الأول التقاء القطعتين على الركن): برج المستوى 2 أصغر قليلاً
+      var s = lv > 0 ? art.piece('wall', kind, lv) : null, sc = 1.0;
+      if (s == null && lv == 1 && kind == 'tower') { s = art.piece('wall', 'tower', 2); sc = 0.8; }
+      final x = _slotPos[id * 3], y = _slotPos[id * 3 + 1], k = _slotPos[id * 3 + 2].toInt();
+      _put(_slotItem[id], s, x, y, sc, art.px, k, map.n);
+      _put(_slotMask[id], s, x, y, sc, art.px, k, map.n);
     }
   }
 

@@ -10,7 +10,8 @@ import '../data/js_config.dart';
 import '../game/features.dart' show stormAt;
 import '../game/state.dart';
 import '../map/generator.dart';
-import 'decor.dart' show isMonument;
+import '../map/parks.dart' show isMonument;
+import 'decor.dart' show featureArt;
 
 class Light {
   final double x, y, r, a;
@@ -38,7 +39,7 @@ List<Light> mapLights(GameMap map, List<Light> decor) {
     final t = d.featureTile, f = d.feature;
     if (t == null || f == null || !F.has(f)) continue;
     final i = t % n, j = t ~/ n, x = (i - j) * TILE_HALF_W, y = (i + j) * TILE_HALF_H;
-    final top = (F.m(f).dn('top') ?? 40) * (d.featureBig ? 1 : 0.55), cy = d.featureBig ? y - TILE_HALF_H : y;
+    final top = (F.m(f).dn('top') ?? 40) * featureArt(d).$1, cy = d.featureBig ? y - TILE_HALF_H : y;
     out.add(Light(x, cy - top * 0.55, F.m('halo').d('light'), _rgb(F.m('colors').ss(f) ?? '255,206,84'), 0.45));
   }
   return out;

@@ -26,7 +26,7 @@ import '../net/session.dart';
 import '../render/batch.dart';
 import '../render/city_art.dart';
 import '../render/city_layer.dart';
-import '../render/decor.dart' show isMonument, parksOf;
+import '../map/parks.dart' show isMonument, parksOf;
 import '../render/fx_art.dart';
 import '../render/unit_art.dart';
 import '../render/unit_atlas.dart';
@@ -227,6 +227,9 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
       // للفحص في المتصفح (?ff=ثوانٍ): تقديم المباراة قبل عرضها
       final ff = (settings['ff'] as num?)?.toDouble() ?? 0;
       for (var t = 0.0; t < ff && s.matchResult == null; t += TICK_SEC) { updateMatch(s); }
+      // للفحص (?fort=المستوى): أسوار القواعد
+      final fort = settings['fort'] as int?;
+      if (fort != null) { for (final d in s.map.districts) { if (d.isHome) d.fort = fort; } }
     }
     s.running = true;
     _recorded = false;
@@ -997,29 +1000,46 @@ class _MatchPainter extends CustomPainter {
       if (d.tintColor == null || d.tintMix <= 0) continue;
       final col = hexRgb(d.tintColor!), al = B.d('alpha') * d.tintMix;
       final e = edges[d.id];
-      for (var k = 0; k < e.length; k += 4) { b.line(e[k], e[k + 1], e[k + 2], e[k + 3], B.d('underWidth'), 0x18120c, 0.45 * d.tintMix); }
-      for (var k = 0; k < e.length; k += 4) { b.line(e[k], e[k + 1], e[k + 2], e[k + 3], B.d('width'), col, al); }
+      // لكل ضلع رباعيان: الظل الداكن ثم الخط بلون المالك
+      for (var k = 0; k < e.length; k += 16) { b.quad(e[k], e[k + 1], e[k + 2], e[k + 3], e[k + 4], e[k + 5], e[k + 6], e[k + 7], 0x18120c, 0.45 * d.tintMix); }
+      for (var k = 8; k < e.length; k += 16) { b.quad(e[k], e[k + 1], e[k + 2], e[k + 3], e[k + 4], e[k + 5], e[k + 6], e[k + 7], col, al); }
     }
   }
 
+  // الحد شريط داخل الحي على كل ضلع يطل على غيره، بأطراف مضبوطة على الأركان (2.4.1، بطلب المستخدم: كانت الخطوط تتقاطع عند
+  // الأركان وتخرج عنها كرؤوس الأسهم): في الركن البارز ينتهي الشريط عند الشريط الآخر، وفي الركن الداخل يمتد إليه، وعلى الضلع
+  // المستقيم يتصل بما بعده. الأبعاد من CAPTURE.border بوحدات الشاشة (المربع نحو 16 وحدة عمودياً على ضلعه)
   List<List<double>> _buildEdges(GameMap m) {
-    final inset = CAPTURE.m('border').d('inset'), W = TILE_HALF_W, H = TILE_HALF_H;
+    final B = CAPTURE.m('border');
+    // المسافة العمودية على الضلع بين حافة المربع ومركزه على الشاشة (نصف المربع)
+    final half = TILE_HALF_W * TILE_HALF_H / math.sqrt(TILE_HALF_W * TILE_HALF_W + TILE_HALF_H * TILE_HALF_H);
+    double t(double units) => units / (2 * half);   // وحدات الشاشة إلى أجزاء من المربع
+    final mid = t(B.d('inset')), under = t(B.d('underWidth')) / 2, line = t(B.d('width')) / 2;
     final out = [for (final _ in m.districts) <double>[]];
+    bool inD(int i, int j, int id) => m.inBounds(i, j) && m.districtAt[m.idx(i, j)] == id;
     for (final d in m.districts) {
+      final list = out[d.id];
       for (final (i, j) in d.tiles) {
-        final x = (i - j) * W, y = (i + j) * H;
-        void edge(int ni, int nj, double x1, double y1, double x2, double y2) {
-          // (والمعلم في وسط حديقة منذ 2.4.0، فلا يدور الحد حوله)
-          if (m.inBounds(ni, nj) && m.districtAt[m.idx(ni, nj)] == d.id) return;
-          // نحو مركز المربع بقدر الإزاحة
-          final cx = x - (x1 + x2) / 2, cy = y - (y1 + y2) / 2, l = math.sqrt(cx * cx + cy * cy);
-          final ox = cx / l * inset, oy = cy / l * inset;
-          out[d.id].addAll([x1 + ox, y1 + oy, x2 + ox, y2 + oy]);
+        for (final (di, dj) in const [(1, 0), (-1, 0), (0, 1), (0, -1)]) {
+          if (inD(i + di, j + dj, d.id)) continue;
+          final ti = dj.abs(), tj = di.abs();                       // اتجاه الضلع
+          // نوع الركن عند طرفي الضلع: 1 بارز (ينقص)، 0 مستقيم، -1 داخل (يمتد)
+          int corner(int sgn) {
+            final ni = i + ti * sgn, nj = j + tj * sgn;
+            if (!inD(ni, nj, d.id)) return 1;
+            return inD(ni + di, nj + dj, d.id) ? -1 : 0;
+          }
+          final c0 = corner(-1), c1 = corner(1);
+          (double, double) at(double o, int sgn, int kind) {
+            final along = sgn * (0.5 - kind * o);
+            final a = i + di * (0.5 - o) + ti * along, b = j + dj * (0.5 - o) + tj * along;
+            return ((a - b) * TILE_HALF_W, (a + b) * TILE_HALF_H);
+          }
+          for (final (o1, o2) in [(mid - under, mid + under), (mid - line, mid + line)]) {
+            final p0 = at(o1, -1, c0), p1 = at(o1, 1, c1), p2 = at(o2, 1, c1), p3 = at(o2, -1, c0);
+            list.addAll([p0.$1, p0.$2, p1.$1, p1.$2, p2.$1, p2.$2, p3.$1, p3.$2]);
+          }
         }
-        edge(i + 1, j, x + W, y, x, y + H);
-        edge(i - 1, j, x - W, y, x, y - H);
-        edge(i, j + 1, x, y + H, x - W, y);
-        edge(i, j - 1, x, y - H, x + W, y);
       }
     }
     return out;

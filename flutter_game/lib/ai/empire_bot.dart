@@ -11,6 +11,7 @@ import '../game/spatial.dart';
 import '../game/features.dart';
 import '../game/state.dart';
 import '../map/generator.dart';
+import '../map/parks.dart' show fortifiable;
 import '../map/sizes.dart';
 
 final J _B = EMPIRE.m('bot');
@@ -151,7 +152,7 @@ _Buy? _bestTech(MatchState state, int pid, List<District> owned, List<District> 
     final sorted = [...list];
     stableSort<District>(sorted, (a, b) => byNum(enemyDist(a), enemyDist(b)));
     District? d;
-    for (final x in sorted) { if (x.fort < max) { d = x; break; } }
+    for (final x in sorted) { if (x.fort < max && fortifiable(state.map, x)) { d = x; break; } }
     final next = d != null ? nextFort(d, state, pid) : null;
     if (next != null) add(rank + 2 * next.level, next.cost, () => fortifyDistrict(state, pid, d!.id));
   }

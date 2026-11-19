@@ -16,6 +16,7 @@ import '../map/generator.dart';
 import 'batch.dart';
 import 'city_art.dart';
 import 'city_layer.dart' show tileSprite;
+import 'decor.dart' show featureArt;
 
 final J _E = EMPIRE;
 const _sqrt2 = 1.4142135623730951;
@@ -206,8 +207,9 @@ void drawEmpireMarks(TriBatch b, MatchState s, CityArt art, int? openDistrict, d
       x = bx; barTop = cy - r - 4;
     } else if (d.featureTile != null && d.feature != null) {
       final (fx, fy0) = _w(d.featureTile! % n, d.featureTile! ~/ n);
-      final sp = art.find('feature', d.feature!), k = d.featureBig ? 1.0 : 0.55;
-      x = fx; barTop = (sp == null ? fy0 - 40 : fy0 + (d.featureBig ? 0 : TILE_HALF_H * k) - sp.ay / art.px * k) - 6;
+      final sp = art.find('feature', d.feature!);
+      final (k, dy) = featureArt(d);
+      x = fx; barTop = (sp == null ? fy0 - 40 : fy0 + dy - sp.ay / art.px * k) - 6;
     } else {
       return;
     }

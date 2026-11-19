@@ -15998,6 +15998,26 @@
     "ay": 154,
     "group": "mark",
     "kind": "ring"
+   },
+   {
+    "file": "cities/chicago/monument.webp",
+    "w": 309,
+    "h": 106,
+    "ax": 154,
+    "ay": 59,
+    "group": "decor",
+    "kind": "fountain",
+    "variant": 1
+   },
+   {
+    "file": "cities/rothenburg/decor/island_1.webp",
+    "w": 240,
+    "h": 203,
+    "ax": 120,
+    "ay": 174,
+    "group": "decor",
+    "kind": "fountain",
+    "variant": 2
    }
   ]
  }

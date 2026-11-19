@@ -163,7 +163,8 @@ GameMap? _buildMap(MapSize size, List<MapPlayer> players, String cityKey, Rng rn
   _assignPoliceDistricts(map, districts, size, rnd, reserved);
   if (features) _assignFeatures(map, districts, size, rnd, reserved);
   if (features && temples) _assignTemples(map, districts, slots);
-  _fillDistricts(map, districts, rnd);
+  // خانات المعبد والمرتزقة ومبنى المدينة 3×3 بمبناها في مربعها الأوسط (2.4.1)
+  _fillDistricts(map, districts, rnd, slots == null ? const {} : {for (final q in [slots.temple, ...slots.mercs, ?slots.extra]) if (q.$3 == 3) map.districtAt[map.idx(q.$1, q.$2)]});
   map.districts = districts;
   final walls = CITIES.walls[cityKey];
   if (walls != null) _buildCityWalls(map, walls, rnd);
@@ -499,31 +500,6 @@ void _assignTemples(GameMap map, List<District> districts, [_Slots? slots]) {
   final (temple, mercs) = pair;
   final old = cityFeatureBuilding(map.city);
   District at((int, int, int) q) => districts[map.districtAt[map.idx(q.$1, q.$2)]];
-  if (slots != null) {
-    // المربعات الثابتة: مبنى المدينة القديم يُرفع من مكانه، والمعبد والمرتزقة وما بقي منه في خاناتها
-    for (final d in districts) {
-      if (d.feature == old || (old == 'complex' && d.feature == 'cartel')) { d.feature = null; d.region = 'neutral'; }
-    }
-    final t = at(slots.temple);
-    _markFeature(t, temple);
-    t.temple = true;
-    if (slots.extra != null && old != null) {
-      final d = at(slots.extra!);
-      _markFeature(d, old);
-      if (old == 'complex') _markCartel(districts, d, CITY_FEATURES.place['cartel']!.neighbors!);
-    }
-    for (final q in slots.mercs) {
-      final d = at(q);
-      _markFeature(d, mercs);
-      d.merc = true;
-    }
-    return;
-  }
-  if (old != null && old != temple) {
-    for (final d in districts) {
-      if (d.feature == old || (old == 'complex' && d.feature == 'cartel')) { d.feature = null; d.region = 'neutral'; }
-    }
-  }
   bool free(District d, bool block) => d.capturable && !d.isHome && !d.police && d.special == null && d.feature == null &&
       (!block || (d.tiles.length >= CITY_FEATURES.blockTiles && _hasBlock(map, d)));
   District? nearest(double ci, double cj, bool block) {
@@ -537,6 +513,34 @@ void _assignTemples(GameMap map, List<District> districts, [_Slots? slots]) {
     return best;
   }
   final ci = (map.land - 1) / 2, cj = (map.n - 1) / 2;
+  if (slots != null) {
+    // المربعات الثابتة: مبنى المدينة القديم يُرفع من مكانه، والمعبد والمرتزقة وما بقي منه في خاناتها
+    for (final d in districts) {
+      if (d.feature == old || (old == 'complex' && d.feature == 'cartel')) { d.feature = null; d.region = 'neutral'; }
+    }
+    final t = at(slots.temple);
+    _markFeature(t, temple);
+    t.temple = true;
+    for (final q in slots.mercs) {
+      final d = at(q);
+      _markFeature(d, mercs);
+      d.merc = true;
+    }
+    // وما بقي من مبنى المدينة في خانته، وإن لم تتسع له خانة ففي أقرب حي للوسط (2.4.1: كان يختفي، كمنجم المكسيكية في الصغيرة)
+    if (old != null && old != temple && old != mercs) {
+      final d = slots.extra != null ? at(slots.extra!) : nearest(ci, cj, FEATURE_BUILDINGS[old] != null);
+      if (d != null) {
+        _markFeature(d, old);
+        if (old == 'complex') _markCartel(districts, d, CITY_FEATURES.place['cartel']!.neighbors!);
+      }
+    }
+    return;
+  }
+  if (old != null && old != temple) {
+    for (final d in districts) {
+      if (d.feature == old || (old == 'complex' && d.feature == 'cartel')) { d.feature = null; d.region = 'neutral'; }
+    }
+  }
   final t = old == temple ? districts.where((d) => d.feature == temple).firstOrNull : nearest(ci, cj, true);
   if (t != null) {
     if (t.feature == null) _markFeature(t, temple);
@@ -575,28 +579,36 @@ bool _apart(_Sq a, _Sq b, int w) {
   return (gi == -w && b0 == d0 && b1 == d1) || (gj == -w && a0 == c0 && a1 == c1);
 }
 
-// بشوارع المدينة العريضة، وإن ضاقت الخريطة (صغيرة بثمانية لاعبين) بشارع واحد
+// بشوارع المدينة العريضة، وإن ضاقت الخريطة بشارع واحد. والمعبد والمرتزقة 3×3 (2.4.1)، وإن لم تتسع لها الخريطة (الصغيرة بأربعة
+// لاعبين: بين المرتزقة في الزوايا والقواعد مربع أو مربعان فلا يمر شارع) فالمرتزقة 4×4 ثم المعبد أيضاً
 _Slots? _planSlots(GameMap map, int count) {
-  final street = CITIES.open[map.city]?.street ?? 1;
-  return _planSlotsW(map, count, street) ?? (street > 1 ? _planSlotsW(map, count, 1) : null);
+  final street = CITIES.open[map.city]?.street ?? 1, L = TEMPLES.m('layout'), t = L.i('temple'), m = L.i('merc'), h = L.i('home');
+  // والمرتزقة 3×3 في الزوايا نفسها، ثم بشارع بينها وبين الحافة (كما في 2.0.9)، قبل الأكبر
+  for (final w in {street, 1}) {
+    for (final (ts, ms, off) in [(t, m, 0), (t, m, w), (t, h, 0), (h, h, 0)]) {
+      final s = _planSlotsW(map, count, w, ts, ms, off);
+      if (s != null) return s;
+    }
+  }
+  return null;
 }
 
-_Slots? _planSlotsW(GameMap map, int count, int w) {
+_Slots? _planSlotsW(GameMap map, int count, int w, int templeSize, int m, int off) {
   final pair = TEMPLES_CITIES[map.city];
   if (pair == null) return null;
   final L = TEMPLES.m('layout'), land = map.land, n = map.n;
   _Sq around(double x, double y, int side) => ((x - (side - 1) / 2).round(), (y - (side - 1) / 2).round(), side);
-  // داخل الخريطة، وعلى حافتها نفسها (كالمرتزقة في الزوايا، فتصطف شوارعها معهم) أو بعيدة عنها بحي
-  bool edge(int g) => g == -w || g >= 3;
+  // داخل الخريطة، وعلى حافتها نفسها (كالمرتزقة في الزوايا، فتصطف شوارعها معهم) أو بشارعها عندها أو بعيدة عنها بحي
+  bool edge(int g) => g == -w || g == 0 || g >= 3;
   bool inside(_Sq q) {
     final (i0, j0, i1, j1) = _box(q, w);
     return q.$1 >= 0 && q.$2 >= 0 && q.$1 + q.$3 <= land && q.$2 + q.$3 <= n && edge(i0) && edge(j0) && edge(land - i1) && edge(n - j1);
   }
-  final temple = around((land - 1) / 2, (n - 1) / 2, L.i('temple')), m = L.i('merc');
+  final temple = around((land - 1) / 2, (n - 1) / 2, templeSize);
   // الدائرة حول مركز المعبد نفسه (لا مركز الخريطة، فقد يزيح التقريب المعبد نصف مربع)
   final ci = temple.$1 + (temple.$3 - 1) / 2, cj = temple.$2 + (temple.$3 - 1) / 2;
   // المرتزقة في الزوايا نفسها (2.4.0: كان بينها وبين الحافة شارع)
-  final mercs = <_Sq>[(0, 0, m), (land - m, 0, m), (0, n - m, m), (land - m, n - m, m)];
+  final mercs = <_Sq>[(off, off, m), (land - m - off, off, m), (off, n - m - off, m), (land - m - off, n - m - off, m)];
   final fixed = [temple, ...mercs];
   bool fits(_Sq q, List<_Sq> others) => inside(q) && others.every((o) => _apart(q, o, w));
   // نصف القطر نفسه لكل القواعد: أكبره الذي تتسع فيه كلها، ومعه ما بقي من مبنى المدينة القديم وشوارع الخانات
@@ -734,9 +746,22 @@ bool _hasBlock(GameMap map, District district) {
 }
 
 // كتلة المبنى المميز 2×2 الأقرب لمركز حيه بلا ساحة العلم، وبقية الحي ساحته. والحي الضيق: مبنى بمربع واحد
-void _placeFeatureBuilding(GameMap map, District district, (int, int) point, List<(int, int)> inner) {
+void _placeFeatureBuilding(GameMap map, District district, (int, int) point, List<(int, int)> inner, [bool plot = false]) {
   bool inD(int i, int j) => map.inBounds(i, j) && map.districtAt[map.idx(i, j)] == district.id;
   bool isPoint(int i, int j) => i == point.$1 && j == point.$2;
+  // خانة المعبد والمرتزقة ومبنى المدينة (2.4.1، بطلب المستخدم: "قم بتصغير رقعة جميع مباني المرتزقة والمعابد والمباني المميزة"):
+  // المبنى في المربع الأقرب للوسط وحده، وبقية الخانة ساحته
+  if (plot && inner.isNotEmpty) {
+    final (ci, cj) = inner.first;
+    for (final (i, j) in district.tiles) {
+      if (isPoint(i, j)) continue;
+      final k = map.idx(i, j), centre = i == ci && j == cj;
+      map.type[k] = centre ? tF : tDot;
+      map.kind[k] = centre ? null : 'fplaza';
+    }
+    district.featureTile = map.idx(ci, cj);
+    return;
+  }
   (int, int)? best;
   var bestD = double.infinity;
   for (final (i, j) in district.tiles) {
@@ -788,7 +813,7 @@ String? Function(int, int) _laneMask(District district, String lanes) {
                             : (i, j) => lane(i, i0, i1) ? 'lane_j' : null;
 }
 
-void _fillDistricts(GameMap map, List<District> districts, Rng rnd) {
+void _fillDistricts(GameMap map, List<District> districts, Rng rnd, [Set<int> plots = const {}]) {
   final city = CITY_THEMES[map.city]!;
   final open = CITIES.open[map.city];
   for (final district in districts) {
@@ -828,7 +853,7 @@ void _fillDistricts(GameMap map, List<District> districts, Rng rnd) {
     if (district.isHome && inner.isNotEmpty) {
       map.type[map.idx(inner[0].$1, inner[0].$2)] = tQ;
     } else if (FEATURE_BUILDINGS[district.feature] != null) {
-      _placeFeatureBuilding(map, district, point, inner);
+      _placeFeatureBuilding(map, district, point, inner, plots.contains(district.id));
     } else if (district.police && inner.isNotEmpty) {
       map.type[map.idx(inner[0].$1, inner[0].$2)] = tN;
     } else if (district.special != null) {

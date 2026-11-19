@@ -7,6 +7,7 @@ import '../core/cfg.dart';
 import '../core/fmath.dart';
 import '../data/js_config.dart';
 import '../map/generator.dart';
+import '../map/parks.dart';
 import '../map/pathfinding.dart';
 import '../map/sizes.dart';
 import 'abilities.dart' show sourceOf;
@@ -16,6 +17,8 @@ import 'spatial.dart';
 import 'spawn.dart';
 import 'state.dart';
 import 'units.dart';
+
+export '../map/parks.dart' show buildSpot;
 
 final J E = EMPIRE;
 final J _DS = DISTRICT_SIZES;
@@ -55,8 +58,6 @@ Result _fail(String reason) => Result(false, reason);
 const _ok = Result(true, '');
 
 const BUILDING_TILE = {'hq': tQ, 'tower': 0x54, 'hospital': 0x4D};
-const _fixedKinds = {'wallI', 'wallJ', 'gateI', 'gateJ', 'archI', 'archJ', 'wallTower', 'brokenI', 'brokenJ', 'brokenTower', 'monument',
-  'fortI', 'fortJ', 'fortTower'};
 
 void _fortify(GameMap map, District district) {
   final art = E.m('art').mm(map.city);
@@ -68,7 +69,7 @@ void _fortify(GameMap map, District district) {
       if ((di == 0 && dj == 0) || !map.inBounds(i, j)) continue;
       final k = map.idx(i, j);
       if (map.road[k] != 0 || map.districtAt[k] != district.id || (map.type[k] != tH && map.type[k] != tR)) continue;
-      if (_fixedKinds.contains(map.kind[k])) continue;
+      if (fixedKinds.contains(map.kind[k])) continue;
       map.type[k] = tH;
       map.kind[k] = di != 0 && dj != 0 ? 'fortTower' : di != 0 ? 'fortJ' : 'fortI';
     }
@@ -422,18 +423,6 @@ Result buyUpgrade(MatchState state, int playerId, String key) {
   return _ok;
 }
 
-int buildSpot(GameMap map, District district) {
-  var best = -1;
-  var bestD = double.infinity;
-  for (final (i, j) in district.tiles) {
-    final k = map.idx(i, j), type = map.type[k];
-    if ((type != tH && type != tR) || _fixedKinds.contains(map.kind[k])) continue;
-    final d = hypot(i - district.cx, j - district.cy);
-    if (d < bestD) { bestD = d; best = k; }
-  }
-  return best;
-}
-
 Result canBuild(MatchState state, int playerId, District? district, String type) {
   if (!_owns(state, playerId, district)) return _fail('ليس حيك');
   final d = district!;
@@ -505,6 +494,7 @@ Result upgradeBuilding(MatchState state, int playerId, int districtId, String ke
 
 Result canFortify(MatchState state, int playerId, District? district) {
   if (!_owns(state, playerId, district)) return _fail('ليس حيك');
+  if (!fortifiable(state.map, district!)) return _fail('لا سور هنا');
   final next = nextFort(district, state, playerId);
   if (next == null) return _fail('أعلى مستوى');
   if (pointsOf(state, playerId) < next.cost) return _fail('النقاط لا تكفي');
