@@ -13,3 +13,6 @@ key.properties
 **/*.keystore
 **/*.jks
 /build/
+
+# ذاكرة مترجم Kotlin أثناء البناء
+/.kotlin/
