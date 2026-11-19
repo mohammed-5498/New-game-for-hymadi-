@@ -3,9 +3,10 @@
 import 'dart:async';
 import 'dart:math' as math;
 
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
 import 'package:flutter/scheduler.dart';
 
+import '../i18n/tr.dart';
 import '../core/cfg.dart';
 import '../config.dart' show PACE, RETIRED_CITIES;
 import '../core/fmath.dart';
@@ -254,30 +255,87 @@ class _MainMenuState extends State<MainMenu> {
     final route = ModalRoute.of(context);   // يُعاد البناء حين تعود القائمة إلى الواجهة: خانة المتابعة بعد الخروج من مباراة
     if (route?.isCurrent ?? true) GameSound.menuMusic(true);
     final saved = Prefs.read(UI.s('matchInfoKey'));
+    final cont = saved == null ? null : '${cityShort('${saved['city']}')} • ${clock((saved['time'] as num).toDouble())}';
+    // الشكل "أ" (2.5.0، اختيار المستخدم): لوحة في جهة البداية (يمين العربية ويسار الإنجليزية) بالشعار والأزرار والمدينة ظاهرة،
+    // وفي الجهة الأخرى الإعدادات والإحصائيات واللغة، وبطاقة مظهر في المتجر (مكان العروض حين تُبنى)
     return Scaffold(body: Stack(children: [
-    const Positioned.fill(child: MenuBackdrop()),
-    Positioned.fill(child: Container(color: const Color(0x66000000))),
-    Center(child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
-      const Text('مدينة العصابات', style: TextStyle(color: gold, fontSize: 30, fontWeight: FontWeight.w900,
-          shadows: [Shadow(blurRadius: 8, color: Colors.black)])),
-      if (migrated > 0) const Text('نُقلت إحصائياتك وتقدمك وإعداداتك من النسخة السابقة', style: TextStyle(color: dim, fontSize: 12.5)),
-      const SizedBox(height: 6),
-      if (saved != null) WideButton('متابعة المباراة', () => _go(const MatchScreen(resume: true)), primary: true,
-          note: '${cityShort('${saved['city']}')} • ${clock((saved['time'] as num).toDouble())}'),
-      WideButton('لعب', () => _go(const SetupScreen()), primary: saved == null),
-      WideButton('القصة', () => _go(const StoryScreen()), note: 'حملة أبناء سبأ'),
-      WideButton('لعب محلي', () => _go(const LanScreen()), note: 'مع الأصدقاء على نفس الواي فاي'),
-      Row(mainAxisSize: MainAxisSize.min, children: [
-        WideButton('المتجر', () => _go(const StoreScreen()), width: 124),
-        const SizedBox(width: 6),
-        WideButton('الإعدادات', () => _go(const SettingsScreen()), width: 124),
-        const SizedBox(width: 6),
-        WideButton('الإحصائيات', () => _go(const StatsScreen()), width: 124),
-      ]),
-    ]))),
-  ]));
+      const Positioned.fill(child: MenuBackdrop()),
+      const Positioned.fill(child: DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(
+          begin: AlignmentDirectional.centerStart, end: AlignmentDirectional.centerEnd,
+          colors: [Color(0xED0C0906), Color(0xCC0C0906), Color(0x1F0C0906), Color(0x000C0906)], stops: [0, 0.34, 0.53, 0.7])))),
+      PositionedDirectional(start: 24, top: 0, bottom: 0, width: 300, child: SafeArea(child: Center(child: SingleChildScrollView(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
+        Row(children: [
+          const Emblem(size: 44),
+          const SizedBox(width: 10),
+          const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            GoldTitle('مدينة العصابات', size: 32),
+            Text('استولِ على المدينة حياً بعد حي', style: TextStyle(color: Color(0xFFCBBD9F), fontSize: 13, shadows: [Shadow(blurRadius: 3)])),
+          ])),
+        ]),
+        if (migrated > 0) const Text('نُقلت إحصائياتك وتقدمك وإعداداتك من النسخة السابقة', style: TextStyle(color: dim, fontSize: 12)),
+        const SizedBox(height: 10),
+        if (cont != null) MenuButton(const Icon(Icons.play_arrow_rounded), 'متابعة المباراة', note: cont, gilt: true,
+            onTap: () => _go(const MatchScreen(resume: true))),
+        MenuButton(const SwordsIcon(), 'لعب', note: 'مباراة ضد البوتات بإعدادك', gilt: cont == null, onTap: () => _go(const SetupScreen())),
+        MenuButton(const Icon(Icons.menu_book_rounded), 'القصة', note: 'حملة أبناء سبأ', onTap: () => _go(const StoryScreen())),
+        MenuButton(const Icon(Icons.wifi_rounded), 'لعب محلي', note: 'مع الأصدقاء على نفس الواي فاي', onTap: () => _go(const LanScreen())),
+      ]))))),
+      PositionedDirectional(end: 14, top: 12, child: SafeArea(child: Row(children: [
+        RoundButton(Icons.settings_rounded, 'الإعدادات', () => _go(const SettingsScreen())),
+        RoundButton(Icons.bar_chart_rounded, 'الإحصائيات', () => _go(const StatsScreen())),
+        RoundButton(Icons.language_rounded, 'اللغة', () => pickLanguage(context)),
+      ]))),
+      PositionedDirectional(end: 18, bottom: 14, child: SafeArea(child: _OfferCard(onTap: (side) => _go(StoreScreen(section: 'skins', side: side))))),
+    ]));
   }
 }
+
+// بطاقة المتجر في القائمة (مكان قائمة العروض حين تُبنى): مظهر نخبة يتبدل كل يوم، ولمسها يفتحه في المتجر
+class _OfferCard extends StatelessWidget {
+  final ValueChanged<String> onTap;
+  const _OfferCard({required this.onTap});
+  @override
+  Widget build(BuildContext context) {
+    final elites = _eliteIds;
+    if (elites.isEmpty) return const SizedBox();
+    final side = elites[DateTime.now().difference(DateTime(2026)).inDays % elites.length];
+    return GestureDetector(onTap: () { sound('ui_tap'); onTap(side); }, child: Container(
+      width: 250, height: 92, clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(borderRadius: BorderRadius.circular(14), border: Border.all(color: gold, width: 1.5),
+          gradient: const LinearGradient(begin: AlignmentDirectional.centerStart, end: AlignmentDirectional.centerEnd,
+              colors: [Color(0xF2281E14), Color(0xF2543C1C)]),
+          boxShadow: const [BoxShadow(color: Color(0x99000000), blurRadius: 12, offset: Offset(0, 4))]),
+      child: Stack(children: [
+        PositionedDirectional(end: 6, bottom: -24, child: ClipRect(child: Align(alignment: Alignment.centerLeft, widthFactor: 0.25,
+            child: Image.asset('assets/thumbs/side_$side.webp', height: 124, filterQuality: FilterQuality.medium)))),
+        PositionedDirectional(start: 12, top: 8, end: 84, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Row(children: [Icon(Icons.card_giftcard_rounded, size: 15, color: gold), SizedBox(width: 5),
+            Text('العروض', style: TextStyle(color: gold, fontSize: 13, fontWeight: FontWeight.w700))]),
+          Text('مظهر ${sideName(side)}', maxLines: 1, overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: ink, fontSize: 15.5, fontWeight: FontWeight.w700, height: 1.25)),
+          const SizedBox(height: 5),
+          Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+              decoration: BoxDecoration(gradient: goldGrad, borderRadius: BorderRadius.circular(9), border: Border.all(color: const Color(0xFFFFE6A8))),
+              child: const Text('المتجر', style: TextStyle(color: Color(0xFF1B140C), fontSize: 13, fontWeight: FontWeight.w700))),
+        ])),
+      ]),
+    ));
+  }
+}
+
+// اختيار اللغة (2.5.0): العربية أو الإنجليزية، كل اسم بلغته
+Future<void> pickLanguage(BuildContext context) => showDialog<void>(context: context, builder: (ctx) => SimpleDialog(
+  backgroundColor: card, title: const Text('اللغة', style: TextStyle(color: gold, fontWeight: FontWeight.w700)),
+  children: [
+    for (final (code, name) in const [('ar', 'العربية'), ('en', 'English')])
+      SimpleDialogOption(onPressed: () { Lang.set(code); Navigator.pop(ctx); }, child: Row(children: [
+        Icon(Lang.code == code ? Icons.radio_button_checked : Icons.radio_button_unchecked, color: gold, size: 20),
+        const SizedBox(width: 10),
+        RawText(name, style: const TextStyle(color: ink, fontSize: 17, fontWeight: FontWeight.w600)),
+      ])),
+  ],
+));
 
 // خلفية القوائم (menuScene.js): مدينة كبيرة والكاميرا تنجرف داخلها، بنصف إيقاع الشاشة
 class MenuBackdrop extends StatefulWidget {
@@ -671,6 +729,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
         Toggle('كتم كل الأصوات', Settings.mute, (v) => _set(() => Settings.mute = v)),
         Toggle('الكلمات الطائرة في القتال', Settings.pops, (v) => _set(() => Settings.pops = v)),
         Toggle('توفير البطارية (30 إطاراً)', Settings.battery, (v) => _set(() => Settings.battery = v)),
+        Row(children: [const SizedBox(width: 110, child: Text('اللغة', style: TextStyle(color: ink))),
+          for (final (code, name) in const [('ar', 'العربية'), ('en', 'English')])
+            Padding(padding: const EdgeInsetsDirectional.only(end: 8), child: ChoiceChip(label: RawText(name), selected: Lang.code == code,
+                onSelected: (_) => setState(() => Lang.set(code)))),
+        ]),
         const SizedBox(height: 8),
         WideButton('رجوع', () => Navigator.pop(context), ghost: true),
       ])))));
@@ -706,13 +769,16 @@ class StatsScreen extends StatelessWidget {
 
 // ===================== المتجر (storeScreen.js) =====================
 class StoreScreen extends StatefulWidget {
-  const StoreScreen({super.key});
+  final String section;
+  final String? side;
+  const StoreScreen({super.key, this.section = 'maps', this.side});
   @override
   State<StoreScreen> createState() => _StoreScreenState();
 }
 
 class _StoreScreenState extends State<StoreScreen> {
-  String section = 'maps', chosenMap = 'arab', chosenSide = 'crows';
+  late String section = widget.section, chosenSide = widget.side ?? 'crows';
+  String chosenMap = 'arab';
   int region = 0;
 
   bool _freeCity(String c) => STORE.l('freeCities').contains(c);

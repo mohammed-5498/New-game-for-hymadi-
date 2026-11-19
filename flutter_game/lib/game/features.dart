@@ -489,7 +489,7 @@ void _spawnBandits(MatchState s, int wave) {
     s.units.add(unit);
   }
   if (spots.isNotEmpty) {
-    s.notice = Notice('${B.s('name')} ${dens == null ? 'ظهروا في وسط المدينة' : 'خرجوا من مخيماتهم'}! (الموجة $wave)', false, 4);
+    s.notice = Notice(dens == null ? '${B.s('name')} ظهروا في وسط المدينة! (الموجة $wave)' : '${B.s('name')} خرجوا من مخيماتهم! (الموجة $wave)', false, 4);
     sound('alert');
   }
 }
@@ -591,7 +591,7 @@ void _coup(MatchState s, int wave) {
   if (total == 0) return;
   s.notice = mine > 0
       ? Notice('انقلاب! تمرد ${mine > 1 ? '$mine من أحيائك' : 'حي من أحيائك'}', true, 4)
-      : Notice('انقلاب في المدينة: تمردت $total${total > 1 ? ' أحياء' : ' حي'}', false, 4);
+      : Notice(total > 1 ? 'انقلاب في المدينة: تمردت $total أحياء' : 'انقلاب في المدينة: تمردت $total حي', false, 4);
   sound('alert');
 }
 

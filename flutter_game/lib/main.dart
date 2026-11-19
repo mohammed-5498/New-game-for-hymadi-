@@ -1,10 +1,12 @@
 // مدينة العصابات بـ Flutter (القسم 18 في GAME_SPEC): القائمة الرئيسية أولاً (lib/ui/menus.dart)
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show LicenseEntryWithLineBreaks, LicenseRegistry;
+import 'package:flutter/material.dart' hide Text;
 import 'package:flutter/services.dart';
 
 import 'audio/sound.dart';
 import 'core/cfg.dart';
 import 'data/js_config.dart';
+import 'i18n/tr.dart';
 import 'ui/crash_report.dart';
 import 'ui/match_screen.dart';
 import 'ui/menus.dart';
@@ -17,6 +19,10 @@ Future<void> main() async {
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
   SystemChrome.setPreferredOrientations([DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]);
   await Prefs.init();
+  Lang.load();                // العربية أو الإنجليزية (2.5.0): ما اختاره اللاعب، أو لغة الجوال أول مرة
+  LicenseRegistry.addLicense(() async* {   // خط El Messiri برخصة SIL OFL 1.1
+    yield LicenseEntryWithLineBreaks(['El Messiri'], await rootBundle.loadString('assets/fonts/OFL.txt'));
+  });
   watchDartErrors();          // أخطاء كود اللعبة تُحفظ وتُعرض عند الفتح التالي (ui/crash_report.dart، 2.1.5)
   await migrateOldSave();     // أول تشغيل فوق اللعبة القديمة: إحصائياتها وتقدمها وإعداداتها (ui/migrate.dart)
   Settings.load();
@@ -25,9 +31,11 @@ Future<void> main() async {
   WidgetsBinding.instance.addObserver(_AppLife());
   runApp(MaterialApp(
     debugShowCheckedModeBanner: false,
-    title: 'مدينة العصابات',
-    theme: ThemeData(brightness: Brightness.dark, colorSchemeSeed: gold, scaffoldBackgroundColor: deep),
-    builder: (context, child) => Directionality(textDirection: TextDirection.rtl, child: child!),
+    title: Lang.en ? 'Gang City' : 'مدينة العصابات',
+    theme: ThemeData(brightness: Brightness.dark, colorSchemeSeed: gold, scaffoldBackgroundColor: deep, fontFamily: 'ElMessiri'),
+    // اللغة واتجاهها فوق كل الشاشات: تغييرها يعيد بناء كل Text (LangScope) والقائمة مكانها
+    builder: (context, child) => ValueListenableBuilder<String>(valueListenable: Lang.notifier, builder: (_, code, _) =>
+        LangScope(code: code, child: Directionality(textDirection: Lang.dir, child: child!))),
     home: _testMatch() ?? const _Intro(),
   ));
 }

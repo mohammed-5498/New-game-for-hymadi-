@@ -4,9 +4,10 @@
 // ومنذ 2.1.6: إشارة الانهيار الأصلي وأثره من سجل أندرويد، وآخر خطوة في المباراة بإعدادها (crumb)
 import 'dart:ui' show PlatformDispatcher;
 
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
 import 'package:flutter/services.dart';
 
+import '../i18n/tr.dart';
 import 'prefs.dart';
 import 'widgets.dart';
 

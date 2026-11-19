@@ -4,9 +4,10 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
 import 'package:flutter/scheduler.dart';
 
+import '../i18n/tr.dart';
 import '../core/cfg.dart';
 import '../config.dart' show PACE, FOG;
 import '../core/fmath.dart';
@@ -784,16 +785,19 @@ class LoadingScreen extends StatelessWidget {
 // صورة كلمة طائرة بلونها، مرة واحدة لكل كلمة
 const _popScale = 4.0;
 final _pops = <String, ui.Image>{};
-ui.Image popImage(String text, String color) => _pops['$text|$color'] ??= () {
-  final pb = ui.ParagraphBuilder(ui.ParagraphStyle(textAlign: TextAlign.center, textDirection: TextDirection.rtl, fontSize: 5.5 * _popScale,
-      fontWeight: FontWeight.w800))
+ui.Image popImage(String text, String color) {
+  final t = tr(text);   // بلغة اللاعب (2.5.0)، ولكل لغة صورتها
+  return _pops['$t|$color'] ??= () {
+  final pb = ui.ParagraphBuilder(ui.ParagraphStyle(textAlign: TextAlign.center, textDirection: Lang.dir, fontSize: 5.5 * _popScale,
+      fontWeight: FontWeight.w800, fontFamily: 'ElMessiri'))
     ..pushStyle(ui.TextStyle(color: Color(0xFF000000 | hexRgb(color)), shadows: const [Shadow(color: Color(0xCC000000), blurRadius: 1.2 * _popScale)]))
-    ..addText(text);
+    ..addText(t);
   final para = pb.build()..layout(const ui.ParagraphConstraints(width: 60 * _popScale));
   final rec = ui.PictureRecorder();
   Canvas(rec).drawParagraph(para, Offset.zero);
   return rec.endRecording().toImageSync((60 * _popScale).round(), (para.height + 2 * _popScale).ceil());
-}();
+  }();
+}
 
 // كل ما يُرسم أول مرة أثناء القتال يُجهَّز عند التحميل فلا يتأخر إطار في أول معركة: الكلمات الطائرة بألوانها
 void warmMatchArt(MatchState s) {

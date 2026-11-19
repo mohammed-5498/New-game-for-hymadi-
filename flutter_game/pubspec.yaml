@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 2.4.2+28   # أعلى من نسخة Capacitor (1) فيُثبَّت فوقها
+version: 2.5.0+29   # أعلى من نسخة Capacitor (1) فيُثبَّت فوقها
 
 environment:
   sdk: ^3.13.7
@@ -64,6 +64,19 @@ flutter:
     - assets/audio/synth/ # المؤثرات المولَّدة (scripts/export_synth_sounds.cjs)
     - assets/thumbs/      # صور مصغرة للمدن والعصابات في القوائم (scripts/export_thumbs.cjs)
     - assets/units/       # صور الشخصيات مقطّعة (scripts/slice_units.py): أجزاؤها في lib/data/unit_sprites.dart
+    - assets/fonts/OFL.txt   # رخصة الخط (صفحة الرخص في التطبيق)
+
+  # خط اللعبة (2.5.0، اختيار المستخدم: El Messiri، رخصة SIL OFL 1.1): عربي وإنجليزي، من Google Fonts بأوزانه الأربعة
+  fonts:
+    - family: ElMessiri
+      fonts:
+        - asset: assets/fonts/ElMessiri-Regular.ttf
+        - asset: assets/fonts/ElMessiri-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/ElMessiri-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/ElMessiri-Bold.ttf
+          weight: 700
 
   # To add assets to your application, add an assets section, like this:
   # assets:

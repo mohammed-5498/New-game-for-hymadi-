@@ -1,7 +1,8 @@
 // شاشة طور القصة (js/ui/storyScreen.js، القسم 17): اختيار العصابة، ثم مراحل حملتها، ثم القصة قبل المعركة.
 // التقدم (المراحل المكتملة) وصعوبة البوتات محفوظان، ومكافآت المراحل السابقة تُحسب منه
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
 
+import '../i18n/tr.dart';
 import '../core/cfg.dart';
 import '../data/campaigns.dart';
 import '../data/js_config.dart';

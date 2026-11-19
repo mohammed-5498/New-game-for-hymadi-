@@ -3,8 +3,9 @@
 // تُعاد بناؤها أربع مرات في الثانية (hud) لا مع كل إطار
 import 'dart:math' as math;
 
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
 
+import '../i18n/tr.dart';
 import '../core/cfg.dart';
 import '../data/js_config.dart';
 import '../game/empire.dart';
