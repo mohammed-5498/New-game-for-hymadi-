@@ -1007,11 +1007,10 @@ class _MatchPainter extends CustomPainter {
     final out = [for (final _ in m.districts) <double>[]];
     for (final d in m.districts) {
       for (final (i, j) in d.tiles) {
-        if (isMonument(m, m.idx(i, j))) continue;   // المعلم خارج حدود الحي
         final x = (i - j) * W, y = (i + j) * H;
         void edge(int ni, int nj, double x1, double y1, double x2, double y2) {
-          // والمعلم منطقة لحالها (2.3.2): الحد يدور حوله
-          if (m.inBounds(ni, nj) && m.districtAt[m.idx(ni, nj)] == d.id && !isMonument(m, m.idx(ni, nj))) return;
+          // (والمعلم في وسط حديقة منذ 2.4.0، فلا يدور الحد حوله)
+          if (m.inBounds(ni, nj) && m.districtAt[m.idx(ni, nj)] == d.id) return;
           // نحو مركز المربع بقدر الإزاحة
           final cx = x - (x1 + x2) / 2, cy = y - (y1 + y2) / 2, l = math.sqrt(cx * cx + cy * cy);
           final ox = cx / l * inset, oy = cy / l * inset;

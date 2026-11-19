@@ -64,7 +64,13 @@ def items(folder):
 
 
 man = json.load(open(os.path.join(MAP, 'manifest.json')))
-common, count = [], 0
+# العامة تُدمج فيما سبق (2.4.0: كانت تحل محله، فتضيع زينة الشارع العامة مع حزمة فيها الأرضيات وحدها)
+common, count = list(man.get('common', {}).get('images', [])), 0
+
+
+def put(rec):
+    common[:] = [o for o in common if not (o['group'] == rec['group'] and o['kind'] == rec['kind'])] + [rec]
+
 for top in sorted(os.listdir(SRC)):
     tdir = os.path.join(SRC, top)
     if top.startswith('0-'):
@@ -72,11 +78,10 @@ for top in sorted(os.listdir(SRC)):
             for _, name, path in items(os.path.join(tdir, cat)):
                 if cat.startswith('3-'):
                     kind = MARKS[name]
-                    r = save(path, f'cities/_common/mark/{kind}.webp')
-                    common.append({**r, 'group': 'mark', 'kind': kind})
+                    put({**save(path, f'cities/_common/mark/{kind}.webp'), 'group': 'mark', 'kind': kind})
                 elif cat.startswith('2-'):
                     kind = STREET[name]
-                    common.append({**save(path, f'cities/_common/decor/{kind}.webp'), 'group': 'decor', 'kind': kind})
+                    put({**save(path, f'cities/_common/decor/{kind}.webp'), 'group': 'decor', 'kind': kind})
                 count += 1
         continue
     for cdir in sorted(os.listdir(tdir)):

@@ -144,10 +144,14 @@ GameMap? _buildMap(MapSize size, List<MapPlayer> players, String cityKey, Rng rn
   for (var j = 0; j < map.n; j++) {
     for (var i = map.land; i < map.n; i++) { map.type[map.idx(i, j)] = tWater; }
   }
-  _carveStreets(map, rnd, !(features && temples));
-  // مع المعابد: مربعات ثابتة للقواعد والمعبد والمرتزقة (3.14)، بشارع حولها
+  // مع المعابد: مربعات ثابتة للقواعد والمعبد والمرتزقة (3.14) بشارع حولها، وشوارع المدينة تمر بحدودها (2.4.0)
   final slots = features && temples ? _planSlots(map, players.length) : null;
-  if (slots != null) _stampSlots(map, slots);
+  if (slots != null) {
+    _carveSlotStreets(map, rnd, slots);
+    _stampSlots(map, slots);
+  } else {
+    _carveStreets(map, rnd, !(features && temples));
+  }
   if (!_roadsConnected(map)) return null;
 
   final districts = _findDistricts(map);
@@ -556,11 +560,20 @@ void _assignTemples(GameMap map, List<District> districts, [_Slots? slots]) {
 
 // --- مربعات المعابد الثابتة (3.14): (i0، j0، الضلع) لكل خانة، وحولها شارع بعرض شوارع المدينة ---
 typedef _Sq = (int, int, int);
-typedef _Slots = ({List<_Sq> homes, _Sq temple, List<_Sq> mercs, _Sq? extra, int w});
+typedef _Slots = ({List<_Sq> homes, _Sq temple, List<_Sq> mercs, _Sq? extra, int w, List<int> cols, List<int> rows});
 
-// تتداخل خانتان إن مسّ داخل إحداهما شارع الأخرى (الشارع المشترك بينهما مسموح)
-bool _clash(_Sq a, _Sq b, int w) =>
-    a.$1 - b.$1 < b.$3 + w && b.$1 - a.$1 < a.$3 + w && a.$2 - b.$2 < b.$3 + w && b.$2 - a.$2 < a.$3 + w;
+// صندوق الخانة بشارعها حولها: (i0، j0، i1، j1)
+(int, int, int, int) _box(_Sq q, int w) => (q.$1 - w, q.$2 - w, q.$1 + q.$3 + w, q.$2 + q.$3 + w);
+
+// خانتان متباعدتان (2.4.0، بطلب المستخدم: كانت شوارعهما تتلاصق أو يبقى بينهما شريط بمربع أو مربعين فتتسع الشوارع):
+// بينهما حي (3 مربعات على الأقل)، أو تتشاركان شارعاً واحداً بطوله
+bool _apart(_Sq a, _Sq b, int w) {
+  final (a0, b0, a1, b1) = _box(a, w);
+  final (c0, d0, c1, d1) = _box(b, w);
+  final gi = math.max(c0 - a1, a0 - c1), gj = math.max(d0 - b1, b0 - d1);
+  if (gi >= 3 || gj >= 3) return true;
+  return (gi == -w && b0 == d0 && b1 == d1) || (gj == -w && a0 == c0 && a1 == c1);
+}
 
 // بشوارع المدينة العريضة، وإن ضاقت الخريطة (صغيرة بثمانية لاعبين) بشارع واحد
 _Slots? _planSlots(GameMap map, int count) {
@@ -573,39 +586,114 @@ _Slots? _planSlotsW(GameMap map, int count, int w) {
   if (pair == null) return null;
   final L = TEMPLES.m('layout'), land = map.land, n = map.n;
   _Sq around(double x, double y, int side) => ((x - (side - 1) / 2).round(), (y - (side - 1) / 2).round(), side);
-  bool inside(_Sq q) => q.$1 >= w && q.$2 >= w && q.$1 + q.$3 + w <= land && q.$2 + q.$3 + w <= n;
+  // داخل الخريطة، وعلى حافتها نفسها (كالمرتزقة في الزوايا، فتصطف شوارعها معهم) أو بعيدة عنها بحي
+  bool edge(int g) => g == -w || g >= 3;
+  bool inside(_Sq q) {
+    final (i0, j0, i1, j1) = _box(q, w);
+    return q.$1 >= 0 && q.$2 >= 0 && q.$1 + q.$3 <= land && q.$2 + q.$3 <= n && edge(i0) && edge(j0) && edge(land - i1) && edge(n - j1);
+  }
   final temple = around((land - 1) / 2, (n - 1) / 2, L.i('temple')), m = L.i('merc');
   // الدائرة حول مركز المعبد نفسه (لا مركز الخريطة، فقد يزيح التقريب المعبد نصف مربع)
   final ci = temple.$1 + (temple.$3 - 1) / 2, cj = temple.$2 + (temple.$3 - 1) / 2;
-  final mercs = <_Sq>[(w, w, m), (land - w - m, w, m), (w, n - w - m, m), (land - w - m, n - w - m, m)];
+  // المرتزقة في الزوايا نفسها (2.4.0: كان بينها وبين الحافة شارع)
+  final mercs = <_Sq>[(0, 0, m), (land - m, 0, m), (0, n - m, m), (land - m, n - m, m)];
   final fixed = [temple, ...mercs];
-  bool fits(_Sq q, List<_Sq> others) => inside(q) && others.every((o) => !_clash(q, o, w));
-  // نصف القطر نفسه لكل القواعد: أكبره الذي تتسع فيه كلها
-  final h = L.i('home');
-  List<_Sq>? homes;
-  for (var r = L.d('ringMax'); r >= L.d('ringMin') - 1e-9 && homes == null; r -= L.d('ringStep')) {
-    final ring = <_Sq>[];
+  bool fits(_Sq q, List<_Sq> others) => inside(q) && others.every((o) => _apart(q, o, w));
+  // نصف القطر نفسه لكل القواعد: أكبره الذي تتسع فيه كلها، ومعه ما بقي من مبنى المدينة القديم وشوارع الخانات
+  final h = L.i('home'), old = cityFeatureBuilding(map.city);
+  final (temp, merc) = pair;
+  for (var r = L.d('ringMax'); r >= L.d('ringMin') - 1e-9; r -= L.d('ringStep')) {
+    final homes = <_Sq>[], R = math.min(land, n) * r;   // دائرة لا قطع ناقص في مدن الماء (2.4.0)
     for (var k = 0; k < count; k++) {
       final a = -math.pi / 2 + 2 * math.pi * k / count;
-      final q = around(ci + fcos(a) * land * r, cj + fsin(a) * n * r, h);
-      if (!fits(q, [...fixed, ...ring])) break;
-      ring.add(q);
+      final q = around(ci + fcos(a) * R, cj + fsin(a) * R, h);
+      if (!fits(q, [...fixed, ...homes])) break;
+      homes.add(q);
     }
-    if (ring.length == count) homes = ring;
-  }
-  if (homes == null) return null;
-  // ما بقي من مبنى المدينة القديم: في منتصف ما بين أول قاعدتين، أقرب ما يتسع للوسط
-  final (temp, merc) = pair;
-  final old = cityFeatureBuilding(map.city);
-  _Sq? extra;
-  if (old != null && old != temp && old != merc) {
-    final a = -math.pi / 2 + math.pi / count, e = L.i('extra');
-    for (var d = 1.0; d < n && extra == null; d += 0.5) {
-      final q = around(ci + fcos(a) * d, cj + fsin(a) * d, e);
-      if (fits(q, [...fixed, ...homes])) extra = q;
+    if (homes.length < count) continue;
+    // ما بقي من مبنى المدينة القديم: في منتصف ما بين أول قاعدتين، أقرب ما يتسع للوسط
+    _Sq? extra;
+    if (old != null && old != temp && old != merc) {
+      final a = -math.pi / 2 + math.pi / count, e = L.i('extra');
+      for (var d = 1.0; d < n && extra == null; d += 0.5) {
+        final q = around(ci + fcos(a) * d, cj + fsin(a) * d, e);
+        if (fits(q, [...fixed, ...homes])) extra = q;
+      }
     }
+    final lines = _slotLines([...homes, ...fixed, ?extra], w, land, n);
+    if (lines != null) return (homes: homes, temple: temple, mercs: mercs, extra: extra, w: w, cols: lines.$1, rows: lines.$2);
   }
-  return (homes: homes, temple: temple, mercs: mercs, extra: extra, w: w);
+  return null;
+}
+
+// خط كامل عند c بعرض w على محور طوله len مع صناديق الخانات spans (2.4.0): على شارع خانة، أو بعيد عنها بحي، أو يعبر
+// داخلها (فيقف عند شارعها). فلا يتسع شارع ولا يبقى بينه وبين خانة شريط ضيق، وحي حافة الخريطة 3 على الأقل
+bool _lineOk(int c, int len, int w, List<(int, int)> spans) {
+  if (c < 3 || c + w > len - 3) return false;
+  for (final (b0, b1) in spans) {
+    if (c == b0 || c + w == b1 || c + w <= b0 - 3 || c >= b1 + 3 || (c >= b0 + w && c + w <= b1 - w)) continue;
+    return false;
+  }
+  return true;
+}
+
+// شارع كامل على حافة كل خانة (فتتصل بالشبكة وتصطف الأحياء معها)، بلا شارعين متوازيين أقرب من حي. null إن تعذر
+(List<int>, List<int>)? _slotLines(List<_Sq> all, int w, int land, int n) {
+  final boxes = [for (final q in all) _box(q, w)];
+  final iSpans = [for (final b in boxes) (b.$1, b.$3)], jSpans = [for (final b in boxes) (b.$2, b.$4)];
+  final cols = <int>[], rows = <int>[];
+  bool apart(List<int> lines, int c) => lines.every((l) => l == c || (l - c).abs() >= w + 3);
+  bool touches(List<int> lines, int b0, int b1) => lines.any((c) => c == b0 || c + w == b1 || (c >= b0 + w && c + w <= b1 - w));
+  for (final (b0, d0, b1, d1) in boxes) {
+    if (touches(cols, b0, b1) || touches(rows, d0, d1)) continue;
+    var done = false;
+    for (final (lines, len, spans, e0, e1) in [(cols, land, iSpans, b0, b1), (rows, n, jSpans, d0, d1)]) {
+      for (final c in [e0, e1 - w]) {
+        if (!done && _lineOk(c, len, w, spans) && apart(lines, c)) { lines.add(c); done = true; }
+      }
+    }
+    if (!done) return null;
+  }
+  return (cols..sort(), rows..sort());
+}
+
+// شوارع المدينة مع الخانات (2.4.0، بطلب المستخدم: "شوارعها تكون كبيرة جداً ومختلفة عن البقية"): شوارع حواف الخانات،
+// وبينها خطوط كاملة بأبعاد أحياء المدينة بشروط _lineOk. فالشوارع كلها بعرض واحد (كانت الخانات تُقطع في شبكة عشوائية
+// فتتسع الشوارع حولها ويبقى بينها أحياء بمربع أو مربعين)
+void _carveSlotStreets(GameMap map, Rng rnd, _Slots s) {
+  final n = map.n, land = map.land, w = s.w, open = CITIES.open[map.city];
+  final sizes = open != null ? [for (final p in open.spacing) p - open.street]
+      : [for (var p = MAP_GEN.streetSpacingMin; p <= MAP_GEN.streetSpacingMax; p++) p - 1];
+  final boxes = [for (final q in [...s.homes, s.temple, ...s.mercs, ?s.extra]) _box(q, w)];
+  List<int> fill(List<int> fixed, int len, List<(int, int)> spans) {
+    final out = <int>[], edges = {for (final (b0, b1) in spans) ...[b0, b1 - w]}.toList()..sort();
+    var from = 0;
+    for (final next in [...fixed, len + 3]) {       // الحافة كخط بعدها بحي (حي الحافة 3 على الأقل)
+      while (next - from > sizes.last) {
+        bool fits(int c) => next - (c + w) >= 3 && _lineOk(c, len, w, spans);
+        // حافة خانة قريبة أولاً (فتصطف الأحياء معها)، وإلا خطوة بأبعاد أحياء المدينة، وإلا أقرب ما يصلح
+        int? pick;
+        for (final e in edges) { if (e - from >= 3 && e - from <= sizes.last + 2 && fits(e)) { pick = e; break; } }
+        final first = sizes[rnd.below(sizes.length)];
+        for (final b in [first, for (final b in sizes) if (b != first) b, for (var b = 3; b <= sizes.last + 4; b++) if (!sizes.contains(b)) b]) {
+          if (pick == null && fits(from + b)) pick = from + b;
+        }
+        // وإلا أقرب ما يصلح بعدها (حي أكبر)
+        for (var c = from + sizes.last + 5; pick == null && c + w + 3 <= next; c++) { if (fits(c)) pick = c; }
+        if (pick == null) break;
+        out.add(pick);
+        from = pick + w;
+      }
+      if (next < len) { out.add(next); from = next + w; }
+    }
+    return out;
+  }
+  for (final c in fill(s.cols, land, [for (final b in boxes) (b.$1, b.$3)])) {
+    for (var j = 0; j < n; j++) { for (var d = 0; d < w; d++) { map.road[map.idx(c + d, j)] = 1; } }
+  }
+  for (final r in fill(s.rows, n, [for (final b in boxes) (b.$2, b.$4)])) {
+    for (var i = 0; i < land; i++) { for (var d = 0; d < w; d++) { map.road[map.idx(i, r + d)] = 1; } }
+  }
 }
 
 // داخل كل خانة بلا شارع، وحولها شارع يصل بما يقطعه من شوارع المدينة

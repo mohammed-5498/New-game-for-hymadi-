@@ -103,6 +103,19 @@ def platform(im):
 FLAT_MAX = 18      # الأبراج الرفيعة تُقرأ أسمك من حقيقتها: لا يُقص أكثر من هذا
 
 
+# الزينة المعلّقة بين عمودين (2.4.0، بطلب المستخدم: "بعض الزينة والمعلقات مشوهة... عدّل اتجاهها لتناسب الشوارع"): صورتها
+# مواجهة للشاشة، فتُصنع منها نسختان مائلتان بميل الشارع على الشاشة: hang_i على طول i وhang_j على طول j
+HANG = {'mexico', 'jaipur'}
+
+
+def shear(im, ax, ay, k):
+    """y' = y + k (x - ax): العمودان قائمان والحبل بميل k، ونقطة الارتكاز (بين العمودين على الأرض) تنزل بقدر ما أُضيف فوقها"""
+    w, h = im.size
+    off = k * ax if k > 0 else -k * (w - ax)
+    out = im.transform((w, int(math.ceil(h + abs(k) * w))), Image.AFFINE, (1, 0, 0, -k, 1, k * ax - off), resample=Image.BICUBIC)
+    return out, ay + off
+
+
 def flatten(im, cut):
     """يُمحى ما تحت حافتي سطح المنصة الأماميتين (وجهاها الجانبيان وظلها)، بحافة ناعمة بكسلاً"""
     bottom, cx, t = cut
@@ -129,6 +142,12 @@ for city, entry in man['cities'].items():
     images = [r for r in images if not (r['group'] == 'ground' and r['kind'] in ('sidewalk', 'curb'))]
     made = relief(src['sidewalk'], src['curb']) if RELIEF and len(src) == 2 else []
     images += [dict(r, file=f'relief/{r["kind"]}', _img=im) for r, im in made]
+    for r in list(images):
+        if city in HANG and r['group'] == 'decor' and r['kind'] == 'roadprop':
+            im = Image.open(os.path.join(ROOT, r['file'])).convert('RGBA')
+            for kind, k in (('hang_i', 0.5), ('hang_j', -0.5)):
+                sh, ay = shear(im, r['ax'], r['ay'], k)
+                images.append(dict(r, kind=kind, file=f'cities/{city}/decor/{kind}_{r.get("variant", 1)}', _img=sh, w=sh.width, h=sh.height, ay=round(ay, 1)))
     # المباني المميزة (المعابد والمرتزقة ومباني المدن) بلا جانبي منصتها، وتنزل بسُمكها فيقع سطحها على الأرض
     for n, r in enumerate(images):
         if r['group'] != 'feature' or not RELIEF: continue

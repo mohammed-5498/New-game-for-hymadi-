@@ -109,7 +109,7 @@ void drawFlagArrows(TriBatch b, MatchState s, double time, double left, double r
 // أعلى سطح المبنى في العالم (من صورته في الأطلس بترقيته أو مستواه ومقياسها)
 double _roofTop(MatchState s, CityArt art, District d, double y) {
   final sp = tileSprite(s.map, art, d.buildTile! % s.map.n, d.buildTile! ~/ s.map.n, s);
-  return sp == null ? y - 30 : y - sp.$1.ay * sp.$2 / art.px;
+  return sp == null ? y - 30 : y + sp.$4 - sp.$1.ay * sp.$2 / art.px;
 }
 
 // مكان الشارة: (x، أعلى السطح، مركز القرص، نصف قطره)

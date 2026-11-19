@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gangcity/config.dart' show CITIES, RETIRED_CITIES;
 import 'package:gangcity/core/fmath.dart';
 import 'package:gangcity/game/combat.dart' show isEnemyId;
 import 'package:gangcity/game/features.dart';
@@ -45,17 +46,27 @@ void main() {
     }
   }, timeout: const Timeout(Duration(minutes: 6)));
 
-  test('القواعد مربعات متساوية على أبعاد متساوية من المعبد، والمعبد والمرتزقة مربعات (في كل المدن، من 2 إلى 8 لاعبين)', () {
-    for (final city in _cities) {
-      for (final np in [2, 3, 4, 8]) {
+  // وشوارعها بعرض واحد (2.4.0، بطلب المستخدم: كانت تتسع حول الخانات): لا مربع شوارع أعرض من شارع المدينة. واليمامة خرجت
+  // من اللعبة (RETIRED_CITIES) فلا تُفحص هنا
+  test('القواعد مربعات متساوية على أبعاد متساوية من المعبد، والمعبد والمرتزقة مربعات، والشوارع بعرض واحد (في كل المدن، من 2 إلى 8 لاعبين)', () {
+    for (final city in _cities.where((c) => !RETIRED_CITIES.contains(c))) {
+      // بحدود قائمة اللعب (MAP_SIZES.maxPlayers): الصغيرة حتى 4 والمتوسطة حتى 6 والكبيرة حتى 8
+      for (final (np, size) in [(2, 'small'), (4, 'small'), (3, 'medium'), (6, 'medium'), (5, 'large'), (7, 'large'), (8, 'large')]) {
         simRng = Rng(np);
         final s = createMatch((jsonDecode(jsonEncode({
-          'mode': 'conquest', 'city': city, 'mapSize': np == 8 ? 'small' : 'medium', 'maxUnits': 50, 'weather': 'day', 'temples': true,
+          'mode': 'conquest', 'city': city, 'mapSize': size, 'maxUnits': 50, 'weather': 'day', 'temples': true,
           'players': [for (var k = 0; k < np; k++) {..._bot(k % 4), 'color': ['blue', 'red', 'green', 'yellow', 'purple', 'orange', 'cyan', 'pink'][k]}],
         })) as Map).cast<String, Object?>());
-        final why = '$city $np';
+        final why = '$city $np $size', m = s.map, w = CITIES.open[city]?.street ?? 1;
+        bool road(int i, int j) => m.road[m.idx(i, j)] == 1;
+        for (var j = 0; j + w < m.n; j++) {
+          for (var i = 0; i + w < m.land; i++) {
+            final wide = [for (var b = 0; b <= w; b++) for (var a = 0; a <= w; a++) road(i + a, j + b)].every((r) => r);
+            expect(wide, isFalse, reason: '$why: شارع أعرض من $w عند $i،$j');
+          }
+        }
         final temple = s.map.districts.firstWhere((d) => d.temple);
-        expect(temple.tiles.length, 25, reason: why);
+        expect(temple.tiles.length, 16, reason: why);
         expect(s.map.districts.where((d) => d.merc).every((d) => d.tiles.length == 16), isTrue, reason: why);
         final homes = s.map.districts.where((d) => d.isHome).toList();
         expect(homes.length, np, reason: why);

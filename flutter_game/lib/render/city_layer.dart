@@ -66,15 +66,32 @@ int _groundOf(GameMap map, CityArt art, int i, int j, int k, int type, Map<Strin
 // البرج والمستشفى ومستوى القاعدة وساحة تدريبها (بلا state صور الأحجام وحدها)
 // والمقياس النهائي (2.3.2): المعلم أصغر داخل حافته، وبيوت الحدائق أشجار، والمباني أصغر قليلاً من مربعها (فلا تخرج زينتها
 // إلى الرصيف) وأصغر على حافة الخريطة
-(Sprite, double, double)? tileSprite(GameMap map, CityArt art, int i, int j, [MatchState? state]) {
+// (الصورة، مقياسها، إزاحتها x، إزاحتها y). وفناء بين الرصيف والمبنى (2.4.0، بطلب المستخدم: "مسافة بين حدود الرصيف وحدود
+// الحي... لكي لا يكون هناك تداخل من المباني على الرصيف"): المبنى يبتعد عن كل ضلع يطل على شارع أو ماء أو حي آخر أو حافة
+// الخريطة حتى يبقى بينهما GROUND.yard من المربع، فلا تخرج صورته إلى الرصيف ولا عن الخريطة، وحد الحي الملون في الفناء
+(Sprite, double, double, double)? tileSprite(GameMap map, CityArt art, int i, int j, [MatchState? state]) {
   final k = map.idx(i, j), type = map.type[k];
-  if (map.road[k] == 1) return _tileSprite(map, art, i, j, state);
-  final park = (type == tH || type == tR) && !isMonument(map, k) && parksOf(map).contains(map.districtAt[k]);
+  if (map.road[k] == 1) { final s = _tileSprite(map, art, i, j, state); return s == null ? null : (s.$1, s.$2, 0, s.$3); }
+  if (isMonument(map, k)) {
+    // المعلم في الحديقة، وجزيرة الدوار مكانه في مدن الدوار (أعرض: تُصغَّر إلى مربعها)
+    final m = art.find('monument', 'monument'), island = m == null ? art.find('decor', 'island') : null;
+    if (m != null) return (m, art.scale * GROUND.monument, 0, 0);
+    return island == null ? null : (island, GROUND.island, 0, 0);
+  }
+  final park = (type == tH || type == tR) && parksOf(map).contains(map.districtAt[k]);
+  if (park && k == parkCenter(map, map.districts[map.districtAt[k]])) {
+    // وسط الحديقة: بئر في المدن العربية والأفريقية (من زينة اليمامة)، ونافورة في غيرها (decor.dart)
+    final w = parkWell(map) ? art.find('prop', 'well') : null;
+    return w == null ? null : (w, art.scale, 0, 0);
+  }
   final s = park ? _parkTree(map, art, i, j) : _tileSprite(map, art, i, j, state);
   if (s == null) return null;
-  var sc = isMonument(map, k) ? GROUND.monument : !park && _built.contains(type) ? GROUND.inset : 1.0;
-  if (i == 0 || j == 0 || i == map.n - 1 || j == map.n - 1) sc *= GROUND.edgeInset;
-  return (s.$1, s.$2 * sc, s.$3);
+  if (park || !_built.contains(type)) return (s.$1, s.$2, 0, s.$3);
+  final id = map.districtAt[k], shift = math.max(0.0, GROUND.yard - (1 - GROUND.inset) / 2);
+  bool out(int a, int b) => !map.inBounds(a, b) || lowGround(map, map.idx(a, b)) || map.districtAt[map.idx(a, b)] != id;
+  double away(bool lo, bool hi) => lo == hi ? 0 : lo ? shift : -shift;
+  final da = away(out(i - 1, j), out(i + 1, j)), db = away(out(i, j - 1), out(i, j + 1));
+  return (s.$1, s.$2 * GROUND.inset, (da - db) * TILE_HALF_W, s.$3 + (da + db) * TILE_HALF_H);
 }
 
 // شجرة الحديقة: شجرة المدينة (نخيلها أو كرزها...) أو شجرة الرصيف، بنسخة بالتجزئة
@@ -104,8 +121,8 @@ int _groundOf(GameMap map, CityArt art, int i, int j, int k, int type, Map<Strin
   }
   if (type == tH) {
     var kind = map.kind[k];
-    if (kind == 'monument') {
-      final s = art.find('monument', 'monument');
+    if (kind == 'monument') {                                      // مكان المعلم القديم: بيت (المعلم في حديقة، 2.4.0)
+      final s = _houseFor(map, art, i, j);
       return s == null ? null : (s, art.scale, 0);
     }
     if (kind == null || !art.has(kind)) kind = _firstBuilding(map.city, art);
@@ -137,8 +154,10 @@ int _groundOf(GameMap map, CityArt art, int i, int j, int k, int type, Map<Strin
   if (type == tF && district?.feature != null) {
     final s = art.find('feature', district!.feature!);
     if (s == null) return null;
-    // الكتلة 2×2 من مربعها الأمامي، والحي الضيق: الرسم نفسه مصغّراً بلا إزاحة الكتلة
-    return district.featureBig ? (s, 1, 0) : (s, _featureSmall, TILE_HALF_H * _featureSmall);
+    // الكتلة 2×2 من مربعها الأمامي، أصغر حول وسطها (ملتقى مربعاتها الأربعة، أعلى من مربعها الأمامي بـ TILE_HALF_H)، والحي
+    // الضيق: الرسم نفسه مصغّراً بلا إزاحة الكتلة
+    final f = GROUND.feature;
+    return district.featureBig ? (s, f, -TILE_HALF_H * (1 - f)) : (s, _featureSmall * f, TILE_HALF_H * _featureSmall * f);
   }
   // ساحة علم حي القاعدة: ساحة تدريب بمستواها (hqYard في empireBuildings.js)
   if (type == tP && state != null && district != null && district.building == 'hq' &&
@@ -249,7 +268,7 @@ class CityLayer {
   final Uint8List? _level;
   final double reliefDrop;
   final ui.Paint _reliefPaint;
-  final _Margin? _margin;
+  final _Edge? _margin;
   CityLayer._(this.ground, this.marks, this._slot, this._bandStart, this.rows, this.rowStart, this.xf, this.rects, this._pos, this._baseCol, this._col,
       this._tileDistrict, this._spriteDistrict, this.spriteCol, this._isMask, this.lights, this._tileItem, this._tileMask,
       this._tileSprite, this._slots, this._slotPos, this._slotItem, this._slotMask, this._slotLevel, this.lift, this.wide,
@@ -319,13 +338,14 @@ class CityLayer {
           gMod[k] = _modulate(base[k], gKind[k]);
         }
         tileD[k] = map.road[k] == 1 || map.type[k] == tWater || map.type[k] == tY || isMonument(map, k) ? -1 : map.districtAt[k];
-        final s = tileSprite(map, art, i, j, state), did = map.road[k] == 1 ? -1 : map.districtAt[k];
+        final s = tileSprite(map, art, i, j, state), did = map.road[k] == 1 || parkPiece(map, k) ? -1 : map.districtAt[k];
+        final sx = x + (s?.$3 ?? 0), sy = y + dz[k] + (s?.$4 ?? 0);
         // مربعات الأحياء خانات بقناع (قد يُبنى فيها مبنى اقتصاد)، وساحة العلم خانة ولو فارغة (ساحة التدريب)
         if (s != null || capture.contains(k)) {
-          items.add(_It(i + j, i, 0, s?.$1, x, y + dz[k] + (s?.$3 ?? 0), s?.$2 ?? 1, did, k));
-          if (did >= 0) items.add(_It(i + j, i, 0, s?.$1, x, y + dz[k] + (s?.$3 ?? 0), s?.$2 ?? 1, did, k, mask: true));
+          items.add(_It(i + j, i, 0, s?.$1, sx, sy, s?.$2 ?? 1, did, k));
+          if (did >= 0) items.add(_It(i + j, i, 0, s?.$1, sx, sy, s?.$2 ?? 1, did, k, mask: true));
         }
-        if (s != null && dz[k] == 0 && _built.contains(map.type[k]) && !parksOf(map).contains(map.districtAt[k])) bases.add((x, y, s.$2));   // ظل قاعدة المبنى (18.10أ)
+        if (s != null && dz[k] == 0 && _built.contains(map.type[k]) && !parksOf(map).contains(map.districtAt[k])) bases.add((sx, sy, s.$2));   // ظل قاعدة المبنى (18.10أ)
         final from = rowVecs[i + j].length;
         decor.tileDecor(rowVecs[i + j], i, j);
         // ارتفاع ما على المربع فوق ركنه الخلفي (ضباب الحرب يغطيه كله): الزينة هنا، والصورة بعد ترتيبها
@@ -422,7 +442,7 @@ class CityLayer {
         [for (final v in rowVecs) v.build()], rowStart, xf, rects, gpos, base, gcol, tileD, spriteD, spriteCol, isMask,
         mapLights(map, decor.lights), tileItem, tileMask, tileImg, slots, Float32List.fromList(slotPos), slotItem, slotMask,
         Int32List(slots.length), lift, wide, gXf, gRect, gBase, gBase == null ? null : Int32List.fromList(gBase), gKindBase, markSprites,
-        rs, rv, level, drop, _weatherPaint(weather), drop > 0 ? _Margin(map, art, weather) : null);
+        rs, rv, level, drop, _weatherPaint(weather), drop > 0 ? _Edge(map, art, weather, dz, base) : null);
     layer.refreshWalls(map, art);
     return layer;
   }
@@ -437,7 +457,7 @@ class CityLayer {
       if (identical(_tileSprite[k], now?.$1)) continue;
       final mm = _tileMask[k];
       if (mm == null && now?.$1.mx != null) return false;
-      final x = (k % n - k ~/ n) * TILE_HALF_W, y = (k % n + k ~/ n) * TILE_HALF_H + (now?.$3 ?? 0), sc = now?.$2 ?? 1;
+      final x = (k % n - k ~/ n) * TILE_HALF_W + (now?.$3 ?? 0), y = (k % n + k ~/ n) * TILE_HALF_H + (now?.$4 ?? 0), sc = now?.$2 ?? 1;
       _put(m, now?.$1, x, y, sc, art.px, k, n);
       if (mm != null) _put(mm, now?.$1, x, y, sc, art.px, k, n);
       _tileSprite[k] = now?.$1;
@@ -510,7 +530,6 @@ class CityLayer {
     // الأرض ثم خطوطها، للشرائح الظاهرة وحدها (حلقة الدوار وحافة الساحات تتجاوز مربعها قليلاً: هامش 48)
     bool seen(int b) => (b * band - 1) * TILE_HALF_H - 48 <= bottom && ((b + 1) * band + 1) * TILE_HALF_H + 48 >= top;
     // skip: المدينة مخفية (مفتاح عدّاد الأداء)، وما فوقها يُرسم كما هو
-    if (!skip) _margin?.paint(canvas, atlas, false);
     for (var b = 0; b < ground.length && !skip; b++) { if (ground[b] != null && seen(b)) canvas.drawVertices(ground[b]!, ui.BlendMode.dst, _paint); }
     // صور الأرض فوق لونها المسطح (يسد ما بين حوافها)، ثم العلامات بالكود وصورها
     final gx = _gXf;
@@ -520,7 +539,7 @@ class CityLayer {
           Float32List.sublistView(_gRect!, _bandStart[b] * 4, _bandStart[b + 1] * 4), Int32List.sublistView(_gCol!, _bandStart[b], _bandStart[b + 1]));
       canvas.drawRawAtlas(atlas, w.$1, w.$2, w.$3, ui.BlendMode.modulate, null, _atlasPaint);
     }
-    if (!skip) _margin?.paint(canvas, atlas, true);
+    if (!skip) _margin?.paint(canvas);
     for (var b = 0; b < marks.length && !skip; b++) { if (marks[b] != null && seen(b)) canvas.drawVertices(marks[b]!, ui.BlendMode.dst, _paint); }
     for (var b = 0; b < _markSprites.length && !skip; b++) {
       final w = _markSprites[b];
@@ -571,48 +590,57 @@ class CityLayer {
   }
 }
 
-// هامش الخريطة (2.3.1، وأضيق في 2.3.2 بطلب المستخدم): شريط أرض بعرض GROUND.margin من المربع حول الخريطة، بلون أرض
-// المدينة أغمق قليلاً، وجانبه الأمامي تراب يغمق إلى أسفل، فلا تنقطع الحافة. الخلفي قبل الأرض والأمامي بعد صورها
-// (يغطي ما نزل من الشارع والماء عند الحافة)
-class _Margin {
-  final List<ui.Vertices?> mesh;                       // [الخلفي، الأمامي]
-  final ui.Vertices? edge;
-  _Margin._(this.mesh, this.edge);
+// حافة الخريطة (2.4.0، بطلب المستخدم: "حدود الخريطة يتم تعبئته بالكامل من دون فراغات"، والماء "يغطي الحدود كاملة لكي يعطي
+// شكل النهر الجاري"): بلا هامش حولها (كان شريط أرض بعرض GROUND.margin، والفناء بين الرصيف والمبنى يمنع خروج المباني عنها
+// الآن)، ووجه تراب تحت الضلعين الأماميين بمستوى كل مربع (الشارع أخفض)، والماء يمتد خارج الخريطة ويخفت فيبدو نهراً يجري تحتها
+class _Edge {
+  final ui.Vertices? mesh;
+  _Edge._(this.mesh);
 
-  factory _Margin(GameMap map, CityArt art, String weather) {
-    final n = map.n, w = GROUND.margin, c = art.colors;
+  factory _Edge(GameMap map, CityArt art, String weather, Float32List dz, Int32List base) {
+    final n = map.n, d = GROUND.edge, deep = art.relief + d, c = art.colors;
     var col = mix(hex(c['ground']!), 0x000000, 0.12);
     if (weather == 'snow') col = mix(col, hex('#eef2f5'), 0.72);
     if (weather == 'rain') col = mix(col, hex('#2a2f36'), 0.2);
-    final c32 = (0xFF000000 | col).toSigned(32);
-    List<double> p(double a, double b) => [(a - b) * TILE_HALF_W, (a + b) * TILE_HALF_H];
-    final lo = -0.5 - w, hi = n - 0.5 + w, il = -0.5, ih = n - 0.5;
-    final oTop = p(lo, lo), oRight = p(hi, lo), oBottom = p(hi, hi), oLeft = p(lo, hi);
-    final iTop = p(il, il), iRight = p(ih, il), iBottom = p(ih, ih), iLeft = p(il, ih);
-    void quad(Vec v, List<double> a, List<double> b, List<double> c, List<double> d) =>
-        v..tri(a[0], a[1], b[0], b[1], c[0], c[1], c32)..tri(a[0], a[1], c[0], c[1], d[0], d[1], c32);
-    final back = Vec(), front = Vec();
-    quad(back, oTop, oLeft, iLeft, iTop);          // الضلع الخلفي الأيسر (i = −½)
-    quad(back, oTop, oRight, iRight, iTop);        // والخلفي الأيمن (j = −½)
-    quad(front, oRight, oBottom, iBottom, iRight); // والأمامي الأيمن (i = n−½)
-    quad(front, oBottom, oLeft, iLeft, iBottom);   // والأمامي الأيسر (j = n−½)
-    // الجانب الأمامي: تراب بلون الأرض أغمق، والأيمن أغمق كوجوه الحافة
-    final e = Vec(), d = GROUND.edge, top = mix(col, hex('#3b2e22'), 0.6), b = (0xFF000000 | 0x140f0b).toSigned(32);
-    for (final (x0, y0, x1, y1, right) in [(oRight[0], oRight[1], oBottom[0], oBottom[1], true), (oBottom[0], oBottom[1], oLeft[0], oLeft[1], false)]) {
-      final t0 = (0xFF000000 | (right ? mix(top, 0x000000, 0.2) : top)).toSigned(32);
-      e..tri(x0, y0, x1, y1, x1, y1 + d, t0, t0, b)..tri(x0, y0, x1, y1 + d, x0, y0 + d, t0, b, b);
+    final top = mix(col, hex('#3b2e22'), 0.6), right = (0xFF000000 | mix(top, 0x000000, 0.2)).toSigned(32);
+    final left = (0xFF000000 | top).toSigned(32), bottom = (0xFF000000 | 0x140f0b).toSigned(32);
+    (double, double) p(double a, double b) => ((a - b) * TILE_HALF_W, (a + b) * TILE_HALF_H);
+    final v = Vec();
+    void face((double, double) a, (double, double) b, double z, int t) {
+      v..tri(a.$1, a.$2 + z, b.$1, b.$2 + z, b.$1, b.$2 + deep, t, t, bottom)..tri(a.$1, a.$2 + z, b.$1, b.$2 + deep, a.$1, a.$2 + deep, t, bottom, bottom);
     }
-    return _Margin._([back.build(), front.build()], e.build());
+    final water = <int>[];
+    for (var t = 0; t < n; t++) {
+      final kr = map.idx(n - 1, t), kl = map.idx(t, n - 1);
+      if (map.type[kr] != tWater) face(p(n - 0.5, t - 0.5), p(n - 0.5, t + 0.5), dz[kr], right);
+      if (map.type[kl] != tWater) face(p(t - 0.5, n - 0.5), p(t + 0.5, n - 0.5), dz[kl], left);
+      for (final k in [kr, kl, map.idx(t, 0), map.idx(0, t)]) { if (map.type[k] == tWater && !water.contains(k)) water.add(k); }
+    }
+    // الماء على الحافة يمتد خارجها بلونه ويخفت حتى GROUND.river من المربع، وزواياه كذلك
+    final reach = GROUND.river;
+    for (final k in water) {
+      // يخفت إلى لون أغمق (لا وهج بلون الماء على الخلفية الداكنة)
+      final i = k % n, j = k ~/ n, z = dz[k], c0 = (0xFF000000 | base[k]).toSigned(32), c1 = mix(base[k] & 0xFFFFFF, 0x141210, 0.55);
+      // رباعي على الماء من (a، b) بألوان رؤوسه
+      void quad((double, double) a, (double, double) b, (double, double) e, (double, double) f, int ca, int cb, int ce, int cf) {
+        v..tri(a.$1, a.$2 + z, b.$1, b.$2 + z, e.$1, e.$2 + z, ca, cb, ce)..tri(a.$1, a.$2 + z, e.$1, e.$2 + z, f.$1, f.$2 + z, ca, ce, cf);
+      }
+      void out(double a0, double b0, double a1, double b1, double da, double db) =>
+          quad(p(a0, b0), p(a1, b1), p(a1 + da, b1 + db), p(a0 + da, b0 + db), c0, c0, c1, c1);
+      final si = i == n - 1 ? 1 : i == 0 ? -1 : 0, sj = j == n - 1 ? 1 : j == 0 ? -1 : 0;
+      if (si != 0) out(i + si * 0.5, j - 0.5, i + si * 0.5, j + 0.5, si * reach, 0);
+      if (sj != 0) out(i - 0.5, j + sj * 0.5, i + 0.5, j + sj * 0.5, 0, sj * reach);
+      if (si != 0 && sj != 0) {                       // الزاوية: من ركن المربع إلى ركنها البعيد
+        quad(p(i + si * 0.5, j + sj * 0.5), p(i + si * (0.5 + reach), j + sj * 0.5), p(i + si * (0.5 + reach), j + sj * (0.5 + reach)),
+            p(i + si * 0.5, j + sj * (0.5 + reach)), c0, c1, c1, c1);
+      }
+    }
+    return _Edge._(v.build());
   }
 
   static final _paint = ui.Paint();
-  void paint(ui.Canvas canvas, ui.Image atlas, bool front) {
-    final k = front ? 1 : 0;
-    if (mesh[k] != null) canvas.drawVertices(mesh[k]!, ui.BlendMode.dst, _paint);
-    if (front && edge != null) canvas.drawVertices(edge!, ui.BlendMode.dst, _paint);
-  }
-
-  void dispose() { for (final v in mesh) { v?.dispose(); } edge?.dispose(); }
+  void paint(ui.Canvas canvas) { if (mesh != null) canvas.drawVertices(mesh!, ui.BlendMode.dst, _paint); }
+  void dispose() => mesh?.dispose();
 }
 
 // مربعات المباني (لها ظل قاعدة): البيوت والأطلال والقاعدة والشرطة والبرج والمستشفى. والمبنى المميز بلا ظل: منصته مقصوصة
@@ -681,18 +709,6 @@ ui.Paint _weatherPaint(String weather) {
       }
     }
   }
-  // هامش الخريطة الخلفي أرض أعلى من الماء عند الحافة الخلفية: وجه ضفته عليه
-  for (var t = 0; t < side; t++) {
-    if (level[t * side] == 1 && fi[t % sub] != null) {
-      final a = -0.5, b = t / sub - 0.5;
-      faces[bandOf(0, t ~/ sub)].add((fi[t % sub]!, (a - b) * TILE_HALF_W, (a + b) * TILE_HALF_H));
-    }
-    if (level[t] == 1 && fj[t % sub] != null) {
-      final a = t / sub - 0.5, b = -0.5;
-      faces[bandOf(t ~/ sub, 0)].add((fj[t % sub]!, (a - b) * TILE_HALF_W, (a + b) * TILE_HALF_H));
-    }
-  }
-
   // ظل قاعدة كل مبنى على ما حوله
   final shade = ((GROUND.shadow * 255).round() << 24).toSigned(32);
   final rings = [GROUND.shadowIn, GROUND.shadowMid, GROUND.shadowOut], alphas = [shade, shade, 0];

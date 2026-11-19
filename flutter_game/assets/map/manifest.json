@@ -597,6 +597,24 @@
      "variant": 1
     },
     {
+     "file": "cities/arab/ground/sidewalk.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49.0,
+     "group": "ground",
+     "kind": "sidewalk"
+    },
+    {
+     "file": "cities/arab/ground/curb.webp",
+     "w": 109,
+     "h": 16,
+     "ax": 0,
+     "ay": 0,
+     "group": "ground",
+     "kind": "curb"
+    },
+    {
      "file": "cities/arab/ground/road.webp",
      "w": 197,
      "h": 98,
@@ -633,22 +651,24 @@
      "kind": "plaza"
     },
     {
-     "file": "cities/arab/ground/sidewalk.webp",
-     "w": 197,
-     "h": 98,
-     "ax": 98.5,
-     "ay": 49.0,
-     "group": "ground",
-     "kind": "sidewalk"
+     "file": "cities/yamamah/props/well_1.webp",
+     "group": "prop",
+     "kind": "well",
+     "w": 79,
+     "h": 102,
+     "ax": 36.5,
+     "ay": 84,
+     "variant": 1
     },
     {
-     "file": "cities/arab/ground/curb.webp",
-     "w": 109,
-     "h": 16,
-     "ax": 0,
-     "ay": 0,
-     "group": "ground",
-     "kind": "curb"
+     "file": "cities/yamamah/props/cart_1.webp",
+     "group": "prop",
+     "kind": "cart",
+     "w": 77,
+     "h": 51,
+     "ax": 38.5,
+     "ay": 40,
+     "variant": 1
     }
    ]
   },
@@ -1238,6 +1258,24 @@
      "variant": 1
     },
     {
+     "file": "cities/japan/ground/sidewalk.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49.0,
+     "group": "ground",
+     "kind": "sidewalk"
+    },
+    {
+     "file": "cities/japan/ground/curb.webp",
+     "w": 109,
+     "h": 16,
+     "ax": 0,
+     "ay": 0,
+     "group": "ground",
+     "kind": "curb"
+    },
+    {
      "file": "cities/japan/ground/road.webp",
      "w": 197,
      "h": 98,
@@ -1272,24 +1310,6 @@
      "ay": 49,
      "group": "ground",
      "kind": "plaza"
-    },
-    {
-     "file": "cities/japan/ground/sidewalk.webp",
-     "w": 197,
-     "h": 98,
-     "ax": 98.5,
-     "ay": 49.0,
-     "group": "ground",
-     "kind": "sidewalk"
-    },
-    {
-     "file": "cities/japan/ground/curb.webp",
-     "w": 109,
-     "h": 16,
-     "ax": 0,
-     "ay": 0,
-     "group": "ground",
-     "kind": "curb"
     }
    ]
   },
@@ -1863,6 +1883,24 @@
      "variant": 1
     },
     {
+     "file": "cities/china/ground/sidewalk.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49.0,
+     "group": "ground",
+     "kind": "sidewalk"
+    },
+    {
+     "file": "cities/china/ground/curb.webp",
+     "w": 109,
+     "h": 16,
+     "ax": 0,
+     "ay": 0,
+     "group": "ground",
+     "kind": "curb"
+    },
+    {
      "file": "cities/china/ground/road.webp",
      "w": 197,
      "h": 98,
@@ -1897,24 +1935,6 @@
      "ay": 49,
      "group": "ground",
      "kind": "plaza"
-    },
-    {
-     "file": "cities/china/ground/sidewalk.webp",
-     "w": 197,
-     "h": 98,
-     "ax": 98.5,
-     "ay": 49.0,
-     "group": "ground",
-     "kind": "sidewalk"
-    },
-    {
-     "file": "cities/china/ground/curb.webp",
-     "w": 109,
-     "h": 16,
-     "ax": 0,
-     "ay": 0,
-     "group": "ground",
-     "kind": "curb"
     }
    ]
   },
@@ -2508,6 +2528,24 @@
      "variant": 1
     },
     {
+     "file": "cities/europe/ground/sidewalk.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49.0,
+     "group": "ground",
+     "kind": "sidewalk"
+    },
+    {
+     "file": "cities/europe/ground/curb.webp",
+     "w": 109,
+     "h": 16,
+     "ax": 0,
+     "ay": 0,
+     "group": "ground",
+     "kind": "curb"
+    },
+    {
      "file": "cities/europe/ground/road.webp",
      "w": 197,
      "h": 98,
@@ -2542,24 +2580,6 @@
      "ay": 49,
      "group": "ground",
      "kind": "plaza"
-    },
-    {
-     "file": "cities/europe/ground/sidewalk.webp",
-     "w": 197,
-     "h": 98,
-     "ax": 98.5,
-     "ay": 49.0,
-     "group": "ground",
-     "kind": "sidewalk"
-    },
-    {
-     "file": "cities/europe/ground/curb.webp",
-     "w": 109,
-     "h": 16,
-     "ax": 0,
-     "ay": 0,
-     "group": "ground",
-     "kind": "curb"
     }
    ]
   },
@@ -3192,6 +3212,24 @@
      "variant": 1
     },
     {
+     "file": "cities/norway/ground/sidewalk.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49.0,
+     "group": "ground",
+     "kind": "sidewalk"
+    },
+    {
+     "file": "cities/norway/ground/curb.webp",
+     "w": 109,
+     "h": 16,
+     "ax": 0,
+     "ay": 0,
+     "group": "ground",
+     "kind": "curb"
+    },
+    {
      "file": "cities/norway/ground/road.webp",
      "w": 197,
      "h": 98,
@@ -3235,24 +3273,6 @@
      "ay": 49,
      "group": "ground",
      "kind": "water"
-    },
-    {
-     "file": "cities/norway/ground/sidewalk.webp",
-     "w": 197,
-     "h": 98,
-     "ax": 98.5,
-     "ay": 49.0,
-     "group": "ground",
-     "kind": "sidewalk"
-    },
-    {
-     "file": "cities/norway/ground/curb.webp",
-     "w": 109,
-     "h": 16,
-     "ax": 0,
-     "ay": 0,
-     "group": "ground",
-     "kind": "curb"
     }
    ]
   },
@@ -3864,6 +3884,24 @@
      "variant": 1
     },
     {
+     "file": "cities/hk/ground/sidewalk.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49.0,
+     "group": "ground",
+     "kind": "sidewalk"
+    },
+    {
+     "file": "cities/hk/ground/curb.webp",
+     "w": 109,
+     "h": 16,
+     "ax": 0,
+     "ay": 0,
+     "group": "ground",
+     "kind": "curb"
+    },
+    {
      "file": "cities/hk/ground/road.webp",
      "w": 197,
      "h": 98,
@@ -3898,24 +3936,6 @@
      "ay": 49,
      "group": "ground",
      "kind": "plaza"
-    },
-    {
-     "file": "cities/hk/ground/sidewalk.webp",
-     "w": 197,
-     "h": 98,
-     "ax": 98.5,
-     "ay": 49.0,
-     "group": "ground",
-     "kind": "sidewalk"
-    },
-    {
-     "file": "cities/hk/ground/curb.webp",
-     "w": 109,
-     "h": 16,
-     "ax": 0,
-     "ay": 0,
-     "group": "ground",
-     "kind": "curb"
     }
    ]
   },
@@ -4505,6 +4525,24 @@
      "variant": 1
     },
     {
+     "file": "cities/jaipur/ground/sidewalk.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49.0,
+     "group": "ground",
+     "kind": "sidewalk"
+    },
+    {
+     "file": "cities/jaipur/ground/curb.webp",
+     "w": 109,
+     "h": 16,
+     "ax": 0,
+     "ay": 0,
+     "group": "ground",
+     "kind": "curb"
+    },
+    {
      "file": "cities/jaipur/ground/road.webp",
      "w": 197,
      "h": 98,
@@ -4539,24 +4577,6 @@
      "ay": 49,
      "group": "ground",
      "kind": "plaza"
-    },
-    {
-     "file": "cities/jaipur/ground/sidewalk.webp",
-     "w": 197,
-     "h": 98,
-     "ax": 98.5,
-     "ay": 49.0,
-     "group": "ground",
-     "kind": "sidewalk"
-    },
-    {
-     "file": "cities/jaipur/ground/curb.webp",
-     "w": 109,
-     "h": 16,
-     "ax": 0,
-     "ay": 0,
-     "group": "ground",
-     "kind": "curb"
     }
    ]
   },
@@ -5132,6 +5152,24 @@
      "variant": 1
     },
     {
+     "file": "cities/mexico/ground/sidewalk.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49.0,
+     "group": "ground",
+     "kind": "sidewalk"
+    },
+    {
+     "file": "cities/mexico/ground/curb.webp",
+     "w": 109,
+     "h": 16,
+     "ax": 0,
+     "ay": 0,
+     "group": "ground",
+     "kind": "curb"
+    },
+    {
      "file": "cities/mexico/ground/road.webp",
      "w": 197,
      "h": 98,
@@ -5166,24 +5204,6 @@
      "ay": 49,
      "group": "ground",
      "kind": "plaza"
-    },
-    {
-     "file": "cities/mexico/ground/sidewalk.webp",
-     "w": 197,
-     "h": 98,
-     "ax": 98.5,
-     "ay": 49.0,
-     "group": "ground",
-     "kind": "sidewalk"
-    },
-    {
-     "file": "cities/mexico/ground/curb.webp",
-     "w": 109,
-     "h": 16,
-     "ax": 0,
-     "ay": 0,
-     "group": "ground",
-     "kind": "curb"
     }
    ]
   },
@@ -5774,6 +5794,24 @@
      "variant": 1
     },
     {
+     "file": "cities/chicago/ground/sidewalk.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49.0,
+     "group": "ground",
+     "kind": "sidewalk"
+    },
+    {
+     "file": "cities/chicago/ground/curb.webp",
+     "w": 109,
+     "h": 16,
+     "ax": 0,
+     "ay": 0,
+     "group": "ground",
+     "kind": "curb"
+    },
+    {
      "file": "cities/chicago/ground/road.webp",
      "w": 197,
      "h": 98,
@@ -5808,24 +5846,6 @@
      "ay": 49,
      "group": "ground",
      "kind": "plaza"
-    },
-    {
-     "file": "cities/chicago/ground/sidewalk.webp",
-     "w": 197,
-     "h": 98,
-     "ax": 98.5,
-     "ay": 49.0,
-     "group": "ground",
-     "kind": "sidewalk"
-    },
-    {
-     "file": "cities/chicago/ground/curb.webp",
-     "w": 109,
-     "h": 16,
-     "ax": 0,
-     "ay": 0,
-     "group": "ground",
-     "kind": "curb"
     }
    ]
   },
@@ -6712,6 +6732,24 @@
      "variant": 1
     },
     {
+     "file": "cities/yamamah/ground/sidewalk.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49.0,
+     "group": "ground",
+     "kind": "sidewalk"
+    },
+    {
+     "file": "cities/yamamah/ground/curb.webp",
+     "w": 109,
+     "h": 16,
+     "ax": 0,
+     "ay": 0,
+     "group": "ground",
+     "kind": "curb"
+    },
+    {
      "file": "cities/yamamah/ground/road.webp",
      "w": 197,
      "h": 98,
@@ -6746,24 +6784,6 @@
      "ay": 49,
      "group": "ground",
      "kind": "plaza"
-    },
-    {
-     "file": "cities/yamamah/ground/sidewalk.webp",
-     "w": 197,
-     "h": 98,
-     "ax": 98.5,
-     "ay": 49.0,
-     "group": "ground",
-     "kind": "sidewalk"
-    },
-    {
-     "file": "cities/yamamah/ground/curb.webp",
-     "w": 109,
-     "h": 16,
-     "ax": 0,
-     "ay": 0,
-     "group": "ground",
-     "kind": "curb"
     }
    ],
    "source": "cities/yamamah/source"
@@ -7343,6 +7363,24 @@
      "variant": 1
     },
     {
+     "file": "cities/shibam/ground/sidewalk.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49.0,
+     "group": "ground",
+     "kind": "sidewalk"
+    },
+    {
+     "file": "cities/shibam/ground/curb.webp",
+     "w": 109,
+     "h": 16,
+     "ax": 0,
+     "ay": 0,
+     "group": "ground",
+     "kind": "curb"
+    },
+    {
      "file": "cities/shibam/ground/road.webp",
      "w": 197,
      "h": 98,
@@ -7379,22 +7417,24 @@
      "kind": "plaza"
     },
     {
-     "file": "cities/shibam/ground/sidewalk.webp",
-     "w": 197,
-     "h": 98,
-     "ax": 98.5,
-     "ay": 49.0,
-     "group": "ground",
-     "kind": "sidewalk"
+     "file": "cities/yamamah/props/well_1.webp",
+     "group": "prop",
+     "kind": "well",
+     "w": 79,
+     "h": 102,
+     "ax": 36.5,
+     "ay": 84,
+     "variant": 1
     },
     {
-     "file": "cities/shibam/ground/curb.webp",
-     "w": 109,
-     "h": 16,
-     "ax": 0,
-     "ay": 0,
-     "group": "ground",
-     "kind": "curb"
+     "file": "cities/yamamah/props/cart_1.webp",
+     "group": "prop",
+     "kind": "cart",
+     "w": 77,
+     "h": 51,
+     "ax": 38.5,
+     "ay": 40,
+     "variant": 1
     }
    ]
   },
@@ -7978,6 +8018,24 @@
      "variant": 1
     },
     {
+     "file": "cities/diriyah/ground/sidewalk.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49.0,
+     "group": "ground",
+     "kind": "sidewalk"
+    },
+    {
+     "file": "cities/diriyah/ground/curb.webp",
+     "w": 109,
+     "h": 16,
+     "ax": 0,
+     "ay": 0,
+     "group": "ground",
+     "kind": "curb"
+    },
+    {
      "file": "cities/diriyah/ground/road.webp",
      "w": 197,
      "h": 98,
@@ -8014,22 +8072,24 @@
      "kind": "plaza"
     },
     {
-     "file": "cities/diriyah/ground/sidewalk.webp",
-     "w": 197,
-     "h": 98,
-     "ax": 98.5,
-     "ay": 49.0,
-     "group": "ground",
-     "kind": "sidewalk"
+     "file": "cities/yamamah/props/well_1.webp",
+     "group": "prop",
+     "kind": "well",
+     "w": 79,
+     "h": 102,
+     "ax": 36.5,
+     "ay": 84,
+     "variant": 1
     },
     {
-     "file": "cities/diriyah/ground/curb.webp",
-     "w": 109,
-     "h": 16,
-     "ax": 0,
-     "ay": 0,
-     "group": "ground",
-     "kind": "curb"
+     "file": "cities/yamamah/props/cart_1.webp",
+     "group": "prop",
+     "kind": "cart",
+     "w": 77,
+     "h": 51,
+     "ax": 38.5,
+     "ay": 40,
+     "variant": 1
     }
    ]
   },
@@ -8594,6 +8654,24 @@
      "variant": 1
     },
     {
+     "file": "cities/cairo/ground/sidewalk.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49.0,
+     "group": "ground",
+     "kind": "sidewalk"
+    },
+    {
+     "file": "cities/cairo/ground/curb.webp",
+     "w": 109,
+     "h": 16,
+     "ax": 0,
+     "ay": 0,
+     "group": "ground",
+     "kind": "curb"
+    },
+    {
      "file": "cities/cairo/ground/road.webp",
      "w": 197,
      "h": 98,
@@ -8630,22 +8708,24 @@
      "kind": "plaza"
     },
     {
-     "file": "cities/cairo/ground/sidewalk.webp",
-     "w": 197,
-     "h": 98,
-     "ax": 98.5,
-     "ay": 49.0,
-     "group": "ground",
-     "kind": "sidewalk"
+     "file": "cities/yamamah/props/well_1.webp",
+     "group": "prop",
+     "kind": "well",
+     "w": 79,
+     "h": 102,
+     "ax": 36.5,
+     "ay": 84,
+     "variant": 1
     },
     {
-     "file": "cities/cairo/ground/curb.webp",
-     "w": 109,
-     "h": 16,
-     "ax": 0,
-     "ay": 0,
-     "group": "ground",
-     "kind": "curb"
+     "file": "cities/yamamah/props/cart_1.webp",
+     "group": "prop",
+     "kind": "cart",
+     "w": 77,
+     "h": 51,
+     "ax": 38.5,
+     "ay": 40,
+     "variant": 1
     }
    ]
   },
@@ -9232,6 +9312,24 @@
      "variant": 1
     },
     {
+     "file": "cities/kaifeng/ground/sidewalk.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49.0,
+     "group": "ground",
+     "kind": "sidewalk"
+    },
+    {
+     "file": "cities/kaifeng/ground/curb.webp",
+     "w": 109,
+     "h": 16,
+     "ax": 0,
+     "ay": 0,
+     "group": "ground",
+     "kind": "curb"
+    },
+    {
      "file": "cities/kaifeng/ground/road.webp",
      "w": 197,
      "h": 98,
@@ -9275,24 +9373,6 @@
      "ay": 49,
      "group": "ground",
      "kind": "water"
-    },
-    {
-     "file": "cities/kaifeng/ground/sidewalk.webp",
-     "w": 197,
-     "h": 98,
-     "ax": 98.5,
-     "ay": 49.0,
-     "group": "ground",
-     "kind": "sidewalk"
-    },
-    {
-     "file": "cities/kaifeng/ground/curb.webp",
-     "w": 109,
-     "h": 16,
-     "ax": 0,
-     "ay": 0,
-     "group": "ground",
-     "kind": "curb"
     }
    ]
   },
@@ -9881,6 +9961,24 @@
      "variant": 1
     },
     {
+     "file": "cities/gyeongju/ground/sidewalk.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49.0,
+     "group": "ground",
+     "kind": "sidewalk"
+    },
+    {
+     "file": "cities/gyeongju/ground/curb.webp",
+     "w": 109,
+     "h": 16,
+     "ax": 0,
+     "ay": 0,
+     "group": "ground",
+     "kind": "curb"
+    },
+    {
      "file": "cities/gyeongju/ground/road.webp",
      "w": 197,
      "h": 98,
@@ -9915,24 +10013,6 @@
      "ay": 49,
      "group": "ground",
      "kind": "plaza"
-    },
-    {
-     "file": "cities/gyeongju/ground/sidewalk.webp",
-     "w": 197,
-     "h": 98,
-     "ax": 98.5,
-     "ay": 49.0,
-     "group": "ground",
-     "kind": "sidewalk"
-    },
-    {
-     "file": "cities/gyeongju/ground/curb.webp",
-     "w": 109,
-     "h": 16,
-     "ax": 0,
-     "ay": 0,
-     "group": "ground",
-     "kind": "curb"
     }
    ]
   },
@@ -10529,6 +10609,24 @@
      "variant": 1
     },
     {
+     "file": "cities/paris/ground/sidewalk.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49.0,
+     "group": "ground",
+     "kind": "sidewalk"
+    },
+    {
+     "file": "cities/paris/ground/curb.webp",
+     "w": 109,
+     "h": 16,
+     "ax": 0,
+     "ay": 0,
+     "group": "ground",
+     "kind": "curb"
+    },
+    {
      "file": "cities/paris/ground/road.webp",
      "w": 197,
      "h": 98,
@@ -10563,24 +10661,6 @@
      "ay": 49,
      "group": "ground",
      "kind": "plaza"
-    },
-    {
-     "file": "cities/paris/ground/sidewalk.webp",
-     "w": 197,
-     "h": 98,
-     "ax": 98.5,
-     "ay": 49.0,
-     "group": "ground",
-     "kind": "sidewalk"
-    },
-    {
-     "file": "cities/paris/ground/curb.webp",
-     "w": 109,
-     "h": 16,
-     "ax": 0,
-     "ay": 0,
-     "group": "ground",
-     "kind": "curb"
     }
    ]
   },
@@ -11166,6 +11246,24 @@
      "variant": 1
     },
     {
+     "file": "cities/birmingham/ground/sidewalk.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49.0,
+     "group": "ground",
+     "kind": "sidewalk"
+    },
+    {
+     "file": "cities/birmingham/ground/curb.webp",
+     "w": 109,
+     "h": 16,
+     "ax": 0,
+     "ay": 0,
+     "group": "ground",
+     "kind": "curb"
+    },
+    {
      "file": "cities/birmingham/ground/road.webp",
      "w": 197,
      "h": 98,
@@ -11209,24 +11307,6 @@
      "ay": 49,
      "group": "ground",
      "kind": "water"
-    },
-    {
-     "file": "cities/birmingham/ground/sidewalk.webp",
-     "w": 197,
-     "h": 98,
-     "ax": 98.5,
-     "ay": 49.0,
-     "group": "ground",
-     "kind": "sidewalk"
-    },
-    {
-     "file": "cities/birmingham/ground/curb.webp",
-     "w": 109,
-     "h": 16,
-     "ax": 0,
-     "ay": 0,
-     "group": "ground",
-     "kind": "curb"
     }
    ]
   },
@@ -11832,6 +11912,24 @@
      "variant": 1
     },
     {
+     "file": "cities/rothenburg/ground/sidewalk.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49.0,
+     "group": "ground",
+     "kind": "sidewalk"
+    },
+    {
+     "file": "cities/rothenburg/ground/curb.webp",
+     "w": 109,
+     "h": 16,
+     "ax": 0,
+     "ay": 0,
+     "group": "ground",
+     "kind": "curb"
+    },
+    {
      "file": "cities/rothenburg/ground/road.webp",
      "w": 197,
      "h": 98,
@@ -11866,24 +11964,6 @@
      "ay": 49,
      "group": "ground",
      "kind": "plaza"
-    },
-    {
-     "file": "cities/rothenburg/ground/sidewalk.webp",
-     "w": 197,
-     "h": 98,
-     "ax": 98.5,
-     "ay": 49.0,
-     "group": "ground",
-     "kind": "sidewalk"
-    },
-    {
-     "file": "cities/rothenburg/ground/curb.webp",
-     "w": 109,
-     "h": 16,
-     "ax": 0,
-     "ay": 0,
-     "group": "ground",
-     "kind": "curb"
     }
    ]
   },
@@ -12459,6 +12539,24 @@
      "variant": 1
     },
     {
+     "file": "cities/gondar/ground/sidewalk.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49.0,
+     "group": "ground",
+     "kind": "sidewalk"
+    },
+    {
+     "file": "cities/gondar/ground/curb.webp",
+     "w": 109,
+     "h": 16,
+     "ax": 0,
+     "ay": 0,
+     "group": "ground",
+     "kind": "curb"
+    },
+    {
      "file": "cities/gondar/ground/road.webp",
      "w": 197,
      "h": 98,
@@ -12495,22 +12593,14 @@
      "kind": "plaza"
     },
     {
-     "file": "cities/gondar/ground/sidewalk.webp",
-     "w": 197,
-     "h": 98,
-     "ax": 98.5,
-     "ay": 49.0,
-     "group": "ground",
-     "kind": "sidewalk"
-    },
-    {
-     "file": "cities/gondar/ground/curb.webp",
-     "w": 109,
-     "h": 16,
-     "ax": 0,
-     "ay": 0,
-     "group": "ground",
-     "kind": "curb"
+     "file": "cities/yamamah/props/well_1.webp",
+     "group": "prop",
+     "kind": "well",
+     "w": 79,
+     "h": 102,
+     "ax": 36.5,
+     "ay": 84,
+     "variant": 1
     }
    ]
   },
@@ -13081,6 +13171,24 @@
      "variant": 1
     },
     {
+     "file": "cities/kano/ground/sidewalk.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49.0,
+     "group": "ground",
+     "kind": "sidewalk"
+    },
+    {
+     "file": "cities/kano/ground/curb.webp",
+     "w": 109,
+     "h": 16,
+     "ax": 0,
+     "ay": 0,
+     "group": "ground",
+     "kind": "curb"
+    },
+    {
      "file": "cities/kano/ground/road.webp",
      "w": 197,
      "h": 98,
@@ -13117,22 +13225,14 @@
      "kind": "plaza"
     },
     {
-     "file": "cities/kano/ground/sidewalk.webp",
-     "w": 197,
-     "h": 98,
-     "ax": 98.5,
-     "ay": 49.0,
-     "group": "ground",
-     "kind": "sidewalk"
-    },
-    {
-     "file": "cities/kano/ground/curb.webp",
-     "w": 109,
-     "h": 16,
-     "ax": 0,
-     "ay": 0,
-     "group": "ground",
-     "kind": "curb"
+     "file": "cities/yamamah/props/well_1.webp",
+     "group": "prop",
+     "kind": "well",
+     "w": 79,
+     "h": 102,
+     "ax": 36.5,
+     "ay": 84,
+     "variant": 1
     }
    ]
   },
@@ -13717,6 +13817,24 @@
      "variant": 1
     },
     {
+     "file": "cities/meroe/ground/sidewalk.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49.0,
+     "group": "ground",
+     "kind": "sidewalk"
+    },
+    {
+     "file": "cities/meroe/ground/curb.webp",
+     "w": 109,
+     "h": 16,
+     "ax": 0,
+     "ay": 0,
+     "group": "ground",
+     "kind": "curb"
+    },
+    {
      "file": "cities/meroe/ground/road.webp",
      "w": 197,
      "h": 98,
@@ -13762,22 +13880,14 @@
      "kind": "water"
     },
     {
-     "file": "cities/meroe/ground/sidewalk.webp",
-     "w": 197,
-     "h": 98,
-     "ax": 98.5,
-     "ay": 49.0,
-     "group": "ground",
-     "kind": "sidewalk"
-    },
-    {
-     "file": "cities/meroe/ground/curb.webp",
-     "w": 109,
-     "h": 16,
-     "ax": 0,
-     "ay": 0,
-     "group": "ground",
-     "kind": "curb"
+     "file": "cities/yamamah/props/well_1.webp",
+     "group": "prop",
+     "kind": "well",
+     "w": 79,
+     "h": 102,
+     "ax": 36.5,
+     "ay": 84,
+     "variant": 1
     }
    ]
   },
@@ -14319,6 +14429,24 @@
      "variant": 1
     },
     {
+     "file": "cities/rio/ground/sidewalk.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49.0,
+     "group": "ground",
+     "kind": "sidewalk"
+    },
+    {
+     "file": "cities/rio/ground/curb.webp",
+     "w": 109,
+     "h": 16,
+     "ax": 0,
+     "ay": 0,
+     "group": "ground",
+     "kind": "curb"
+    },
+    {
      "file": "cities/rio/ground/road.webp",
      "w": 197,
      "h": 98,
@@ -14353,24 +14481,6 @@
      "ay": 49,
      "group": "ground",
      "kind": "plaza"
-    },
-    {
-     "file": "cities/rio/ground/sidewalk.webp",
-     "w": 197,
-     "h": 98,
-     "ax": 98.5,
-     "ay": 49.0,
-     "group": "ground",
-     "kind": "sidewalk"
-    },
-    {
-     "file": "cities/rio/ground/curb.webp",
-     "w": 109,
-     "h": 16,
-     "ax": 0,
-     "ay": 0,
-     "group": "ground",
-     "kind": "curb"
     }
    ]
   },
@@ -14934,6 +15044,24 @@
      "variant": 1
     },
     {
+     "file": "cities/laboca/ground/sidewalk.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49.0,
+     "group": "ground",
+     "kind": "sidewalk"
+    },
+    {
+     "file": "cities/laboca/ground/curb.webp",
+     "w": 109,
+     "h": 16,
+     "ax": 0,
+     "ay": 0,
+     "group": "ground",
+     "kind": "curb"
+    },
+    {
      "file": "cities/laboca/ground/road.webp",
      "w": 197,
      "h": 98,
@@ -14977,24 +15105,6 @@
      "ay": 49,
      "group": "ground",
      "kind": "water"
-    },
-    {
-     "file": "cities/laboca/ground/sidewalk.webp",
-     "w": 197,
-     "h": 98,
-     "ax": 98.5,
-     "ay": 49.0,
-     "group": "ground",
-     "kind": "sidewalk"
-    },
-    {
-     "file": "cities/laboca/ground/curb.webp",
-     "w": 109,
-     "h": 16,
-     "ax": 0,
-     "ay": 0,
-     "group": "ground",
-     "kind": "curb"
     }
    ]
   },
@@ -15579,6 +15689,24 @@
      "variant": 1
     },
     {
+     "file": "cities/tenoch/ground/sidewalk.webp",
+     "w": 197,
+     "h": 98,
+     "ax": 98.5,
+     "ay": 49.0,
+     "group": "ground",
+     "kind": "sidewalk"
+    },
+    {
+     "file": "cities/tenoch/ground/curb.webp",
+     "w": 109,
+     "h": 16,
+     "ax": 0,
+     "ay": 0,
+     "group": "ground",
+     "kind": "curb"
+    },
+    {
      "file": "cities/tenoch/ground/road.webp",
      "w": 197,
      "h": 98,
@@ -15622,24 +15750,6 @@
      "ay": 49,
      "group": "ground",
      "kind": "water"
-    },
-    {
-     "file": "cities/tenoch/ground/sidewalk.webp",
-     "w": 197,
-     "h": 98,
-     "ax": 98.5,
-     "ay": 49.0,
-     "group": "ground",
-     "kind": "sidewalk"
-    },
-    {
-     "file": "cities/tenoch/ground/curb.webp",
-     "w": 109,
-     "h": 16,
-     "ax": 0,
-     "ay": 0,
-     "group": "ground",
-     "kind": "curb"
     }
    ]
   }
@@ -15828,10 +15938,10 @@
    },
    {
     "file": "cities/_common/mark/crack.webp",
-    "w": 79,
-    "h": 21,
-    "ax": 45.5,
-    "ay": 6,
+    "w": 81,
+    "h": 20,
+    "ax": 46.5,
+    "ay": 5,
     "group": "mark",
     "kind": "crack"
    },
@@ -15864,18 +15974,18 @@
    },
    {
     "file": "cities/_common/mark/grass.webp",
-    "w": 67,
-    "h": 32,
-    "ax": 30.5,
-    "ay": 15,
+    "w": 58,
+    "h": 30,
+    "ax": 26.5,
+    "ay": 13,
     "group": "mark",
     "kind": "grass"
    },
    {
     "file": "cities/_common/mark/gravel.webp",
-    "w": 82,
+    "w": 75,
     "h": 34,
-    "ax": 38.5,
+    "ax": 34.5,
     "ay": 14,
     "group": "mark",
     "kind": "gravel"

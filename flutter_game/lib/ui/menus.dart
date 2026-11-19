@@ -7,7 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
 import '../core/cfg.dart';
-import '../config.dart' show PACE;
+import '../config.dart' show PACE, RETIRED_CITIES;
 import '../core/fmath.dart';
 import '../data/cities.dart';
 import '../data/js_config.dart';
@@ -65,7 +65,7 @@ class SetupModel {
     if (_GM.m('king').l('holdMinutes').contains(j['kingMinutes'])) m.kingMinutes = j['kingMinutes'] as int;
     if (_GM.m('survival').l('allies').contains(j['allies'])) m.allies = j['allies'] as int;
     if (_GM.m('survival').l('levels').contains(j['survivalLevel'])) m.survivalLevel = j['survivalLevel'] as String;
-    if (CITIES.l('order').contains(j['city']) || j['city'] == 'random' || j['city'] == 'host') m.city = j['city'] as String;
+    if (playableCities.contains(j['city']) || j['city'] == 'random' || j['city'] == 'host') m.city = j['city'] as String;
     if (MAP_SIZES.has('${j['mapSize']}')) m.mapSize = j['mapSize'] as String;
     if (UNITS.l('maxUnitsChoices').contains(j['maxUnits'])) m.maxUnits = j['maxUnits'] as int;
     if (WEATHER_KEYS.contains(j['weather']) || j['weather'] == 'random') m.weather = j['weather'] as String;
@@ -122,7 +122,7 @@ class SetupModel {
       'modeOptions': {'minutes': pointsMinutes, 'holdMinutes': kingMinutes, 'allies': allies, 'level': survivalLevel},
       'mapSize': mapSize,
       // مدينة المضيف: مدينة أمة اللاعب الأول بعد حسم العشوائي، أو عشوائي للعصابة الكلاسيكية
-      'city': city == 'host' ? hostCity(players[0]['nation'] as String?) : city,
+      'city': _concrete(city == 'host' ? hostCity(players[0]['nation'] as String?) : city),
       'maxUnits': maxUnits, 'players': players, 'fog': fog, 'temples': true,   // المعابد ومباني المرتزقة (3.14)
       'weather': weather == 'random' ? WEATHER_KEYS[math.Random().nextInt(WEATHER_KEYS.length)] : weather,
     };
@@ -139,8 +139,13 @@ Map<String, Object?> resolveSide(String choice) {
 
 String hostCity(String? side) {
   final n = side != null && nations.l('order').contains(_baseSide(side)) ? nations.m(_baseSide(side)) : null;
-  return n != null && CITIES.l('order').contains(n['city']) ? n.s('city') : 'random';
+  return n != null && playableCities.contains(n['city']) ? n.s('city') : 'random';
 }
+
+// مدن اللعب (بلا ما خرج من اللعبة، RETIRED_CITIES)، والعشوائي يُحسم هنا منها (كان يحسمه المولّد من كل المدن). واللعب المحلي
+// يرسل المدينة المحسومة إلى الأصدقاء
+List<String> get playableCities => [for (final c in CITIES.l('order').cast<String>()) if (!RETIRED_CITIES.contains(c)) c];
+String _concrete(String city) => city == 'random' ? playableCities[math.Random().nextInt(playableCities.length)] : city;
 
 // الأمم الـ15 ثم العصابات الكلاسيكية الأربع ثم العشوائي (SIDE_CHOICES)
 List<String> get _nationIds => nations.l('order').cast<String>();
@@ -302,7 +307,7 @@ class _MenuBackdropState extends State<MenuBackdrop> with SingleTickerProviderSt
 
   Future<void> _load() async {
     final r = math.Random();
-    final cities = CITIES.l('order').cast<String>();
+    final cities = playableCities;
     final city = cities[r.nextInt(cities.length)];
     final players = [for (final g in _gangIds) MapPlayer(g)];
     final m = createMap(_M.s('mapSize'), players, city, Rng(r.nextInt(1 << 30)), specials: false, features: false);
@@ -454,7 +459,7 @@ class _SetupScreenState extends State<SetupScreen> {
     final pick = await _sheet<String>(PickerSheet(title: 'المدينة', groups: [
       for (final r in REGIONS.l('order').cast<String>())
         (REGIONS.m(r).s('name'), [
-          for (final c in REGIONS.m(r).l('cities').cast<String>())
+          for (final c in REGIONS.m(r).l('cities').cast<String>()) if (!RETIRED_CITIES.contains(c))
             PickCard(title: cityShort(c), note: cityName(c), image: 'assets/thumbs/city_$c.webp', selected: m.city == c,
                 onTap: () => Navigator.pop(context, c)),
         ]),
@@ -750,7 +755,7 @@ class _StoreScreenState extends State<StoreScreen> {
   @override
   Widget build(BuildContext context) {
     final groups = section == 'maps'
-        ? [for (final r in REGIONS.l('order').cast<String>()) (REGIONS.m(r).s('name'), REGIONS.m(r).l('cities').cast<String>())]
+        ? [for (final r in REGIONS.l('order').cast<String>()) (REGIONS.m(r).s('name'), [for (final c in REGIONS.m(r).l('cities').cast<String>()) if (!RETIRED_CITIES.contains(c)) c])]
         : section == 'skins'
             ? [for (final r in REGIONS.l('order').cast<String>()) (REGIONS.m(r).s('name'),
                 [for (final n in REGIONS.m(r).l('nations').cast<String>()) if (_eliteIds.contains('${n}_elite')) '${n}_elite'])]

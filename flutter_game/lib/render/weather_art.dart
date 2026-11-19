@@ -10,6 +10,7 @@ import '../data/js_config.dart';
 import '../game/features.dart' show stormAt;
 import '../game/state.dart';
 import '../map/generator.dart';
+import 'decor.dart' show isMonument;
 
 class Light {
   final double x, y, r, a;
@@ -29,7 +30,7 @@ List<Light> mapLights(GameMap map, List<Light> decor) {
   for (var j = 0; j < n; j++) {
     for (var i = 0; i < n; i++) {
       final k = map.idx(i, j), x = (i - j) * TILE_HALF_W, y = (i + j) * TILE_HALF_H;
-      if (map.kind[k] == 'monument') out.add(Light(x, y - 16, 30, 0xffd78c, 0.4));
+      if (isMonument(map, k)) out.add(Light(x, y - 16, 30, 0xffd78c, 0.4));
       if (map.type[k] == tP) out.add(Light(x, y - 4, 18, 0xffebbe, 0.25));
     }
   }
