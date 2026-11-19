@@ -27,7 +27,7 @@ const el = (id) => document.getElementById(id);
 const MAP_SIZE_KEYS = ['small', 'medium', 'large'];
 // حد الوحدات الافتراضي: أقل في الجودة المنخفضة (الجوال الضعيف)، ما لم يُحفظ إعداد سابق
 const DEFAULT_UNITS = gfx().maxUnits || UNITS.maxUnitsDefault;
-const MAX_UNIT_CHOICES = [30, 50, 100, 150, 200, 250];
+const MAX_UNIT_CHOICES = UNITS.maxUnitsChoices;
 const WEATHER_CHOICES = [...WEATHER_KEYS, 'random'];
 // خيار المدينة: المدن، ثم "مدينة المضيف" (مدينة أمة اللاعب الأول، القسم 3.10)، ثم عشوائي
 const CITY_CHOICES = [...CITIES.order, 'host', 'random'];
@@ -334,7 +334,7 @@ function openUnitsPicker() {
     title: 'الحد الأقصى للوحدات',
     groups: single(MAX_UNIT_CHOICES.map(v => ({ value: v, text: String(v), note: v === DEFAULT_UNITS ? 'الافتراضي' : '' }))),
     icon: drawUnitsIcon,
-    columns: 6,
+    columns: 3,
     current: () => setup.maxUnits,
     pick: (v) => { setup.maxUnits = v; refresh(); },
     aside: (node, v) => {

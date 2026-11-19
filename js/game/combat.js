@@ -16,6 +16,7 @@ import { soundAt, soundAlert, onScreen } from '../audio/sound.js';
 import { raiseAlert } from './alerts.js';
 import { random } from './random.js';   // عشوائية المنطق: مشتركة بين الأجهزة في اللعب المحلي
 import { stormMiss, rangeMul, buildingOwner, holiTruce } from './features.js';
+import { empireEvade, classPierce, classUpgrade } from './empire.js';
 
 // اختيار الهدف للبوتات (القسم 11.2): يُسجَّل من ai/bot.js، ولا يغيّر قواعد القتال
 // يُستدعى فقط حين تحتاج الوحدة هدفاً جديداً، ويعيد undefined ليبقى الاختيار العادي
@@ -625,6 +626,26 @@ function hitSound(state, attacker, target, amount) {
 // ضربة مباشرة: قد تكون دائرية (المحطِّم) فتصيب كل الأعداء حول الهدف. shot: من مقذوف
 // تعيد true إذا مات الهدف الأساسي (ليُدفع جسده)
 function strike(state, attacker, target, amount, shot = false) {
+  const died = strikeOnly(state, attacker, target, amount, shot);
+  steadySplash(state, attacker, target, amount, shot);
+  return died;
+}
+
+// ترقية الصامد (بطلب المستخدم، 2026-11-12): فرصة chance[مستوى] أن تصيب الضربة كل عدو حول الضارب بـ splash من ضررها
+function steadySplash(state, attacker, target, amount, shot) {
+  if (state.players[attacker.playerId].gang !== 'hammers') return;
+  const up = classUpgrade(state, attacker.playerId);
+  if (!up || random() >= up.C.chance[up.level - 1]) return;
+  const r = up.C.radius, rSq = r * r;
+  forEachNearby(state, attacker.x, attacker.y, r, (other) => {
+    if (other === target || other.state === 'dead' || other.hp <= 0) return;
+    if (distanceSq(other, attacker) > rSq) return;
+    if (!isEnemy(state, attacker, other)) return;
+    applyDamage(state, attacker, other, amount * up.C.splash, shot);
+  });
+}
+
+function strikeOnly(state, attacker, target, amount, shot) {
   const splash = attacker.stats.splashRadius;
   if (!splash) return applyDamage(state, attacker, target, amount, shot);
 
@@ -645,7 +666,7 @@ export function applyDamage(state, attacker, target, amount, shot = false) {
   if (!isAlive(target)) return false;
   if (target.invulnUntil > state.time) return false;     // تصلّب: لا يتلقى ضرراً ولا يترنّح ولا يُدفع
   // ترقية سرعة المشي: فرصة تجنب الضربة كلها (والكلمة لضربات الوحدات وحدها، لا لكل تحديث من النار)
-  const evade = state.economy ? state.modeState.levels[target.playerId].speed * EMPIRE.upgrades.speed.evade : 0;
+  const evade = state.economy ? empireEvade(state, target.playerId) : 0;
   if (evade && random() < evade) { if (attacker.stats) addPop(state, target, 'تفادى!', 'dodge'); return false; }
   retaliateIfCloser(state, attacker, target);
   // الأنماط الأربعة (القسم 3.12): الغالب أقوى على من يغلبه، والخاطف يتجاوز بعض درع الصامد، والصامد أقل تأثراً بالمقذوفات
@@ -657,6 +678,7 @@ export function applyDamage(state, attacker, target, amount, shot = false) {
   // درع الوحدة + مكافأة مراكز الشرطة المملوكة (القسم 3.8)
   let armor = Math.min(COMBAT.maxArmor, target.stats.armor + target.armorBonus);
   if (beats && attacker.gang === 'crows') armor *= 1 - P.pierce;
+  if (attacker.stats && state.economy) armor *= 1 - classPierce(state, attacker.playerId);   // ترقية الرامي (2026-11-12)
   let taken = amount * (1 - armor) * target.takenMul;     // takenMul: سمة الأمة داخل أحيائها (القسم 3.10)
   if (shot && target.gang === 'hammers' && !target.creature) taken *= 1 - P.shotGuard;
   target.hp -= taken;

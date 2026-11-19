@@ -35,7 +35,7 @@ export function initSamples(context, onLoaded) {
   const names = [...AUDIO.files.sfx, ...AUDIO.files.music];
   total = left = names.length;
   for (const name of names) {
-    fetch(AUDIO.files.dir + name + '.mp3')
+    fetch(AUDIO.files.dir + (name === 'theme' ? 'music/' + AUDIO.menuTrack : name) + '.mp3')   // لحن القائمة من ألحان المدن
       .then(r => r.arrayBuffer())
       .then(data => ctx.decodeAudioData(data))
       .then(buf => { buffers[name] = buf; }, () => {})

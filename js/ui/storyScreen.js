@@ -1,8 +1,8 @@
 // شاشة طور القصة (القسم 17): اختيار العصابة، ثم مراحل حملتها، ثم القصة قبل المعركة. ونتيجة المرحلة في شاشة النهاية
 // (hud.js) بحوار ما بعدها ومكافأتها. التقدم (المراحل المكتملة) في localStorage، ومكافآت المراحل السابقة تُحسب منه
-import { STORY, REGIONS, nations, PLAYER_COLORS } from '../config.js';
+import { STORY, REGIONS, nations, PLAYER_COLORS, BOT } from '../config.js';
 import { CAMPAIGNS } from '../story/campaigns.js';
-import { storyPlayers } from '../game/story.js';
+import { storyPlayers, storyBotLevel } from '../game/story.js';
 import { drawCharacters } from './charThumb.js';
 import { sound } from '../audio/sound.js';
 
@@ -25,6 +25,16 @@ function saveProgress(p) {
   try { localStorage.setItem(STORY.storageKey, JSON.stringify(p)); } catch (e) { /* تخزين معطّل */ }
 }
 const doneOf = (id) => (loadProgress()[id] || []).slice(0, STORY.levels);
+
+// صعوبة البوتات المختارة (STORY.difficulty)، محفوظة لكل الحملات
+function difficulty() {
+  let d = null;
+  try { d = localStorage.getItem(STORY.difficultyKey); } catch (e) { /* تخزين معطّل */ }
+  return Object.hasOwn(STORY.difficulty, d) ? d : STORY.defaultDifficulty;
+}
+function setDifficulty(d) {
+  try { localStorage.setItem(STORY.difficultyKey, d); } catch (e) { /* تخزين معطّل */ }
+}
 const unlocked = (id, k) => k === 0 || !!doneOf(id)[k - 1];
 
 // إعداد مباراة المرحلة، ومعه مكافآت ما اكتمل قبلها من الحملة نفسها
@@ -40,7 +50,7 @@ export function storySettings(id, k) {
   }
   return {
     mode: 'conquest', modeOptions: {}, city: camp.city, mapSize: STORY.mapSize[k], maxUnits: STORY.maxUnits,
-    weather: level.weather || 'day', story: { campaign: id, level: k, bonus }, players: storyPlayers(id, k)
+    weather: level.weather || 'day', story: { campaign: id, level: k, bonus }, players: storyPlayers(id, k, difficulty())
   };
 }
 
@@ -101,12 +111,21 @@ function renderLevels(body) {
   const camp = CAMPAIGNS[campaign], n = nations[campaign], done = doneOf(campaign);
   body.append(node('h2', null, n.gangName + ' — ' + n.name), node('p', 'story-pitch', camp.pitch),
               node('p', 'hint', 'العدو: ' + camp.enemy.name));
+  // صعوبة البوتات: متوسط كما صُممت المراحل، وكل مرحلة تكتب صعوبة عدوها الفعلية
+  const diff = node('div', 'story-difficulty');
+  diff.append(node('span', 'label', 'صعوبة البوتات'));
+  const row = node('div', 'options');
+  for (const d of Object.keys(STORY.difficulty)) {
+    row.append(button('opt' + (d === difficulty() ? ' selected' : ''), BOT[d].name, () => { setDifficulty(d); render(); }));
+  }
+  diff.append(row);
+  body.append(diff);
   const list = node('div', 'story-levels');
   camp.levels.forEach((level, k) => {
     const open = unlocked(campaign, k);
     const b = node('button', 'story-level' + (done[k] ? ' done' : '') + (open ? '' : ' locked'));
     b.append(node('b', null, (done[k] ? '✓ ' : open ? '' : '🔒 ') + 'المرحلة ' + (k + 1) + ': ' + level.title),
-             node('span', 'hint', 'المكافأة: ' + level.reward.text));
+             node('span', 'hint', 'العدو: ' + BOT[storyBotLevel(k, difficulty())].name + ' • المكافأة: ' + level.reward.text));
     if (open) b.addEventListener('click', () => { sound('ui_tap'); levelIndex = k; view = 'brief'; render(); });
     list.append(b);
   });
@@ -135,6 +154,8 @@ function renderBrief(body) {
     body.append(section('الزعيم', box));
   }
   body.append(section('المكافأة', node('p', null, level.reward.text)));
+  body.append(node('p', 'hint', 'صعوبة العدو: ' + BOT[storyBotLevel(levelIndex, difficulty())].name +
+    ' (تُغيَّر من قائمة المراحل)'));
   const row = node('div', 'story-actions');
   row.append(button('wide gold', 'ابدأ المعركة', () => H && H.start(storySettings(campaign, levelIndex))),
              button('wide ghost', 'رجوع', () => { view = 'levels'; render(); }));

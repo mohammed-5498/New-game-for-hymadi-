@@ -12,6 +12,7 @@ import { badgeOf } from '../render/empireArt.js';
 import { featureBadgeOf } from '../render/featureArt.js';
 import { openEmpireMenu, closeEmpireMenu, isEmpireMenuOpen, sendEmpire, takePick } from './empireMenu.js';
 import { canPick } from '../game/features.js';
+import { canRally } from '../game/empire.js';
 import { lanCommand } from '../net/session.js';
 
 export function setupInput(canvas, state) {
@@ -279,12 +280,29 @@ export function setupInput(canvas, state) {
 
   // هجوم الترياد أو رحلة القطار إلى الحي الملموس، أو سبب الرفض في الإشعار
   function pickDistrict(pick, sx, sy) {
+    if (pick.a === 'rally') { pickRally(pick, sx, sy); return; }
     const target = areaAt(sx, sy);
     const result = target
       ? sendEmpire(state, { ...pick, x: target.id }, () => canPick(state, state.humanId, pick, target))
       : canPick(state, state.humanId, pick, null);
     state.notice = result.ok ? null : { text: result.reason, mine: true, t: 2.5 };
     sound(result.ok ? 'command' : 'ui_tap');
+  }
+
+  // مكان إنتاج القاعدة: المربع الملموس، أو إلغاؤه بلمسة على حي القاعدة نفسها، ثم تعود قائمتها
+  function pickRally(pick, sx, sy) {
+    const world = screenToWorld(sx, sy, state.camera, state.view);
+    const tile = worldToTile(world.x, world.y), n = state.map.n;
+    const i = Math.round(tile.i), j = Math.round(tile.j);
+    const inside = i >= 0 && j >= 0 && i < n && j < n;
+    const area = areaAt(sx, sy);
+    const x = !inside || (area && area.id === pick.d) ? -1 : j * n + i;
+    const district = state.map.districts[pick.d];
+    const result = sendEmpire(state, { ...pick, x }, () => canRally(state, state.humanId, district));
+    state.notice = result.ok ? { text: x < 0 ? 'أُلغي مكان الإنتاج' : 'تحدد مكان الإنتاج', mine: true, t: 2 }
+      : { text: result.reason, mine: true, t: 2.5 };
+    sound(result.ok ? 'command' : 'ui_tap');
+    if (result.ok) openEmpireMenu(state, pick.d);
   }
 
   // لمسة على سهم الحافة: تنقل الكاميرا إلى مكان الحدث ويختفي السهم

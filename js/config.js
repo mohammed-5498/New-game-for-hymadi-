@@ -936,11 +936,13 @@ export const PLAYER_COLORS = [
 export const UNITS = {
   startUnits: 3,              // عدد الأفراد عند بداية المباراة
   maxUnitsDefault: 100,
+  maxUnitsChoices: [50, 75, 100],   // خيارات الحد الأقصى في قائمة الإعداد (بطلب المستخدم 2026-11-06؛ كانت 30-250)
   separationRadius: 0.55,     // مسافة التباعد بين وحدتين (مربعات)
   separationStrength: 1.2,    // قوة دفع التباعد (مربع/ثانية)
   arriveDistance: 0.06,       // اعتبار الوحدة وصلت لنقطة المسار
   groupSpotsFactor: 2,        // عدد مربعات الهدف = عدد الوحدات × هذا الرقم
-  pathRequestsPerTick: 20     // حد طلبات A* في التحديث الواحد
+  pathRequestsPerTick: 20,    // حد طلبات A* في التحديث الواحد
+  moveMul: 0.8                // مشي كل الوحدات أبطأ 20% (بطلب المستخدم، 2026-11-12: كان 40% ثم 20%؛ moveSpeed في weather.js)
 };
 
 // --- القتال ---
@@ -1317,18 +1319,23 @@ export const AUDIO = {
   // على الشاشة السوداء لبدء المباراة، وgame_start على شاشة التشغيل السوداء إن جهز الصوت وهي ظاهرة (التطبيق)،
   // واللحن يبدأ مع ارتفاعها مباشرة (بطلب المستخدم)
   // loadingFade: صوت التحميل يخفت في هذا الزمن إن ارتفعت شاشة التحميل قبل أن ينتهي
-  tracks: { theme: 0.8, themeFadeIn: 1.5, themeFadeOut: 0.6, match_start: 0.9, loading: 0.85, loadingDelay: 0.6, loadingFade: 0.4,
+  // introFadeIn: لحن القائمة بعد الشاشة السوداء عند التشغيل يبدأ فوراً (مجهّز أثناءها، بطلب المستخدم 2026-11-12)
+  tracks: { theme: 0.95, themeFadeIn: 1.5, introFadeIn: 0.15, themeFadeOut: 0.6, match_start: 0.9, loading: 0.85, loadingDelay: 0.6, loadingFade: 0.4,
             game_start: 0.9, city: 0.2, cityFadeIn: 2, cityFadeOut: 0.8 },
 
   // موسيقى الخرائط (بطلب المستخدم، assets/audio/music/): لحن لكل مدينة يدور خلف المباراة، وبعض المدن تتشارك لحناً.
-  // الملفات m01-m20 بترتيب إرساله ومسوّاة الارتفاع، وتُسمع بـ tracks.city (20%) قبل مؤشر الموسيقى، وتظهر بتلاشٍ
+  // الملفات (من m01-m20 بترتيب إرساله، وبقي ما اختاره المستخدم لكل منطقة) مسوّاة الارتفاع، وتُسمع بـ tracks.city (20%) قبل مؤشر الموسيقى، وتظهر بتلاشٍ
   // بعد الشاشة السوداء. والخريطة لكل لحن من كلامه. المدينة بلا لحن هنا: الموسيقى المولَّدة كما كانت
+  // لحن لكل منطقة (بطلب المستخدم، 2026-11-12): العربية m03، والأوروبية m05 إلا النرويجية m06، والآسيوية m02 إلا
+  // هونغ كونغ m20، والأفريقية m14، والأمريكتان m09 إلا شيكاغو m13. وحُذفت بقية الألحان لتخفيف المساحة
   cityMusic: {
-    rio: 'm01', china: 'm02', kaifeng: 'm02', arab: 'm03', cairo: 'm04', diriyah: 'm04', europe: 'm05',
-    norway: 'm06', japan: 'm07', birmingham: 'm08', tenoch: 'm09', mexico: 'm09', jaipur: 'm10',
-    rothenburg: 'm11', shibam: 'm12', yamamah: 'm12', chicago: 'm13', gondar: 'm14', gyeongju: 'm15',
-    paris: 'm16', kano: 'm17', laboca: 'm18', meroe: 'm19', hk: 'm20'
-  }
+    arab: 'm03', shibam: 'm03', diriyah: 'm03', yamamah: 'm03', cairo: 'm03',
+    europe: 'm05', paris: 'm05', birmingham: 'm05', rothenburg: 'm05', norway: 'm06',
+    china: 'm02', kaifeng: 'm02', japan: 'm02', gyeongju: 'm02', jaipur: 'm02', hk: 'm20',
+    gondar: 'm14', kano: 'm14', meroe: 'm14',
+    rio: 'm09', laboca: 'm09', tenoch: 'm09', mexico: 'm09', chicago: 'm13'
+  },
+  menuTrack: 'm07'       // لحن القائمة الرئيسية من ألحان المدن (بطلب المستخدم)، مكان theme.mp3
 };
 
 // --- الأداء ---
@@ -1384,6 +1391,9 @@ export const STORY = {
   mapSize: ['small', 'small', 'medium', 'medium', 'medium'],
   // صعوبة العدو الرئيسي (وحليفه أضعف بمستوى). الرابعة فيها عصابتان معاً فعدوها الرئيسي سهل، والخامسة أصعبها
   botLevel: ['easy', 'easy', 'medium', 'easy', 'hard'],
+  // صعوبة البوتات يختارها اللاعب في قائمة الحملة (بطلب المستخدم 2026-11-06): تزيح botLevel لكل مرحلة بهذا العدد
+  // من الدرجات (متوسط = كما صُممت المراحل)، بحد السهل والمجنون، والحلفاء أضعف منه بدرجة كما كانوا. تُحفظ في difficultyKey
+  difficulty: { easy: -1, medium: 0, hard: 1, insane: 2 }, defaultDifficulty: 'medium', difficultyKey: 'gangcity.storyDifficulty',
   // زمن إنتاج العدو وحلفائه في القاعدة × هذا لكل مرحلة: الأخيرتان أبطأ 30% (بطلب المستخدم بعد تجربتهما، 2026-11-06)
   enemyProduction: [1, 1, 1, 1.3, 1.3],
   maxUnits: 100,
@@ -1558,7 +1568,9 @@ export const gameModes = {
 // المباني بطراز كل مدينة (art أدناه)، ولا يتغير شكل الجنود مع الترقيات
 export const EMPIRE = {
   startPoints: 0,
-  income: { district: 0.5, hq: 2 },        // نقطة في الثانية: كل حي، والقاعدة الرئيسية (بدل الحي)
+  // نقطة في الثانية: كل حي، والقاعدة الرئيسية (بدل الحي). وmul على كل دخل الأحياء (العادي والقاعدة والمباني المميزة):
+  // النصف بطلب المستخدم (2026-11-12)، لا مكافآت الزعماء والقوافل والكنوز
+  income: { district: 0.5, hq: 2, mul: 0.5 },
   leaderKill: 50,                           // من يُسقط زعيم عصابة (بطلها) يأخذ هذه النقاط
   hintSeconds: 7,                           // تلميح البداية: لمستان على حيك تفتحان قائمته
   // الإنتاج من القاعدة الرئيسية: الكلفة بالنقاط، والزمن بالثواني قبل ترقية سرعة الإنتاج
@@ -1571,7 +1583,7 @@ export const EMPIRE = {
   },
   // النخبة من الشخصيتين المميزتين لكل نمط قتالي (الأمم بأنماطها)، والأخرى هي "الأقوى"
   elite: { crows: 'spear', hammers: 'smasher', vipers: 'sniper', scorpions: 'boss' },
-  queueMax: 5,                              // أقصى طلبات الإنتاج في القاعدة الواحدة
+  queueMax: 10,                             // أقصى طلبات الإنتاج في القاعدة الواحدة (كان 5، وبطلب المستخدم 10)
   // ترقيات العصابة: ثلاثة مستويات، والكلفة لكل مستوى، والأثر لكل مستوى. الجنود الحاليون والجدد معاً،
   // وتبقى للعصابة التي اشترتها مهما سقطت قواعدها (بقرار المستخدم)
   upgrades: {
@@ -1580,8 +1592,16 @@ export const EMPIRE = {
     hp:         { name: 'الدم',         costs: [30, 50, 70], per: 0.20 },   // +20% دم لكل مستوى
     damage:     { name: 'الضرر',        costs: [30, 50, 70], per: 0.25 },   // +25% ضرر
     armor:      { name: 'الدفاع',       costs: [30, 50, 70], per: 0.10 },   // +10 نقاط درع (من 100) فوق درع الوحدة
-    // +10% سرعة لكل مستوى، ومعها فرصة تجنب الضربة كلها evade (5% لكل مستوى، applyDamage في combat.js)
-    speed:      { name: 'سرعة المشي',   costs: [30, 50, 70], per: 0.10, evade: 0.05 }
+    // +10% سرعة لكل مستوى، ومعها فرصة تجنب الضربة كلها evade (5% لكل مستوى، applyDamage في combat.js).
+    // للخاطف وحده؛ وبطلب المستخدم (2026-11-12) الخانة نفسها لكل فئة أخرى بأثرها (classUpgrade في empire.js):
+    // الصامد: فرصة chance (لكل مستوى) أن تصيب ضربته كل عدو حوله داخل radius بـ splash من ضررها.
+    // الرامي: مدى رمي +range وخرق درع pierce لكل مستوى. الحشد: احتلال الأحياء أسرع capture لكل مستوى
+    speed:      { name: 'سرعة المشي',   costs: [30, 50, 70], per: 0.10, evade: 0.05,
+                  classes: {
+                    hammers:   { name: 'الضربة المحيطية', chance: [0.10, 0.20, 0.25], splash: 0.2, radius: 1.5 },
+                    vipers:    { name: 'المدى والاختراق', range: 0.2, pierce: 0.10 },
+                    scorpions: { name: 'سرعة الاحتلال',   capture: 0.20 }
+                  } }
   },
   buildings: {
     order: ['tower', 'hospital', 'hq'],
@@ -1958,7 +1978,7 @@ export const CITY_FEATURES = {
   // ومن بقي بعد maxSeconds يخرج على أي حال
   // (12أ: كانت 150 و180، وmaxSeconds 150؛ وصار أقل من every فلا تلتقي قافلتان)
   caravan: { first: 90, every: 108, merchants: 4, guards: [null, null, 'sniper'], loot: 20, think: 2, exitRadius: 1.6,
-             maxSeconds: 100, escort: 1.5, name: 'القافلة', merchantName: 'تاجر', color: '#7a5a34', nation: 'saudi',
+             maxSeconds: 125, escort: 1.5,   // 100 ث قبل إبطاء المشي 20% (UNITS.moveMul) name: 'القافلة', merchantName: 'تاجر', color: '#7a5a34', nation: 'saudi',
              merchant: { hp: 120, damage: 0, speed: 0.9 }, guard: { hp: 200, armor: 0.15, speed: 1.6 } },
   // السوق الكبير (المدينة العربية): مالكه يأخذ tax من كل ما يصرفه غيره، ولا يدفع الصارف أكثر من سعره
   souk: { tax: 0.1, top: 50 },

@@ -7,6 +7,7 @@ import { raiseAlert } from './alerts.js';
 import { hypot } from './hypot.js';
 import { captureBonus } from './nations.js';
 import { featureCaptureMul } from './features.js';
+import { classCaptureMul } from './empire.js';
 import { DISTRICT_SIZES as DS, EMPIRE } from '../config.js';
 import { sizeOf } from '../map/sizes.js';
 
@@ -95,6 +96,7 @@ export function updateCapture(state) {
 function advanceProgress(state, district, playerId, power) {
   // وبرج الخرطوم (القسم 3.11) احتلاله أبطأ بكثير، من الحياد ومن مالكه، والحي الكبير أبطأ والصغير أسرع (القسم 3.12)
   let step = CAPTURE.pointsPerSecond * power * TICK_SEC * featureCaptureMul(district) * DS.capture[sizeOf(district)];
+  if (state.economy) step *= classCaptureMul(state, playerId);   // ترقية الحشد (2026-11-12)
   // تحصين الحي (القسم 3.12): أسواره تبطئ كل من لا يملكه، وتبقى قائمة وهو محايد في منتصف احتلاله
   if (district.fort && (district.owner === null || !allied(state, playerId, district.owner))) {
     step /= 1 + EMPIRE.fortify.capture[district.fort - 1];
