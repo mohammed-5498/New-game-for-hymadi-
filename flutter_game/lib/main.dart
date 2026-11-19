@@ -33,9 +33,10 @@ Future<void> main() async {
     debugShowCheckedModeBanner: false,
     title: Lang.en ? 'Gang City' : 'مدينة العصابات',
     theme: ThemeData(brightness: Brightness.dark, colorSchemeSeed: gold, scaffoldBackgroundColor: deep, fontFamily: 'ElMessiri'),
-    // اللغة واتجاهها فوق كل الشاشات: تغييرها يعيد بناء كل Text (LangScope) والقائمة مكانها
+    // اللغة فوق كل الشاشات: تغييرها يعيد بناء كل Text (LangScope) والقائمة مكانها. والترتيب من اليمين لليسار في اللغتين
+    // (2.6.0، بطلب المستخدم: "عند تغيير اللغة إلى الإنجليزية لا تقم بعكس الاتجاه")، ونص الإنجليزية نفسه من اليسار لليمين (Text)
     builder: (context, child) => ValueListenableBuilder<String>(valueListenable: Lang.notifier, builder: (_, code, _) =>
-        LangScope(code: code, child: Directionality(textDirection: Lang.dir, child: child!))),
+        LangScope(code: code, child: Directionality(textDirection: TextDirection.rtl, child: child!))),
     home: _testMatch() ?? const _Intro(),
   ));
 }

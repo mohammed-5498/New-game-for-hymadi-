@@ -151,8 +151,10 @@ class Text extends m.StatelessWidget {
   m.Widget build(m.BuildContext context) {
     context.dependOnInheritedWidgetOfExactType<LangScope>();
     final d = data;
-    if (d != null) return m.Text(tr(d), style: style, textAlign: textAlign, textDirection: textDirection, overflow: overflow, maxLines: maxLines);
-    return m.Text.rich(trSpan(textSpan!), style: style, textAlign: textAlign, textDirection: textDirection, overflow: overflow, maxLines: maxLines);
+    // الترتيب من اليمين لليسار في اللغتين، والجملة الإنجليزية نفسها من اليسار لليمين (فلا تنقلب علامات الترقيم)
+    final dir = textDirection ?? (Lang.en ? m.TextDirection.ltr : null);
+    if (d != null) return m.Text(tr(d), style: style, textAlign: textAlign, textDirection: dir, overflow: overflow, maxLines: maxLines);
+    return m.Text.rich(trSpan(textSpan!), style: style, textAlign: textAlign, textDirection: dir, overflow: overflow, maxLines: maxLines);
   }
 }
 

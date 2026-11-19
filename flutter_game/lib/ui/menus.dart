@@ -25,6 +25,7 @@ import 'migrate.dart' show migrated;
 import 'match_screen.dart';
 import 'crash_report.dart';
 import 'prefs.dart';
+import 'showcase.dart';
 import 'story_screen.dart';
 import 'widgets.dart';
 
@@ -262,7 +263,7 @@ class _MainMenuState extends State<MainMenu> {
       const Positioned.fill(child: MenuBackdrop()),
       const Positioned.fill(child: DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(
           begin: AlignmentDirectional.centerStart, end: AlignmentDirectional.centerEnd,
-          colors: [Color(0xED0C0906), Color(0xCC0C0906), Color(0x1F0C0906), Color(0x000C0906)], stops: [0, 0.34, 0.53, 0.7])))),
+          colors: [Color(0xED0C0906), Color(0xCC0C0906), Color(0x8C0C0906), Color(0x660C0906)], stops: [0, 0.34, 0.55, 1])))),   // والباقي أدكن قليلاً (2.6.0، بطلبه)
       PositionedDirectional(start: 24, top: 0, bottom: 0, width: 300, child: SafeArea(child: Center(child: SingleChildScrollView(
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
         Row(children: [
@@ -767,7 +768,9 @@ class StatsScreen extends StatelessWidget {
   }
 }
 
-// ===================== المتجر (storeScreen.js) =====================
+// ===================== المتجر (2.6.0، بطلب المستخدم: "تجميل المتجر وطريقة عرض المظاهر") =====================
+// شريط أعلاه بالأقسام الثلاثة، وخانات بصور المدن من رسم اللعبة (tool/export_city_thumbs_test.dart) وأبطال العصابات، ولوحة عرض:
+// الشخصيات حية برسم اللعبة (showcase.dart) وتبديل العادي والنخبة في المظاهر، أو صورة المدينة بميزتها ومبناها
 class StoreScreen extends StatefulWidget {
   final String section;
   final String? side;
@@ -780,43 +783,11 @@ class _StoreScreenState extends State<StoreScreen> {
   late String section = widget.section, chosenSide = widget.side ?? 'crows';
   String chosenMap = 'arab';
   int region = 0;
+  bool normalLook = false;   // في المظاهر: الشكل العادي للمقارنة
 
   bool _freeCity(String c) => STORE.l('freeCities').contains(c);
-
-  Widget _aside() {
-    if (section == 'maps') {
-      final c = chosenMap, free = _freeCity(c);
-      final lines = <String>['منطقتها: ${REGIONS.m(regionOfCity(c) ?? 'arabic').s('name')}'];
-      final host = nations.l('order').cast<String>().where((n) => nations.m(n).s('city') == c);
-      if (host.isNotEmpty) lines.add('مدينة أمة ${nations.m(host.first).s('name')}: مدينة المضيف حين تلعب بها.');
-      final f = CITY_FEATURES.m('desc')[CITY_FEATURES.m('cities')[c]], b = CITY_FEATURES.m('desc')[CITY_FEATURES.m('buildings')[c]];
-      if (f != null) lines.add('ميزتها: $f');
-      if (b != null) lines.add('مبناها: $b');
-      return _asideBox(Image.asset('assets/thumbs/city_$c.webp', fit: BoxFit.cover), cityName(c), free, lines,
-          WideButton('عرض المدينة', () => Navigator.push(context, MaterialPageRoute(builder: (_) => CityPreview(city: c))), width: 200));
-    }
-    final s = chosenSide, nation = _isNation(s) ? nations.m(_baseSide(s)) : null, style = nation?.s('style') ?? s, st = nations.m('styles').m(style);
-    final names = nation != null
-        ? [nation.m('names').s('common'), for (final h in GANGS.m(style).l('heroes').cast<String>()) nation.m('names').s(h), nation.m('names').s('champion')]
-        : ['الفرد العادي', for (final h in GANGS.m(s).l('heroes').cast<String>()) HEROES.m(h).s('name'), CHAMPIONS.m(s).s('name')];
-    final free = _gangIds.contains(s);
-    return _asideBox(Image.asset('assets/thumbs/side_$s.webp', fit: BoxFit.contain),
-        _isElite(s) ? '${sideName(s)} — ${nation!.s('gangName')}' : nation != null ? '${nation.s('gangName')} — ${nation.s('name')}' : GANGS.m(s).s('name'), free,
-        [if (_isElite(s)) 'مظهر أسود وذهبي لـ${nation!.s('gangName')}: الوجه واليدان بلونك، والقدرات كما هي. يُختار بجوار عصابته في الإعداد',
-         names.join(' • '), if (nation != null) '«${nation.m('trait').s('name')}»: ${nation.m('trait').s('desc')}', 'نمط ${st.s('name')}: ${st.s('desc')}'], null);
-  }
-
-  Widget _asideBox(Widget image, String title, bool free, List<String> lines, Widget? action) => SizedBox(width: 280, child: Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      ClipRRect(borderRadius: BorderRadius.circular(10), child: AspectRatio(aspectRatio: 2, child: Container(color: card, child: image))),
-      const SizedBox(height: 6),
-      Text(title, style: const TextStyle(color: gold, fontSize: 16, fontWeight: FontWeight.w800)),
-      Text(free ? 'مجانية • تأتي مع اللاعب' : 'السعر: يُحدد لاحقاً • متاحة لك الآن في فترة الاختبار',
-          style: TextStyle(color: free ? const Color(0xFF9FD07C) : gold, fontSize: 12)),
-      const SizedBox(height: 4),
-      for (final l in lines) Padding(padding: const EdgeInsets.only(bottom: 3), child: Text(l, style: const TextStyle(color: ink, fontSize: 12))),
-      if (action != null) action,
-    ]));
+  bool _freeSide(String s) => _gangIds.contains(s);
+  static const _cardFrame = Color(0x40E2B55A), _freeInk = Color(0xFF9FD07C);
 
   @override
   Widget build(BuildContext context) {
@@ -828,39 +799,188 @@ class _StoreScreenState extends State<StoreScreen> {
             : sideGroups;
     if (region >= groups.length) region = 0;
     final items = groups[region].$2;
-    return Scaffold(body: SafeArea(child: Padding(padding: const EdgeInsets.all(10), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Column(children: [
-        const Text('المتجر', style: TextStyle(color: gold, fontSize: 20, fontWeight: FontWeight.w800)),
-        for (final (k, label, n) in [('maps', 'الخرائط', 24), ('sides', 'العصابات', _nationIds.length + _gangIds.length), ('skins', 'المظاهر', _eliteIds.length)])
-          Padding(padding: const EdgeInsets.only(top: 6), child: SizedBox(width: 150, child: ChoiceChip(
-              label: Text('$label ($n)'), selected: section == k, onSelected: (_) => setState(() {
-                section = k; region = 0;
-                if (k == 'skins' && !_isElite(chosenSide)) chosenSide = _eliteIds.first;
-                if (k == 'sides' && _isElite(chosenSide)) chosenSide = 'crows';
-              })))),
-        const Spacer(),
-        WideButton('رجوع', () => Navigator.pop(context), ghost: true, width: 120),
-      ]),
-      const SizedBox(width: 10),
-      Expanded(child: Column(children: [
-        if (groups.length > 1) SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [
-          for (var k = 0; k < groups.length; k++) Padding(padding: const EdgeInsets.only(left: 6),
-              child: ChoiceChip(label: Text('${groups[k].$1} ${groups[k].$2.length}'), selected: region == k, onSelected: (_) => setState(() => region = k))),
+    final maps = [for (final r in REGIONS.l('order').cast<String>()) ...REGIONS.m(r).l('cities')].where((c) => !RETIRED_CITIES.contains(c)).length;
+    return Scaffold(body: DecoratedBox(
+      decoration: const BoxDecoration(gradient: RadialGradient(center: Alignment(0.35, -0.5), radius: 1.35,
+          colors: [Color(0xFF3B2D1D), Color(0xFF120E0A)])),
+      child: SafeArea(child: Padding(padding: const EdgeInsets.fromLTRB(12, 8, 12, 10), child: Column(children: [
+        Row(children: [
+          Container(width: 36, height: 36, decoration: BoxDecoration(shape: BoxShape.circle, gradient: goldGrad,
+              border: Border.all(color: const Color(0xFFFFE6A8))),
+              child: const Icon(Icons.storefront_rounded, size: 20, color: Color(0xFF2A1A08))),
+          const SizedBox(width: 10),
+          const GoldTitle('المتجر', size: 26),
+          const SizedBox(width: 16),
+          for (final (k, label, icon, n) in [('maps', 'الخرائط', Icons.map_rounded, maps),
+              ('sides', 'العصابات', Icons.groups_rounded, _nationIds.length + _gangIds.length),
+              ('skins', 'المظاهر', Icons.checkroom_rounded, _eliteIds.length)])
+            Padding(padding: const EdgeInsetsDirectional.only(end: 8), child: _Pill(icon, '$label ($n)', on: section == k, onTap: () => setState(() {
+              section = k; region = 0; normalLook = false;
+              if (k == 'skins' && !_isElite(chosenSide)) chosenSide = _eliteIds.first;
+              if (k == 'sides' && _isElite(chosenSide)) chosenSide = 'crows';
+            }))),
+          const Spacer(),
+          _Pill(Icons.arrow_back_rounded, 'رجوع', on: false, onTap: () => Navigator.pop(context)),
+        ]),
+        const SizedBox(height: 8),
+        Expanded(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Expanded(child: Column(children: [
+            if (groups.length > 1) SizedBox(height: 32, child: ListView(scrollDirection: Axis.horizontal, children: [
+              for (var k = 0; k < groups.length; k++) Padding(padding: const EdgeInsetsDirectional.only(end: 6),
+                  child: _Pill(null, '${groups[k].$1} ${groups[k].$2.length}', on: region == k, small: true, onTap: () => setState(() => region = k))),
+            ])),
+            const SizedBox(height: 8),
+            Expanded(child: GridView.extent(maxCrossAxisExtent: 200, childAspectRatio: 1.55, mainAxisSpacing: 10, crossAxisSpacing: 10,
+                children: [for (final it in items) section == 'maps' ? _mapCard(it) : _sideCard(it)])),
+          ])),
+          const SizedBox(width: 12),
+          SizedBox(width: 330, child: Container(clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0x80E2B55A)),
+                gradient: const LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0xF2302519), Color(0xF2171210)]),
+                boxShadow: const [BoxShadow(color: Color(0x99000000), blurRadius: 14, offset: Offset(0, 4))]),
+            child: section == 'maps' ? _mapShow() : _sideShow())),
         ])),
-        Expanded(child: GridView.extent(maxCrossAxisExtent: 190, childAspectRatio: 1.45, padding: const EdgeInsets.only(top: 8),
-            mainAxisSpacing: 8, crossAxisSpacing: 8, children: [
-          for (final it in items)
-            section == 'maps'
-                ? PickCard(title: cityShort(it), note: cityName(it), image: 'assets/thumbs/city_$it.webp', selected: it == chosenMap,
-                    badge: _freeCity(it) ? 'مجانية' : 'السعر لاحقاً', onTap: () => setState(() => chosenMap = it))
-                : PickCard(title: sideName(it), note: sideNote(it), image: 'assets/thumbs/side_$it.webp', aspect: 2.5,
-                    selected: it == chosenSide, badge: _gangIds.contains(it) ? 'مجانية' : 'السعر لاحقاً', onTap: () => setState(() => chosenSide = it)),
+      ]))),
+    ));
+  }
+
+  // --- الخانات ---
+  Widget _card({required bool selected, required bool free, required VoidCallback onTap, required List<Widget> children}) =>
+      GestureDetector(onTap: () { sound('ui_tap'); onTap(); }, child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), border: Border.all(color: selected ? gold : _cardFrame, width: selected ? 2 : 1),
+            boxShadow: [selected ? const BoxShadow(color: Color(0x80E2B55A), blurRadius: 12) : const BoxShadow(color: Color(0x80000000), blurRadius: 6, offset: Offset(0, 2))]),
+        child: ClipRRect(borderRadius: BorderRadius.circular(11), child: Stack(fit: StackFit.expand, children: [
+          ...children,
+          PositionedDirectional(top: 6, start: 6, child: Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
+              decoration: BoxDecoration(color: free ? const Color(0xE6304F23) : const Color(0xE64A3618), borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: free ? const Color(0x809FD07C) : const Color(0x80E2B55A))),
+              child: Text(free ? 'مجانية' : 'السعر لاحقاً', style: TextStyle(fontSize: 10, color: free ? _freeInk : gold)))),
+        ])),
+      ));
+
+  static const _fade = DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter,
+      colors: [Color(0x00000000), Color(0x59000000), Color(0xEB000000)], stops: [0.25, 0.55, 1])));
+  Widget _caption(String title, String note, double end) => PositionedDirectional(start: 10, end: end, bottom: 7, child: Column(
+    crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+      Text(title, maxLines: 1, overflow: TextOverflow.ellipsis,
+          style: const TextStyle(color: ink, fontSize: 13.5, fontWeight: FontWeight.w700, shadows: [Shadow(blurRadius: 3)])),
+      Text(note, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Color(0xFFCBBD9F), fontSize: 10.5)),
+    ]));
+
+  Widget _mapCard(String c) => _card(selected: c == chosenMap, free: _freeCity(c), onTap: () => setState(() => chosenMap = c), children: [
+    Image.asset('assets/thumbs/city_$c.webp', fit: BoxFit.cover),
+    _fade,
+    _caption(cityShort(c), cityName(c), 10),
+  ]);
+
+  // البطل كبيراً (أول ربع من صورة العصابة، البطل يسارها) على مسرح صغير
+  Widget _hero(String side) => ClipRect(child: Align(alignment: Alignment.centerLeft, widthFactor: 0.25,
+      child: Image.asset('assets/thumbs/side_$side.webp', fit: BoxFit.fitHeight, filterQuality: FilterQuality.medium)));
+  Widget _sideCard(String s) => _card(selected: s == chosenSide, free: _freeSide(s), onTap: () => setState(() { chosenSide = s; normalLook = false; }), children: [
+    const DecoratedBox(decoration: BoxDecoration(gradient: RadialGradient(center: Alignment(-0.55, 0.25), radius: 0.95,
+        colors: [Color(0xFF5A4326), Color(0xFF17120D)]))),
+    PositionedDirectional(end: 2, top: 4, bottom: -2, child: _hero(s)),
+    _caption(sideName(s), sideNote(s), 66),
+  ]);
+
+  // --- لوحة العرض ---
+  Widget _status(bool free) => Container(
+    margin: const EdgeInsets.only(top: 4, bottom: 6), padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+    decoration: BoxDecoration(borderRadius: BorderRadius.circular(9), color: free ? const Color(0x33304F23) : const Color(0x334A3618),
+        border: Border.all(color: free ? const Color(0x669FD07C) : const Color(0x66E2B55A))),
+    child: Row(children: [
+      Icon(free ? Icons.check_circle_rounded : Icons.schedule_rounded, size: 15, color: free ? _freeInk : gold),
+      const SizedBox(width: 6),
+      Expanded(child: Text(free ? 'مجانية • تأتي مع اللاعب' : 'السعر: يُحدد لاحقاً • متاحة لك الآن في فترة الاختبار',
+          style: TextStyle(color: free ? _freeInk : gold, fontSize: 11.5))),
+    ]));
+  Widget _line(IconData icon, String text) => Padding(padding: const EdgeInsets.only(bottom: 7), child: Row(
+    crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Padding(padding: const EdgeInsets.only(top: 2), child: Icon(icon, size: 15, color: gold)),
+      const SizedBox(width: 7),
+      Expanded(child: Text(text, style: const TextStyle(color: ink, fontSize: 12.5, height: 1.35))),
+    ]));
+
+  Widget _mapShow() {
+    final c = chosenMap;
+    final host = nations.l('order').cast<String>().where((n) => nations.m(n).s('city') == c);
+    final f = CITY_FEATURES.m('desc')[CITY_FEATURES.m('cities')[c]], b = CITY_FEATURES.m('desc')[CITY_FEATURES.m('buildings')[c]];
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      SizedBox(height: 160, child: Stack(fit: StackFit.expand, children: [
+        Image.asset('assets/thumbs/city_$c.webp', fit: BoxFit.cover),
+        const DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter,
+            colors: [Color(0x00171210), Color(0x8C1B150F), Color(0xFA2B2117)], stops: [0.3, 0.62, 1]))),
+        PositionedDirectional(start: 14, end: 14, bottom: 6, child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+          GoldTitle(cityShort(c), size: 22),
+          Text(cityName(c), style: const TextStyle(color: ink, fontSize: 12, shadows: [Shadow(blurRadius: 3)])),
         ])),
       ])),
-      const SizedBox(width: 10),
-      SingleChildScrollView(child: _aside()),
-    ]))));
+      Expanded(child: SingleChildScrollView(padding: const EdgeInsets.fromLTRB(14, 6, 14, 4), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        _status(_freeCity(c)),
+        _line(Icons.public_rounded, 'منطقتها: ${REGIONS.m(regionOfCity(c) ?? 'arabic').s('name')}'),
+        if (host.isNotEmpty) _line(Icons.flag_rounded, 'مدينة أمة ${nations.m(host.first).s('name')}: مدينة المضيف حين تلعب بها.'),
+        if (f != null) _line(Icons.auto_awesome_rounded, 'ميزتها: $f'),
+        if (b != null) _line(Icons.account_balance_rounded, 'مبناها: $b'),
+      ]))),
+      Padding(padding: const EdgeInsets.fromLTRB(14, 0, 14, 8), child: WideButton('عرض المدينة',
+          () => Navigator.push(context, MaterialPageRoute(builder: (_) => CityPreview(city: c))), primary: true, width: double.infinity)),
+    ]);
   }
+
+  Widget _sideShow() {
+    final s = chosenSide, elite = _isElite(s), base = _baseSide(s), nation = _isNation(s) ? nations.m(base) : null;
+    final style = nation?.s('style') ?? s, st = nations.m('styles').m(style);
+    final names = nation != null
+        ? [nation.m('names').s('common'), for (final h in GANGS.m(style).l('heroes').cast<String>()) nation.m('names').s(h), nation.m('names').s('champion')]
+        : ['الفرد العادي', for (final h in GANGS.m(s).l('heroes').cast<String>()) HEROES.m(h).s('name'), CHAMPIONS.m(s).s('name')];
+    final title = elite ? sideName(s) : nation != null ? nation.s('gangName') : GANGS.m(s).s('name');
+    final note = elite ? nation!.s('gangName') : nation != null ? nation.s('name') : sideNote(s);
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      SizedBox(height: 182, child: Stack(fit: StackFit.expand, children: [
+        const DecoratedBox(decoration: BoxDecoration(gradient: RadialGradient(center: Alignment(0, -0.1), radius: 0.95,
+            colors: [Color(0xFF5E4628), Color(0xFF1A140E)]))),
+        Align(alignment: const Alignment(0, 0.72), child: FractionallySizedBox(widthFactor: 0.92, child: Container(height: 30,
+            decoration: const BoxDecoration(borderRadius: BorderRadius.all(Radius.elliptical(160, 15)),
+                gradient: RadialGradient(colors: [Color(0x80FFD27A), Color(0x00FFD27A)]))))),
+        CharacterShowcase(gang: style, nation: nation != null ? base : null, elite: elite && !normalLook),
+        if (elite) PositionedDirectional(top: 8, start: 8, child: Row(children: [
+          for (final (normal, label) in const [(false, 'نخبة'), (true, 'عادي')])
+            Padding(padding: const EdgeInsetsDirectional.only(end: 6),
+                child: _Pill(null, label, on: normalLook == normal, small: true, onTap: () => setState(() => normalLook = normal))),
+        ])),
+      ])),
+      Expanded(child: SingleChildScrollView(padding: const EdgeInsets.fromLTRB(14, 8, 14, 8), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Text(title, style: const TextStyle(color: gold, fontSize: 19, fontWeight: FontWeight.w700, height: 1.2)),
+        Text(note, style: const TextStyle(color: Color(0xFFCBBD9F), fontSize: 12)),
+        _status(_freeSide(s)),
+        if (elite) _line(Icons.auto_awesome_rounded,
+            'مظهر أسود وذهبي لـ${nation!.s('gangName')}: الوجه واليدان بلونك، والقدرات كما هي. يُختار بجوار عصابته في الإعداد'),
+        _line(Icons.groups_rounded, names.join(' • ')),
+        if (nation != null) _line(Icons.bolt_rounded, '«${nation.m('trait').s('name')}»: ${nation.m('trait').s('desc')}'),
+        _line(Icons.shield_rounded, 'نمط ${st.s('name')}: ${st.s('desc')}'),
+      ]))),
+    ]);
+  }
+}
+
+// زر قرص: أقسام المتجر ومناطقه والرجوع، والمختار بتدرج ذهبي
+class _Pill extends StatelessWidget {
+  final IconData? icon;
+  final String label;
+  final bool on, small;
+  final VoidCallback onTap;
+  const _Pill(this.icon, this.label, {required this.on, this.small = false, required this.onTap});
+  @override
+  Widget build(BuildContext context) => GestureDetector(onTap: () { sound('ui_tap'); onTap(); }, child: Container(
+    height: small ? 30 : 36, padding: EdgeInsets.symmetric(horizontal: small ? 11 : 13),
+    decoration: BoxDecoration(borderRadius: BorderRadius.circular(18), gradient: on ? goldGrad : plateGrad,
+        border: Border.all(color: on ? const Color(0xFFFFE6A8) : const Color(0x80E2B55A))),
+    child: Row(mainAxisSize: MainAxisSize.min, children: [
+      if (icon != null) ...[Icon(icon, size: 17, color: on ? const Color(0xFF2A1A08) : gold), const SizedBox(width: 6)],
+      Text(label, style: TextStyle(fontSize: small ? 12.5 : 14, fontWeight: FontWeight.w700, color: on ? const Color(0xFF1B140C) : ink)),
+    ]),
+  ));
 }
 
 // معاينة المدينة من المتجر: خريطتها كاملة بالتحريك والتقريب

@@ -255,7 +255,10 @@ void setUnitSkins(MatchState s) {
   _skins = [for (final p in s.players) p.id < list.length && list[p.id] is Map ? (list[p.id] as Map)['skin'] as String? : null];
   _nations = [for (final p in s.players) p.nation];
 }
-String? skinOf(Unit u) => u.nation != null && u.playerId < _skins.length && _nations[u.playerId] == u.nation ? _skins[u.playerId] : null;
+String? skinOf(Unit u) => u.playerId < 0 ? previewSkin[u]
+    : u.nation != null && u.playerId < _skins.length && _nations[u.playerId] == u.nation ? _skins[u.playerId] : null;
+// مظهر شخصيات العرض في المتجر (2.6.0، ui/showcase.dart): وحدات بلا لاعب (playerId سالب) لا تمر بإعداد مباراة
+final previewSkin = Expando<String>('preview skin');
 
 // لوح صور الوحدة: المقطّع أجزاءً (النخبة إن اختارها صاحبها، أو البديل) وإلا القديم
 String? sheetOf(Unit u, [String? skin]) => rigFor(artKey(u), skin)?.sheet ?? describe(artKey(u))?.gang;

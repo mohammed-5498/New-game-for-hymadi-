@@ -1122,4 +1122,6 @@ const EN = <String, String>{
   'المهمة التالية بعد لحظات': 'Next mission in a moment',
   'وصل {}': '{} arrived',
   '{}/{} ث': '{}/{} s',
+  'نخبة': 'Elite',
+  'عادي': 'Normal',
 };
