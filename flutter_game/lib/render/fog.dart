@@ -166,7 +166,9 @@ class Fog {
     _liftShown = Float32List.fromList(lift);
   }
 
+  static int bakes = 0;   // صور الضباب الجديدة منذ آخر قراءة (عدّاد الأداء)
   void _bake() {
+    bakes++;
     if (!_same(_liftShown, lift) || _gpos.isEmpty) _shape();
     final k = FOG.bake, col = _gcol, corner = _corner, d = dark;
     for (var v = 0; v < col.length; v++) {

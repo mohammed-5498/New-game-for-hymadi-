@@ -17,6 +17,37 @@ const _tau = 6.2831853;
 // نقطة على المربع بإحداثياته (a على i، b على j، من −0.5 إلى 0.5) حول مركزه
 List<double> _at(double x, double y, double a, double b) => [x + (a - b) * 18, y + (a + b) * 9];
 
+// معلم المنطقة (placeMonument): مبنى عادي قرب الوسط حل محله المعلم. وقد يقع مربعه في ساحة معبد فلا يبقى مبنى
+bool isMonument(GameMap map, int k) => map.type[k] == tH && map.kind[k] == 'monument';
+
+// الحدائق (2.3.2، بطلب المستخدم: "أشجار وأعمدة إنارة تنفع حديقة منتزه"): أحياء عادية تُرسم حدائق، شجرة مكان كل بيت وأرضها
+// أخضر، وإنارتها ومقاعدها على ممراتها (decor.dart). رسم فقط: المربعات وأنواعها والاستيلاء كما هي. حي صغير أو متوسط بلا مبنى
+// مميز ولا قاعدة ولا معلم، بعيد عن الحدائق الأخرى، واحدة لكل GROUND.parkEvery من ضلع الخريطة
+final _parks = Expando<Set<int>>();
+Set<int> parksOf(GameMap map) => _parks[map] ??= () {
+  final n = map.n, out = <int>{};
+  bool plain(District d) => d.capture != null && !d.temple && !d.merc && d.feature == null && d.special == null && !d.police &&
+      !d.isHome && d.tiles.length >= 4 && d.tiles.length <= 16 && d.tiles.every((t) {
+        final k = map.idx(t.$1, t.$2), ty = map.type[k];
+        return (ty == tH || ty == tR || ty == tDot || ty == tP) && !isMonument(map, k);
+      }) && d.tiles.where((t) => map.type[map.idx(t.$1, t.$2)] == tH).length >= 3;
+  final cand = [for (final d in map.districts) if (plain(d)) d]
+    ..sort((a, b) => hsh(a.id, 7, 650, map.seed).compareTo(hsh(b.id, 7, 650, map.seed)));
+  for (final d in cand) {
+    if (out.length >= math.max(1, n ~/ GROUND.parkEvery)) break;
+    final c = d.capture!;
+    if (out.any((o) { final e = map.districts[o].capture!; return (e.i - c.i).abs() + (e.j - c.j).abs() < n / 3; })) continue;
+    out.add(d.id);
+  }
+  return out;
+}();
+
+// المدن الجافة: حديقتها نخيل على رمل أخضر قليلاً
+bool aridCity(String city) {
+  final r = REGIONS.order.firstWhere((r) => REGIONS.cities[r]!.contains(city), orElse: () => '');
+  return r == 'arabic' || r == 'african' || city == 'tenoch' || city == 'mexico';
+}
+
 // الشارع (والدوار) والماء: أخفض من أرض الأحياء والرصيف (18.10أ)
 bool lowGround(GameMap map, int k) => map.road[k] == 1 || map.type[k] == tY || map.type[k] == tWater;
 
@@ -57,13 +88,6 @@ class Decor {
   double _dz(int k) => lowGround(map, k) ? drop : 0;
   // المربع أعلى من الشارع (أرض حي)، وما خلف حافة الخريطة الخلفية أيضاً فللشارع عندها رصيف
   bool upper(int i, int j) => !map.inBounds(i, j) || !lowGround(map, map.idx(i, j));   // خارج الخريطة أرض (هامشها)
-  // وسط الرصيف الخلفي لمربع شارع (عند جاره -i أو -j)، أو null بلا رصيف خلفه (تقاطع)
-  List<double>? _onSide(int i, int j, double x, double y, int salt) {
-    final a = upper(i - 1, j), b = upper(i, j - 1);
-    if (!a && !b) return null;
-    final w = 0.5 - 0.5 / GROUND.sub;
-    return a && (!b || h(i, j, salt) < 0.5) ? _at(x, y, -w, 0) : _at(x, y, 0, -w);
-  }
 
   // --- الأرض: طبقة chunkCache.drawGround ---
   // at: الطبقة التي يُرسم فيها ما على المربع (i، j)، فتُقسم الأرض شرائح تُرسم الظاهرة منها وحدها
@@ -81,6 +105,8 @@ class Decor {
           v.stroke([[x - 12, y], [x, y - 6], [x + 12, y], [x, y + 6], [x - 12, y]], 'rgba(255,226,150,0.32)', 0.6);
           v.ln(x - 6, y - 3, x + 6, y + 3, 'rgba(255,226,150,0.32)', 0.6);
           v.ln(x + 6, y - 3, x - 6, y + 3, 'rgba(255,226,150,0.32)', 0.6);
+        } else if (isMonument(map, k)) {
+          _monumentKerb(v, x, y);
         } else if (map.type[k] == tY && _roundaboutAnchor(i, j)) {
           if (!_mark('ring', x, y + drop, i, j)) v.ring(x, y + drop - 9, 38, 19, 'rgba(240,236,224,0.7)', 0.9, [4, 3]);
         }
@@ -112,7 +138,7 @@ class Decor {
   void _roadSurface(Vec v, int i, int j, double x, double y) {
     if (open != null) {
       final dash = map.dash[map.idx(i, j)];
-      if ((dash == 6 || dash == 7) && !_mark(dash == 6 ? 'cross_i' : 'cross_j', x, y, i, j)) _crosswalk(v, dash == 6, x, y);
+      if (dash == 6 || dash == 7) _zebra(v, i, j, dash == 6, x, y);
     }
     if (_s('ground', 'road') == null) _themeTile(v, i, j, x, y);   // نقش الشارع في صورته
     if (h(i, j, 201) < STREET.crack && !_mark('crack', x, y, i, j)) {
@@ -120,10 +146,15 @@ class Decor {
     }
   }
 
-  void _crosswalk(Vec v, bool along, double x, double y) {
-    for (final o in const [-0.3, 0.0, 0.3]) {
-      final s = along ? _at(x, y, -0.28, o) : _at(x, y, o, -0.28), e = along ? _at(x, y, 0.28, o) : _at(x, y, o, 0.28);
-      v.ln(s[0], s[1], e[0], e[1], 'rgba(236,232,220,0.62)', 1.5);
+  // ممر المشاة (2.3.2، بطلب المستخدم: كانت خطوطه غير منتظمة): خمسة أشرطة لكل مربع على مسافات متساوية عبر الشارع كله،
+  // فتتصل أشرطة مربعي الشارع العريض صفاً واحداً، ولا شريط على الرصيف
+  void _zebra(Vec v, int i, int j, bool along, double x, double y) {
+    final lo = along ? upper(i, j - 1) : upper(i - 1, j), hi = along ? upper(i, j + 1) : upper(i + 1, j);
+    for (var k = 0; k < 5; k++) {
+      if ((k == 0 && lo) || (k == 4 && hi)) continue;
+      final w = -0.4 + k * 0.2;
+      final s = along ? _at(x, y, -0.3, w) : _at(x, y, w, -0.3), e = along ? _at(x, y, 0.3, w) : _at(x, y, w, 0.3);
+      v.ln(s[0], s[1], e[0], e[1], 'rgba(238,234,224,0.72)', 1.5);
     }
   }
 
@@ -166,9 +197,10 @@ class Decor {
       if (map.dash[k] >= 5 || map.kind[k] != null) return;     // حلقة الدوار وممرات المشاة نظيفة، والبوابة صورة
       if (open?.roadProp != false) _roadProp(v, i, j, x, y);
       _streetDebris(v, x, y + drop, i, j);
-      if (open != null) _streetTree(v, i, j, x, y);
-      return;
+      return;                                // أشجار الرصيف انتقلت إلى الحدائق (2.3.2)
     }
+    if ((type == tDot || type == tH || type == tR) && parksOf(map).contains(map.districtAt[k])) { _parkDecor(v, i, j, x, y, k); return; }
+    if (isMonument(map, k)) return;
     if (type == tDot) {
       if (map.kind[k] == 'fplaza') {
         _featurePlaza(v, i, j, x, y);
@@ -253,33 +285,7 @@ class Decor {
     }
   }
 
-  // --- المدن المفتوحة: أشجار الرصيف وزينة الممرات والدوار (openCity.js) ---
-  static const _tree = {
-    'europe': ['#5b4636', '#5f8a44', '#6f9a52'],
-    'chicago': ['#4a3a2e', '#4f6b3a', '#5f7d45'],
-    'hk': ['#3a2f28', '#2f5a3a', '#3a6a44'],
-  };
-
-  void _streetTree(Vec v, int i, int j, double x, double y) {
-    final k = map.idx(i, j);
-    if (map.dash[k] >= 5 || h(i, j, 530) >= 0.34) return;
-    for (final (da, db) in const [(-1, 0), (0, -1)]) {
-      final a = i + da, b = j + db;
-      if (!map.inBounds(a, b)) continue;
-      final t = map.type[map.idx(a, b)];
-      if (map.road[map.idx(a, b)] == 0 && (t == tH || t == tR)) {
-        final p = da != 0 ? _at(x, y, -0.36, 0) : _at(x, y, 0, -0.36);
-        if (_item(theme.tree == 'palm' ? 'spalm' : 'stree', p[0], p[1], i, j)) return;
-        if (theme.tree == 'palm') { streetPalm(v, p[0], p[1], i, j); return; }
-        final c = _tree[city] ?? _tree['europe']!;
-        v.el(p[0], p[1] + 0.6, 4.2, 1.8, 'rgba(0,0,0,0.22)');
-        v.rc(p[0] - 0.8, p[1] - 7, 1.6, 7, c[0]);
-        v.circ(p[0], p[1] - 10.5, 4.6, c[1]); v.circ(p[0] - 2, p[1] - 12, 3.2, c[2]); v.circ(p[0] + 2.2, p[1] - 9.6, 2.6, c[1]);
-        return;
-      }
-    }
-  }
-
+  // --- المدن المفتوحة: زينة الممرات والدوار (openCity.js) ---
   static void streetPalm(Vec v, double px, double py, int i, int j) {
     final o = ((i * 3 + j) % 3) - 1;
     v.el(px, py + 0.6, 3.6, 1.5, 'rgba(0,0,0,0.22)');
@@ -667,21 +673,74 @@ class Decor {
   static const _posts = {'europe', 'rothenburg', 'cairo', 'kaifeng', 'gyeongju', 'paris', 'birmingham', 'laboca', 'diriyah', 'meroe', 'rio', 'tenoch'};
   void _roadProp(Vec v, int i, int j, double x, double y) {
     if (STREET.noHang.contains(city)) return;
+    if (_posts.contains(city) && onItem != null && _s('decor', 'roadprop') != null) { _post(i, j, x, y); return; }
     if (onItem != null && _s('decor', 'roadprop') != null) {
       _probe.clear();
       _roadPropCode(_probe, i, j, x, y);
       if (_probe.isEmpty) return;
-      // باريس: مدخل المترو (1) أو عمود الإنارة (2) كما يختار رسمها، والبقية بالتجزئة
-      final n = city == 'paris' ? ((i * 7 + j * 5) % 9 == 0 ? 1 : 2) : _variant('roadprop', i, j, 431);
-      if (!_posts.contains(city)) { _item('roadprop', x, y + drop, i, j, n); return; }
-      final at = _onSide(i, j, x, y, 433), s = _s('decor', 'roadprop', n)!;
-      if (at == null) return;
-      // قاعدة العمود أسفل وسط الصورة: تُنقل الصورة فتقف قاعدته على الرصيف
-      final px = art!.px;
-      _item('roadprop', at[0] - (s.w / 2 - s.ax) / px, at[1] - (s.h - s.ay) / px + 0.4, i, j, n);
+      _item('roadprop', x, y + drop, i, j, _variant('roadprop', i, j, 431));
       return;
     }
     _roadPropCode(v, i, j, x, y + drop);
+  }
+
+  // عمود الإنارة (أو المشعل) على الرصيف الخلفي كل ثلاثة مربعات من الشارع في صف مستقيم، لا عند التقاطع (2.3.2: كان
+  // موزعاً بالتجزئة). وفي باريس عمود الإنارة وحده: مدخل المترو في الحدائق
+  void _post(int i, int j, double x, double y) {
+    final a = upper(i - 1, j), b = upper(i, j - 1), w = 0.5 - 0.5 / GROUND.sub;
+    final at = a && !b && j % 3 == 0 ? _at(x, y, -w, 0) : b && !a && i % 3 == 0 ? _at(x, y, 0, -w) : null;
+    if (at == null) return;
+    final n = city == 'paris' ? 2 : 1, s = _s('decor', 'roadprop', n);
+    if (s == null) return;
+    // قاعدة العمود أسفل وسط الصورة: تُنقل الصورة فتقف قاعدته على الرصيف
+    final px = art!.px;
+    _item('roadprop', at[0] - (s.w / 2 - s.ax) / px, at[1] - (s.h - s.ay) / px + 0.4, i, j, n);
+  }
+
+  // الحديقة: ممراتها مرصوفة بإنارة ومقاعد بالتناوب، ومدخل المترو في ممرها الأمامي بباريس، وتحت أشجارها شجيرات
+  final _entrance = <int, int>{};
+  void _parkDecor(Vec v, int i, int j, double x, double y, int k) {
+    final id = map.districtAt[k], type = map.type[k];
+    if (type != tDot) {
+      final p = _at(x, y, 0.3, -0.25);
+      if (h(i, j, 660) < 0.4) _item('planter', p[0], p[1], i, j);
+      return;
+    }
+    final front = _entrance[id] ??= () {
+      var best = -1;
+      for (final (a, b) in map.districts[id].tiles) {
+        final q = map.idx(a, b);
+        if (map.type[q] == tDot && (best < 0 || a + b > best % map.n + best ~/ map.n)) best = q;
+      }
+      return best;
+    }();
+    if (city == 'paris' && k == front && _item('roadprop', x, y, i, j, 1)) return;
+    if ((i + j) % 2 == 0) {
+      final p = _at(x, y, -0.32, -0.32);
+      if (_item('lamp', p[0], p[1], i, j)) lights.add(Light(p[0], p[1] - 15, 24, 0xffdc96, 0.5));
+    } else if (h(i, j, 661) < 0.6) {
+      final p = _at(x, y, 0.2, -0.3);
+      _item('bench', p[0], p[1], i, j);
+    }
+  }
+
+  // حافة المعلم (2.3.2، بطلب المستخدم: "منطقة لحالها بحدود بسيطة"): إطار حجري منخفض حول مربعه بلون ساحة المدينة،
+  // وأرضه مرصوفة (city_layer.dart) خارج حدود الحي ولا تُصبغ
+  void _monumentKerb(Vec v, double x, double y) {
+    final plaza = hex(art?.colors['plaza'] ?? '#b8ae9c');
+    String css6(int c) => '#${(c & 0xFFFFFF).toRadixString(16).padLeft(6, '0')}';
+    final top = css6(mix(plaza, 0xffffff, 0.35)), face = css6(mix(plaza, 0x000000, 0.35)), hgt = 1.4;
+    const cx = [0.0, 1.0, 0.0, -1.0], cy = [-1.0, 0.0, 1.0, 0.0];   // أعلى ويمين وأسفل ويسار
+    List<double> p(double r, int c, [double up = 0]) => [x + cx[c] * TILE_HALF_W * r, y + cy[c] * TILE_HALF_H * r - up];
+    const r1 = 0.84, r2 = 0.97;
+    for (var c = 0; c < 4; c++) {
+      final d = (c + 1) % 4;
+      v.poly([p(r1, c, hgt), p(r1, d, hgt), p(r2, d, hgt), p(r2, c, hgt)], top);
+    }
+    for (final c in const [1, 2]) {                       // الوجهان الأماميان: من اليمين إلى الأسفل ومنه إلى اليسار
+      final d = (c + 1) % 4;
+      v.poly([p(r2, c, hgt), p(r2, d, hgt), p(r2, d), p(r2, c)], face);
+    }
   }
 
   void _roadPropCode(Vec v, int i, int j, double x, double y) {

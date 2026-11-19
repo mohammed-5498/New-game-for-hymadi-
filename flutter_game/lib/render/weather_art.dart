@@ -79,7 +79,9 @@ class WeatherFx {
   final _lx = Float32List(4 * 160), _lr = Float32List(4 * 160);
   final _lc = Int32List(160);
   final _fl = <double>[];             // أضواء النيران المدموجة: x وy ونصف القطر والعدد
-  static final _plus = ui.Paint()..blendMode = ui.BlendMode.plus..filterQuality = ui.FilterQuality.low;
+  // الأضواء بمزج عادي (2.3.2): مزج الجمع (plus) مع ألوان الصور كان يُرسم في طبقة كاملة الشاشة إضافية على كرت الشاشة
+  static final _plus = ui.Paint()..filterQuality = ui.FilterQuality.low;
+  static int lights = 0;   // الأضواء في آخر إطار (عدّاد الأداء)
 
   // بعد رسم العالم، بإحداثيات الشاشة. statics من mapLights، وdt زمن الإطار (صفر في الإيقاف)
   // lit: قوة الضوء في هذا الموضع من العالم (ضباب الحرب: لا أضواء فيما لم يُستكشف، وأخفت فيما لا يُرى الآن)
@@ -113,6 +115,7 @@ class WeatherFx {
       }
       for (var k = 0; k < _fl.length; k += 4) { add(_fl[k], _fl[k + 1], _fl[k + 2] * math.min(1.6, 1 + 0.15 * (_fl[k + 3] - 1)), 0xff963c, 0.5); }
       for (final l in statics) { add(l.x, l.y, l.r, l.rgb, l.a); }
+      lights = n;
       if (n > 0) {
         canvas.drawRawAtlas(_glow!, Float32List.sublistView(_lx, 0, n * 4), Float32List.sublistView(_lr, 0, n * 4),
             Int32List.sublistView(_lc, 0, n), ui.BlendMode.modulate, null, _plus);

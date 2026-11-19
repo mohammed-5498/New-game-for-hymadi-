@@ -26,6 +26,7 @@ import '../net/session.dart';
 import '../render/batch.dart';
 import '../render/city_art.dart';
 import '../render/city_layer.dart';
+import '../render/decor.dart' show isMonument, parksOf;
 import '../render/fx_art.dart';
 import '../render/unit_art.dart';
 import '../render/unit_atlas.dart';
@@ -125,7 +126,11 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
       'رسم المشهد ${ms(_mPaint, _mPaints, _mPaintMax)} • المنطق ${ms(_mSim, _mTicks, _mSimMax)} ملي ث',
       'الجنود $alive (ظاهر $visibleUnits) • تقريب ${s.camera.z.toStringAsFixed(1)}',
       'توقف الخيط بين الإطارات: أقصى ${(_mLag / 1000).toStringAsFixed(1)} ملي ث • مجموعه ${(_mLagSum / 1000).round()} في الثانية',
+      // ما يثقل كرت الشاشة (2.3.2): الطقس وأضواؤه، وصور الضباب الجديدة، وأوامر رسم الدفعات في الإطار
+      'الطقس ${s.weather} • أضواء ${WeatherFx.lights} • صور الضباب ${(Fog.bakes / sec).round()}/ث • دفعات ${(TriBatch.draws / math.max(1, _mFrames)).round()}/إطار',
     ].join('\n');
+    Fog.bakes = 0;
+    TriBatch.draws = 0;
     _mLag = _mLagSum = 0;
     _mAt = now;
     _mFrames = _mTimed = _mSlow = _mBuild = _mBuildMax = _mRaster = _mRasterMax = 0;
@@ -255,7 +260,9 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     // للفحص: الكاميرا على مربع (i،j) أو على المعبد أو أول مبنى مرتزقة
     final at = settings['cam'] as String?;
     if (at != null) {
-      final t = at == 'temple' || at == 'merc' ? s.map.districts.where((d) => at == 'merc' ? d.merc : d.temple).firstOrNull?.capture : null;
+      final pk = at == 'park' ? parksOf(s.map).firstOrNull : null;   // أول حديقة
+      final t = pk != null ? s.map.districts[pk].capture
+          : at == 'temple' || at == 'merc' ? s.map.districts.where((d) => at == 'merc' ? d.merc : d.temple).firstOrNull?.capture : null;
       // beast: على الترول أو الفارس الأسود (للفحص بعد ff)
       final m = at == 'beast' ? s.units.where((u) => u.creature == 'troll' || u.blackKnight).firstOrNull : null;
       final mo = at == 'monument' ? [for (var k = 0; k < s.map.n * s.map.n; k++) if (isMonument(s.map, k)) k].firstOrNull ?? -1 : -1;   // المعلم
@@ -1000,10 +1007,11 @@ class _MatchPainter extends CustomPainter {
     final out = [for (final _ in m.districts) <double>[]];
     for (final d in m.districts) {
       for (final (i, j) in d.tiles) {
-        if (isMonument(m, m.idx(i, j))) continue;   // المعلم على منصته خارج حدود الحي (2.3.1)
+        if (isMonument(m, m.idx(i, j))) continue;   // المعلم خارج حدود الحي
         final x = (i - j) * W, y = (i + j) * H;
         void edge(int ni, int nj, double x1, double y1, double x2, double y2) {
-          if (m.inBounds(ni, nj) && m.districtAt[m.idx(ni, nj)] == d.id) return;
+          // والمعلم منطقة لحالها (2.3.2): الحد يدور حوله
+          if (m.inBounds(ni, nj) && m.districtAt[m.idx(ni, nj)] == d.id && !isMonument(m, m.idx(ni, nj))) return;
           // نحو مركز المربع بقدر الإزاحة
           final cx = x - (x1 + x2) / 2, cy = y - (y1 + y2) / 2, l = math.sqrt(cx * cx + cy * cy);
           final ox = cx / l * inset, oy = cy / l * inset;

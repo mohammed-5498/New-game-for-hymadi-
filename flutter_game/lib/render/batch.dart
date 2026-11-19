@@ -188,8 +188,10 @@ class TriBatch {
   static ui.Paint _paintOf(ui.Image atlas) => _paints[atlas] ??= (ui.Paint()
       ..shader = ui.ImageShader(atlas, ui.TileMode.clamp, ui.TileMode.clamp, Float64List.fromList(
           [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]), filterQuality: ui.FilterQuality.medium));
+  static int draws = 0;   // أوامر الرسم منذ آخر قراءة (عدّاد الأداء)
   void flush(ui.Canvas canvas, ui.Image atlas) {
     if (_n == 0) return;
+    draws++;
     final paint = _paints[atlas] ??= (ui.Paint()
       ..shader = ui.ImageShader(atlas, ui.TileMode.clamp, ui.TileMode.clamp, Float64List.fromList(
           [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]), filterQuality: ui.FilterQuality.medium));
