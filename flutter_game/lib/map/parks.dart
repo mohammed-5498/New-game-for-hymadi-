@@ -82,6 +82,7 @@ bool parkPiece(GameMap map, int k) {
   return isMonument(map, k) || (id >= 0 && parksOf(map).contains(id) && k == parkCenter(map, map.districts[id]));
 }
 
-// لا سور حول المعبد ومباني المرتزقة والحدائق (2.4.1، بطلب المستخدم)، في خرائط المعابد (وبلاها كما كان: فحص التطابق مع المتصفح)
+// لا سور حول المعبد ومباني المرتزقة والحدائق (2.4.1، بطلب المستخدم) ولا المباني المميزة (2.4.2، بطلبه)، في خرائط المعابد
+// (وبلاها كما كان: فحص التطابق مع المتصفح)
 bool fortifiable(GameMap map, District d) =>
-    !(d.temple || d.merc || (map.districts.any((x) => x.temple) && parksOf(map).contains(d.id)));
+    !(d.temple || d.merc || (map.districts.any((x) => x.temple) && (d.feature != null || parksOf(map).contains(d.id))));

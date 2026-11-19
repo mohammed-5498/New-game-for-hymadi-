@@ -1,5 +1,5 @@
 // الحدائق (2.4.1، بطلب المستخدم): حديقة واحدة على الأقل في كل خريطة لمعلمها ونافورتها، ووسط الحديقة غير مربع البناء (كان برج
-// حديقة هونغ كونغ يُبنى مكان نافورتها فترمي السهام)، ولا سور في الحدائق والمعبد ومباني المرتزقة
+// حديقة هونغ كونغ يُبنى مكان نافورتها فترمي السهام)، ولا سور في الحدائق والمعبد ومباني المرتزقة والمباني المميزة (2.4.2)
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -27,11 +27,11 @@ void main() {
           expect(c, greaterThanOrEqualTo(0), reason: why);
           expect(c, isNot(buildSpot(m, d)), reason: '$why: وسط الحديقة مربع البناء');
           d..owner = 0..progress = 100;
-          expect(canFortify(s, 0, d).ok, isFalse, reason: '$why: سور في حديقة');
+          expect(canFortify(s, 0, d).reason, 'لا سور هنا', reason: '$why: سور في حديقة');
         }
-        for (final d in m.districts.where((d) => d.temple || d.merc)) {
+        for (final d in m.districts.where((d) => d.temple || d.merc || d.feature != null)) {
           d..owner = 0..progress = 100;
-          expect(canFortify(s, 0, d).ok, isFalse, reason: '$why: سور حول معبد أو مرتزقة');
+          expect(canFortify(s, 0, d).reason, 'لا سور هنا', reason: '$why: سور حول معبد أو مرتزقة أو مبنى مميز (${d.feature})');
         }
       }
     }

@@ -4,6 +4,7 @@ import '../audio/sound.dart';
 import '../core/cfg.dart';
 import '../data/js_config.dart';
 import '../map/generator.dart';
+import '../map/parks.dart' show parksOf;
 import '../map/pathfinding.dart';
 import 'abilities.dart';
 import 'alerts.dart';
@@ -39,6 +40,7 @@ MatchState createMatch(J settings) {
   final map = createMap(settings.ss('mapSize') ?? 'medium', players, settings.ss('city') ?? 'random', simRng, specials: !economy,
       features: economy, temples: economy && settings['temples'] == true);
   if (map == null) throw StateError('تعذر توليد خريطة صالحة');
+  parksOf(map);   // الحدائق من الخريطة كما وُلّدت: المباني تغيّر مربعاتها، والحفظ يعيدها قبل أن يُسأل عنها
   final feature = economy ? cityFeature(map.city) : null;
   // الشرطة طرف محايد بعد الأحياء المنزلية، ثم طرف الميزة إن احتاجته
   players.add(createPolicePlayer(players));

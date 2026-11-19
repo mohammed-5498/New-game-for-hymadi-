@@ -529,32 +529,15 @@ class Decor {
     }
   }
 
-  // زينة الأركان: فوانيس حجرية للمعبد، ومشاعل وصناديق ورايات للمرتزقة
+  // زينة الأركان: صناديق ورايات للمرتزقة وحدها (2.4.2، بطلب المستخدم: بلا فوانيس المعبد الحجرية ولا المشاعل)
   void _squareCorner(Vec v, District d, int i, int j, double x, double y) {
     final b = _boxes[d.id] ?? _bbox(d);
-    final corner = (i == b.$1 || i == b.$3) && (j == b.$2 || j == b.$4);
-    if (!corner) return;
-    if (d.temple) {
-      v.box(x, y, 2.4, 1.2, 3, '#8f8676', '#b3a994', '#c8bfa9');
-      v.box(x, y - 3, 1.2, 0.6, 7, '#9a917f', '#bdb39e');
-      v.box(x, y - 10, 2.6, 1.3, 3.2, '#7d756a', '#a39a87', '#ffe39a');
-      v.poly([[x - 3.4, y - 13.2], [x, y - 16.6], [x + 3.4, y - 13.2], [x, y - 11.6]], '#6b6358');
-      lights.add(Light(x, y - 11, 26, 0xffd98a, 0.5));
-    } else if (d.merc) {
-      if ((i + j) % 2 == 0) {
-        _brazier(v, x, y);
-        lights.add(Light(x, y - 9, 28, 0xff963c, 0.55));
-      } else {
-        v.box(x - 2, y + 1, 2.6, 1.3, 3.6, '#6e4f30', '#8a6640', '#9c7449');
-        v.box(x + 2.2, y, 2, 1, 2.8, '#5f432a', '#7a5838', '#8c6844');
-        v.ln(x + 0.6, y - 1, x + 0.6, y - 17, '#3a2a1c', 0.9);
-        v.poly([[x + 0.6, y - 16.5], [x + 6.4, y - 15], [x + 6.4, y - 10.4], [x + 0.6, y - 11.9]], '#8e2f24');
-        v.ln(x + 0.6, y - 14.2, x + 6.4, y - 12.7, '#e8c56a', 0.5);
-      }
-    } else {
-      _brazier(v, x, y);
-      lights.add(Light(x, y - 9, 24, 0xff963c, 0.45));
-    }
+    if (!d.merc || !((i == b.$1 || i == b.$3) && (j == b.$2 || j == b.$4))) return;
+    v.box(x - 2, y + 1, 2.6, 1.3, 3.6, '#6e4f30', '#8a6640', '#9c7449');
+    v.box(x + 2.2, y, 2, 1, 2.8, '#5f432a', '#7a5838', '#8c6844');
+    v.ln(x + 0.6, y - 1, x + 0.6, y - 17, '#3a2a1c', 0.9);
+    v.poly([[x + 0.6, y - 16.5], [x + 6.4, y - 15], [x + 6.4, y - 10.4], [x + 0.6, y - 11.9]], '#8e2f24');
+    v.ln(x + 0.6, y - 14.2, x + 6.4, y - 12.7, '#e8c56a', 0.5);
   }
 
   (int, int, int, int) _bbox(District d) {
@@ -570,15 +553,11 @@ class Decor {
     if (d == null || !d.featureBig || d.featureTile == null) return;
     final i0 = d.featureTile! % map.n - 1, j0 = d.featureTile! ~/ map.n - 1;
     if (!((i == i0 - 1 || i == i0 + 2) && (j == j0 - 1 || j == j0 + 2))) return;
+    if (_torches.contains(d.feature)) return;   // أركانها مشاعل (والصورة corner_hunters مشعل)، وبلا مشاعل منذ 2.4.2
     if (_item('corner_${d.feature}', x, y, i, j)) return;
     _plazaProp(v, d.feature!, x, y, i, j);
   }
-
-  void _brazier(Vec v, double x, double y) {
-    v.box(x, y, 2.6, 1.3, 5, '#5a4632', '#6e563d', '#7a6045');
-    v.poly([[x - 2.6, y - 5], [x, y - 13], [x + 2.6, y - 5]], '#ff8a2a');
-    v.poly([[x - 1.3, y - 5.4], [x, y - 10], [x + 1.3, y - 5.4]], '#ffe08a');
-  }
+  static const _torches = {'fortress', 'khartoum', 'kanoGate', 'hunters'};
 
   void _plazaProp(Vec v, String f, double x, double y, int i, int j) {
     switch (f) {
@@ -596,8 +575,6 @@ class Decor {
         v.ln(x, y - 16, x + 4, y - 16, '#3a2a20', 0.7);
         v.el(x + 4, y - 12.4, 2.2, 2.8, '#d8402e');
         v.ln(x + 2.4, y - 12.4, x + 5.6, y - 12.4, '#f2c14e', 0.5);
-      case 'fortress': case 'khartoum': case 'kanoGate': case 'hunters':
-        _brazier(v, x, y);
       case 'policeHQ':
         v.ln(x, y, x, y - 16, '#2a2d33', 1);
         v.ln(x, y - 16, x + 3.4, y - 16, '#2a2d33', 0.8);

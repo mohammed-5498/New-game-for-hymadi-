@@ -7,6 +7,7 @@ import 'dart:typed_data';
 import '../ai/empire_bot.dart' show BotMemo, botMemos;
 import '../ai/squads.dart';
 import '../core/fmath.dart';
+import '../map/parks.dart' show fortifiable;
 import '../map/pathfinding.dart';
 import 'empire.dart';
 import 'match.dart';
@@ -217,8 +218,9 @@ MatchState decodeMatch(String text) {
     final d = s.map.districts[k], x = (dl[k] as Map).cast<String, Object?>();
     final storyTower = d.storyTile != null ? (d.buildTile, d.storyTile) : null;   // برج القصة من initStory
     d.owner = x['o'] as int?; d.progress = _n(x['p'])!; d.progressOwner = x['po'] as int?;
-    d.tintColor = x['tc'] as String?; d.tintMix = _n(x['tm'])!; d.fort = x['f'] as int; d.building = x['b'] as String?;
-    d.buildTile = x['bt'] as int?; d.blv = (x['blv'] as Map).cast<String, int>(); d.cool = _n(x['cool'])!;
+    d.tintColor = x['tc'] as String?; d.tintMix = _n(x['tm'])!; d.building = x['b'] as String?;
+    d.fort = fortifiable(s.map, d) ? x['f'] as int : 0;   // سور حفظته نسخة قبل منعه هناك (2.4.2) لا يبقى
+    d.buildTile = x['bt'] as int?; d.blv =(x['blv'] as Map).cast<String, int>(); d.cool = _n(x['cool'])!;
     final r = x['rally'] as List?;
     d.rally = r == null ? null : (k: r[0] as int, owner: r[1] as int);
     d.policeDisabled = x['pd'] == true;
