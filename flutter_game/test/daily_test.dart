@@ -44,7 +44,7 @@ void main() {
     expect(Daily.claim(math.Random(3)).length, 3);
     final added = Wallet.owned.difference(before);
     expect(added.map((k) => k.split(':').first).toSet(), {'side', 'skin', 'city'});
-    expect(Wallet.hasSide(added.firstWhere((k) => k.startsWith('skin:')).substring(5)), isTrue, reason: 'المظهر من عصابة يملكها');
+    expect(Wallet.hasSide(skinNation(added.firstWhere((k) => k.startsWith('skin:')).substring(5))), isTrue, reason: 'المظهر من عصابة يملكها');
     expect(Wallet.gold, goldBefore);
     // ثم من أول التقويم
     now = now.add(const Duration(days: 1));
@@ -56,7 +56,8 @@ void main() {
 
   test('اليوم الأخير يعوّض ما تملكه بسعره', () async {
     await _fresh();
-    for (final n in Offers.nationIds) { Wallet.grant('side', n); Wallet.grant('skin', n); }
+    for (final n in Offers.nationIds) { Wallet.grant('side', n); }
+    for (final s in Offers.skins) { Wallet.grant('skin', s); }
     for (final c in Offers.cities) { Wallet.grant('city', c); }
     Daily.day = DAILY.days - 1;
     Daily.clock = () => DateTime(2026, 12, 1, 8);

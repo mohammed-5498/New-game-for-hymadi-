@@ -112,10 +112,11 @@ const GROUND_CACHE = (margin: 0.25, settle: 3, gap: 6, maxSide: 4096.0, maxPixel
 // --- الذهب والمتجر (2.12.0، بطلب المستخدم: "خلنا نجرب الطريقة الثالثة"، GAME_SPEC 18.18): الأسعار بالذهب، وما يكسبه الفائز على
 // البوتات (rewards بصعوبتهم إن كانت واحدة، وmixedReward إن اختلفت، 2.13.0)، وfogBonus مع ضباب الحرب، ولا شيء عند الخسارة. ومع
 // الحلفاء لا ذهب إلا إن كان في الأعداء فريق بعدد فريقك على الأقل وبصعوبة حليفك أو أصعب. والصمود ينتهي بالخسارة: survival لكل
-// survivalEvery موجات بصعوبة الشرطة. ومظهر النخبة مجاناً بإكمال حملة عصابته بصعوبة من skinStory. وstartGold رصيد أول تشغيل ---
+// survivalEvery موجات بصعوبة الشرطة، ويقل كثيراً بالحلفاء (survivalAllies). ومظهر النخبة مجاناً بإكمال حملة عصابته بصعوبة من skinStory. وstartGold رصيد أول تشغيل ---
 const SHOP = (city: 500, side: 800, skin: 250,
     rewards: {'easy': 15, 'medium': 35, 'hard': 70, 'insane': 140}, mixedReward: 20, fogBonus: 10,
     survival: {'easy': 5, 'medium': 10, 'hard': 25, 'insane': 35}, survivalEvery: 3,
+    survivalAllies: [1.0, 0.4, 0.2, 0.1],   // ذهب الصمود بعدد حلفائك (2.15.0، بطلبه: "يقل اذا كان معك حليف بشكل كبير")
     skinStory: ['hard', 'insane'], startGold: 0);
 
 // --- المكافآت اليومية والعروض (2.14.0، بطلب المستخدم، GAME_SPEC 18.18ب): تقويم days يوماً، يوم واحد لكل تاريخ: gold ذهباً، وكل

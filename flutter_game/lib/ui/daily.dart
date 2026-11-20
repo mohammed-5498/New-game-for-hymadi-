@@ -12,7 +12,7 @@ import '../config.dart' show DAILY;
 import '../core/cfg.dart';
 import '../data/js_config.dart';
 import '../i18n/tr.dart';
-import 'menus.dart' show cityShort;
+import 'menus.dart' show cityShort, sideName;
 import 'prefs.dart';
 import 'wallet.dart';
 import 'widgets.dart';
@@ -73,9 +73,9 @@ class Daily {
     }
     final gang = Offers.nationIds[r.nextInt(Offers.nationIds.length)];
     give('side', gang, nations.m(gang).s('gangName'));
-    final mine = [for (final n in Offers.skins) if (Wallet.hasSide(n)) n], pool = mine.isEmpty ? Offers.skins : mine;
+    final mine = [for (final s in Offers.skins) if (Wallet.hasSide(skinNation(s))) s], pool = mine.isEmpty ? Offers.skins : mine;
     final skin = pool[r.nextInt(pool.length)];
-    give('skin', skin, 'نخبة ${nations.m(skin).s('name')}');
+    give('skin', skin, sideName(skin));
     final city = Offers.cities[r.nextInt(Offers.cities.length)];
     give('city', city, cityShort(city));
     return out;

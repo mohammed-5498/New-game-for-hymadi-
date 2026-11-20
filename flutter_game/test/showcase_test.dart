@@ -10,18 +10,19 @@ import 'package:gangcity/ui/showcase.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  testWidgets('كل عصابة وأمة ونخبة تُرسم في العرض', (tester) async {
-    final sides = <(String, String?, bool)>[
-      for (final g in GANG_IDS) (g as String, null, false),
+  testWidgets('كل عصابة وأمة ومظهر يُرسم في العرض', (tester) async {
+    final sides = <(String, String?, String?)>[
+      for (final g in GANG_IDS) (g as String, null, null),
       for (final n in nations.l('order').cast<String>()) ...[
-        (nations.m(n).s('style'), n, false),
-        if (RIG_SHEETS.containsKey('${n}_elite')) (nations.m(n).s('style'), n, true),
+        (nations.m(n).s('style'), n, null),
+        for (final k in const ['elite', 'outfit']) if (RIG_SHEETS.containsKey('${n}_$k')) (nations.m(n).s('style'), n, k),
       ],
     ];
     for (final (gang, nation, elite) in sides) {
       final (cast, hex) = showcaseCast(gang, nation, elite);
       expect(cast.where((u) => u.champion).length, 1, reason: '$gang $nation');
       final sheets = {for (final u in cast) sheetOf(u, previewSkin[u])}.whereType<String>().toList();
+      if (elite != null) expect(sheets, ['${nation}_$elite'], reason: 'المظهر من لوحه (2.15.0)');
       final atlas = (await tester.runAsync(() => buildUnitAtlas([for (final s in sheets) (s, hex)])))!;
       for (final t in [0.4, 1.0]) {   // واقفاً، ثم في منتصف ضربة
         final b = TriBatch();

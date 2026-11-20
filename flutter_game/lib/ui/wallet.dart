@@ -17,10 +17,17 @@ import '../i18n/tr.dart';
 import 'prefs.dart';
 import 'widgets.dart';
 
+// المظاهر (2.15.0): كل مظهر لوح '<أمة>_<نوع>' في RIG_SHEETS، ومعرّفه هذا الاسم نفسه (في الشراء والإعداد): elite "نخبة <الأمة>"
+// (2.1.0) وoutfit الأزياء الجديدة بأسمائها (2.15.0)
+const skinKinds = ['elite', 'outfit'];
+final allSkins = [for (final n in nations.l('order').cast<String>()) for (final k in skinKinds) if (RIG_SHEETS.containsKey('${n}_$k')) '${n}_$k'];
+String? skinKind(String side) => allSkins.contains(side) ? side.substring(side.indexOf('_') + 1) : null;
+String skinNation(String skin) => skin.substring(0, skin.indexOf('_'));
+
 class Wallet {
   static const _key = 'gangcity.wallet';
   static int gold = 0, gems = 0;
-  static final owned = <String>{};   // 'city:<مدينة>' و'side:<أمة>' و'skin:<أمة>'
+  static final owned = <String>{};   // 'city:<مدينة>' و'side:<أمة>' و'skin:<أمة>_<نوع>'
 
   static void load() {
     final w = Prefs.read(_key);
@@ -30,6 +37,9 @@ class Wallet {
     gems = (w['gems'] as num?)?.toInt() ?? 0;
     final list = w['owned'];
     if (list is List) owned.addAll(list.whereType<String>());
+    // مظهر النخبة كان 'skin:<أمة>' قبل الأزياء الجديدة (2.15.0)
+    final old = [for (final k in owned) if (k.startsWith('skin:') && !k.contains('_')) k];
+    if (old.isNotEmpty) { owned..removeAll(old)..addAll([for (final k in old) '${k}_elite']); save(); }
   }
   static final changed = ValueNotifier<int>(0);   // الرصيد ظاهر في شاشات كثيرة: يُعاد رسمه مع كل تغيير (GoldChip)
   static void save() {
@@ -41,7 +51,7 @@ class Wallet {
   static bool freeSide(String s) => GANG_IDS.contains(s);
   static bool hasCity(String c) => freeCity(c) || owned.contains('city:$c');
   static bool hasSide(String s) => freeSide(s) || owned.contains('side:$s');   // أمة أو عصابة كلاسيكية
-  static bool hasSkin(String nation) => owned.contains('skin:$nation');
+  static bool hasSkin(String skin) => owned.contains('skin:$skin');   // '<أمة>_<نوع>'
   static int basePrice(String kind) => kind == 'city' ? SHOP.city : kind == 'side' ? SHOP.side : SHOP.skin;
   static int price(String kind, String id) => (basePrice(kind) * (100 - Offers.percent(kind, id)) / 100).round();   // وفيه العرض
 
@@ -49,7 +59,7 @@ class Wallet {
   // لماذا لا يُشترى الآن (null: يُشترى)
   static String? blocked(String kind, String id) {
     if (has(kind, id)) return 'تملكها';
-    if (kind == 'skin' && !hasSide(id)) return 'اشترِ العصابة أولاً';
+    if (kind == 'skin' && !hasSide(skinNation(id))) return 'اشترِ العصابة أولاً';
     if (gold < price(kind, id)) return 'ينقصك ${price(kind, id) - gold} ذهب';
     return null;
   }
@@ -61,7 +71,7 @@ class Wallet {
     return true;
   }
   // بجوهرة: أي شيء لا تملكه (والمظهر بعد عصابته كما بالذهب)
-  static bool gemBuys(String kind, String id) => gems > 0 && !has(kind, id) && !(kind == 'skin' && !hasSide(id));
+  static bool gemBuys(String kind, String id) => gems > 0 && !has(kind, id) && !(kind == 'skin' && !hasSide(skinNation(id)));
   static bool buyWithGem(String kind, String id) {
     if (!gemBuys(kind, id)) return false;
     gems--;
@@ -78,8 +88,11 @@ class Wallet {
     if (l.foes.isEmpty || !l.fair) return 0;
     return (l.uniform ? SHOP.rewards[BOT_LEVELS[l.foes.first]]! : SHOP.mixedReward) + (fog ? SHOP.fogBonus : 0);
   }
-  // الصمود (ينتهي بالخسارة): لكل SHOP.survivalEvery موجات وصلتها، بصعوبة الشرطة
-  static int survivalGold(String level, int wave) => wave ~/ SHOP.survivalEvery * (SHOP.survival[level] ?? 0);
+  // الصمود (ينتهي بالخسارة): لكل SHOP.survivalEvery موجات وصلتها، بصعوبة الشرطة، وجزء منه بعدد الحلفاء (survivalAllies)
+  static int survivalGold(String level, int wave, [int allies = 0]) {
+    final mul = SHOP.survivalAllies[math.min(allies, SHOP.survivalAllies.length - 1)];
+    return (wave ~/ SHOP.survivalEvery * (SHOP.survival[level] ?? 0) * mul).floor();
+  }
 }
 
 // العروض (2.14.0، بطلب المستخدم: "تخفيض لبعض الخرائط لمده يوم او 12 ساعه بنسبه 20% و 40% للعروض قصيره المده"، GAME_SPEC
@@ -90,7 +103,7 @@ class Offers {
   static final cities = [for (final r in REGIONS.l('order').cast<String>()) for (final c in REGIONS.m(r).l('cities').cast<String>())
       if (!RETIRED_CITIES.contains(c) && !Wallet.freeCity(c)) c];
   static final nationIds = nations.l('order').cast<String>().toList();
-  static final skins = [for (final n in nationIds) if (RIG_SHEETS.containsKey('${n}_elite')) n];   // المظهر باسم أمته
+  static final skins = allSkins;
 
   static int _day(DateTime t) => DateTime.utc(t.year, t.month, t.day).difference(DateTime.utc(2026)).inDays;
   static List<(String, String)> today([DateTime? now]) {

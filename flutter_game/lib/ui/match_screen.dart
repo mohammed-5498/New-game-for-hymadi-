@@ -466,7 +466,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     // ولا إنجازات في اللعب المحلي
     if (human != null && s.lanRole == null) {
       final lineup = lineupOf(s), fog = settings['fog'] == true;
-      goldEarned = s.mode == 'survival' ? Wallet.survivalGold(modeOf(s).level, modeOf(s).wave) : r.won ? Wallet.matchGold(lineup, fog) : 0;
+      goldEarned = s.mode == 'survival' ? Wallet.survivalGold(modeOf(s).level, modeOf(s).wave, lineup.allies.length) : r.won ? Wallet.matchGold(lineup, fog) : 0;
       if (goldEarned > 0 && Daily.doubled) { goldEarned *= DAILY.doublerMul; goldDoubled = true; }   // مضاعف الذهب (2.14.0)
       if (goldEarned > 0) Wallet.earn(goldEarned);
       if (r.won && s.mode != 'survival' && lineup.foes.isNotEmpty && !lineup.fair) goldNote = 'بلا ذهب: فريقك أكبر من فرق الأعداء أو حليفك أقوى منها';

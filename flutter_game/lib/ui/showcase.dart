@@ -29,7 +29,7 @@ Future<UnitAtlas> _atlas(List<(String, String)> pairs) async {
 }
 
 // شخصيات العرض بترتيبها على المسرح (الفرد العادي، مميز، البطل في الوسط، مميز) بلون المتجر، ولون المتجر
-(List<Unit>, String) showcaseCast(String gang, String? nation, bool elite) {
+(List<Unit>, String) showcaseCast(String gang, String? nation, String? skin) {
   final hex = [for (final c in PLAYER_COLORS) c as J].firstWhere((c) => c['id'] == STORE.s('previewColor')).s('hex');
   final heroes = nation != null
       ? [for (final k in nations.m(nation).m('names').keys) if (k != 'common' && k != 'champion') k]
@@ -42,15 +42,15 @@ Future<UnitAtlas> _atlas(List<(String, String)> pairs) async {
           x: 0, y: 0, stats: unitStats(gang, hero(kinds[k]), kinds[k] == 'champion', nation))
         ..state = 'idle'..attackRate = 0.55,
   ];
-  for (final u in cast) { previewSkin[u] = elite ? 'elite' : null; }
+  for (final u in cast) { previewSkin[u] = skin; }
   return (cast, hex);
 }
 
 class CharacterShowcase extends StatefulWidget {
   final String gang;       // نمط العصابة الكلاسيكي (crows...)
   final String? nation;    // أمتها إن كانت
-  final bool elite;        // مظهر النخبة
-  const CharacterShowcase({super.key, required this.gang, this.nation, this.elite = false});
+  final String? skin;      // المظهر: 'elite' أو 'outfit' (2.15.0)
+  const CharacterShowcase({super.key, required this.gang, this.nation, this.skin});
   @override
   State<CharacterShowcase> createState() => _CharacterShowcaseState();
 }
@@ -76,11 +76,11 @@ class _CharacterShowcaseState extends State<CharacterShowcase> with SingleTicker
   @override
   void didUpdateWidget(CharacterShowcase old) {
     super.didUpdateWidget(old);
-    if (old.gang != widget.gang || old.nation != widget.nation || old.elite != widget.elite) _load();
+    if (old.gang != widget.gang || old.nation != widget.nation || old.skin != widget.skin) _load();
   }
 
   Future<void> _load() async {
-    final (cast, hex) = showcaseCast(widget.gang, widget.nation, widget.elite);
+    final (cast, hex) = showcaseCast(widget.gang, widget.nation, widget.skin);
     final a = await _atlas([for (final s in {for (final u in cast) sheetOf(u, previewSkin[u])}.whereType<String>()) (s, hex)]);
     if (!mounted) return;
     setState(() { atlas = a; units = cast; color = hex; });
@@ -130,8 +130,8 @@ class _ShowcasePainter extends CustomPainter {
 class ShowcaseStage extends StatelessWidget {
   final String gang;
   final String? nation;
-  final bool elite;
-  const ShowcaseStage({super.key, required this.gang, this.nation, this.elite = false});
+  final String? skin;
+  const ShowcaseStage({super.key, required this.gang, this.nation, this.skin});
   @override
   Widget build(BuildContext context) => Stack(fit: StackFit.expand, children: [
     const DecoratedBox(decoration: BoxDecoration(gradient: RadialGradient(center: Alignment(0, -0.1), radius: 0.95,
@@ -139,6 +139,6 @@ class ShowcaseStage extends StatelessWidget {
     Align(alignment: const Alignment(0, 0.72), child: FractionallySizedBox(widthFactor: 0.92, child: Container(height: 30,
         decoration: const BoxDecoration(borderRadius: BorderRadius.all(Radius.elliptical(160, 15)),
             gradient: RadialGradient(colors: [Color(0x80FFD27A), Color(0x00FFD27A)]))))),
-    CharacterShowcase(gang: gang, nation: nation, elite: elite),
+    CharacterShowcase(gang: gang, nation: nation, skin: skin),
   ]);
 }

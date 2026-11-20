@@ -19,16 +19,17 @@ void main() {
     expect(Wallet.hasCity('paris'), isFalse);
     expect(Wallet.hasSide('crows'), isTrue, reason: 'عصابة كلاسيكية');
     expect(Wallet.hasSide('yemen'), isFalse);
-    expect(Wallet.blocked('skin', 'yemen'), isNotNull, reason: 'المظهر بعد عصابته');
+    expect(Wallet.blocked('skin', 'yemen_elite'), isNotNull, reason: 'المظهر بعد عصابته');
     expect(ownsSide('yemen_elite'), isFalse);
 
-    final pCity = Wallet.price('city', 'paris'), pSide = Wallet.price('side', 'yemen'), pSkin = Wallet.price('skin', 'yemen');   // وفيها عروض اليوم
+    final pCity = Wallet.price('city', 'paris'), pSide = Wallet.price('side', 'yemen'), pSkin = Wallet.price('skin', 'yemen_elite');   // وفيها عروض اليوم
     expect(Wallet.buy('city', 'paris'), isTrue);
     expect(Wallet.gold, start - pCity);
     expect(Wallet.buy('city', 'paris'), isFalse, reason: 'لا يُشترى مرتين');
     expect(Wallet.buy('side', 'yemen'), isTrue);
-    expect(Wallet.buy('skin', 'yemen'), isTrue);
+    expect(Wallet.buy('skin', 'yemen_elite'), isTrue);
     expect(ownsSide('yemen_elite'), isTrue);
+    expect(ownsSide('yemen_outfit'), isFalse, reason: 'لكل مظهر شراؤه (2.15.0)');
     expect(Wallet.gold, start - pCity - pSide - pSkin);
 
     Wallet.gold = 100;
@@ -44,7 +45,7 @@ void main() {
     // الجوهرة تشتري أي شيء واحد لا تملكه (والمظهر بعد عصابته)
     expect(Wallet.gemBuys('side', 'egypt'), isFalse, reason: 'بلا جوهرة');
     Wallet.gems = 1;
-    expect(Wallet.gemBuys('skin', 'egypt'), isFalse, reason: 'المظهر بعد عصابته');
+    expect(Wallet.gemBuys('skin', 'egypt_outfit'), isFalse, reason: 'المظهر بعد عصابته');
     expect(Wallet.gemBuys('city', 'paris'), isFalse, reason: 'تملكها');
     expect(Wallet.buyWithGem('side', 'egypt'), isTrue);
     expect(Wallet.gems, 0);
@@ -55,6 +56,8 @@ void main() {
     expect(Wallet.survivalGold('easy', 2), 0);
     expect(Wallet.survivalGold('hard', 7), 2 * SHOP.survival['hard']!);
     expect(Wallet.survivalGold('insane', 9), 3 * SHOP.survival['insane']!);
+    expect(Wallet.survivalGold('insane', 9, 1), (3 * SHOP.survival['insane']! * SHOP.survivalAllies[1]).floor(), reason: 'حليف واحد');
+    expect(Wallet.survivalGold('hard', 30, 3), (10 * SHOP.survival['hard']! * SHOP.survivalAllies[3]).floor(), reason: 'ثلاثة حلفاء');
 
     // العشوائي للاعب من الكلاسيكية وما اشتراه وحده
     for (var k = 0; k < 50; k++) {
@@ -63,5 +66,16 @@ void main() {
       final r = resolveSide('random', owned: true);
       expect(r['nation'] == null || ['yemen', 'egypt'].contains(r['nation']), isTrue, reason: '$r');
     }
+  });
+
+  test('مظهر النخبة المحفوظ قبل 2.15.0 يبقى', () async {
+    SharedPreferences.setMockInitialValues({'flutter.gangcity.wallet': '{"gold":5,"owned":["side:japan","skin:japan"]}'});
+    await Prefs.init();
+    Wallet.load();
+    expect(Wallet.hasSkin('japan_elite'), isTrue);
+    expect(ownsSide('japan_elite'), isTrue);
+    expect(Wallet.owned.contains('skin:japan'), isFalse);
+    Wallet.load();
+    expect(Wallet.hasSkin('japan_elite'), isTrue, reason: 'حُفظ بالاسم الجديد');
   });
 }

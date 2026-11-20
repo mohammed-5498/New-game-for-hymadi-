@@ -142,7 +142,7 @@ class SetupModel {
 Map<String, Object?> resolveSide(String choice, {bool owned = false}) {
   if (choice == 'random') choice = randomSide(owned: owned);
   final base = _baseSide(choice), nation = nations.mm(base);
-  if (nation != null && nations.l('order').contains(base)) return {'gang': nation.s('style'), 'nation': base, if (_isElite(choice)) 'skin': 'elite'};
+  if (nation != null && nations.l('order').contains(base)) return {'gang': nation.s('style'), 'nation': base, if (_isSkin(choice)) 'skin': skinKind(choice)};
   return {'gang': _gangIds.contains(choice) ? choice : _gangIds[0], 'nation': null};
 }
 
@@ -152,7 +152,7 @@ String hostCity(String? side) {
 }
 
 // ما يملكه اللاعب (2.12.0، GAME_SPEC 18.18): الكلاسيكية مجانية، والأمة بشرائها، والنخبة بشراء مظهرها بعد عصابتها. والعشوائي مما يملكه
-bool ownsSide(String side) => side == 'random' || (_isElite(side) ? Wallet.hasSide(_baseSide(side)) && Wallet.hasSkin(_baseSide(side)) : Wallet.hasSide(side));
+bool ownsSide(String side) => side == 'random' || (_isSkin(side) ? Wallet.hasSide(_baseSide(side)) && Wallet.hasSkin(side) : Wallet.hasSide(side));
 String randomSide({bool owned = false}) {
   final pool = [for (final s in [..._nationIds, ..._gangIds]) if (!owned || Wallet.hasSide(s)) s];
   return pool[math.Random().nextInt(pool.length)];
@@ -169,13 +169,17 @@ String _concrete(String city) {
 
 // الأمم الـ15 ثم العصابات الكلاسيكية الأربع ثم العشوائي (SIDE_CHOICES)
 List<String> get _nationIds => nations.l('order').cast<String>();
-List<String> get _sides => [..._nationIds, ..._eliteIds, ..._gangIds, 'random'];
+List<String> get _sides => [..._nationIds, ...allSkins, ..._gangIds, 'random'];
 bool _isNation(String side) => _nationIds.contains(_baseSide(side));
-// مظهر النخبة الأسود والذهبي لكل أمة (حزمة المستخدم، 2026-11-15): "<أمة>_elite"، باسم "نخبة <الأمة>" بجوار عصابته
-List<String> get _eliteIds => [for (final n in _nationIds) if (RIG_SHEETS.containsKey('${n}_elite')) '${n}_elite'];
-bool _isElite(String side) => side.endsWith('_elite') && _nationIds.contains(side.substring(0, side.length - 6));
-String _baseSide(String side) => _isElite(side) ? side.substring(0, side.length - 6) : side;
-String sideName(String side) => side == 'random' ? 'عشوائي' : _isElite(side) ? 'نخبة ${nations.m(_baseSide(side)).s('name')}'
+// مظاهر كل أمة بجوار عصابتها (allSkins في wallet.dart): "<أمة>_elite" باسم "نخبة <الأمة>" (حزمة المستخدم، 2026-11-15)،
+// و"<أمة>_outfit" الأزياء الجديدة (حزمته، 2026-11-20) بأسماء اخترناها لها بطلبه: "اسمائهم غير مختاره لذلك قم بأختيار اسماء لهم"
+const _outfitNames = {'yemen': 'طريق البخور', 'saudi': 'صقور نجد', 'egypt': 'أسياد النيل', 'sudan': 'ملوك كوش', 'ethiopia': 'شمس أكسوم',
+  'nigeria': 'حرس بنين', 'japan': 'رونين الشفق', 'china': 'حرس اليشم', 'korea': 'زهر الهانبوك', 'britain': 'دخان المصانع',
+  'france': 'مبارزو باريس', 'germany': 'رايات الراين', 'argentina': 'ليالي التانغو', 'brazil': 'ألوان باهيا', 'mexico': 'ريش الكتزال'};
+bool _isSkin(String side) => skinKind(side) != null;
+String _baseSide(String side) => _isSkin(side) ? skinNation(side) : side;
+String sideName(String side) => side == 'random' ? 'عشوائي'
+    : skinKind(side) == 'elite' ? 'نخبة ${nations.m(_baseSide(side)).s('name')}' : _isSkin(side) ? _outfitNames[_baseSide(side)] ?? side
     : _isNation(side) ? nations.m(side).s('name') : GANGS.m(side).s('name');
 String sideNote(String side) => side == 'random' ? '' : _isNation(side) ? nations.m(_baseSide(side)).s('gangName') : nations.s('classicNote');
 
@@ -227,7 +231,8 @@ class _SidePickerState extends State<_SidePicker> {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text(sideName(g), style: const TextStyle(color: ink, fontSize: 16, fontWeight: FontWeight.w800)),
       Text(sideNote(g), style: const TextStyle(color: dim, fontSize: 11.5)),
-      if (_isElite(g)) ..._line('المظهر', 'زي أسود وذهبي، والوجه واليدان بلونك. القدرات كما هي لأمته'),
+      if (skinKind(g) == 'elite') ..._line('المظهر', 'زي أسود وذهبي، والوجه واليدان بلونك. القدرات كما هي لأمته'),
+      if (skinKind(g) == 'outfit') ..._line('المظهر', 'زي جديد بأسلحة جديدة، والوجه والأطراف بلونك. القدرات كما هي لأمته'),
       if (_isNation(g)) ..._line('القدرة: ${nations.m(n).m('trait').s('name')}', nations.m(n).m('trait').s('desc')),
       if (_isNation(g)) ..._line('ضربة البطل: ${nations.m(n).m('ult').s('name')}', nations.m(n).m('ult').s('desc')),
       ..._line('الفئة: ${style.s('name')}', style.s('desc')),
@@ -238,7 +243,7 @@ class _SidePickerState extends State<_SidePicker> {
   Widget build(BuildContext context) => PickerSheet(title: 'الأمة أو العصابة', groups: [
     for (final (name, list) in sideGroups)
       (name, [
-        for (final g in [for (final x in list) ...[x, if (_eliteIds.contains('${x}_elite')) '${x}_elite']])   // النخبة بجوار عصابتها
+        for (final g in [for (final x in list) ...[x, for (final k in skinKinds) if (allSkins.contains('${x}_$k')) '${x}_$k']])   // مظاهرها بجوارها
           PickCard(title: sideName(g), note: _isNation(g) ? '${sideNote(g)} • ${nations.m('styles').m(nations.m(_baseSide(g)).s('style')).s('name')}'
               : nations.m('styles').m(g).s('name'), image: 'assets/thumbs/side_$g.webp', aspect: 2.5,
               badge: widget.human ? _lock(g) : null, selected: chosen == g, onTap: () => setState(() => chosen = g)),
@@ -249,7 +254,7 @@ class _SidePickerState extends State<_SidePicker> {
       // الشخصيات حية برسم اللعبة (2.7.0)، كعرض المتجر، ثم وصفها يُمرَّران معاً، وزر الاختيار أسفل اللوحة بجوار "عشوائي"
       child: SingleChildScrollView(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         if (chosen != 'random') SizedBox(height: 112, child: ShowcaseStage(gang: _isNation(chosen) ? nations.m(_baseSide(chosen)).s('style') : chosen,
-            nation: _isNation(chosen) ? _baseSide(chosen) : null, elite: _isElite(chosen))),
+            nation: _isNation(chosen) ? _baseSide(chosen) : null, skin: skinKind(chosen))),
         Padding(padding: const EdgeInsets.fromLTRB(10, 8, 10, 8), child: _details()),
       ]))),
     footer: [
@@ -261,11 +266,11 @@ class _SidePickerState extends State<_SidePicker> {
 
   // قفل ما لا يملكه وسعره: النخبة تحتاج عصابتها أولاً
   String? _lock(String g) => ownsSide(g) ? null
-      : _isElite(g) ? (Wallet.hasSide(_baseSide(g)) ? '🔒 ${Wallet.price('skin', _baseSide(g))}' : '🔒') : '🔒 ${Wallet.price('side', g)}';
+      : _isSkin(g) ? (Wallet.hasSide(_baseSide(g)) ? '🔒 ${Wallet.price('skin', g)}' : '🔒') : '🔒 ${Wallet.price('side', g)}';
   Future<void> _buy() async {
-    final elite = _isElite(chosen), base = _baseSide(chosen);
-    final ok = await buyDialog(context, elite ? 'skin' : 'side', base, sideName(chosen),
-        note: elite ? 'يُشترى بعد عصابته، أو يُكسب مجاناً بإكمال حملتها كلها على صعوبة صعبة' : 'تفتح معها حملتها في القصة');
+    final skin = skinKind(chosen);
+    final ok = await buyDialog(context, skin != null ? 'skin' : 'side', chosen, sideName(chosen),
+        note: skin == 'elite' ? 'يُشترى بعد عصابته، أو يُكسب مجاناً بإكمال حملتها كلها على صعوبة صعبة' : skin != null ? 'يُشترى بعد عصابته' : 'تفتح معها حملتها في القصة');
     if (ok && mounted) Navigator.pop(context, chosen);
   }
 }
@@ -369,7 +374,7 @@ class _OfferCardState extends State<_OfferCard> {
   @override
   Widget build(BuildContext context) {
     final (kind, id) = Offers.flash();
-    final name = kind == 'city' ? 'خريطة ${cityShort(id)}' : kind == 'skin' ? 'مظهر ${sideName('${id}_elite')}' : sideName(id);
+    final name = kind == 'city' ? 'خريطة ${cityShort(id)}' : kind == 'skin' ? 'مظهر ${sideName(id)}' : sideName(id);
     final left = hoursLeft(Offers.flashLeft());
     return GestureDetector(onTap: () { sound('ui_tap'); widget.onTap(); }, child: Container(
       width: 250, height: 92, clipBehavior: Clip.antiAlias,
@@ -383,7 +388,7 @@ class _OfferCardState extends State<_OfferCard> {
           const PositionedDirectional(end: 54, top: 0, bottom: 0, width: 50, child: DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(
               begin: AlignmentDirectional.centerStart, end: AlignmentDirectional.centerEnd, colors: [Color(0xF2402614), Color(0x00402614)])))),
         ] else PositionedDirectional(end: 6, bottom: -24, child: ClipRect(child: Align(alignment: Alignment.centerLeft, widthFactor: 0.25,
-            child: Image.asset('assets/thumbs/side_${kind == 'skin' ? '${id}_elite' : id}.webp', height: 124, filterQuality: FilterQuality.medium)))),
+            child: Image.asset('assets/thumbs/side_$id.webp', height: 124, filterQuality: FilterQuality.medium)))),
         PositionedDirectional(start: 12, top: 8, end: 84, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [const Icon(Icons.local_offer_rounded, size: 15, color: offerColor), const SizedBox(width: 5),
             Text('عرض سريع: خصم ${OFFERS.shortPercent}%', style: const TextStyle(color: offerColor, fontSize: 13, fontWeight: FontWeight.w700))]),
@@ -978,7 +983,7 @@ class _StoreScreenState extends State<StoreScreen> {
   void _pickOffer((String, String) o) {
     offerKind = o.$1;
     normalLook = false;
-    if (o.$1 == 'city') { chosenMap = o.$2; } else { chosenSide = o.$1 == 'skin' ? '${o.$2}_elite' : o.$2; }
+    if (o.$1 == 'city') { chosenMap = o.$2; } else { chosenSide = o.$2; }
   }
 
   static const _cardFrame = Color(0x40E2B55A), _freeInk = Color(0xFF9FD07C);
@@ -989,9 +994,9 @@ class _StoreScreenState extends State<StoreScreen> {
   }
   (String, int) _cityTag(String c) => Wallet.freeCity(c) ? ('مجانية', 1) : Wallet.hasCity(c) ? ('تملكها', 1) : _priceTag('city', c);
   (String, int) _sideTag(String s) {
-    if (_isElite(s)) {
+    if (_isSkin(s)) {
       final n = _baseSide(s);
-      return Wallet.hasSkin(n) ? ('تملكها', 1) : !Wallet.hasSide(n) ? ('🔒 العصابة أولاً', 0) : _priceTag('skin', n);
+      return Wallet.hasSkin(s) ? ('تملكها', 1) : !Wallet.hasSide(n) ? ('🔒 العصابة أولاً', 0) : _priceTag('skin', s);
     }
     return Wallet.freeSide(s) ? ('مجانية', 1) : Wallet.hasSide(s) ? ('تملكها', 1) : _priceTag('side', s);
   }
@@ -1003,7 +1008,7 @@ class _StoreScreenState extends State<StoreScreen> {
         ? [for (final r in REGIONS.l('order').cast<String>()) (REGIONS.m(r).s('name'), [for (final c in REGIONS.m(r).l('cities').cast<String>()) if (!RETIRED_CITIES.contains(c)) c])]
         : section == 'skins'
             ? [for (final r in REGIONS.l('order').cast<String>()) (REGIONS.m(r).s('name'),
-                [for (final n in REGIONS.m(r).l('nations').cast<String>()) if (_eliteIds.contains('${n}_elite')) '${n}_elite'])]
+                [for (final n in REGIONS.m(r).l('nations').cast<String>()) for (final k in skinKinds) if (allSkins.contains('${n}_$k')) '${n}_$k'])]
             : sideGroups;
     if (region >= groups.length) region = 0;
     final items = groups[region].$2;
@@ -1027,8 +1032,8 @@ class _StoreScreenState extends State<StoreScreen> {
               Padding(padding: const EdgeInsetsDirectional.only(end: 8), child: Pill(icon, label, on: section == k, onTap: () => setState(() {
                 section = k; region = 0; normalLook = false;
                 if (k == 'offers') _pickOffer(Offers.flash());
-                if (k == 'skins' && !_isElite(chosenSide)) chosenSide = _eliteIds.first;
-                if (k == 'sides' && _isElite(chosenSide)) chosenSide = 'crows';
+                if (k == 'skins' && !_isSkin(chosenSide)) chosenSide = allSkins.first;
+                if (k == 'sides' && _isSkin(chosenSide)) chosenSide = 'crows';
               }))),
           ]))),
           const SizedBox(width: 8),
@@ -1088,7 +1093,7 @@ class _StoreScreenState extends State<StoreScreen> {
   // خانة عرض: 'نوع:معرّف' بخانة الخريطة أو العصابة أو المظهر
   Widget _offerCard(String key) {
     final i = key.indexOf(':'), kind = key.substring(0, i), id = key.substring(i + 1);
-    return kind == 'city' ? _mapCard(id) : _sideCard(kind == 'skin' ? '${id}_elite' : id);
+    return kind == 'city' ? _mapCard(id) : _sideCard(id);
   }
 
   Widget _mapCard(String c) => _card(selected: c == chosenMap && (section != 'offers' || offerKind == 'city'), tag: _cityTag(c),
@@ -1099,7 +1104,7 @@ class _StoreScreenState extends State<StoreScreen> {
   ]);
 
   Widget _sideCard(String s) => _card(selected: s == chosenSide && (section != 'offers' || offerKind != 'city'), tag: _sideTag(s),
-      onTap: () => setState(() { chosenSide = s; normalLook = false; offerKind = _isElite(s) ? 'skin' : 'side'; }), children: [
+      onTap: () => setState(() { chosenSide = s; normalLook = false; offerKind = _isSkin(s) ? 'skin' : 'side'; }), children: [
     const DecoratedBox(decoration: BoxDecoration(gradient: RadialGradient(center: Alignment(-0.55, 0.25), radius: 0.95,
         colors: [Color(0xFF5A4326), Color(0xFF17120D)]))),
     PositionedDirectional(end: 2, top: 4, bottom: -2, child: heroThumb(s)),
@@ -1165,18 +1170,18 @@ class _StoreScreenState extends State<StoreScreen> {
   }
 
   Widget _sideShow() {
-    final s = chosenSide, elite = _isElite(s), base = _baseSide(s), nation = _isNation(s) ? nations.m(base) : null;
+    final s = chosenSide, skin = skinKind(s), elite = skin == 'elite', base = _baseSide(s), nation = _isNation(s) ? nations.m(base) : null;
     final style = nation?.s('style') ?? s, st = nations.m('styles').m(style);
     final names = nation != null
         ? [nation.m('names').s('common'), for (final h in GANGS.m(style).l('heroes').cast<String>()) nation.m('names').s(h), nation.m('names').s('champion')]
         : ['الفرد العادي', for (final h in GANGS.m(s).l('heroes').cast<String>()) HEROES.m(h).s('name'), CHAMPIONS.m(s).s('name')];
-    final title = elite ? sideName(s) : nation != null ? nation.s('gangName') : GANGS.m(s).s('name');
-    final note = elite ? nation!.s('gangName') : nation != null ? nation.s('name') : sideNote(s);
+    final title = skin != null ? sideName(s) : nation != null ? nation.s('gangName') : GANGS.m(s).s('name');
+    final note = skin != null ? nation!.s('gangName') : nation != null ? nation.s('name') : sideNote(s);
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       SizedBox(height: 182, child: Stack(fit: StackFit.expand, children: [
-        ShowcaseStage(gang: style, nation: nation != null ? base : null, elite: elite && !normalLook),
-        if (elite) PositionedDirectional(top: 8, start: 8, child: Row(children: [
-          for (final (normal, label) in const [(false, 'نخبة'), (true, 'عادي')])
+        ShowcaseStage(gang: style, nation: nation != null ? base : null, skin: normalLook ? null : skin),
+        if (skin != null) PositionedDirectional(top: 8, start: 8, child: Row(children: [
+          for (final (normal, label) in [(false, elite ? 'نخبة' : 'المظهر'), (true, 'عادي')])
             Padding(padding: const EdgeInsetsDirectional.only(end: 6),
                 child: Pill(null, label, on: normalLook == normal, small: true, onTap: () => setState(() => normalLook = normal))),
         ])),
@@ -1184,8 +1189,10 @@ class _StoreScreenState extends State<StoreScreen> {
       Expanded(child: SingleChildScrollView(padding: const EdgeInsets.fromLTRB(14, 8, 14, 8), child: Snap(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Text(title, style: const TextStyle(color: gold, fontSize: 19, fontWeight: FontWeight.w700, height: 1.2)),
         Text(note, style: const TextStyle(color: Color(0xFFCBBD9F), fontSize: 12)),
-        elite ? _buyBox('skin', base, sideName(s), note: 'أو أكمل حملة عصابته كلها على صعوبة صعبة فتأخذه مجاناً')
+        skin != null ? _buyBox('skin', s, sideName(s), note: elite ? 'أو أكمل حملة عصابته كلها على صعوبة صعبة فتأخذه مجاناً' : null)
             : _buyBox('side', s, title, free: Wallet.freeSide(s), note: CAMPAIGNS.has(s) ? 'تفتح معها حملتها في القصة' : null),
+        if (skin == 'outfit') _line(Icons.auto_awesome_rounded,
+            'زي جديد بأسلحة جديدة لعصابة ${nation!.s('gangName')}: الوجه والأطراف بلونك، والقدرات كما هي. يُختار بجوار عصابته في الإعداد'),
         if (elite) _line(Icons.auto_awesome_rounded,
             'مظهر أسود وذهبي لـ${nation!.s('gangName')}: الوجه واليدان بلونك، والقدرات كما هي. يُختار بجوار عصابته في الإعداد'),
         _line(Icons.groups_rounded, names.join(' • ')),

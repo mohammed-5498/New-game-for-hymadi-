@@ -8,6 +8,8 @@
 #   python3 -I scripts/import_rigged.py <base_rig> <extras> <base_sheets...> -- <elite_rig> <elite_sheets...>
 #   ثم صور القوائم: OUT=<مجلد> flutter test tool/export_rig_thumbs_test.dart (في flutter_game)
 #   و python3 -I scripts/import_rigged.py --thumbs <المجلد>
+#   ومظهر آخر لكل أمة (2.15.0، الأزياء الجديدة GangCity-New-Outfits-Rigged): يضيف ألواح <أمة>_<مظهر> وحدها ويُبقي الموجود كما هو
+#   python3 -I scripts/import_rigged.py --outfit <مظهر> <rig> <sheets...>   (ATLAS_OUT=<مجلد> للتجربة خارج المستودع)
 # كل جزء يُصغَّر بمعامل واحد لشخصيته (الفخذ ~52 بكسلاً، كدقة أطالس الشخصيات الحالية)، وقناع لون اللاعب من لون الجسد
 # (اليدان لون الجسد خالصاً): درجته ±16 بحواف ناعمة، كـ tint_mask_n في slice_units.py
 import json
@@ -18,7 +20,7 @@ import numpy as np
 from PIL import Image
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-OUT = os.path.join(ROOT, 'flutter_game', 'assets', 'units')
+OUT = os.environ.get('ATLAS_OUT') or os.path.join(ROOT, 'flutter_game', 'assets', 'units')
 DART = os.path.join(ROOT, 'flutter_game', 'lib', 'data', 'rig_sprites.dart')
 UPP = 19.6 / (570.0 * 0.27)     # وحدة رسم لكل بكسل (كأطالس slice_units.py)
 THIGH_PX = 6.6 / UPP            # ارتفاع الفخذ المرسوم (5.8 + تراكب) بالبكسل
@@ -27,8 +29,9 @@ WIDTH, PAD, HUE_HALF = 1024, 2, 16
 ROLE = {'germany_spear': 'armored', 'germany_dual': 'smasher', 'brazil_musician': 'spear', 'brazil_acrobat': 'dual',
         'argentina_gaucho': 'spear', 'argentina_duelist': 'dual', 'mexico_archer': 'sniper', 'mexico_thrower': 'firebomber'}
 DEF_KEYS = ('weapon', 'twoH', 'weaponLength', 'grip', 'hem', 'skirtWidth', 'skirt', 'offhand', 'offhandSize', 'offhandLength',
-            'offhandGrip', 'heldGrip', 'headHeight', 'headPivot', 'scabbard')
-PART_KEYS = ('tipDown', 'center', 'top', 'bottom', 'pole', 'gripX', 'topX', 'bottomX')
+            'offhandGrip', 'heldGrip', 'headHeight', 'headPivot', 'scabbard', 'backcloth', 'backclothLength', 'torsoFill')
+PART_KEYS = ('tipDown', 'center', 'top', 'bottom', 'pole', 'gripX', 'topX', 'bottomX', 'handleX')
+FLIP_KEYS = ('gripX', 'topX', 'bottomX', 'handleX')   # القطعة المعكوسة (mirrorX) تُعكس في اللوح، ونقاطها 1 - x
 
 
 def js_value(path, marker):
@@ -139,6 +142,47 @@ def dart(v):
     return '<String, Object?>{' + ', '.join(f"'{k}': {dart(x)}" for k, x in v.items()) + '}'
 
 
+def outfit(variant, rig_dir, sheet_dirs):
+    """مظهر جديد لكل أمة من حزمة كحزمة النخبة (rigs/*.json وألواحها): ألواح <أمة>_<مظهر> وأسطرها في rig_sprites.dart،
+    ولون الجسد من الحزمة نفسها، والألواح الأخرى كما هي"""
+    chars = {}
+    for f in sorted(os.listdir(os.path.join(rig_dir, 'rigs'))):
+        r = json.load(open(os.path.join(rig_dir, 'rigs', f), encoding='utf-8'))
+        d, cid = r['definition'], r['definition']['id']
+        nation = d['nationId']
+        parts = {}
+        for k, q in r['parts'].items():
+            if not q: continue
+            if q.get('mirrorX'): q = {**q, **{x: round(1 - q[x], 6) for x in FLIP_KEYS if x in q}}
+            parts[k] = q
+        imgs = character(find(sheet_dirs, cid + '.png'), parts, None, {})
+        for k, q in parts.items():
+            if q.get('mirrorX') and k in imgs: imgs[k] = np.ascontiguousarray(imgs[k][:, ::-1])
+        info = {k: d[k] for k in DEF_KEYS if k in d}
+        info['parts'] = {n: {k: q[k] for k in PART_KEYS if k in q} for n, q in parts.items() if any(k in q for k in PART_KEYS)}
+        info['id'] = cid
+        role = ROLE.get(cid, d.get('role') or cid.split('_', 1)[1])
+        chars.setdefault(nation, {})[f'{nation}_{role}'] = [imgs, nation, None, info]
+    lines = {}
+    for nation, cs in sorted(chars.items()):
+        hue = nation_hue([im for c in cs.values() for im in (c[0]['handF'], c[0]['handB'], c[0]['head'])])
+        for c in cs.values():
+            c[1], c[2] = hue, body_ref([c[0]['handF'], c[0]['handB'], c[0]['head']], hue)
+        name = f'{nation}_{variant}'
+        height, rect, (sat, val) = pack(name, {k: (v[0], v[1], v[2]) for k, v in cs.items()})
+        units = {k: {'def': v[3], 'parts': rect[k]} for k, v in cs.items()}
+        lines[name] = f"  '{name}': {dart({'src': f'assets/units/{name}.webp', 'h': height, 'sat': sat, 'val': val, 'style': 'outfit', 'units': units})},"
+        print(f'{name:18s} {len(cs)} شخصيات، أطلس {WIDTH}x{height * 2}، الجسد {hue:.0f}°، تشبع {sat} إضاءة {val}')
+    if os.environ.get('ATLAS_OUT'): return   # تجربة: الألواح وحدها
+    text = open(DART, encoding='utf-8').read().split('\n')
+    head = [l for l in text if not l.startswith("  '")]
+    keep = [l for l in text if l.startswith("  '") and l[3:l.index("'", 3)] not in lines]
+    body = sorted(keep + list(lines.values()), key=lambda l: l[3:l.index("'", 3)])
+    end = head.index('};')
+    with open(DART, 'w', encoding='utf-8') as fh:
+        fh.write('\n'.join(head[:end] + body + head[end:]))
+
+
 def thumbs(folder):
     """صور القوائم من أداة flutter_game/tool/export_rig_thumbs_test.dart (PNG) إلى assets/thumbs/side_*.webp"""
     dst = os.path.join(ROOT, 'flutter_game', 'assets', 'thumbs')
@@ -151,6 +195,7 @@ def thumbs(folder):
 def main():
     args = sys.argv[1:]
     if args[0] == '--thumbs': return thumbs(args[1])
+    if args[0] == '--outfit': return outfit(args[1], args[2], args[3:])
     cut = args.index('--')
     base_rig, extras_dir, base_sheets = args[0], args[1], args[2:cut]
     elite_rig, elite_sheets = args[cut + 1], args[cut + 2:]
@@ -200,7 +245,7 @@ def main():
     with open(DART, 'w', encoding='utf-8') as fh:
         fh.write('// مولَّد بـ scripts/import_rigged.py من حزمتي الشخصيات المقطّعة (لا تعدّله باليد)\n')
         fh.write('// لكل لوح: صورته (الأجزاء فوق وقناع لون اللاعب تحتها)، ولكل شخصية بمفتاح اللعبة: def (السلاح والمسكات وأطوال الرسم)\n')
-        fh.write('// وأجزاؤها [x, y, w, h] في اللوح. style: base للبديلة وelite لمظهر النخبة\n')
+        fh.write('// وأجزاؤها [x, y, w, h] في اللوح. style: base للبديلة وelite لمظهر النخبة وoutfit للأزياء الجديدة (--outfit، 2.15.0)\n')
         fh.write('const Map<String, Object?> RIG_SHEETS = <String, Object?>{\n' + '\n'.join(out) + '\n};\n')
 
 

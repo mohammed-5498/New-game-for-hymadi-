@@ -1,5 +1,6 @@
 // صور القوائم للشخصيات المقطّعة (أداة، لا تدخل الفحص العادي): flutter test tool/export_rig_thumbs_test.dart
-// لكل أمة لها لوح بديل side_<أمة>.png، ولكل نخبة side_<أمة>_elite.png في مجلد OUT (ثم webp بـ scripts/import_rigged.py --thumbs)
+// لكل أمة لها لوح بديل side_<أمة>.png، ولكل مظهر side_<أمة>_<نوع>.png (النخبة والأزياء الجديدة) في مجلد OUT (ثم webp بـ
+// scripts/import_rigged.py --thumbs)، وONLY=<لاحقة> (outfit مثلاً) يصنع ألواحها وحدها
 // كـ drawCharacters في js/ui/charThumb.js: الفرد العادي يميناً ثم المميزان ثم البطل، تنظر يساراً، بلون المتجر
 import 'dart:convert';
 import 'dart:io';
@@ -22,12 +23,14 @@ void main() {
     final out = Platform.environment['OUT'] ?? '/tmp/rig_thumbs';
     Directory(out).createSync(recursive: true);
     final color = [for (final c in PLAYER_COLORS) c as J].firstWhere((c) => c['id'] == STORE.s('previewColor')).s('hex');
+    final only = Platform.environment['ONLY'];
     for (final sheet in RIG_SHEETS.keys) {
-      final nation = sheet.split('_').first, elite = sheet.endsWith('_elite');
+      final nation = sheet.split('_').first, kind = sheet.substring(nation.length + 1), skin = kind == 'rig' ? null : kind;
+      if (only != null && kind != only) continue;
       simRng = Rng(1);
       final s = createMatch((jsonDecode(jsonEncode({'mode': 'conquest', 'city': 'arab', 'mapSize': 'small', 'maxUnits': 50, 'weather': 'day',
         'players': [{'name': 'a', 'gang': nations.m(nation).s('style'), 'nation': nation, 'color': STORE.s('previewColor'), 'isHuman': false, 'team': 0,
-                     'skin': elite ? 'elite' : null},
+                     'skin': skin},
                     {'name': 'b', 'gang': 'crows', 'nation': null, 'color': 'red', 'isHuman': false, 'team': 0}]})) as Map).cast<String, Object?>());
       setUnitSkins(s);
       final u = s.units.firstWhere((x) => x.playerId == 0 && x.nation == nation);
@@ -51,7 +54,7 @@ void main() {
       b.flush(c, atlas.image);
       final img = await tester.runAsync(() => rec.endRecording().toImage(w.toInt(), h.toInt()));
       final bytes = await tester.runAsync(() => img!.toByteData(format: ui.ImageByteFormat.png));
-      File('$out/side_${elite ? '${nation}_elite' : nation}.png').writeAsBytesSync(bytes!.buffer.asUint8List());
+      File('$out/side_${skin != null ? sheet : nation}.png').writeAsBytesSync(bytes!.buffer.asUint8List());
     }
   });
 }

@@ -248,7 +248,7 @@ String artKey(Unit unit, [double time = 0]) {
 // أطلس كل وحدة: أمتها، وإلا عصابتها
 String spriteGang(String gang, String? nation) => nation != null && SPRITE_GANGS.containsKey(nation) ? nation : gang;
 
-// مظهر كل لاعب (إعداد المباراة: 'skin' لكل لاعب، 'elite' نخبة أمته) وأمته: لجنود أمته وحدهم
+// مظهر كل لاعب (إعداد المباراة: 'skin' لكل لاعب: 'elite' نخبة أمته أو 'outfit' أزياؤها الجديدة) وأمته: لجنود أمته وحدهم
 var _skins = const <String?>[], _nations = const <String?>[];
 void setUnitSkins(MatchState s) {
   final list = s.settings['players'] as List? ?? const [];
@@ -265,7 +265,7 @@ String? sheetOf(Unit u, [String? skin]) => rigFor(artKey(u), skin)?.sheet ?? des
 // لوح أمة (ومظهرها): لمن يُجنَّد منها أو ينضم بلون جديد
 String nationSheet(String gang, String? nation, [String? skin]) {
   final n = spriteGang(gang, nation);
-  if (skin == 'elite' && RIG_SHEETS.containsKey('${n}_elite')) return '${n}_elite';
+  if (skin != null && RIG_SHEETS.containsKey('${n}_$skin')) return '${n}_$skin';
   return RIG_SHEETS.containsKey('${n}_rig') ? '${n}_rig' : n;
 }
 

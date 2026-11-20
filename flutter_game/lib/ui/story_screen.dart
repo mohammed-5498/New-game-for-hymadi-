@@ -46,8 +46,8 @@ String _hardDone(String id, int k) {
   p['$id:hard'] = list;
   Prefs.write(STORY.s('storageKey'), p);
   final nation = CAMPAIGNS.m(id).s('nation');
-  if (!list.every((x) => x) || Wallet.hasSkin(nation)) return '';
-  Wallet.grant('skin', nation);
+  if (!list.every((x) => x) || Wallet.hasSkin('${nation}_elite')) return '';
+  Wallet.grant('skin', '${nation}_elite');
   return 'حصلت على مظهر «نخبة ${nations.m(nation).s('name')}» مجاناً: أكملت الحملة كلها على صعوبة صعبة';
 }
 
