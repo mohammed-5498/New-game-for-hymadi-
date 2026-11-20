@@ -110,11 +110,19 @@ const CPU = (share: 0.10, cores: 1.0, saver: 0.7, steps: [60.0, 30.0], saverStep
 const GROUND_CACHE = (margin: 0.25, settle: 3, gap: 6, maxSide: 4096.0, maxPixels: 6.5e6);
 
 // --- الذهب والمتجر (2.12.0، بطلب المستخدم: "خلنا نجرب الطريقة الثالثة"، GAME_SPEC 18.18): الأسعار بالذهب، وما يكسبه الفائز على
-// البوتات بصعوبة أصعب بوت عدو (rewards)، وfogBonus مع ضباب الحرب، ولا شيء عند الخسارة. ومظهر النخبة مجاناً بإكمال حملة عصابته بصعوبة
-// من skinStory. وstartGold رصيد أول تشغيل (للتجربة حتى يقرر المستخدم) ---
+// البوتات (rewards بصعوبتهم إن كانت واحدة، وmixedReward إن اختلفت، 2.13.0)، وfogBonus مع ضباب الحرب، ولا شيء عند الخسارة. ومع
+// الحلفاء لا ذهب إلا إن كان في الأعداء فريق بعدد فريقك على الأقل وبصعوبة حليفك أو أصعب. والصمود ينتهي بالخسارة: survival لكل
+// survivalEvery موجات بصعوبة الشرطة. ومظهر النخبة مجاناً بإكمال حملة عصابته بصعوبة من skinStory. وstartGold رصيد أول تشغيل ---
 const SHOP = (city: 500, side: 800, skin: 250,
-    rewards: {'easy': 15, 'medium': 35, 'hard': 70, 'insane': 140}, fogBonus: 10,
-    skinStory: ['hard', 'insane'], startGold: 2000);
+    rewards: {'easy': 15, 'medium': 35, 'hard': 70, 'insane': 140}, mixedReward: 20, fogBonus: 10,
+    survival: {'easy': 5, 'medium': 10, 'hard': 25, 'insane': 35}, survivalEvery: 3,
+    skinStory: ['hard', 'insane'], startGold: 0);
+
+// --- الإنجازات (2.13.0، بطلب المستخدم، GAME_SPEC 18.18ج): جائزة كل درجة بالذهب (والمجنونة جوهرة تشتري أي شيء واحد مجاناً)،
+// وأهداف الإنجازات بأسمائها في lib/ui/achievements.dart ---
+const ACH = (rewards: {'easy': 25, 'medium': 70, 'hard': 120}, gems: 1,
+    districts: 10, ults: 10, points: 1000, cities: 4, mediumWins: 10, hqs: 3, waves: 10, kills: 500,
+    hardWins: 10, hardBots: 2, hardWaves: 12, insaneWaves: 12, mobAllies: 1, mob: 6);
 
 // --- الأعلام في صورة المدينة (2.11.0، بطلب المستخدم: "قم بالبحث عن طرق لتخفيف الضغط"): سارية العلم وحلقته وظله لا تتحرك، فتُرسم
 // مع المباني في الصورة الجاهزة، والراية معها والتقريب أقل من waveZoom (لا ترفرف وهي صغيرة)؛ ومن waveZoom ترفرف فوقها مع الجنود.

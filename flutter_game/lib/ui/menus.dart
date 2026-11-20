@@ -21,6 +21,7 @@ import '../audio/sound.dart';
 import '../game/match.dart';
 import '../game/state.dart';
 import '../net/session.dart';
+import 'achievements.dart';
 import 'lan_screen.dart';
 import 'migrate.dart' show migrated;
 import 'match_screen.dart';
@@ -321,6 +322,9 @@ class _MainMenuState extends State<MainMenu> {
         MenuButton(const SwordsIcon(), 'لعب', note: 'مباراة ضد البوتات بإعدادك', gilt: cont == null, onTap: () => _go(const SetupScreen())),
         MenuButton(const Icon(Icons.menu_book_rounded), 'القصة', note: 'حملة أبناء سبأ', onTap: () => _go(const StoryScreen())),
         MenuButton(const Icon(Icons.wifi_rounded), 'لعب محلي', note: 'مع الأصدقاء على نفس الواي فاي', onTap: () => _go(const LanScreen())),
+        MenuButton(const Icon(Icons.emoji_events_rounded), 'الإنجازات',
+            note: 'أنجزت ${achievements.where((a) => Achievements.done.contains(a.id)).length} من ${achievements.length} • جوائز ذهب وجواهر',
+            onTap: () => _go(const AchievementsScreen())),
       ])))))),
       PositionedDirectional(end: 14, top: 12, child: SafeArea(child: Snap(child: Row(children: [
         const GoldChip(size: 16),
@@ -788,7 +792,7 @@ class _SetupScreenState extends State<SetupScreen> {
           const SizedBox(width: 10),
           GoldTitle(widget.lan ? 'لعب محلي' : 'إعداد المباراة', size: 24),
           const Spacer(),
-          _Pill(Icons.arrow_back_rounded, 'رجوع', on: false, onTap: () => Navigator.pop(context)),
+          Pill(Icons.arrow_back_rounded, 'رجوع', on: false, onTap: () => Navigator.pop(context)),
         ]),
         const SizedBox(height: 8),
         Expanded(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -970,7 +974,7 @@ class _StoreScreenState extends State<StoreScreen> {
           for (final (k, label, icon, n) in [('maps', 'الخرائط', Icons.map_rounded, maps),
               ('sides', 'العصابات', Icons.groups_rounded, _nationIds.length + _gangIds.length),
               ('skins', 'المظاهر', Icons.checkroom_rounded, _eliteIds.length)])
-            Padding(padding: const EdgeInsetsDirectional.only(end: 8), child: _Pill(icon, '$label ($n)', on: section == k, onTap: () => setState(() {
+            Padding(padding: const EdgeInsetsDirectional.only(end: 8), child: Pill(icon, '$label ($n)', on: section == k, onTap: () => setState(() {
               section = k; region = 0; normalLook = false;
               if (k == 'skins' && !_isElite(chosenSide)) chosenSide = _eliteIds.first;
               if (k == 'sides' && _isElite(chosenSide)) chosenSide = 'crows';
@@ -978,14 +982,14 @@ class _StoreScreenState extends State<StoreScreen> {
           const Spacer(),
           const GoldChip(size: 16),
           const SizedBox(width: 10),
-          _Pill(Icons.arrow_back_rounded, 'رجوع', on: false, onTap: () => Navigator.pop(context)),
+          Pill(Icons.arrow_back_rounded, 'رجوع', on: false, onTap: () => Navigator.pop(context)),
         ])),
         const SizedBox(height: 8),
         Expanded(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Expanded(child: Column(children: [
             if (groups.length > 1) SizedBox(height: 32, child: ListView(scrollDirection: Axis.horizontal, children: [
               for (var k = 0; k < groups.length; k++) Padding(padding: const EdgeInsetsDirectional.only(end: 6),
-                  child: _Pill(null, '${groups[k].$1} ${groups[k].$2.length}', on: region == k, small: true, onTap: () => setState(() => region = k))),
+                  child: Pill(null, '${groups[k].$1} ${groups[k].$2.length}', on: region == k, small: true, onTap: () => setState(() => region = k))),
             ])),
             const SizedBox(height: 8),
             Expanded(child: GridView.extent(maxCrossAxisExtent: 200, childAspectRatio: 1.55, mainAxisSpacing: 10, crossAxisSpacing: 10,
@@ -1054,7 +1058,7 @@ class _StoreScreenState extends State<StoreScreen> {
     if (Wallet.has(kind, id)) return _status('تملكها • تختارها في قائمة اللعب');
     final block = Wallet.blocked(kind, id);
     return Padding(padding: const EdgeInsets.only(top: 4, bottom: 6), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      WideButton('شراء بـ ${Wallet.price(kind)} ذهب', block != null ? null : () async {
+      WideButton('شراء بـ ${Wallet.price(kind)} ذهب', block != null && !Wallet.gemBuys(kind, id) ? null : () async {   // والجوهرة تشتري بلا ذهب
         if (await buyDialog(context, kind, id, name, note: note) && mounted) setState(() {});
       }, primary: true, width: double.infinity),
       if (block != null) Text(block, textAlign: TextAlign.center, style: const TextStyle(color: danger, fontSize: 11.5)),
@@ -1108,7 +1112,7 @@ class _StoreScreenState extends State<StoreScreen> {
         if (elite) PositionedDirectional(top: 8, start: 8, child: Row(children: [
           for (final (normal, label) in const [(false, 'نخبة'), (true, 'عادي')])
             Padding(padding: const EdgeInsetsDirectional.only(end: 6),
-                child: _Pill(null, label, on: normalLook == normal, small: true, onTap: () => setState(() => normalLook = normal))),
+                child: Pill(null, label, on: normalLook == normal, small: true, onTap: () => setState(() => normalLook = normal))),
         ])),
       ])),
       Expanded(child: SingleChildScrollView(padding: const EdgeInsets.fromLTRB(14, 8, 14, 8), child: Snap(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -1124,25 +1128,6 @@ class _StoreScreenState extends State<StoreScreen> {
       ])))),
     ]);
   }
-}
-
-// زر قرص: أقسام المتجر ومناطقه والرجوع، والمختار بتدرج ذهبي
-class _Pill extends StatelessWidget {
-  final IconData? icon;
-  final String label;
-  final bool on, small;
-  final VoidCallback onTap;
-  const _Pill(this.icon, this.label, {required this.on, this.small = false, required this.onTap});
-  @override
-  Widget build(BuildContext context) => GestureDetector(onTap: () { sound('ui_tap'); onTap(); }, child: Container(
-    height: small ? 30 : 36, padding: EdgeInsets.symmetric(horizontal: small ? 11 : 13),
-    decoration: BoxDecoration(borderRadius: BorderRadius.circular(18), gradient: on ? goldGrad : plateGrad,
-        border: Border.all(color: on ? const Color(0xFFFFE6A8) : const Color(0x80E2B55A))),
-    child: Row(mainAxisSize: MainAxisSize.min, children: [
-      if (icon != null) ...[Icon(icon, size: 17, color: on ? const Color(0xFF2A1A08) : gold), const SizedBox(width: 6)],
-      Text(label, style: TextStyle(fontSize: small ? 12.5 : 14, fontWeight: FontWeight.w700, color: on ? const Color(0xFF1B140C) : ink)),
-    ]),
-  ));
 }
 
 // معاينة المدينة من المتجر: خريطتها كاملة بالتحريك والتقريب

@@ -370,3 +370,22 @@ Timer? restTicker(Ticker t, double fps, BuildContext context) {
 void wakeTicker(Ticker t, BuildContext context) {
   if (context.mounted) t.muted = !TickerMode.getValuesNotifier(context).value.enabled;
 }
+
+// زر قرص: أقسام المتجر والإنجازات ومناطقها والرجوع، والمختار بتدرج ذهبي
+class Pill extends StatelessWidget {
+  final IconData? icon;
+  final String label;
+  final bool on, small;
+  final VoidCallback onTap;
+  const Pill(this.icon, this.label, {super.key, required this.on, this.small = false, required this.onTap});
+  @override
+  Widget build(BuildContext context) => GestureDetector(onTap: () { sound('ui_tap'); onTap(); }, child: Container(
+    height: small ? 30 : 36, padding: EdgeInsets.symmetric(horizontal: small ? 11 : 13),
+    decoration: BoxDecoration(borderRadius: BorderRadius.circular(18), gradient: on ? goldGrad : plateGrad,
+        border: Border.all(color: on ? const Color(0xFFFFE6A8) : const Color(0x80E2B55A))),
+    child: Row(mainAxisSize: MainAxisSize.min, children: [
+      if (icon != null) ...[Icon(icon, size: 17, color: on ? const Color(0xFF2A1A08) : gold), const SizedBox(width: 6)],
+      Text(label, style: TextStyle(fontSize: small ? 12.5 : 14, fontWeight: FontWeight.w700, color: on ? const Color(0xFF1B140C) : ink)),
+    ]),
+  ));
+}

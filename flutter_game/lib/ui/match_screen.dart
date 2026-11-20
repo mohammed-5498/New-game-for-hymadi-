@@ -36,6 +36,7 @@ import '../render/weather_art.dart';
 import '../render/empire_art.dart';
 import '../render/fog.dart';
 import '../render/occlusion.dart';
+import 'achievements.dart';
 import 'cpu_guard.dart';
 import 'crash_report.dart' show crumb;
 import 'hud.dart';
@@ -62,6 +63,8 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
   bool _recorded = false;
   ({String title, List<(String, String)> lines, String reward, String ending, String gift, String next})? storyResult;
   int goldEarned = 0;             // ذهب هذه المباراة (2.12.0)
+  String goldNote = '';           // لماذا لا ذهب لفوز (2.13.0)
+  final newAch = <Ach>[];         // إنجازات هذه المباراة (2.13.0)
   late bool _resumePending = widget.resume;
   StreamSubscription<String>? _lanSub;
   int _frames = 0;
@@ -347,6 +350,17 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     if (lanRole != null) { Lan.command({'k': 'emp', 'a': a, 'd': did, 'x': x}); return; }
     final r = empireCommand(s, s.humanId, a, did, x);
     if (!r.ok && r.reason.isNotEmpty) s.notice = Notice(r.reason, true, 2.5);
+    if (r.ok) _achieved(s, Achievements.command(s, a, did));
+  }
+
+  // إنجاز جديد أثناء المباراة: إشعار بجائزته، ويُعرض مع غيره في شاشة النهاية
+  void _achieved(MatchState s, List<Ach> got) {
+    if (got.isEmpty) return;
+    newAch.addAll(got);
+    final a = got.last;
+    s.notice = Notice('🏆 إنجاز: ${a.title} • ${Achievements.rewardText(a)}', true, 4);
+    sound('capture_special');
+    hud.value++;
   }
 
   // زر نهاية مرحلة القصة: التالية أو إعادتها، أو العودة إلى قائمة القصة بعد آخرها
@@ -360,6 +374,8 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
   void restart() {
     storyResult = null;
     goldEarned = 0;
+    goldNote = '';
+    newAch.clear();
     _rest?.cancel();
     CpuGuard.leave();
     _ticker.stop();
@@ -379,6 +395,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     Prefs.writeRaw(UI.s('matchKey'), encodeMatch(s));
     Prefs.write(UI.s('matchInfoKey'), saveInfo(s));
     if (fog != null) Prefs.writeRaw(FOG.key, fog!.save());
+    Achievements.save();   // عدّادا الضربات والقتلى
   }
 
   void openPause({bool saveNow = false}) {
@@ -441,16 +458,15 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     if (human != null && s.mode != 'survival' && settings['story'] == null) {
       Stats.record(won: r.won, duration: r.duration, kills: r.kills, losses: r.losses, maxDistricts: r.maxDistricts, gang: human.nation ?? human.gang);
     }
-    // الذهب (2.12.0، GAME_SPEC 18.18): فوزك على البوتات بصعوبة أصعب بوت عدو، وزيادة ضباب الحرب، ولا شيء عند الخسارة.
-    // ولا في اللعب المحلي ولا في الصمود (ينتهي بالخسارة دائماً)
-    if (human != null && r.won && s.lanRole == null && s.mode != 'survival') {
-      String? hardest;
-      for (final p in s.players) {
-        if (p.isHuman || p.neutral || p.passive || p.feature != null || p.storyRole != null) continue;
-        if (human.team != 0 && p.team == human.team) continue;   // حليفك
-        if (hardest == null || BOT_LEVELS.indexOf(p.difficulty) > BOT_LEVELS.indexOf(hardest)) hardest = p.difficulty;
-      }
-      if (hardest != null) Wallet.earn(goldEarned = Wallet.reward(hardest, settings['fog'] == true));
+    // الذهب (2.12.0، وقواعد 2.13.0 بطلب المستخدم، GAME_SPEC 18.18): الفوز على البوتات بصعوبتهم أو mixedReward إن اختلفت، وزيادة
+    // ضباب الحرب، ولا شيء عند الخسارة ولا إن كان فريقك أكبر من فرق الأعداء (Lineup.fair). والصمود لكل ثلاث موجات وصلتها. ولا ذهب
+    // ولا إنجازات في اللعب المحلي
+    if (human != null && s.lanRole == null) {
+      final lineup = lineupOf(s), fog = settings['fog'] == true;
+      goldEarned = s.mode == 'survival' ? Wallet.survivalGold(modeOf(s).level, modeOf(s).wave) : r.won ? Wallet.matchGold(lineup, fog) : 0;
+      if (goldEarned > 0) Wallet.earn(goldEarned);
+      if (r.won && s.mode != 'survival' && lineup.foes.isNotEmpty && !lineup.fair) goldNote = 'بلا ذهب: فريقك أكبر من فرق الأعداء أو حليفك أقوى منها';
+      newAch.addAll(Achievements.ended(s, r, lineup, fog));
     }
   }
 
@@ -523,7 +539,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
         _mTicks++; _mSim += took;
         if (took > _mSimMax) _mSimMax = took;
         _acc -= TICK_SEC;
-        if (++_ticks % 10 == 0) hud.value++;   // الواجهة مرتين في الثانية (واللمس يحدّثها فوراً)
+        if (++_ticks % 10 == 0) { hud.value++; _achieved(s, Achievements.poll(s)); }   // الواجهة والإنجازات مرتين في الثانية (واللمس يحدّثها فوراً)
         if (s.matchResult != null) { _ended(s); hud.value++; break; }
       }
       alpha = _acc / TICK_SEC;

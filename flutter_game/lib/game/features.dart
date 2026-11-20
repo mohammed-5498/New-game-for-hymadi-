@@ -1245,6 +1245,7 @@ void _updateKnight(MatchState s) {
     final killer = u.lastHitBy;
     if (killer < 0 || killer >= s.players.length || s.players[killer].neutral) continue;
     _gain(s, killer, K.d('reward'));
+    if (killer == s.humanId) s.stats.beasts++;
     addPop(s, u, '+${K.i('reward')}', 'loot');
     soundAt(s, 'capture_done', u.x, u.y);
     s.notice = killer == s.humanId
@@ -1538,6 +1539,7 @@ void _rewardTroll(MatchState s) {
     final killer = u.lastHitBy;
     if (killer < 0 || killer >= s.players.length || s.players[killer].neutral) continue;
     _gain(s, killer, T.d('reward'));
+    if (killer == s.humanId) s.stats.beasts++;
     addPop(s, u, '+${T.i('reward')}', 'loot');
     soundAt(s, 'capture_done', u.x, u.y);
     s.notice = killer == s.humanId

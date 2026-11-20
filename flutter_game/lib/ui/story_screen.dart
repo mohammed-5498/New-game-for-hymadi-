@@ -38,6 +38,7 @@ List<bool> _hardOf(String id) {
   final l = _progress()['$id:hard'];
   return [for (var k = 0; k < STORY.i('levels'); k++) l is List && k < l.length && l[k] == true];
 }
+bool campaignHard(String id) => _hardOf(id).every((x) => x);   // للإنجازات (2.13.0)
 String _hardDone(String id, int k) {
   if (!SHOP.skinStory.contains(storyDifficulty())) return '';
   final p = _progress(), list = _hardOf(id);

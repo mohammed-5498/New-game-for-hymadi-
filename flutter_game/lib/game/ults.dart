@@ -133,6 +133,7 @@ bool tryCastUlt(MatchState state, Unit unit) {
   final rate = ULT.d('castSeconds');
   unit.ultCharge = 0;
   unit.ultAnnounced = false;
+  if (unit.playerId == state.humanId) state.stats.ults++;
   soundAt(state, 'ult_cast', unit.x, unit.y);
   unit.pendingHit = null;
   unit.attackStart = state.time;

@@ -304,6 +304,7 @@ class PathRequest {
 class MatchStats {
   final List<int> kills, losses;
   int maxDistricts = 1;
+  int ults = 0, beasts = 0;   // ضربات بطل اللاعب والترول والفارس الأسود اللذان أسقطهما (للإنجازات، 2.13.0؛ لا تمس المحاكاة)
   MatchStats(int n) : kills = List.filled(n, 0, growable: true), losses = List.filled(n, 0, growable: true);
 }
 

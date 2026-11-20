@@ -18,6 +18,7 @@ import '../game/victory.dart';
 import '../map/generator.dart' show District;
 import '../map/parks.dart' show fortifiable;
 import '../map/sizes.dart';
+import 'achievements.dart';
 import 'match_screen.dart';
 import 'prefs.dart';
 import 'widgets.dart';
@@ -634,6 +635,13 @@ class _End extends StatelessWidget {
       if (sr.reward.isNotEmpty) Text(sr.reward, style: const TextStyle(color: gold, fontSize: 13)),
       if (sr.ending.isNotEmpty) SizedBox(width: 520, child: Text(sr.ending, style: const TextStyle(color: gold, fontSize: 13))),
       if (sr.gift.isNotEmpty) SizedBox(width: 520, child: Text(sr.gift, style: const TextStyle(color: gold, fontSize: 14, fontWeight: FontWeight.w700))),
+    ],
+    if (screen.goldNote.isNotEmpty) Text(screen.goldNote, style: const TextStyle(color: dim, fontSize: 12.5)),
+    if (screen.newAch.isNotEmpty) ...[
+      const SizedBox(height: 6),
+      const Text('🏆 إنجازات جديدة', style: TextStyle(color: gold, fontSize: 14, fontWeight: FontWeight.w700)),
+      const SizedBox(height: 4),
+      SizedBox(width: 560, child: Wrap(spacing: 6, runSpacing: 6, alignment: WrapAlignment.center, children: [for (final a in screen.newAch) AchChip(a)])),
     ],
     const SizedBox(height: 8),
     SizedBox(width: 560, child: Wrap(spacing: 8, runSpacing: 8, alignment: WrapAlignment.center, children: [
