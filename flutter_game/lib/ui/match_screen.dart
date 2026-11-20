@@ -42,6 +42,7 @@ import 'hud.dart';
 import 'menus.dart';
 import 'prefs.dart';
 import 'story_screen.dart';
+import 'wallet.dart';
 import 'widgets.dart';
 
 class MatchScreen extends StatefulWidget {
@@ -59,7 +60,8 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
   double loadProgress = 0;
   String tip = '';
   bool _recorded = false;
-  ({String title, List<(String, String)> lines, String reward, String ending, String next})? storyResult;
+  ({String title, List<(String, String)> lines, String reward, String ending, String gift, String next})? storyResult;
+  int goldEarned = 0;             // ذهب هذه المباراة (2.12.0)
   late bool _resumePending = widget.resume;
   StreamSubscription<String>? _lanSub;
   int _frames = 0;
@@ -357,6 +359,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
 
   void restart() {
     storyResult = null;
+    goldEarned = 0;
     _rest?.cancel();
     CpuGuard.leave();
     _ticker.stop();
@@ -437,6 +440,17 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     if (settings['story'] != null) storyResult = storyEnd(settings, r.won);
     if (human != null && s.mode != 'survival' && settings['story'] == null) {
       Stats.record(won: r.won, duration: r.duration, kills: r.kills, losses: r.losses, maxDistricts: r.maxDistricts, gang: human.nation ?? human.gang);
+    }
+    // الذهب (2.12.0، GAME_SPEC 18.18): فوزك على البوتات بصعوبة أصعب بوت عدو، وزيادة ضباب الحرب، ولا شيء عند الخسارة.
+    // ولا في اللعب المحلي ولا في الصمود (ينتهي بالخسارة دائماً)
+    if (human != null && r.won && s.lanRole == null && s.mode != 'survival') {
+      String? hardest;
+      for (final p in s.players) {
+        if (p.isHuman || p.neutral || p.passive || p.feature != null || p.storyRole != null) continue;
+        if (human.team != 0 && p.team == human.team) continue;   // حليفك
+        if (hardest == null || BOT_LEVELS.indexOf(p.difficulty) > BOT_LEVELS.indexOf(hardest)) hardest = p.difficulty;
+      }
+      if (hardest != null) Wallet.earn(goldEarned = Wallet.reward(hardest, settings['fog'] == true));
     }
   }
 

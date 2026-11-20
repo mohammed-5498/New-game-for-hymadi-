@@ -8,8 +8,9 @@ import 'package:flutter/scheduler.dart';
 
 import '../i18n/tr.dart';
 import '../core/cfg.dart';
-import '../config.dart' show PACE, RETIRED_CITIES;
+import '../config.dart' show PACE, RETIRED_CITIES, SHOP;
 import '../core/fmath.dart';
+import '../data/campaigns.dart';
 import '../data/cities.dart';
 import '../data/js_config.dart';
 import '../data/rig_sprites.dart';
@@ -27,6 +28,7 @@ import 'crash_report.dart';
 import 'prefs.dart';
 import 'showcase.dart';
 import 'story_screen.dart';
+import 'wallet.dart';
 import 'widgets.dart';
 
 // ===================== إعداد المباراة =====================
@@ -85,6 +87,9 @@ class SetupModel {
         if (BOT_LEVELS.contains(x['difficulty'])) s.difficulty = x['difficulty'] as String;
       }
     }
+    // ما لم يعد يملكه (كان كل شيء مفتوحاً قبل 2.12.0): عشوائي مما يملكه
+    if (!ownsSide(m.slots[0].side)) m.slots[0].side = 'random';
+    if (m.city != 'random' && m.city != 'host' && !Wallet.hasCity(m.city)) m.city = 'random';
     return m;
   }
 
@@ -116,7 +121,7 @@ class SetupModel {
     // اللعب المحلي: كل صديق لاعب حقيقي على جهازه، وإن غادر يقوده بوت متوسط
     final players = [
       for (var k = 0; k < a.length; k++)
-        {'name': k == 0 ? host ?? 'أنت' : a[k].type == 'net' ? a[k].name : 'بوت $k', ...resolveSide(a[k].side), 'color': a[k].color,
+        {'name': k == 0 ? host ?? 'أنت' : a[k].type == 'net' ? a[k].name : 'بوت $k', ...resolveSide(a[k].side, owned: k == 0), 'color': a[k].color,
           'isHuman': k == 0 || a[k].type == 'net', 'team': survival ? 1 : a[k].team, 'difficulty': a[k].type == 'net' ? 'medium' : a[k].difficulty},
     ];
     return {
@@ -131,9 +136,9 @@ class SetupModel {
   }
 }
 
-// الأمة ← نمطها القتالي، والعشوائي من كل الخيارات (resolveSide في nations.js)
-Map<String, Object?> resolveSide(String choice) {
-  if (choice == 'random') { final pool = [..._nationIds, ..._gangIds]; choice = pool[math.Random().nextInt(pool.length)]; }
+// الأمة ← نمطها القتالي، والعشوائي من كل الخيارات (resolveSide في nations.js)، وللاعب (owned) مما يملكه (2.12.0)
+Map<String, Object?> resolveSide(String choice, {bool owned = false}) {
+  if (choice == 'random') choice = randomSide(owned: owned);
   final base = _baseSide(choice), nation = nations.mm(base);
   if (nation != null && nations.l('order').contains(base)) return {'gang': nation.s('style'), 'nation': base, if (_isElite(choice)) 'skin': 'elite'};
   return {'gang': _gangIds.contains(choice) ? choice : _gangIds[0], 'nation': null};
@@ -141,13 +146,24 @@ Map<String, Object?> resolveSide(String choice) {
 
 String hostCity(String? side) {
   final n = side != null && nations.l('order').contains(_baseSide(side)) ? nations.m(_baseSide(side)) : null;
-  return n != null && playableCities.contains(n['city']) ? n.s('city') : 'random';
+  return n != null && playableCities.contains(n['city']) && Wallet.hasCity(n.s('city')) ? n.s('city') : 'random';
+}
+
+// ما يملكه اللاعب (2.12.0، GAME_SPEC 18.18): الكلاسيكية مجانية، والأمة بشرائها، والنخبة بشراء مظهرها بعد عصابتها. والعشوائي مما يملكه
+bool ownsSide(String side) => side == 'random' || (_isElite(side) ? Wallet.hasSide(_baseSide(side)) && Wallet.hasSkin(_baseSide(side)) : Wallet.hasSide(side));
+String randomSide({bool owned = false}) {
+  final pool = [for (final s in [..._nationIds, ..._gangIds]) if (!owned || Wallet.hasSide(s)) s];
+  return pool[math.Random().nextInt(pool.length)];
 }
 
 // مدن اللعب (بلا ما خرج من اللعبة، RETIRED_CITIES)، والعشوائي يُحسم هنا منها (كان يحسمه المولّد من كل المدن). واللعب المحلي
 // يرسل المدينة المحسومة إلى الأصدقاء
 List<String> get playableCities => [for (final c in CITIES.l('order').cast<String>()) if (!RETIRED_CITIES.contains(c)) c];
-String _concrete(String city) => city == 'random' ? playableCities[math.Random().nextInt(playableCities.length)] : city;
+String _concrete(String city) {
+  if (city != 'random') return city;
+  final mine = [for (final c in playableCities) if (Wallet.hasCity(c)) c];   // العشوائي من مدنك (2.12.0)
+  return mine[math.Random().nextInt(mine.length)];
+}
 
 // الأمم الـ15 ثم العصابات الكلاسيكية الأربع ثم العشوائي (SIDE_CHOICES)
 List<String> get _nationIds => nations.l('order').cast<String>();
@@ -180,12 +196,14 @@ String? regionOfCity(String city) {
 
 // لوحة الأمم والعصابات (الإعداد وأمة الصديق في اللعب المحلي): لمسة على الخانة تحددها وتكتب قدرتها في اللوحة
 // الجانبية، وزر "اختيار" يعتمدها (بطلب المستخدم، 2.0.5)
-Future<String?> pickSide(BuildContext context, String current) => showModalBottomSheet<String>(context: context, backgroundColor: panel,
-    isScrollControlled: true, builder: (_) => _SidePicker(current));
+// human: خانة اللاعب نفسه (أو الصديق في اللعب المحلي): ما لا يملكه بقفل وسعر، و"اختيار" يصير "شراء" (2.12.0). والبوتات بكل شيء
+Future<String?> pickSide(BuildContext context, String current, {bool human = false}) => showModalBottomSheet<String>(context: context,
+    backgroundColor: panel, isScrollControlled: true, builder: (_) => _SidePicker(current, human));
 
 class _SidePicker extends StatefulWidget {
   final String current;
-  const _SidePicker(this.current);
+  final bool human;
+  const _SidePicker(this.current, this.human);
   @override
   State<_SidePicker> createState() => _SidePickerState();
 }
@@ -221,7 +239,7 @@ class _SidePickerState extends State<_SidePicker> {
         for (final g in [for (final x in list) ...[x, if (_eliteIds.contains('${x}_elite')) '${x}_elite']])   // النخبة بجوار عصابتها
           PickCard(title: sideName(g), note: _isNation(g) ? '${sideNote(g)} • ${nations.m('styles').m(nations.m(_baseSide(g)).s('style')).s('name')}'
               : nations.m('styles').m(g).s('name'), image: 'assets/thumbs/side_$g.webp', aspect: 2.5,
-              selected: chosen == g, onTap: () => setState(() => chosen = g)),
+              badge: widget.human ? _lock(g) : null, selected: chosen == g, onTap: () => setState(() => chosen = g)),
       ]),
   ], side: Container(width: 260, margin: const EdgeInsets.fromLTRB(10, 10, 0, 10), clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0x80E2B55A)),
@@ -233,9 +251,21 @@ class _SidePickerState extends State<_SidePicker> {
         Padding(padding: const EdgeInsets.fromLTRB(10, 8, 10, 8), child: _details()),
       ]))),
     footer: [
-      WideButton('اختيار', chosen == 'random' ? null : () => Navigator.pop(context, chosen), primary: true, width: 160),
+      if (widget.human && !ownsSide(chosen))
+        WideButton('شراء', _buy, primary: true, width: 160)
+      else WideButton('اختيار', chosen == 'random' ? null : () => Navigator.pop(context, chosen), primary: true, width: 160),
       WideButton('عشوائي', () => Navigator.pop(context, 'random'), width: 160),
     ]);
+
+  // قفل ما لا يملكه وسعره: النخبة تحتاج عصابتها أولاً
+  String? _lock(String g) => ownsSide(g) ? null
+      : _isElite(g) ? (Wallet.hasSide(_baseSide(g)) ? '🔒 ${SHOP.skin}' : '🔒') : '🔒 ${SHOP.side}';
+  Future<void> _buy() async {
+    final elite = _isElite(chosen), base = _baseSide(chosen);
+    final ok = await buyDialog(context, elite ? 'skin' : 'side', base, sideName(chosen),
+        note: elite ? 'يُشترى بعد عصابته، أو يُكسب مجاناً بإكمال حملتها كلها على صعوبة صعبة' : 'تفتح معها حملتها في القصة');
+    if (ok && mounted) Navigator.pop(context, chosen);
+  }
 }
 
 // ===================== القائمة الرئيسية =====================
@@ -293,6 +323,8 @@ class _MainMenuState extends State<MainMenu> {
         MenuButton(const Icon(Icons.wifi_rounded), 'لعب محلي', note: 'مع الأصدقاء على نفس الواي فاي', onTap: () => _go(const LanScreen())),
       ])))))),
       PositionedDirectional(end: 14, top: 12, child: SafeArea(child: Snap(child: Row(children: [
+        const GoldChip(size: 16),
+        const SizedBox(width: 10),
         RoundButton(Icons.settings_rounded, 'الإعدادات', () => _go(const SettingsScreen())),
         RoundButton(Icons.bar_chart_rounded, 'الإحصائيات', () => _go(const StatsScreen())),
         RoundButton(Icons.language_rounded, 'اللغة', () => pickLanguage(context)),
@@ -539,7 +571,11 @@ class _SetupScreenState extends State<SetupScreen> {
         (REGIONS.m(r).s('name'), [
           for (final c in REGIONS.m(r).l('cities').cast<String>()) if (!RETIRED_CITIES.contains(c))
             PickCard(title: cityShort(c), note: cityName(c), image: 'assets/thumbs/city_$c.webp', selected: m.city == c,
-                onTap: () => Navigator.pop(context, c)),
+                badge: Wallet.hasCity(c) ? null : '🔒 ${SHOP.city}',
+                onTap: () async {   // مدينة لا تملكها: تُشترى من هنا (2.12.0)
+                  if (!Wallet.hasCity(c) && !await buyDialog(context, 'city', c, cityShort(c))) return;
+                  if (mounted) Navigator.pop(context, c);
+                }),
         ]),
     ], footer: [WideButton('عشوائي', () => Navigator.pop(context, 'random'), width: 160),
       WideButton('مدينة المضيف', () => Navigator.pop(context, 'host'), width: 160, note: 'مدينة أمة اللاعب الأول')]));
@@ -590,7 +626,7 @@ class _SetupScreenState extends State<SetupScreen> {
   }
 
   Future<void> _pickSide(int k) async {
-    final pick = await pickSide(context, m.slots[k].side);
+    final pick = await pickSide(context, m.slots[k].side, human: k == 0);
     if (pick != null) setState(() => m.slots[k].side = pick);
   }
 
@@ -897,9 +933,16 @@ class _StoreScreenState extends State<StoreScreen> {
   int region = 0;
   bool normalLook = false;   // في المظاهر: الشكل العادي للمقارنة
 
-  bool _freeCity(String c) => STORE.l('freeCities').contains(c);
-  bool _freeSide(String s) => _gangIds.contains(s);
   static const _cardFrame = Color(0x40E2B55A), _freeInk = Color(0xFF9FD07C);
+  // ما على الخانة (2.12.0): مجانية أو تملكها (أخضر)، أو السعر بالذهب، والمظهر مقفل حتى تُشترى عصابته
+  (String, bool) _cityTag(String c) => Wallet.freeCity(c) ? ('مجانية', true) : Wallet.hasCity(c) ? ('تملكها', true) : ('${SHOP.city} ذهب', false);
+  (String, bool) _sideTag(String s) {
+    if (_isElite(s)) {
+      final n = _baseSide(s);
+      return Wallet.hasSkin(n) ? ('تملكها', true) : !Wallet.hasSide(n) ? ('🔒 العصابة أولاً', false) : ('${SHOP.skin} ذهب', false);
+    }
+    return Wallet.freeSide(s) ? ('مجانية', true) : Wallet.hasSide(s) ? ('تملكها', true) : ('${SHOP.side} ذهب', false);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -933,6 +976,8 @@ class _StoreScreenState extends State<StoreScreen> {
               if (k == 'sides' && _isElite(chosenSide)) chosenSide = 'crows';
             }))),
           const Spacer(),
+          const GoldChip(size: 16),
+          const SizedBox(width: 10),
           _Pill(Icons.arrow_back_rounded, 'رجوع', on: false, onTap: () => Navigator.pop(context)),
         ])),
         const SizedBox(height: 8),
@@ -958,7 +1003,7 @@ class _StoreScreenState extends State<StoreScreen> {
   }
 
   // --- الخانات ---
-  Widget _card({required bool selected, required bool free, required VoidCallback onTap, required List<Widget> children}) =>
+  Widget _card({required bool selected, required (String, bool) tag, required VoidCallback onTap, required List<Widget> children}) =>
       GestureDetector(onTap: () { sound('ui_tap'); onTap(); }, child: Snap(margin: 20, child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
         decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), border: Border.all(color: selected ? gold : _cardFrame, width: selected ? 2 : 1),
@@ -966,9 +1011,9 @@ class _StoreScreenState extends State<StoreScreen> {
         child: ClipRRect(borderRadius: BorderRadius.circular(11), child: Stack(fit: StackFit.expand, children: [
           ...children,
           PositionedDirectional(top: 6, start: 6, child: Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
-              decoration: BoxDecoration(color: free ? const Color(0xE6304F23) : const Color(0xE64A3618), borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: free ? const Color(0x809FD07C) : const Color(0x80E2B55A))),
-              child: Text(free ? 'مجانية' : 'السعر لاحقاً', style: TextStyle(fontSize: 10, color: free ? _freeInk : gold)))),
+              decoration: BoxDecoration(color: tag.$2 ? const Color(0xE6304F23) : const Color(0xE64A3618), borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: tag.$2 ? const Color(0x809FD07C) : const Color(0x80E2B55A))),
+              child: Text(tag.$1, style: TextStyle(fontSize: 10, color: tag.$2 ? _freeInk : gold)))),
         ])),
       )));
 
@@ -981,13 +1026,13 @@ class _StoreScreenState extends State<StoreScreen> {
       Text(note, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Color(0xFFCBBD9F), fontSize: 10.5)),
     ]));
 
-  Widget _mapCard(String c) => _card(selected: c == chosenMap, free: _freeCity(c), onTap: () => setState(() => chosenMap = c), children: [
+  Widget _mapCard(String c) => _card(selected: c == chosenMap, tag: _cityTag(c), onTap: () => setState(() => chosenMap = c), children: [
     Image.asset('assets/thumbs/city_$c.webp', fit: BoxFit.cover),
     _fade,
     _caption(cityShort(c), cityName(c), 10),
   ]);
 
-  Widget _sideCard(String s) => _card(selected: s == chosenSide, free: _freeSide(s), onTap: () => setState(() { chosenSide = s; normalLook = false; }), children: [
+  Widget _sideCard(String s) => _card(selected: s == chosenSide, tag: _sideTag(s), onTap: () => setState(() { chosenSide = s; normalLook = false; }), children: [
     const DecoratedBox(decoration: BoxDecoration(gradient: RadialGradient(center: Alignment(-0.55, 0.25), radius: 0.95,
         colors: [Color(0xFF5A4326), Color(0xFF17120D)]))),
     PositionedDirectional(end: 2, top: 4, bottom: -2, child: heroThumb(s)),
@@ -995,16 +1040,27 @@ class _StoreScreenState extends State<StoreScreen> {
   ]);
 
   // --- لوحة العرض ---
-  Widget _status(bool free) => Container(
+  Widget _status(String text) => Container(
     margin: const EdgeInsets.only(top: 4, bottom: 6), padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-    decoration: BoxDecoration(borderRadius: BorderRadius.circular(9), color: free ? const Color(0x33304F23) : const Color(0x334A3618),
-        border: Border.all(color: free ? const Color(0x669FD07C) : const Color(0x66E2B55A))),
+    decoration: BoxDecoration(borderRadius: BorderRadius.circular(9), color: const Color(0x33304F23), border: Border.all(color: const Color(0x669FD07C))),
     child: Row(children: [
-      Icon(free ? Icons.check_circle_rounded : Icons.schedule_rounded, size: 15, color: free ? _freeInk : gold),
+      const Icon(Icons.check_circle_rounded, size: 15, color: _freeInk),
       const SizedBox(width: 6),
-      Expanded(child: Text(free ? 'مجانية • تأتي مع اللاعب' : 'السعر: يُحدد لاحقاً • متاحة لك الآن في فترة الاختبار',
-          style: TextStyle(color: free ? _freeInk : gold, fontSize: 11.5))),
+      Expanded(child: Text(text, style: const TextStyle(color: _freeInk, fontSize: 11.5))),
     ]));
+  // مجانية أو تملكها، أو زر الشراء بالذهب وما يمنعه (2.12.0، GAME_SPEC 18.18)
+  Widget _buyBox(String kind, String id, String name, {bool free = false, String? note}) {
+    if (free) return _status('مجانية • تأتي مع اللاعب');
+    if (Wallet.has(kind, id)) return _status('تملكها • تختارها في قائمة اللعب');
+    final block = Wallet.blocked(kind, id);
+    return Padding(padding: const EdgeInsets.only(top: 4, bottom: 6), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      WideButton('شراء بـ ${Wallet.price(kind)} ذهب', block != null ? null : () async {
+        if (await buyDialog(context, kind, id, name, note: note) && mounted) setState(() {});
+      }, primary: true, width: double.infinity),
+      if (block != null) Text(block, textAlign: TextAlign.center, style: const TextStyle(color: danger, fontSize: 11.5)),
+      if (note != null) Text(note, textAlign: TextAlign.center, style: const TextStyle(color: dim, fontSize: 11)),
+    ]));
+  }
   Widget _line(IconData icon, String text) => Padding(padding: const EdgeInsets.only(bottom: 7), child: Row(
     crossAxisAlignment: CrossAxisAlignment.start, children: [
       Padding(padding: const EdgeInsets.only(top: 2), child: Icon(icon, size: 15, color: gold)),
@@ -1027,7 +1083,7 @@ class _StoreScreenState extends State<StoreScreen> {
         ])),
       ]))),
       Expanded(child: SingleChildScrollView(padding: const EdgeInsets.fromLTRB(14, 6, 14, 4), child: Snap(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        _status(_freeCity(c)),
+        _buyBox('city', c, cityShort(c), free: Wallet.freeCity(c)),
         _line(Icons.public_rounded, 'منطقتها: ${REGIONS.m(regionOfCity(c) ?? 'arabic').s('name')}'),
         if (host.isNotEmpty) _line(Icons.flag_rounded, 'مدينة أمة ${nations.m(host.first).s('name')}: مدينة المضيف حين تلعب بها.'),
         if (f != null) _line(Icons.auto_awesome_rounded, 'ميزتها: $f'),
@@ -1058,7 +1114,8 @@ class _StoreScreenState extends State<StoreScreen> {
       Expanded(child: SingleChildScrollView(padding: const EdgeInsets.fromLTRB(14, 8, 14, 8), child: Snap(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Text(title, style: const TextStyle(color: gold, fontSize: 19, fontWeight: FontWeight.w700, height: 1.2)),
         Text(note, style: const TextStyle(color: Color(0xFFCBBD9F), fontSize: 12)),
-        _status(_freeSide(s)),
+        elite ? _buyBox('skin', base, sideName(s), note: 'أو أكمل حملة عصابته كلها على صعوبة صعبة فتأخذه مجاناً')
+            : _buyBox('side', s, title, free: Wallet.freeSide(s), note: CAMPAIGNS.has(s) ? 'تفتح معها حملتها في القصة' : null),
         if (elite) _line(Icons.auto_awesome_rounded,
             'مظهر أسود وذهبي لـ${nation!.s('gangName')}: الوجه واليدان بلونك، والقدرات كما هي. يُختار بجوار عصابته في الإعداد'),
         _line(Icons.groups_rounded, names.join(' • ')),

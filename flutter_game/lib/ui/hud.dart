@@ -633,9 +633,11 @@ class _End extends StatelessWidget {
           style: const TextStyle(color: ink, fontSize: 12.5))),
       if (sr.reward.isNotEmpty) Text(sr.reward, style: const TextStyle(color: gold, fontSize: 13)),
       if (sr.ending.isNotEmpty) SizedBox(width: 520, child: Text(sr.ending, style: const TextStyle(color: gold, fontSize: 13))),
+      if (sr.gift.isNotEmpty) SizedBox(width: 520, child: Text(sr.gift, style: const TextStyle(color: gold, fontSize: 14, fontWeight: FontWeight.w700))),
     ],
     const SizedBox(height: 8),
     SizedBox(width: 560, child: Wrap(spacing: 8, runSpacing: 8, alignment: WrapAlignment.center, children: [
+      if (screen.goldEarned > 0) StatCard('ذهب ربحته', '+${screen.goldEarned}'),
       StatCard('مدة المباراة', clock(r.duration)),
       StatCard('أكبر عدد أحياء', '${r.maxDistricts}'),
       StatCard('أعداء قتلتهم', '${r.kills}'),

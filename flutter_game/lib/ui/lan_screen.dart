@@ -44,7 +44,7 @@ class _LanScreenState extends State<LanScreen> {
     var name = _prefs['lanName'] as String?;
     if (name == null) { name = cleanName('لاعب ${10 + math.Random().nextInt(90)}'); _pref('lanName', name); }
     nameCtl = TextEditingController(text: name);
-    side = _prefs['lanSide'] is String ? _prefs['lanSide'] as String : 'random';
+    side = _prefs['lanSide'] is String && ownsSide(_prefs['lanSide'] as String) ? _prefs['lanSide'] as String : 'random';
     _sub = Lan.events.listen(_onEvent);
     _timer = Timer.periodic(const Duration(seconds: 1), (_) { if (mounted && view == 'home') setState(() {}); });   // المضيف الذي توقف إعلانه يختفي
     if (!kIsWeb) _goHome();
@@ -117,7 +117,7 @@ class _LanScreenState extends State<LanScreen> {
     busy = true;
     _status('جارٍ الاتصال…');
     try {
-      await Lan.join(ip, port, _myName(), side);
+      await Lan.join(ip, port, _myName(), _sent(side));
       setState(() { view = 'lobby'; status = ''; });
     } catch (e) {
       _goHome();                         // البحث يعود فيختار غيرها أو يعيد المحاولة
@@ -132,12 +132,14 @@ class _LanScreenState extends State<LanScreen> {
   }
 
   Future<void> _pickSide() async {
-    final pick = await pickSide(context, side);
+    final pick = await pickSide(context, side, human: true);
     if (pick == null) return;
     setState(() => side = pick);
     _pref('lanSide', pick);
-    Lan.setSide(pick);
+    Lan.setSide(_sent(pick));
   }
+  // المضيف يحسم عشوائي الأصدقاء من كل العصابات، فعشوائيك يُحسم هنا مما تملكه (2.12.0)
+  String _sent(String side) => side == 'random' ? randomSide(owned: true) : side;
 
   Widget _home() {
     final now = DateTime.now();

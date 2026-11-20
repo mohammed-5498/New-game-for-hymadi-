@@ -23,6 +23,7 @@ APP=... HIDE=city python3 bench.py nocity 28 15 "$Q"   # بلا طبقة (city �
 APP=... FREEZE=400 python3 bench.py frozen 36 20 "$Q"  # الإطار نفسه في النسختين: المنطق يتوقف بعد 400 تحديث (والكاميرا على أكبر اشتباك مع watch=1)
 APP=... FREEZE=200 FPS=60 NOLAG=1 python3 bench.py f60 34 14 "$Q"   # ومعه إيقاع ثابت (FPS)، وGUARD=1 حارس المعالج يحكم، وVIAMENU=1 القائمة أولاً
 EXTRA=/مسار/تعديل.py ./make.sh /tmp/b_x           # نسخة بتعديل تجريبي (سكربت يأخذ مجلد النسخة) للمقارنة
+APP=... SCREEN=store python3 bench.py st 9 2 "" shot   # صورة شاشة: store وstore-sides وstore-skins وstore-yemen وsetup وstory وmenu
 ```
 `GC_Q` مثل رابط الفحص في المتصفح (`_testMatch` في main.dart). `SCALE=1` نقطة لكل وحدة (أسرع على الرسم البرمجي فيبلغ 30 إطاراً)،
 و2 بدقة الجوال تقريباً. و`spectate=1` مباراة بوتات لا تنتهي بخسارتك.

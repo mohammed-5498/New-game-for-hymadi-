@@ -17,6 +17,11 @@ if 'GC_VIAMENU' not in s:
     s = s.replace("// للفحص في المتصفح:", "final _gcNav = GlobalKey<NavigatorState>();\n// للفحص في المتصفح:", 1)
     s = s.replace("  ));\n}\n", "  ));\n  if (Platform.environment['GC_VIAMENU'] != null) Future<void>.delayed(const Duration(seconds: 8), () => _gcNav.currentState!.push(MaterialPageRoute(builder: (_) => _testMatch()!)));\n}\n", 1)
     assert s.count('GC_VIAMENU') == 2, s.count('GC_VIAMENU')
+    # GC_SCREEN=store|store-sides|store-skins|setup|story: الشاشة نفسها أولاً (صور الفحص)
+    s = s.replace("    home: Platform.environment['GC_VIAMENU'] != null ? const _Intro() : (_testMatch() ?? const _Intro()),",
+        "    home: switch (Platform.environment['GC_SCREEN']) { 'store' => const StoreScreen(), 'store-sides' => const StoreScreen(section: 'sides'), 'store-skins' => const StoreScreen(section: 'skins'), 'store-yemen' => const StoreScreen(section: 'sides', side: 'yemen'), 'store-yemen-elite' => const StoreScreen(section: 'skins', side: 'yemen_elite'), 'setup' => const SetupScreen(), 'story' => const StoryScreen(), 'menu' => const MainMenu(), _ => Platform.environment['GC_VIAMENU'] != null ? const _Intro() : (_testMatch() ?? const _Intro()) },", 1)
+    if "import 'ui/story_screen.dart';" not in s: s = s.replace("import 'ui/menus.dart';", "import 'ui/menus.dart';\nimport 'ui/story_screen.dart';", 1)
+    assert 'GC_SCREEN' in s
     open(p, 'w', encoding='utf-8').write(s)
 p = f'{b}/lib/ui/match_screen.dart'; s = open(p, encoding='utf-8').read()
 if 'GC_METER' not in s:

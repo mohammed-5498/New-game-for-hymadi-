@@ -3,12 +3,14 @@
 import 'package:flutter/material.dart' hide Text;
 
 import '../i18n/tr.dart';
+import '../config.dart' show SHOP;
 import '../core/cfg.dart';
 import '../data/campaigns.dart';
 import '../data/js_config.dart';
 import '../game/story.dart';
 import 'match_screen.dart';
 import 'prefs.dart';
+import 'wallet.dart';
 import 'widgets.dart';
 
 const _type = {'defend': 'دفاع', 'rescue': 'إنقاذ', 'destroy': 'تدمير', 'escort': 'حماية', 'capture': 'سيطرة على منطقة', 'storm': 'اقتحام',
@@ -31,6 +33,22 @@ String storyDifficulty() {
   return d != null && STORY.m('difficulty').has(d) ? d : STORY.s('defaultDifficulty');
 }
 bool _unlocked(String id, int k) => k == 0 || doneOf(id)[k - 1];
+// المراحل المكتملة بصعوبة SHOP.skinStory (صعب أو مجنون): كلها تعطي مظهر نخبة الأمة مجاناً (2.12.0)
+List<bool> _hardOf(String id) {
+  final l = _progress()['$id:hard'];
+  return [for (var k = 0; k < STORY.i('levels'); k++) l is List && k < l.length && l[k] == true];
+}
+String _hardDone(String id, int k) {
+  if (!SHOP.skinStory.contains(storyDifficulty())) return '';
+  final p = _progress(), list = _hardOf(id);
+  list[k] = true;
+  p['$id:hard'] = list;
+  Prefs.write(STORY.s('storageKey'), p);
+  final nation = CAMPAIGNS.m(id).s('nation');
+  if (!list.every((x) => x) || Wallet.hasSkin(nation)) return '';
+  Wallet.grant('skin', nation);
+  return 'حصلت على مظهر «نخبة ${nations.m(nation).s('name')}» مجاناً: أكملت الحملة كلها على صعوبة صعبة';
+}
 
 // إعداد مباراة المرحلة، ومعه مكافآت ما اكتمل قبلها من الحملة نفسها
 J storySettings(String id, int k) {
@@ -51,16 +69,18 @@ J storySettings(String id, int k) {
 }
 
 // نهاية المرحلة: تحفظ الإكمال، وتعيد (العنوان، الحوار، المكافأة، النهاية، نص الزر التالي)
-({String title, List<(String, String)> lines, String reward, String ending, String next}) storyEnd(J settings, bool won) {
+({String title, List<(String, String)> lines, String reward, String ending, String gift, String next}) storyEnd(J settings, bool won) {
   final st = settings.m('story'), id = st.s('campaign'), k = st.i('level');
   final camp = CAMPAIGNS.m(id), level = camp.l('levels')[k] as J;
   if (won) _markDone(id, k);
+  final gift = won ? _hardDone(id, k) : '';
   final last = k + 1 >= camp.l('levels').length;
   return (
     title: won ? 'اكتملت المرحلة ${k + 1}' : 'فشلت المرحلة ${k + 1}',
     lines: won ? [for (final l in level.l('after')) ((l as List)[0] as String, l[1] as String)] : const [],
     reward: won ? 'المكافأة: ${level.m('reward').s('text')}' : '',
     ending: won && last ? 'النهاية: ${camp.s('ending')}' : '',
+    gift: gift,
     next: won ? (last ? 'قائمة القصة' : 'المرحلة التالية') : 'إعادة المرحلة',
   );
 }
@@ -103,14 +123,21 @@ class _StoryScreenState extends State<StoryScreen> {
     ]), style: const TextStyle(color: ink, fontSize: 13)),
   ]);
 
+  // حملة كل عصابة تُفتح بشرائها (2.12.0، بطلب المستخدم)، ومظهر نخبتها مجاناً بإكمالها كلها على الصعب
+  Future<void> _open(String id) async {
+    if (!Wallet.hasSide(id) && !await buyDialog(context, 'side', id, nations.m(id).s('gangName'), note: 'تفتح معها حملتها في القصة')) return;
+    if (mounted) setState(() { campaign = id; view = 'levels'; });
+  }
+
   Widget _gangs() => Column(children: [
     _title('القصة'),
-    _p('اختر عصابة لتلعب حملتها: خمس مراحل بمهام وقصة.', color: dim),
+    _p('اختر عصابة لتلعب حملتها: خمس مراحل بمهام وقصة. تُفتح الحملة بشراء عصابتها، وإكمالها كلها على صعوبة صعبة يعطيك مظهر نخبتها مجاناً.', color: dim),
     Wrap(spacing: 8, runSpacing: 8, alignment: WrapAlignment.center, children: [
       for (final id in nations.l('order').cast<String>())
         SizedBox(width: 170, child: PickCard(title: nations.m(id).s('gangName'), note: nations.m(id).s('name'), image: 'assets/thumbs/side_$id.webp',
-            aspect: 2.5, badge: CAMPAIGNS.has(id) ? '${doneOf(id).where((x) => x).length}/${STORY.i('levels')}' : 'قريباً',
-            onTap: CAMPAIGNS.has(id) ? () => setState(() { campaign = id; view = 'levels'; }) : () {})),
+            aspect: 2.5, badge: !CAMPAIGNS.has(id) ? 'قريباً' : !Wallet.hasSide(id) ? '🔒 ${SHOP.side}'
+                : '${doneOf(id).where((x) => x).length}/${STORY.i('levels')}',
+            onTap: CAMPAIGNS.has(id) ? () => _open(id) : () {})),
     ]),
     const SizedBox(height: 8),
     WideButton('رجوع', () => Navigator.pop(context), ghost: true),

@@ -13,6 +13,7 @@ import 'ui/match_screen.dart';
 import 'ui/menus.dart';
 import 'ui/migrate.dart';
 import 'ui/prefs.dart';
+import 'ui/wallet.dart';
 import 'ui/widgets.dart';
 
 Future<void> main() async {
@@ -27,6 +28,7 @@ Future<void> main() async {
   watchDartErrors();          // أخطاء كود اللعبة تُحفظ وتُعرض عند الفتح التالي (ui/crash_report.dart، 2.1.5)
   await migrateOldSave();     // أول تشغيل فوق اللعبة القديمة: إحصائياتها وتقدمها وإعداداتها (ui/migrate.dart)
   Settings.load();
+  Wallet.load();              // الذهب والمشتريات (2.12.0)
   await GameSound.init();
   GameSound.intro();
   CpuGuard.start();           // حارس المعالج (2.8.0): وقت اللعبة على المعالج، وإيقاع اللعب ينزل إن تجاوزت حصتها
