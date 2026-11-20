@@ -118,6 +118,13 @@ const SHOP = (city: 500, side: 800, skin: 250,
     survival: {'easy': 5, 'medium': 10, 'hard': 25, 'insane': 35}, survivalEvery: 3,
     skinStory: ['hard', 'insane'], startGold: 0);
 
+// --- المكافآت اليومية والعروض (2.14.0، بطلب المستخدم، GAME_SPEC 18.18ب): تقويم days يوماً، يوم واحد لكل تاريخ: gold ذهباً، وكل
+// every أيام weekGold ومضاعف لذهب المباريات (×doublerMul) doublerHours ساعة، والأخير عصابة ومظهر وخريطة عشوائياً (وما تملكه منها
+// بسعره ذهباً). من فاته يوم يكمل من يومه، وبعد الأخير يعود التقويم إلى أوله. والعروض من التاريخ وحده: كل يوم dayMaps خرائط
+// وdayGangs عصابات بـ −dayPercent% حتى منتصف الليل، وشيء واحد بـ −shortPercent% يتبدل كل shortHours ساعة ---
+const DAILY = (days: 30, gold: 50, every: 7, weekGold: 100, doublerHours: 12, doublerMul: 2);
+const OFFERS = (dayPercent: 20, dayMaps: 2, dayGangs: 1, shortPercent: 40, shortHours: 12);
+
 // --- الإنجازات (2.13.0، بطلب المستخدم، GAME_SPEC 18.18ج): جائزة كل درجة بالذهب (والمجنونة جوهرة تشتري أي شيء واحد مجاناً)،
 // وأهداف الإنجازات بأسمائها في lib/ui/achievements.dart ---
 const ACH = (rewards: {'easy': 25, 'medium': 70, 'hard': 120}, gems: 1,

@@ -8,7 +8,7 @@ import 'package:flutter/scheduler.dart';
 
 import '../i18n/tr.dart';
 import '../core/cfg.dart';
-import '../config.dart' show PACE, RETIRED_CITIES, SHOP;
+import '../config.dart' show PACE, RETIRED_CITIES, OFFERS;
 import '../core/fmath.dart';
 import '../data/campaigns.dart';
 import '../data/cities.dart';
@@ -26,6 +26,7 @@ import 'lan_screen.dart';
 import 'migrate.dart' show migrated;
 import 'match_screen.dart';
 import 'crash_report.dart';
+import 'daily.dart';
 import 'prefs.dart';
 import 'showcase.dart';
 import 'story_screen.dart';
@@ -260,7 +261,7 @@ class _SidePickerState extends State<_SidePicker> {
 
   // قفل ما لا يملكه وسعره: النخبة تحتاج عصابتها أولاً
   String? _lock(String g) => ownsSide(g) ? null
-      : _isElite(g) ? (Wallet.hasSide(_baseSide(g)) ? '🔒 ${SHOP.skin}' : '🔒') : '🔒 ${SHOP.side}';
+      : _isElite(g) ? (Wallet.hasSide(_baseSide(g)) ? '🔒 ${Wallet.price('skin', _baseSide(g))}' : '🔒') : '🔒 ${Wallet.price('side', g)}';
   Future<void> _buy() async {
     final elite = _isElite(chosen), base = _baseSide(chosen);
     final ok = await buyDialog(context, elite ? 'skin' : 'side', base, sideName(chosen),
@@ -284,7 +285,11 @@ class _MainMenuState extends State<MainMenu> {
     super.initState();
     if (_reported) return;
     _reported = true;
-    pendingCrashReport().then((text) { if (text != null && mounted) showCrashReport(context, text); });
+    // ثم المكافأة اليومية إن لم تُستلم اليوم (2.14.0): تُفتح وحدها مرة عند التشغيل
+    pendingCrashReport().then((text) {
+      if (!mounted) return;
+      if (text != null) { showCrashReport(context, text); } else if (Daily.ready) { _go(const DailyScreen()); }
+    });
   }
 
   Future<void> _go(Widget screen) => Navigator.of(context).push(PageRouteBuilder(pageBuilder: (_, _, _) => screen,
@@ -329,42 +334,67 @@ class _MainMenuState extends State<MainMenu> {
       PositionedDirectional(end: 14, top: 12, child: SafeArea(child: Snap(child: Row(children: [
         const GoldChip(size: 16),
         const SizedBox(width: 10),
+        RoundButton(Icons.calendar_month_rounded, 'المكافآت', () => _go(const DailyScreen()), dot: Daily.ready),
         RoundButton(Icons.settings_rounded, 'الإعدادات', () => _go(const SettingsScreen())),
         RoundButton(Icons.bar_chart_rounded, 'الإحصائيات', () => _go(const StatsScreen())),
         RoundButton(Icons.language_rounded, 'اللغة', () => pickLanguage(context)),
       ])))),
-      PositionedDirectional(end: 18, bottom: 14, child: SafeArea(child: Snap(child: _OfferCard(onTap: (side) => _go(StoreScreen(section: 'skins', side: side)))))),
+      PositionedDirectional(end: 18, bottom: 14, child: SafeArea(child: Snap(child: _OfferCard(onTap: () => _go(const StoreScreen(section: 'offers')))))),
     ]));
   }
 }
 
-// بطاقة المتجر في القائمة (مكان قائمة العروض حين تُبنى): مظهر نخبة يتبدل كل يوم، ولمسها يفتحه في المتجر
-class _OfferCard extends StatelessWidget {
-  final ValueChanged<String> onTap;
+// بطاقة العروض في القائمة (2.14.0، GAME_SPEC 18.18ب): العرض السريع بصورته وسعره والزمن الباقي (تتحدث كل نصف دقيقة)، ولمسها
+// يفتح قسم العروض في المتجر
+class _OfferCard extends StatefulWidget {
+  final VoidCallback onTap;
   const _OfferCard({required this.onTap});
   @override
+  State<_OfferCard> createState() => _OfferCardState();
+}
+
+class _OfferCardState extends State<_OfferCard> {
+  Timer? _tick;
+  @override
+  void initState() {
+    super.initState();
+    _tick = Timer.periodic(const Duration(seconds: 30), (_) { if (mounted) setState(() {}); });
+  }
+  @override
+  void dispose() {
+    _tick?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final elites = _eliteIds;
-    if (elites.isEmpty) return const SizedBox();
-    final side = elites[DateTime.now().difference(DateTime(2026)).inDays % elites.length];
-    return GestureDetector(onTap: () { sound('ui_tap'); onTap(side); }, child: Container(
+    final (kind, id) = Offers.flash();
+    final name = kind == 'city' ? 'خريطة ${cityShort(id)}' : kind == 'skin' ? 'مظهر ${sideName('${id}_elite')}' : sideName(id);
+    final left = hoursLeft(Offers.flashLeft());
+    return GestureDetector(onTap: () { sound('ui_tap'); widget.onTap(); }, child: Container(
       width: 250, height: 92, clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(borderRadius: BorderRadius.circular(14), border: Border.all(color: gold, width: 1.5),
+      decoration: BoxDecoration(borderRadius: BorderRadius.circular(14), border: Border.all(color: offerColor, width: 1.5),
           gradient: const LinearGradient(begin: AlignmentDirectional.centerStart, end: AlignmentDirectional.centerEnd,
-              colors: [Color(0xF2281E14), Color(0xF2543C1C)]),
+              colors: [Color(0xF2281E14), Color(0xF25A2E14)]),
           boxShadow: const [BoxShadow(color: Color(0x99000000), blurRadius: 12, offset: Offset(0, 4))]),
       child: Stack(children: [
-        PositionedDirectional(end: 6, bottom: -24, child: ClipRect(child: Align(alignment: Alignment.centerLeft, widthFactor: 0.25,
-            child: Image.asset('assets/thumbs/side_$side.webp', height: 124, filterQuality: FilterQuality.medium)))),
+        if (kind == 'city') ...[
+          PositionedDirectional(end: 0, top: 0, bottom: 0, width: 104, child: Image.asset('assets/thumbs/city_$id.webp', fit: BoxFit.cover)),
+          const PositionedDirectional(end: 54, top: 0, bottom: 0, width: 50, child: DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(
+              begin: AlignmentDirectional.centerStart, end: AlignmentDirectional.centerEnd, colors: [Color(0xF2402614), Color(0x00402614)])))),
+        ] else PositionedDirectional(end: 6, bottom: -24, child: ClipRect(child: Align(alignment: Alignment.centerLeft, widthFactor: 0.25,
+            child: Image.asset('assets/thumbs/side_${kind == 'skin' ? '${id}_elite' : id}.webp', height: 124, filterQuality: FilterQuality.medium)))),
         PositionedDirectional(start: 12, top: 8, end: 84, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Row(children: [Icon(Icons.card_giftcard_rounded, size: 15, color: gold), SizedBox(width: 5),
-            Text('العروض', style: TextStyle(color: gold, fontSize: 13, fontWeight: FontWeight.w700))]),
-          Text('مظهر ${sideName(side)}', maxLines: 1, overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: ink, fontSize: 15.5, fontWeight: FontWeight.w700, height: 1.25)),
-          const SizedBox(height: 5),
-          Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+          Row(children: [const Icon(Icons.local_offer_rounded, size: 15, color: offerColor), const SizedBox(width: 5),
+            Text('عرض سريع: خصم ${OFFERS.shortPercent}%', style: const TextStyle(color: offerColor, fontSize: 13, fontWeight: FontWeight.w700))]),
+          Text(name, maxLines: 1, overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: ink, fontSize: 15, fontWeight: FontWeight.w700, height: 1.25)),
+          Text(Wallet.has(kind, id) ? 'تملكه • باقي $left' : '${Wallet.price(kind, id)} ذهب بدل ${Wallet.basePrice(kind)} • باقي $left',
+              maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Color(0xFFE8C9A8), fontSize: 11.5)),
+          const SizedBox(height: 3),
+          Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 1),
               decoration: BoxDecoration(gradient: goldGrad, borderRadius: BorderRadius.circular(9), border: Border.all(color: const Color(0xFFFFE6A8))),
-              child: const Text('المتجر', style: TextStyle(color: Color(0xFF1B140C), fontSize: 13, fontWeight: FontWeight.w700))),
+              child: const Text('العروض', style: TextStyle(color: Color(0xFF1B140C), fontSize: 12.5, fontWeight: FontWeight.w700))),
         ])),
       ]),
     ));
@@ -575,7 +605,7 @@ class _SetupScreenState extends State<SetupScreen> {
         (REGIONS.m(r).s('name'), [
           for (final c in REGIONS.m(r).l('cities').cast<String>()) if (!RETIRED_CITIES.contains(c))
             PickCard(title: cityShort(c), note: cityName(c), image: 'assets/thumbs/city_$c.webp', selected: m.city == c,
-                badge: Wallet.hasCity(c) ? null : '🔒 ${SHOP.city}',
+                badge: Wallet.hasCity(c) ? null : '🔒 ${Wallet.price('city', c)}',
                 onTap: () async {   // مدينة لا تملكها: تُشترى من هنا (2.12.0)
                   if (!Wallet.hasCity(c) && !await buyDialog(context, 'city', c, cityShort(c))) return;
                   if (mounted) Navigator.pop(context, c);
@@ -936,21 +966,40 @@ class _StoreScreenState extends State<StoreScreen> {
   String chosenMap = 'arab';
   int region = 0;
   bool normalLook = false;   // في المظاهر: الشكل العادي للمقارنة
+  String offerKind = 'city';   // نوع المختار في قسم العروض (2.14.0): خريطة أو عصابة أو مظهر
+
+  @override
+  void initState() {
+    super.initState();
+    if (section == 'offers') _pickOffer(Offers.flash());
+  }
+  // العرض السريع أولاً ثم عروض اليوم
+  List<(String, String)> get _offers { final f = Offers.flash(); return [f, for (final o in Offers.today()) if (o != f) o]; }
+  void _pickOffer((String, String) o) {
+    offerKind = o.$1;
+    normalLook = false;
+    if (o.$1 == 'city') { chosenMap = o.$2; } else { chosenSide = o.$1 == 'skin' ? '${o.$2}_elite' : o.$2; }
+  }
 
   static const _cardFrame = Color(0x40E2B55A), _freeInk = Color(0xFF9FD07C);
-  // ما على الخانة (2.12.0): مجانية أو تملكها (أخضر)، أو السعر بالذهب، والمظهر مقفل حتى تُشترى عصابته
-  (String, bool) _cityTag(String c) => Wallet.freeCity(c) ? ('مجانية', true) : Wallet.hasCity(c) ? ('تملكها', true) : ('${SHOP.city} ذهب', false);
-  (String, bool) _sideTag(String s) {
+  // ما على الخانة (2.12.0): مجانية أو تملكها (أخضر)، أو السعر بالذهب (وبرتقالي بالعرض، 2.14.0)، والمظهر مقفل حتى تُشترى عصابته
+  (String, int) _priceTag(String kind, String id) {
+    final off = Offers.percent(kind, id);
+    return off > 0 ? ('خصم $off% • ${Wallet.price(kind, id)} ذهب', 2) : ('${Wallet.price(kind, id)} ذهب', 0);
+  }
+  (String, int) _cityTag(String c) => Wallet.freeCity(c) ? ('مجانية', 1) : Wallet.hasCity(c) ? ('تملكها', 1) : _priceTag('city', c);
+  (String, int) _sideTag(String s) {
     if (_isElite(s)) {
       final n = _baseSide(s);
-      return Wallet.hasSkin(n) ? ('تملكها', true) : !Wallet.hasSide(n) ? ('🔒 العصابة أولاً', false) : ('${SHOP.skin} ذهب', false);
+      return Wallet.hasSkin(n) ? ('تملكها', 1) : !Wallet.hasSide(n) ? ('🔒 العصابة أولاً', 0) : _priceTag('skin', n);
     }
-    return Wallet.freeSide(s) ? ('مجانية', true) : Wallet.hasSide(s) ? ('تملكها', true) : ('${SHOP.side} ذهب', false);
+    return Wallet.freeSide(s) ? ('مجانية', 1) : Wallet.hasSide(s) ? ('تملكها', 1) : _priceTag('side', s);
   }
 
   @override
   Widget build(BuildContext context) {
-    final groups = section == 'maps'
+    final offers = section == 'offers';
+    final groups = offers ? [('العروض', [for (final o in _offers) '${o.$1}:${o.$2}'])] : section == 'maps'
         ? [for (final r in REGIONS.l('order').cast<String>()) (REGIONS.m(r).s('name'), [for (final c in REGIONS.m(r).l('cities').cast<String>()) if (!RETIRED_CITIES.contains(c)) c])]
         : section == 'skins'
             ? [for (final r in REGIONS.l('order').cast<String>()) (REGIONS.m(r).s('name'),
@@ -971,15 +1020,18 @@ class _StoreScreenState extends State<StoreScreen> {
           const SizedBox(width: 10),
           const GoldTitle('المتجر', size: 26),
           const SizedBox(width: 16),
-          for (final (k, label, icon, n) in [('maps', 'الخرائط', Icons.map_rounded, maps),
-              ('sides', 'العصابات', Icons.groups_rounded, _nationIds.length + _gangIds.length),
-              ('skins', 'المظاهر', Icons.checkroom_rounded, _eliteIds.length)])
-            Padding(padding: const EdgeInsetsDirectional.only(end: 8), child: Pill(icon, '$label ($n)', on: section == k, onTap: () => setState(() {
-              section = k; region = 0; normalLook = false;
-              if (k == 'skins' && !_isElite(chosenSide)) chosenSide = _eliteIds.first;
-              if (k == 'sides' && _isElite(chosenSide)) chosenSide = 'crows';
-            }))),
-          const Spacer(),
+          // الأقسام تُمرَّر في الشاشة الضيقة (أربعة أقسام منذ العروض)
+          Expanded(child: SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [
+            for (final (k, label, icon) in const [('offers', 'العروض', Icons.local_offer_rounded), ('maps', 'الخرائط', Icons.map_rounded),
+                ('sides', 'العصابات', Icons.groups_rounded), ('skins', 'المظاهر', Icons.checkroom_rounded)])
+              Padding(padding: const EdgeInsetsDirectional.only(end: 8), child: Pill(icon, label, on: section == k, onTap: () => setState(() {
+                section = k; region = 0; normalLook = false;
+                if (k == 'offers') _pickOffer(Offers.flash());
+                if (k == 'skins' && !_isElite(chosenSide)) chosenSide = _eliteIds.first;
+                if (k == 'sides' && _isElite(chosenSide)) chosenSide = 'crows';
+              }))),
+          ]))),
+          const SizedBox(width: 8),
           const GoldChip(size: 16),
           const SizedBox(width: 10),
           Pill(Icons.arrow_back_rounded, 'رجوع', on: false, onTap: () => Navigator.pop(context)),
@@ -987,27 +1039,30 @@ class _StoreScreenState extends State<StoreScreen> {
         const SizedBox(height: 8),
         Expanded(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Expanded(child: Column(children: [
+            if (offers) Align(alignment: AlignmentDirectional.centerStart, child: Text(
+                'عرض سريع بخصم ${OFFERS.shortPercent}% ينتهي بعد ${hoursLeft(Offers.flashLeft())} • عروض اليوم بخصم ${OFFERS.dayPercent}% تنتهي بعد ${hoursLeft(Offers.dayLeft())}',
+                style: const TextStyle(color: offerColor, fontSize: 13, fontWeight: FontWeight.w700))),
             if (groups.length > 1) SizedBox(height: 32, child: ListView(scrollDirection: Axis.horizontal, children: [
               for (var k = 0; k < groups.length; k++) Padding(padding: const EdgeInsetsDirectional.only(end: 6),
                   child: Pill(null, '${groups[k].$1} ${groups[k].$2.length}', on: region == k, small: true, onTap: () => setState(() => region = k))),
             ])),
             const SizedBox(height: 8),
             Expanded(child: GridView.extent(maxCrossAxisExtent: 200, childAspectRatio: 1.55, mainAxisSpacing: 10, crossAxisSpacing: 10,
-                children: [for (final it in items) section == 'maps' ? _mapCard(it) : _sideCard(it)])),
+                children: [for (final it in items) offers ? _offerCard(it) : section == 'maps' ? _mapCard(it) : _sideCard(it)])),
           ])),
           const SizedBox(width: 12),
           SizedBox(width: 330, child: Container(clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0x80E2B55A)),
                 gradient: const LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0xF2302519), Color(0xF2171210)]),
                 boxShadow: const [BoxShadow(color: Color(0x99000000), blurRadius: 14, offset: Offset(0, 4))]),
-            child: section == 'maps' ? _mapShow() : _sideShow())),
+            child: section == 'maps' || (offers && offerKind == 'city') ? _mapShow() : _sideShow())),
         ])),
       ]))),
     ));
   }
 
   // --- الخانات ---
-  Widget _card({required bool selected, required (String, bool) tag, required VoidCallback onTap, required List<Widget> children}) =>
+  Widget _card({required bool selected, required (String, int) tag, required VoidCallback onTap, required List<Widget> children}) =>
       GestureDetector(onTap: () { sound('ui_tap'); onTap(); }, child: Snap(margin: 20, child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
         decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), border: Border.all(color: selected ? gold : _cardFrame, width: selected ? 2 : 1),
@@ -1015,9 +1070,9 @@ class _StoreScreenState extends State<StoreScreen> {
         child: ClipRRect(borderRadius: BorderRadius.circular(11), child: Stack(fit: StackFit.expand, children: [
           ...children,
           PositionedDirectional(top: 6, start: 6, child: Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
-              decoration: BoxDecoration(color: tag.$2 ? const Color(0xE6304F23) : const Color(0xE64A3618), borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: tag.$2 ? const Color(0x809FD07C) : const Color(0x80E2B55A))),
-              child: Text(tag.$1, style: TextStyle(fontSize: 10, color: tag.$2 ? _freeInk : gold)))),
+              decoration: BoxDecoration(color: const [Color(0xE64A3618), Color(0xE6304F23), Color(0xF05A2410)][tag.$2], borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const [Color(0x80E2B55A), Color(0x809FD07C), offerColor][tag.$2])),
+              child: Text(tag.$1, style: TextStyle(fontSize: 10, color: const [gold, _freeInk, Color(0xFFFFC09A)][tag.$2], fontWeight: tag.$2 == 2 ? FontWeight.w700 : null)))),
         ])),
       )));
 
@@ -1030,13 +1085,21 @@ class _StoreScreenState extends State<StoreScreen> {
       Text(note, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Color(0xFFCBBD9F), fontSize: 10.5)),
     ]));
 
-  Widget _mapCard(String c) => _card(selected: c == chosenMap, tag: _cityTag(c), onTap: () => setState(() => chosenMap = c), children: [
+  // خانة عرض: 'نوع:معرّف' بخانة الخريطة أو العصابة أو المظهر
+  Widget _offerCard(String key) {
+    final i = key.indexOf(':'), kind = key.substring(0, i), id = key.substring(i + 1);
+    return kind == 'city' ? _mapCard(id) : _sideCard(kind == 'skin' ? '${id}_elite' : id);
+  }
+
+  Widget _mapCard(String c) => _card(selected: c == chosenMap && (section != 'offers' || offerKind == 'city'), tag: _cityTag(c),
+      onTap: () => setState(() { chosenMap = c; offerKind = 'city'; }), children: [
     Image.asset('assets/thumbs/city_$c.webp', fit: BoxFit.cover),
     _fade,
     _caption(cityShort(c), cityName(c), 10),
   ]);
 
-  Widget _sideCard(String s) => _card(selected: s == chosenSide, tag: _sideTag(s), onTap: () => setState(() { chosenSide = s; normalLook = false; }), children: [
+  Widget _sideCard(String s) => _card(selected: s == chosenSide && (section != 'offers' || offerKind != 'city'), tag: _sideTag(s),
+      onTap: () => setState(() { chosenSide = s; normalLook = false; offerKind = _isElite(s) ? 'skin' : 'side'; }), children: [
     const DecoratedBox(decoration: BoxDecoration(gradient: RadialGradient(center: Alignment(-0.55, 0.25), radius: 0.95,
         colors: [Color(0xFF5A4326), Color(0xFF17120D)]))),
     PositionedDirectional(end: 2, top: 4, bottom: -2, child: heroThumb(s)),
@@ -1058,9 +1121,12 @@ class _StoreScreenState extends State<StoreScreen> {
     if (Wallet.has(kind, id)) return _status('تملكها • تختارها في قائمة اللعب');
     final block = Wallet.blocked(kind, id);
     return Padding(padding: const EdgeInsets.only(top: 4, bottom: 6), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      WideButton('شراء بـ ${Wallet.price(kind)} ذهب', block != null && !Wallet.gemBuys(kind, id) ? null : () async {   // والجوهرة تشتري بلا ذهب
+      WideButton('شراء بـ ${Wallet.price(kind, id)} ذهب', block != null && !Wallet.gemBuys(kind, id) ? null : () async {   // والجوهرة تشتري بلا ذهب
         if (await buyDialog(context, kind, id, name, note: note) && mounted) setState(() {});
       }, primary: true, width: double.infinity),
+      if (Offers.percent(kind, id) > 0) Text(
+          'خصم ${Offers.percent(kind, id)}% بدل ${Wallet.basePrice(kind)} ذهب • ينتهي بعد ${hoursLeft(Offers.flash() == (kind, id) ? Offers.flashLeft() : Offers.dayLeft())}',
+          textAlign: TextAlign.center, style: const TextStyle(color: offerColor, fontSize: 11.5, fontWeight: FontWeight.w700)),
       if (block != null) Text(block, textAlign: TextAlign.center, style: const TextStyle(color: danger, fontSize: 11.5)),
       if (note != null) Text(note, textAlign: TextAlign.center, style: const TextStyle(color: dim, fontSize: 11)),
     ]));

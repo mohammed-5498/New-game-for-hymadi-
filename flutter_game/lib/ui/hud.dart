@@ -645,7 +645,7 @@ class _End extends StatelessWidget {
     ],
     const SizedBox(height: 8),
     SizedBox(width: 560, child: Wrap(spacing: 8, runSpacing: 8, alignment: WrapAlignment.center, children: [
-      if (screen.goldEarned > 0) StatCard('ذهب ربحته', '+${screen.goldEarned}'),
+      if (screen.goldEarned > 0) StatCard('ذهب ربحته', '+${screen.goldEarned}${screen.goldDoubled ? ' (×2)' : ''}'),
       StatCard('مدة المباراة', clock(r.duration)),
       StatCard('أكبر عدد أحياء', '${r.maxDistricts}'),
       StatCard('أعداء قتلتهم', '${r.kills}'),

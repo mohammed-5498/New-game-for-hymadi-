@@ -10,7 +10,7 @@ import 'package:flutter/scheduler.dart';
 
 import '../i18n/tr.dart';
 import '../core/cfg.dart';
-import '../config.dart' show PACE, FOG, FLAG_BAKE;
+import '../config.dart' show PACE, FOG, FLAG_BAKE, DAILY;
 import '../core/fmath.dart';
 import '../data/js_config.dart';
 import '../audio/sound.dart';
@@ -39,6 +39,7 @@ import '../render/occlusion.dart';
 import 'achievements.dart';
 import 'cpu_guard.dart';
 import 'crash_report.dart' show crumb;
+import 'daily.dart';
 import 'hud.dart';
 import 'menus.dart';
 import 'prefs.dart';
@@ -63,6 +64,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
   bool _recorded = false;
   ({String title, List<(String, String)> lines, String reward, String ending, String gift, String next})? storyResult;
   int goldEarned = 0;             // ذهب هذه المباراة (2.12.0)
+  bool goldDoubled = false;       // بمضاعف الذهب من المكافآت اليومية (2.14.0)
   String goldNote = '';           // لماذا لا ذهب لفوز (2.13.0)
   final newAch = <Ach>[];         // إنجازات هذه المباراة (2.13.0)
   late bool _resumePending = widget.resume;
@@ -374,6 +376,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
   void restart() {
     storyResult = null;
     goldEarned = 0;
+    goldDoubled = false;
     goldNote = '';
     newAch.clear();
     _rest?.cancel();
@@ -464,6 +467,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     if (human != null && s.lanRole == null) {
       final lineup = lineupOf(s), fog = settings['fog'] == true;
       goldEarned = s.mode == 'survival' ? Wallet.survivalGold(modeOf(s).level, modeOf(s).wave) : r.won ? Wallet.matchGold(lineup, fog) : 0;
+      if (goldEarned > 0 && Daily.doubled) { goldEarned *= DAILY.doublerMul; goldDoubled = true; }   // مضاعف الذهب (2.14.0)
       if (goldEarned > 0) Wallet.earn(goldEarned);
       if (r.won && s.mode != 'survival' && lineup.foes.isNotEmpty && !lineup.fair) goldNote = 'بلا ذهب: فريقك أكبر من فرق الأعداء أو حليفك أقوى منها';
       newAch.addAll(Achievements.ended(s, r, lineup, fog));

@@ -22,13 +22,14 @@ void main() {
     expect(Wallet.blocked('skin', 'yemen'), isNotNull, reason: 'المظهر بعد عصابته');
     expect(ownsSide('yemen_elite'), isFalse);
 
+    final pCity = Wallet.price('city', 'paris'), pSide = Wallet.price('side', 'yemen'), pSkin = Wallet.price('skin', 'yemen');   // وفيها عروض اليوم
     expect(Wallet.buy('city', 'paris'), isTrue);
-    expect(Wallet.gold, start - SHOP.city);
+    expect(Wallet.gold, start - pCity);
     expect(Wallet.buy('city', 'paris'), isFalse, reason: 'لا يُشترى مرتين');
     expect(Wallet.buy('side', 'yemen'), isTrue);
     expect(Wallet.buy('skin', 'yemen'), isTrue);
     expect(ownsSide('yemen_elite'), isTrue);
-    expect(Wallet.gold, start - SHOP.city - SHOP.side - SHOP.skin);
+    expect(Wallet.gold, start - pCity - pSide - pSkin);
 
     Wallet.gold = 100;
     Wallet.save();

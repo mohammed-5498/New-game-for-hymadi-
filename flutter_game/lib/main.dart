@@ -14,6 +14,7 @@ import 'ui/menus.dart';
 import 'ui/migrate.dart';
 import 'ui/prefs.dart';
 import 'ui/achievements.dart';
+import 'ui/daily.dart';
 import 'ui/wallet.dart';
 import 'ui/widgets.dart';
 
@@ -31,6 +32,7 @@ Future<void> main() async {
   Settings.load();
   Wallet.load();              // الذهب والمشتريات (2.12.0)
   Achievements.load();        // الإنجازات (2.13.0)
+  Daily.load();               // المكافآت اليومية (2.14.0)
   await GameSound.init();
   GameSound.intro();
   CpuGuard.start();           // حارس المعالج (2.8.0): وقت اللعبة على المعالج، وإيقاع اللعب ينزل إن تجاوزت حصتها

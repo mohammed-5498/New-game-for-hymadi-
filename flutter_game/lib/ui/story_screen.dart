@@ -136,7 +136,7 @@ class _StoryScreenState extends State<StoryScreen> {
     Wrap(spacing: 8, runSpacing: 8, alignment: WrapAlignment.center, children: [
       for (final id in nations.l('order').cast<String>())
         SizedBox(width: 170, child: PickCard(title: nations.m(id).s('gangName'), note: nations.m(id).s('name'), image: 'assets/thumbs/side_$id.webp',
-            aspect: 2.5, badge: !CAMPAIGNS.has(id) ? 'قريباً' : !Wallet.hasSide(id) ? '🔒 ${SHOP.side}'
+            aspect: 2.5, badge: !CAMPAIGNS.has(id) ? 'قريباً' : !Wallet.hasSide(id) ? '🔒 ${Wallet.price('side', id)}'
                 : '${doneOf(id).where((x) => x).length}/${STORY.i('levels')}',
             onTap: CAMPAIGNS.has(id) ? () => _open(id) : () {})),
     ]),

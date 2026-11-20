@@ -156,19 +156,24 @@ class MenuButton extends StatelessWidget {
   );
 }
 
-// زر دائري بأيقونة وكلمة تحته (الإعدادات والإحصائيات واللغة)
+// زر دائري بأيقونة وكلمة تحته (الإعدادات والإحصائيات واللغة والمكافآت)، ونقطة حمراء إن كان فيه ما ينتظر (dot)
 class RoundButton extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
-  const RoundButton(this.icon, this.label, this.onTap, {super.key});
+  final bool dot;
+  const RoundButton(this.icon, this.label, this.onTap, {super.key, this.dot = false});
   @override
   Widget build(BuildContext context) => SizedBox(width: 76, child: Column(mainAxisSize: MainAxisSize.min, children: [
-    Material(type: MaterialType.transparency, child: Ink(
-      width: 42, height: 42,
-      decoration: BoxDecoration(color: const Color(0xE01E1710), shape: BoxShape.circle,
-          border: Border.all(color: const Color(0xA6E2B55A), width: 1.5), boxShadow: _shadow),
-      child: InkWell(customBorder: const CircleBorder(), onTap: () { sound('ui_tap'); onTap(); }, child: Icon(icon, size: 21, color: gold)))),
+    Stack(clipBehavior: Clip.none, children: [
+      Material(type: MaterialType.transparency, child: Ink(
+        width: 42, height: 42,
+        decoration: BoxDecoration(color: const Color(0xE01E1710), shape: BoxShape.circle,
+            border: Border.all(color: const Color(0xA6E2B55A), width: 1.5), boxShadow: _shadow),
+        child: InkWell(customBorder: const CircleBorder(), onTap: () { sound('ui_tap'); onTap(); }, child: Icon(icon, size: 21, color: gold)))),
+      if (dot) PositionedDirectional(top: -1, end: -1, child: Container(width: 13, height: 13, decoration: BoxDecoration(
+          color: const Color(0xFFE5483B), shape: BoxShape.circle, border: Border.all(color: const Color(0xFF1E1710), width: 2)))),
+    ]),
     const SizedBox(height: 2),
     Text(label, maxLines: 1, style: const TextStyle(color: Color(0xFFEADCC2), fontSize: 11.5, shadows: [Shadow(blurRadius: 3)])),
   ]));
