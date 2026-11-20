@@ -4,10 +4,62 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart' hide Text;
+import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart' show Ticker;
 
 import '../audio/sound.dart';
 import '../i18n/tr.dart';
+
+// صورة جاهزة لجزء من الواجهة (2.8.0، تخفيف المعالج): محرك الرسم (Impeller) يرسم الواجهة كلها من أولها في كل إطار، فالجزء
+// الذي لا يتغير إلا قليلاً (شريط القوة والأزرار والزمن ولوحة القائمة) يُرسم صورة واحدة حين يتغير ما فيه، وتُعرض الصورة بين
+// ذلك بأمر رسم واحد. حاجز رسم: أي تغيير تحته (وموجة اللمسة) يعيد رسمه فتُصنع صورته من جديد، واللمس يصل إلى ما تحته كما هو.
+// لا يوضع فوق ما يتحرك كل إطار، ولا فوق حاجز رسم آخر (تغييره وحده لا يصل إليه)
+class Snap extends SingleChildRenderObjectWidget {
+  final double margin;             // ما يرسمه خارج حدوده (ظل البطاقة) يدخل الصورة بهذا الهامش
+  const Snap({super.key, this.margin = 0, super.child});
+  @override
+  RenderObject createRenderObject(BuildContext context) => RenderSnap(MediaQuery.devicePixelRatioOf(context), margin);
+  @override
+  void updateRenderObject(BuildContext context, RenderSnap renderObject) => renderObject
+    ..dpr = MediaQuery.devicePixelRatioOf(context)
+    ..margin = margin;
+}
+
+class RenderSnap extends RenderProxyBox {
+  RenderSnap(this._dpr, this._margin);
+  double _dpr, _margin;
+  set dpr(double v) { if (v != _dpr) { _dpr = v; markNeedsPaint(); } }
+  set margin(double v) { if (v != _margin) { _margin = v; markNeedsPaint(); } }
+  ui.Image? _img;
+  static final _paint = Paint()..filterQuality = FilterQuality.low;
+
+  @override
+  bool get isRepaintBoundary => true;
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    _img?.dispose();
+    _img = null;
+    if (size.isEmpty || child == null) return;
+    final box = (Offset.zero & size).inflate(_margin), layer = OffsetLayer(), ctx = PaintingContext(layer, box);
+    super.paint(ctx, Offset.zero);
+    // ignore: invalid_use_of_protected_member
+    ctx.stopRecordingIfNeeded();
+    final img = _img = layer.toImageSync(box, pixelRatio: _dpr);
+    layer.dispose();
+    // على نقاط الشاشة نفسها: مكانه بنقاط الجهاز قد يقع بين نقطتين (2.625 نقطة لكل وحدة)، فيُزاح أقل من نقطة لئلا يغبش النص
+    final g = localToGlobal(box.topLeft) * _dpr;
+    final at = offset + box.topLeft - Offset(g.dx - g.dx.floorToDouble(), g.dy - g.dy.floorToDouble()) / _dpr;
+    context.canvas.drawImageRect(img, Rect.fromLTWH(0, 0, img.width.toDouble(), img.height.toDouble()),
+        at & Size(img.width / _dpr, img.height / _dpr), _paint);
+  }
+
+  @override
+  void dispose() {
+    _img?.dispose();
+    super.dispose();
+  }
+}
 
 const gold = Color(0xFFE2B55A), panel = Color(0xE6261E17), ink = Color(0xFFF2E6CF), dim = Color(0xFF9C8F7A);
 const deep = Color(0xFF15110D), card = Color(0xFF2E241B), cardOn = Color(0xFF4A3A26), danger = Color(0xFFE07060);
@@ -250,7 +302,8 @@ class PickCard extends StatelessWidget {
   final double aspect;
   const PickCard({super.key, required this.title, this.note, this.image, this.badge, this.selected = false, required this.onTap, this.aspect = 2.9});
   @override
-  Widget build(BuildContext context) => Material(
+  // صورة جاهزة (Snap، 2.8.0): لوحة العصابات فيها شخصيات تتحرك، فكانت الخانات كلها تُرسم مع كل إطار
+  Widget build(BuildContext context) => Snap(child: Material(
     color: selected ? cardOn : card, borderRadius: BorderRadius.circular(10),
     child: InkWell(borderRadius: BorderRadius.circular(10), onTap: onTap, child: Container(
       decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), border: Border.all(color: selected ? gold : Colors.transparent, width: 1.5)),
@@ -269,7 +322,7 @@ class PickCard extends StatelessWidget {
         ])),
       ]),
     )),
-  );
+  ));
 }
 
 // لوحة اختيار بتبويب لكل مجموعة (المناطق) وخانات في كل تبويب (picker.js)
@@ -308,6 +361,7 @@ final _hz = () {
 Timer? restTicker(Ticker t, double fps, BuildContext context) {
   if (fps >= _hz - 1) return null;
   t.muted = true;
+  if (fps <= 0) return null;            // لا إطار حتى يوقظه شيء (wakeTicker): الإيقاف والنهاية (2.8.0)
   return Timer(Duration(microseconds: (1e6 / fps - math.min(8000, 750000 / _hz)).round()), () => wakeTicker(t, context));
 }
 

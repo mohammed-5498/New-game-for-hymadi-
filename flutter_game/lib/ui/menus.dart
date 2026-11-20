@@ -273,8 +273,9 @@ class _MainMenuState extends State<MainMenu> {
       const Positioned.fill(child: DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(
           begin: AlignmentDirectional.centerStart, end: AlignmentDirectional.centerEnd,
           colors: [Color(0xED0C0906), Color(0xCC0C0906), Color(0x8C0C0906), Color(0x660C0906)], stops: [0, 0.34, 0.55, 1])))),   // والباقي أدكن قليلاً (2.6.0، بطلبه)
+      // اللوحة والأزرار والبطاقة صور جاهزة (Snap، 2.8.0): الخلفية تتحرك تحتها فكان كرت الشاشة يرسمها كلها مع كل إطار
       PositionedDirectional(start: 24, top: 0, bottom: 0, width: 300, child: SafeArea(child: Center(child: SingleChildScrollView(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
+          child: Snap(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
         Row(children: [
           const Emblem(size: 44),
           const SizedBox(width: 10),
@@ -290,13 +291,13 @@ class _MainMenuState extends State<MainMenu> {
         MenuButton(const SwordsIcon(), 'لعب', note: 'مباراة ضد البوتات بإعدادك', gilt: cont == null, onTap: () => _go(const SetupScreen())),
         MenuButton(const Icon(Icons.menu_book_rounded), 'القصة', note: 'حملة أبناء سبأ', onTap: () => _go(const StoryScreen())),
         MenuButton(const Icon(Icons.wifi_rounded), 'لعب محلي', note: 'مع الأصدقاء على نفس الواي فاي', onTap: () => _go(const LanScreen())),
-      ]))))),
-      PositionedDirectional(end: 14, top: 12, child: SafeArea(child: Row(children: [
+      ])))))),
+      PositionedDirectional(end: 14, top: 12, child: SafeArea(child: Snap(child: Row(children: [
         RoundButton(Icons.settings_rounded, 'الإعدادات', () => _go(const SettingsScreen())),
         RoundButton(Icons.bar_chart_rounded, 'الإحصائيات', () => _go(const StatsScreen())),
         RoundButton(Icons.language_rounded, 'اللغة', () => pickLanguage(context)),
-      ]))),
-      PositionedDirectional(end: 18, bottom: 14, child: SafeArea(child: _OfferCard(onTap: (side) => _go(StoreScreen(section: 'skins', side: side))))),
+      ])))),
+      PositionedDirectional(end: 18, bottom: 14, child: SafeArea(child: Snap(child: _OfferCard(onTap: (side) => _go(StoreScreen(section: 'skins', side: side)))))),
     ]));
   }
 }
@@ -416,7 +417,7 @@ class _MenuBackdropState extends State<MenuBackdrop> with SingleTickerProviderSt
     }
     _frame.value++;
     _rest?.cancel();
-    _rest = restTicker(_ticker, PACE.menuFps, context);   // 20 إطاراً فعلاً (كانت الشاشة تُركَّب 60)
+    _rest = restTicker(_ticker, PACE.menuFps, context);   // 12 إطاراً فعلاً (2.8.0، كانت 20؛ والكاميرا تنجرف ببطء)
   }
 
   @override
@@ -831,7 +832,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Text('${(Settings.music * 100).round()}%', style: const TextStyle(color: dim))]),
         Toggle('كتم كل الأصوات', Settings.mute, (v) => _set(() => Settings.mute = v)),
         Toggle('الكلمات الطائرة في القتال', Settings.pops, (v) => _set(() => Settings.pops = v)),
-        Toggle('توفير البطارية (30 إطاراً)', Settings.battery, (v) => _set(() => Settings.battery = v)),
+        Toggle('توفير البطارية (20 إطاراً)', Settings.battery, (v) => _set(() => Settings.battery = v)),
         Row(children: [const SizedBox(width: 110, child: Text('اللغة', style: TextStyle(color: ink))),
           for (final (code, name) in const [('ar', 'العربية'), ('en', 'English')])
             Padding(padding: const EdgeInsetsDirectional.only(end: 8), child: ChoiceChip(label: RawText(name), selected: Lang.code == code,
@@ -906,7 +907,8 @@ class _StoreScreenState extends State<StoreScreen> {
       decoration: const BoxDecoration(gradient: RadialGradient(center: Alignment(0.35, -0.5), radius: 1.35,
           colors: [Color(0xFF3B2D1D), Color(0xFF120E0A)])),
       child: SafeArea(child: Padding(padding: const EdgeInsets.fromLTRB(12, 8, 12, 10), child: Column(children: [
-        Row(children: [
+        // ما لا يتحرك صور جاهزة (Snap، 2.8.0): الشخصيات تتحرك في لوحة العرض فكان كرت الشاشة يرسم المتجر كله مع كل إطار
+        Snap(child: Row(children: [
           Container(width: 36, height: 36, decoration: BoxDecoration(shape: BoxShape.circle, gradient: goldGrad,
               border: Border.all(color: const Color(0xFFFFE6A8))),
               child: const Icon(Icons.storefront_rounded, size: 20, color: Color(0xFF2A1A08))),
@@ -923,7 +925,7 @@ class _StoreScreenState extends State<StoreScreen> {
             }))),
           const Spacer(),
           _Pill(Icons.arrow_back_rounded, 'رجوع', on: false, onTap: () => Navigator.pop(context)),
-        ]),
+        ])),
         const SizedBox(height: 8),
         Expanded(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Expanded(child: Column(children: [
@@ -948,7 +950,7 @@ class _StoreScreenState extends State<StoreScreen> {
 
   // --- الخانات ---
   Widget _card({required bool selected, required bool free, required VoidCallback onTap, required List<Widget> children}) =>
-      GestureDetector(onTap: () { sound('ui_tap'); onTap(); }, child: AnimatedContainer(
+      GestureDetector(onTap: () { sound('ui_tap'); onTap(); }, child: Snap(margin: 20, child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
         decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), border: Border.all(color: selected ? gold : _cardFrame, width: selected ? 2 : 1),
             boxShadow: [selected ? const BoxShadow(color: Color(0x80E2B55A), blurRadius: 12) : const BoxShadow(color: Color(0x80000000), blurRadius: 6, offset: Offset(0, 2))]),
@@ -959,7 +961,7 @@ class _StoreScreenState extends State<StoreScreen> {
                   border: Border.all(color: free ? const Color(0x809FD07C) : const Color(0x80E2B55A))),
               child: Text(free ? 'مجانية' : 'السعر لاحقاً', style: TextStyle(fontSize: 10, color: free ? _freeInk : gold)))),
         ])),
-      ));
+      )));
 
   static const _fade = DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter,
       colors: [Color(0x00000000), Color(0x59000000), Color(0xEB000000)], stops: [0.25, 0.55, 1])));
@@ -1006,7 +1008,7 @@ class _StoreScreenState extends State<StoreScreen> {
     final host = nations.l('order').cast<String>().where((n) => nations.m(n).s('city') == c);
     final f = CITY_FEATURES.m('desc')[CITY_FEATURES.m('cities')[c]], b = CITY_FEATURES.m('desc')[CITY_FEATURES.m('buildings')[c]];
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      SizedBox(height: 160, child: Stack(fit: StackFit.expand, children: [
+      SizedBox(height: 160, child: Snap(child: Stack(fit: StackFit.expand, children: [
         Image.asset('assets/thumbs/city_$c.webp', fit: BoxFit.cover),
         const DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter,
             colors: [Color(0x00171210), Color(0x8C1B150F), Color(0xFA2B2117)], stops: [0.3, 0.62, 1]))),
@@ -1014,14 +1016,14 @@ class _StoreScreenState extends State<StoreScreen> {
           GoldTitle(cityShort(c), size: 22),
           Text(cityName(c), style: const TextStyle(color: ink, fontSize: 12, shadows: [Shadow(blurRadius: 3)])),
         ])),
-      ])),
-      Expanded(child: SingleChildScrollView(padding: const EdgeInsets.fromLTRB(14, 6, 14, 4), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      ]))),
+      Expanded(child: SingleChildScrollView(padding: const EdgeInsets.fromLTRB(14, 6, 14, 4), child: Snap(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         _status(_freeCity(c)),
         _line(Icons.public_rounded, 'منطقتها: ${REGIONS.m(regionOfCity(c) ?? 'arabic').s('name')}'),
         if (host.isNotEmpty) _line(Icons.flag_rounded, 'مدينة أمة ${nations.m(host.first).s('name')}: مدينة المضيف حين تلعب بها.'),
         if (f != null) _line(Icons.auto_awesome_rounded, 'ميزتها: $f'),
         if (b != null) _line(Icons.account_balance_rounded, 'مبناها: $b'),
-      ]))),
+      ])))),
       Padding(padding: const EdgeInsets.fromLTRB(14, 0, 14, 8), child: WideButton('عرض المدينة',
           () => Navigator.push(context, MaterialPageRoute(builder: (_) => CityPreview(city: c))), primary: true, width: double.infinity)),
     ]);
@@ -1044,7 +1046,7 @@ class _StoreScreenState extends State<StoreScreen> {
                 child: _Pill(null, label, on: normalLook == normal, small: true, onTap: () => setState(() => normalLook = normal))),
         ])),
       ])),
-      Expanded(child: SingleChildScrollView(padding: const EdgeInsets.fromLTRB(14, 8, 14, 8), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Expanded(child: SingleChildScrollView(padding: const EdgeInsets.fromLTRB(14, 8, 14, 8), child: Snap(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Text(title, style: const TextStyle(color: gold, fontSize: 19, fontWeight: FontWeight.w700, height: 1.2)),
         Text(note, style: const TextStyle(color: Color(0xFFCBBD9F), fontSize: 12)),
         _status(_freeSide(s)),
@@ -1053,7 +1055,7 @@ class _StoreScreenState extends State<StoreScreen> {
         _line(Icons.groups_rounded, names.join(' • ')),
         if (nation != null) _line(Icons.bolt_rounded, '«${nation.m('trait').s('name')}»: ${nation.m('trait').s('desc')}'),
         _line(Icons.shield_rounded, 'نمط ${st.s('name')}: ${st.s('desc')}'),
-      ]))),
+      ])))),
     ]);
   }
 }

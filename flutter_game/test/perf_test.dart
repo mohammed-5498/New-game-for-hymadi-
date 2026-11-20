@@ -25,7 +25,6 @@ void main() {
     tester.view.devicePixelRatio = 2.625;
     addTearDown(tester.view.reset);
     final key = GlobalKey<MatchScreenState>();
-    MatchScreenState.noHeavy = true;
     // المعركة الكبيرة كما في جوال المستخدم: PERF_CITY=gondar PERF_SIZE=large PERF_FF=600 PERF_ZOOM=1.2 PERF_TEMPLES=1
     final env = Platform.environment;
     await tester.runAsync(() => tester.pumpWidget(MaterialApp(home: MatchScreen(key: key, settings: {

@@ -7,6 +7,7 @@ import 'audio/sound.dart';
 import 'core/cfg.dart';
 import 'data/js_config.dart';
 import 'i18n/tr.dart';
+import 'ui/cpu_guard.dart';
 import 'ui/crash_report.dart';
 import 'ui/match_screen.dart';
 import 'ui/menus.dart';
@@ -28,6 +29,7 @@ Future<void> main() async {
   Settings.load();
   await GameSound.init();
   GameSound.intro();
+  CpuGuard.start();           // حارس المعالج (2.8.0): وقت اللعبة على المعالج، وإيقاع اللعب ينزل إن تجاوزت حصتها
   WidgetsBinding.instance.addObserver(_AppLife());
   runApp(MaterialApp(
     debugShowCheckedModeBanner: false,
@@ -58,11 +60,14 @@ Widget? _testMatch() {
   });
 }
 
-// تصغير التطبيق: يصمت الصوت كله ويعود عند الرجوع
+// تصغير التطبيق: يصمت الصوت كله ويعود عند الرجوع، ولا يقرأ حارس المعالج والتطبيق في الخلفية
 class _AppLife with WidgetsBindingObserver {
   @override
-  void didChangeAppLifecycleState(AppLifecycleState state) =>
-      GameSound.hold(state == AppLifecycleState.paused || state == AppLifecycleState.hidden || state == AppLifecycleState.inactive);
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    GameSound.hold(state == AppLifecycleState.paused || state == AppLifecycleState.hidden || state == AppLifecycleState.inactive);
+    if (state == AppLifecycleState.resumed) CpuGuard.start();
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.hidden) CpuGuard.stop();
+  }
 }
 
 // شاشة التشغيل (introBlackout في blackout.js، UI.intro): سوداء مع صوت البداية، ثم تتلاشى إلى القائمة ولحنها

@@ -6,6 +6,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart' hide Text;
 import 'package:flutter/scheduler.dart' show Ticker;
 
+import '../config.dart' show PACE;
 import '../core/cfg.dart';
 import '../data/js_config.dart';
 import '../game/state.dart';
@@ -67,7 +68,7 @@ class _CharacterShowcaseState extends State<CharacterShowcase> with SingleTicker
     super.initState();
     _ticker = createTicker((e) {
       _time.value = e.inMicroseconds / 1e6;
-      _rest = restTicker(_ticker, 30, context);   // 30 إطاراً تكفي العرض، والبطارية أهم
+      _rest = restTicker(_ticker, PACE.showFps, context);   // 20 إطاراً تكفي العرض، والبطارية أهم (2.8.0، كانت 30)
     })..start();
     _load();
   }

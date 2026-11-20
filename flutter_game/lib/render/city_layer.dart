@@ -244,13 +244,12 @@ int _modulate(int c, int base, {bool faint = true}) {
 class CityLayer {
   // الأرض وخطوطها (الشوارع والأرصفة وممرات المشاة ورصف الممرات وحلقة الدوار) شرائح من band صفوف عمق، تُرسم الظاهرة منها وحدها
   static const band = 6;
-  final List<ui.Vertices?> ground, marks;
+  final _Strips _ground, _marks;       // الأرض المسطحة وخطوطها: أمر رسم واحد للشرائح الظاهرة كلها (2.8.0)
   final Int32List _slot, _bandStart;   // مكان رؤوس كل مربع في مصفوفة الأرض (مرتبة بالشرائح)، وأول مربع في كل شريحة
   final List<ui.Vertices?> rows;     // زينة كل صف
   final Int32List rowStart;          // أول صورة لكل صف في xf وrects (والأخير = العدد)
   final Float32List xf, rects;       // لكل صورة: التحويل (scos, ssin, tx, ty) ومستطيلها في الأطلس
   // صبغ المالك (القسم 8): لون أرض كل مربع قبل الصبغ وحيّه، وحي كل صورة ولونها (أبيض بلا صبغ، والقناع بلون المالك)
-  final Float32List _pos;
   final Int32List _baseCol, _col, _tileDistrict, _spriteDistrict, spriteCol;
   final Uint8List _isMask;
   final _applied = <int, (String?, double)>{};
@@ -268,16 +267,16 @@ class CityLayer {
   final Float32List? _gXf, _gRect;
   final Int32List? _gBase, _gCol;
   final Int32List? _gKindBase;       // لون صورة أرض كل مربع (موضعه في الشرائح)
-  final List<(Float32List, Float32List)?> _markSprites;
+  final _Sprites _markSprites;
   // الأرض البارزة (18.10أ): قطع الرصيف ووجوه الحافة لكل شريحة، وظل قواعد المباني وحافة الخريطة، ومستوى كل خُمس مربع
   // (0 أرض الحي والرصيف، 1 الشارع والماء) لقدمي الجندي
-  final List<(Float32List, Float32List)?> _reliefSprites;
-  final List<ui.Vertices?> _reliefVec;
+  final _Sprites _reliefSprites;
+  final _Strips _reliefVec;
   final Uint8List? _level;
   final double reliefDrop;
   final ui.Paint _reliefPaint;
   final _Edge? _margin;
-  CityLayer._(this.ground, this.marks, this._slot, this._bandStart, this.rows, this.rowStart, this.xf, this.rects, this._pos, this._baseCol, this._col,
+  CityLayer._(this._ground, this._marks, this._slot, this._bandStart, this.rows, this.rowStart, this.xf, this.rects, this._baseCol, this._col,
       this._tileDistrict, this._spriteDistrict, this.spriteCol, this._isMask, this.lights, this._tileItem, this._tileMask,
       this._tileSprite, this._slots, this._slotPos, this._slotItem, this._slotMask, this._slotLevel, this.lift, this.wide,
       this._gXf, this._gRect, this._gBase, this._gCol, this._gKindBase, this._markSprites,
@@ -436,21 +435,24 @@ class CityLayer {
         gKindBase![m] = gKind[k];
       }
     }
-    final markSprites = <(Float32List, Float32List)?>[
+    final markSprites = _Sprites.join(<(Float32List, Float32List)?>[
       for (final list in markList)
         if (list.isEmpty) null else () {
           final mx = Float32List(list.length * 4), mr = Float32List(list.length * 4);
           for (var q = 0; q < list.length; q++) { _place(mx, mr, lift, wide, q, list[q].$1, list[q].$2, list[q].$3, 1, art.px, false, -1, n); }
           return (mx, mr);
         }(),
-    ];
-    final (rs, rv, level) = drop > 0 ? _relief(map, art, decor, dz, bands, bases, n) : (const <(Float32List, Float32List)?>[], const <ui.Vertices?>[], null);
-    final layer = CityLayer._([for (var b = 0; b < bands; b++) _band(gpos, gcol, bandStart, b)], [for (final v in markVecs) v.build()],
+    ]);
+    final (rs, rv, level) = drop > 0 ? _relief(map, art, decor, dz, bands, bases, n)
+        : (List<(Float32List, Float32List)?>.filled(bands, null), List.generate(bands, (_) => Vec()), null);
+    final (mp, mc, ms) = Vec.join(markVecs);
+    final (rp, rc, rst) = Vec.join(rv);
+    final layer = CityLayer._(_Strips(gpos, gcol, Int32List.fromList([for (final t in bandStart) t * 6])), _Strips(mp, mc, ms),
         slot, bandStart,
-        [for (final v in rowVecs) v.build()], rowStart, xf, rects, gpos, base, gcol, tileD, spriteD, spriteCol, isMask,
+        [for (final v in rowVecs) v.build()], rowStart, xf, rects, base, gcol, tileD, spriteD, spriteCol, isMask,
         mapLights(map, decor.lights), tileItem, tileMask, tileImg, slots, Float32List.fromList(slotPos), slotItem, slotMask,
         Int32List(slots.length), lift, wide, gXf, gRect, gBase, gBase == null ? null : Int32List.fromList(gBase), gKindBase, markSprites,
-        rs, rv, level, drop, _weatherPaint(weather), drop > 0 ? _Edge(map, art, weather, dz, base) : null);
+        _Sprites.join(rs), _Strips(rp, rc, rst), level, drop, _weatherPaint(weather), drop > 0 ? _Edge(map, art, weather, dz, base) : null);
     layer.refreshWalls(map, art);
     return layer;
   }
@@ -497,7 +499,7 @@ class CityLayer {
       if (_applied[id] != amount[id]) { _applied[id] = amount[id]; changed.add(id); }
     }
     if (changed.isEmpty) return;
-    final n = math.sqrt(_baseCol.length).round(), dirty = <int>{};
+    var dirty = false;
     for (var k = 0; k < _baseCol.length; k++) {
       final id = _tileDistrict[k];
       if (id < 0 || !changed.contains(id)) continue;
@@ -507,12 +509,9 @@ class CityLayer {
       final g = _gCol, m = _slot[k];
       // صورة الأرض بلون المربع المصبوغ، والخافتة (الثلج) كما هي: لونها المسطح تحتها مصبوغ
       if (g != null && (_gBase![m] >> 24 & 255) == 255) g[m] = owner == null || a <= 0 ? _gBase[m] : _modulate(c, _gKindBase![m], faint: false);
-      dirty.add((k % n + k ~/ n) ~/ band);
+      dirty = true;
     }
-    for (final b in dirty) {          // الشرائح التي تغيّر فيها لون وحدها
-      ground[b]?.dispose();
-      ground[b] = _band(_pos, _col, _bandStart, b);
-    }
+    if (dirty) _ground.stale();
     tinted = false;
     for (var m = 0; m < spriteCol.length; m++) {
       final id = _spriteDistrict[m];
@@ -532,36 +531,34 @@ class CityLayer {
 
   // top وbottom: حدا الشاشة بوحدات العالم. onGround بعد الأرض (الظلال والحدود والنار)، وafterRow(d) بعد كل صف
   // (الجنود الواقفون فيه: يغطيهم ما أمامهم من مبانٍ ولا يغطيهم ما خلفهم)
-  static ui.Vertices? _band(Float32List pos, Int32List col, Int32List start, int b) => start[b + 1] == start[b] ? null
-      : ui.Vertices.raw(ui.VertexMode.triangles, Float32List.sublistView(pos, start[b] * 12, start[b + 1] * 12),
-          colors: Int32List.sublistView(col, start[b] * 6, start[b + 1] * 6));
-
   void paint(ui.Canvas canvas, ui.Image atlas, double top, double bottom,
       {void Function()? onGround, void Function(int d)? afterRow, bool skip = false}) {
     // الأرض ثم خطوطها، للشرائح الظاهرة وحدها (حلقة الدوار وحافة الساحات تتجاوز مربعها قليلاً: هامش 48)
     bool seen(int b) => (b * band - 1) * TILE_HALF_H - 48 <= bottom && ((b + 1) * band + 1) * TILE_HALF_H + 48 >= top;
-    // skip: المدينة مخفية (مفتاح عدّاد الأداء)، وما فوقها يُرسم كما هو
-    for (var b = 0; b < ground.length && !skip; b++) { if (ground[b] != null && seen(b)) canvas.drawVertices(ground[b]!, ui.BlendMode.dst, _paint); }
-    // صور الأرض فوق لونها المسطح (يسد ما بين حوافها)، ثم العلامات بالكود وصورها
-    final gx = _gXf;
-    for (var b = 0; b < ground.length && !skip && gx != null; b++) {
-      if (!seen(b) || _bandStart[b + 1] == _bandStart[b]) continue;
-      final w = _gViews[b] ??= (Float32List.sublistView(gx, _bandStart[b] * 4, _bandStart[b + 1] * 4),
-          Float32List.sublistView(_gRect!, _bandStart[b] * 4, _bandStart[b + 1] * 4), Int32List.sublistView(_gCol!, _bandStart[b], _bandStart[b + 1]));
-      canvas.drawRawAtlas(atlas, w.$1, w.$2, w.$3, ui.BlendMode.modulate, null, _atlasPaint);
+    // skip: المدينة مخفية (مفتاح عدّاد الأداء)، وما فوقها يُرسم كما هو. الشرائح الظاهرة متجاورة (b0..b1): كل طبقة أرض
+    // بأمر رسم واحد لها كلها (2.8.0، كانت أمراً لكل شريحة)، والترتيب بين الطبقات كما كان
+    final bands = _bandStart.length - 1;
+    var b0 = 0, b1 = bands - 1;
+    while (b0 < bands && !seen(b0)) { b0++; }
+    while (b1 >= b0 && !seen(b1)) { b1--; }
+    final any = !skip && b0 <= b1;
+    if (any) {
+      _ground.paint(canvas, b0, b1, _paint);
+      // صور الأرض فوق لونها المسطح (يسد ما بين حوافها)
+      final gx = _gXf, a = _bandStart[b0], b = _bandStart[b1 + 1];
+      if (gx != null && b > a) {
+        canvas.drawRawAtlas(atlas, Float32List.sublistView(gx, a * 4, b * 4), Float32List.sublistView(_gRect!, a * 4, b * 4),
+            Int32List.sublistView(_gCol!, a, b), ui.BlendMode.modulate, null, _atlasPaint);
+      }
     }
     if (!skip) _margin?.paint(canvas);
-    for (var b = 0; b < marks.length && !skip; b++) { if (marks[b] != null && seen(b)) canvas.drawVertices(marks[b]!, ui.BlendMode.dst, _paint); }
-    for (var b = 0; b < _markSprites.length && !skip; b++) {
-      final w = _markSprites[b];
-      if (w != null && seen(b)) canvas.drawRawAtlas(atlas, w.$1, w.$2, null, null, null, _atlasPaint);
+    if (any) {
+      // العلامات بالكود وصورها، ثم الرصيف ووجوه حافته، ثم ظل قواعد المباني وحافة الخريطة الأمامية
+      _marks.paint(canvas, b0, b1, _paint);
+      _markSprites.paint(canvas, atlas, b0, b1, _atlasPaint);
+      _reliefSprites.paint(canvas, atlas, b0, b1, _reliefPaint);
+      _reliefVec.paint(canvas, b0, b1, _paint);
     }
-    // الرصيف ووجوه حافته، ثم ظل قواعد المباني وحافة الخريطة الأمامية
-    for (var b = 0; b < _reliefSprites.length && !skip; b++) {
-      final w = _reliefSprites[b];
-      if (w != null && seen(b)) canvas.drawRawAtlas(atlas, w.$1, w.$2, null, null, null, _reliefPaint);
-    }
-    for (var b = 0; b < _reliefVec.length && !skip; b++) { if (_reliefVec[b] != null && seen(b)) canvas.drawVertices(_reliefVec[b]!, ui.BlendMode.dst, _paint); }
     onGround?.call();
     for (var d = 0; d < rows.length; d++) {
       final y = d * TILE_HALF_H;
@@ -580,7 +577,6 @@ class CityLayer {
   }
 
   late final _views = List<(Float32List, Float32List, Int32List)?>.filled(rows.length, null);
-  late final _gViews = List<(Float32List, Float32List, Int32List)?>.filled(ground.length, null);
 
   // كم تنزل قدما الجندي عند (i، j): صفر على أرض الحي والرصيف وdrop في الشارع، بتدرج خُمس مربع عند الحافة
   double drop(double i, double j) {
@@ -593,10 +589,10 @@ class CityLayer {
   }
 
   void dispose() {
-    for (final g in ground) { g?.dispose(); }
-    for (final m in marks) { m?.dispose(); }
+    _ground.dispose();
+    _marks.dispose();
+    _reliefVec.dispose();
     for (final r in rows) { r?.dispose(); }
-    for (final v in _reliefVec) { v?.dispose(); }
     _margin?.dispose();
   }
 }
@@ -675,7 +671,7 @@ ui.Paint _weatherPaint(String weather) {
 // (0) بعرض خُمس على كل ضلع يجاور أرضاً أعلى، وركن خُمس×خُمس حيث تجاوره من الركن وحده، فيلتف الرصيف حول الحي.
 // ثم: قطعة الرصيف لكل ضلع وركن (من صورة البلاط نفسها، فتتصل)، ووجه حافة لكل خُمس أعلى يطل على أخفض أمامه
 // (+i الأيمن أو +j الأيسر)، وحافة الخريطة الأمامية، وظل قاعدة كل مبنى: حلقات معيّن حوله تخفت إلى الخارج
-(List<(Float32List, Float32List)?>, List<ui.Vertices?>, Uint8List) _relief(
+(List<(Float32List, Float32List)?>, List<Vec>, Uint8List) _relief(
     GameMap map, CityArt art, Decor decor, Float32List dz, int bands, List<(double, double, double)> bases, int n) {
   final sub = GROUND.sub, side = n * sub, level = Uint8List(side * side);
   final tops = List.generate(bands, (_) => <(Sprite, double, double)>[]), faces = List.generate(bands, (_) => <(Sprite, double, double)>[]);
@@ -745,5 +741,52 @@ ui.Paint _weatherPaint(String weather) {
         return (xf, rects);
       }(),
   ];
-  return (sprites, [for (final v in vecs) v.build()], level);
+  return (sprites, vecs, level);
+}
+
+// طبقة أرض بشرائحها متتالية (2.8.0): رؤوس الشرائح كلها في مصفوفة واحدة، وstart أول رأس لكل شريحة. تُرسم الظاهرة منها
+// (b0..b1) بأمر واحد يُحفظ حتى تتغير الشرائح الظاهرة أو ألوانها (stale). كانت أمراً لكل شريحة في كل إطار
+class _Strips {
+  final Float32List pos;
+  final Int32List col, start;
+  ui.Vertices? _v;
+  int _key = -1;
+  _Strips(this.pos, this.col, this.start);
+  void paint(ui.Canvas canvas, int b0, int b1, ui.Paint paint) {
+    final key = b0 << 16 | b1;
+    if (key != _key) {
+      _v?.dispose();
+      _key = key;
+      final a = start[b0], b = start[b1 + 1];
+      _v = b == a ? null
+          : ui.Vertices.raw(ui.VertexMode.triangles, Float32List.sublistView(pos, a * 2, b * 2), colors: Int32List.sublistView(col, a, b));
+    }
+    final v = _v;
+    if (v != null) canvas.drawVertices(v, ui.BlendMode.dst, paint);
+  }
+  void stale() => _key = -1;
+  void dispose() => _v?.dispose();
+}
+
+// صور بشرائحها متتالية: لكل صورة تحويلها ومستطيلها في الأطلس، وstart أول صورة لكل شريحة
+class _Sprites {
+  final Float32List xf, rects;
+  final Int32List start;
+  _Sprites(this.xf, this.rects, this.start);
+  factory _Sprites.join(List<(Float32List, Float32List)?> bands) {
+    final start = Int32List(bands.length + 1);
+    for (var b = 0; b < bands.length; b++) { start[b + 1] = start[b] + (bands[b]?.$1.length ?? 0) ~/ 4; }
+    final xf = Float32List(start.last * 4), rects = Float32List(start.last * 4);
+    for (var b = 0; b < bands.length; b++) {
+      final w = bands[b];
+      if (w == null) continue;
+      xf.setAll(start[b] * 4, w.$1);
+      rects.setAll(start[b] * 4, w.$2);
+    }
+    return _Sprites(xf, rects, start);
+  }
+  void paint(ui.Canvas canvas, ui.Image atlas, int b0, int b1, ui.Paint paint) {
+    final a = start[b0], b = start[b1 + 1];
+    if (b > a) canvas.drawRawAtlas(atlas, Float32List.sublistView(xf, a * 4, b * 4), Float32List.sublistView(rects, a * 4, b * 4), null, null, null, paint);
+  }
 }

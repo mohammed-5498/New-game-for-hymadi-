@@ -144,4 +144,18 @@ class Vec {
   ui.Vertices? build() => _pos.isEmpty ? null
       : ui.Vertices.raw(ui.VertexMode.triangles, Float32List.fromList(_pos),
           colors: Int32List.fromList([for (final c in _col) c.toSigned(32)]));
+
+  // شرائح متتالية في مصفوفة واحدة (2.8.0): رؤوس كل واحد بعد الذي قبله، وstart أول رأس لكل واحد (والأخير = العدد)،
+  // فتُرسم شرائح متجاورة بأمر واحد
+  static (Float32List, Int32List, Int32List) join(List<Vec> vecs) {
+    final start = Int32List(vecs.length + 1);
+    for (var b = 0; b < vecs.length; b++) { start[b + 1] = start[b] + vecs[b]._col.length; }
+    final pos = Float32List(start.last * 2), col = Int32List(start.last);
+    for (var b = 0; b < vecs.length; b++) {
+      pos.setAll(start[b] * 2, vecs[b]._pos);
+      final c = vecs[b]._col;
+      for (var k = 0; k < c.length; k++) { col[start[b] + k] = c[k].toSigned(32); }
+    }
+    return (pos, col, start);
+  }
 }

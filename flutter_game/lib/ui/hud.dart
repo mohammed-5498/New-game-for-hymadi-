@@ -28,7 +28,8 @@ class MatchHud extends StatelessWidget {
   const MatchHud({super.key, required this.screen});
 
   // كل جزء من الواجهة (_Memo) يُبنى ويُرسم من جديد حين يتغير ما يعرضه وحده: كانت الواجهة كلها تُبنى مرتين في الثانية
-  // (الأزرار والمجموعات وشريط القوة...) فيتأخر إطار في القتال
+  // (الأزرار والمجموعات وشريط القوة...) فيتأخر إطار في القتال. وكل جزء لا يتحرك كل إطار صورة جاهزة (Snap، 2.8.0): كرت
+  // الشاشة كان يرسمه كله من أوله في كل إطار
   @override
   Widget build(BuildContext context) => ValueListenableBuilder<int>(
     valueListenable: screen.hud,
@@ -40,12 +41,12 @@ class MatchHud extends StatelessWidget {
         // الصف الأعلى: الزمن والمدينة والنقاط يساراً، والأزرار يميناً، وشريط الطور في المساحة بينهما وحدها (يصغر ولا يتداخل).
         // الزمن والنقاط يتحدث كل منهما وحده (clockText وpointsText)، وثلاث لمسات على الزمن تفتح عدّاد الأداء
         Positioned(top: 6, left: 6, right: 6, child: Row(textDirection: TextDirection.ltr, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          _Memo('clock', 0, () => GestureDetector(onTap: screen.tapClock, child: RepaintBoundary(child: ValueListenableBuilder<String>(
+          _Memo('clock', 0, () => GestureDetector(onTap: screen.tapClock, child: Snap(child: ValueListenableBuilder<String>(
               valueListenable: screen.clockText,
               builder: (_, t, _) => _Box(child: Text(t, style: const TextStyle(color: ink, fontSize: 12))))))),
           if (me != null && s.empire != null) ...[
             const SizedBox(width: 4),
-            _Memo('points', 0, () => RepaintBoundary(child: ValueListenableBuilder<(int, String)?>(
+            _Memo('points', 0, () => Snap(child: ValueListenableBuilder<(int, String)?>(
                 valueListenable: screen.pointsText,
                 builder: (_, p, _) => _Box(child: Row(mainAxisSize: MainAxisSize.min, children: [
                   const Icon(Icons.toll, size: 14, color: gold), const SizedBox(width: 3),
@@ -54,8 +55,8 @@ class MatchHud extends StatelessWidget {
                 ]))))),
           ],
           Expanded(child: _Memo('bar', bar == null ? '' : '${bar.text}|${bar.alarm}|${[for (final (c, r, m) in bar.bars) '$c${(r * 150).round()}$m'].join()}',
-              () => Center(child: bar != null ? FittedBox(fit: BoxFit.scaleDown, child: _ModeBarBox(bar)) : const SizedBox()))),
-          _Memo('buttons', '${screen.selectMode}|${screen.paused}', () => Row(mainAxisSize: MainAxisSize.min, textDirection: TextDirection.ltr, children: [
+              () => Center(child: bar != null ? Snap(child: FittedBox(fit: BoxFit.scaleDown, child: _ModeBarBox(bar))) : const SizedBox()))),
+          _Memo('buttons', '${screen.selectMode}|${screen.paused}', () => Snap(child: Row(mainAxisSize: MainAxisSize.min, textDirection: TextDirection.ltr, children: [
             _Btn(icon: Icons.highlight_alt, on: screen.selectMode, tip: 'تحديد', onTap: () { screen.selectMode = !screen.selectMode; screen.hud.value++; }),
             _Btn(icon: Icons.groups, tip: 'كل جنودك', onTap: () {
               for (final u in s.units) { u.selected = u.playerId == s.humanId && u.state != 'dead'; }
@@ -63,27 +64,27 @@ class MatchHud extends StatelessWidget {
             }),
             _Btn(icon: Icons.fort, tip: 'القاعدة', onTap: () => _nextHq(s)),
             _Btn(icon: screen.paused ? Icons.play_arrow : Icons.pause, tip: 'إيقاف', onTap: () => screen.paused ? screen.closePause() : screen.openPause()),
-          ])),
+          ]))),
         ])),
         // أسهم الحافة: زعماء الأعداء ذهبية، والتنبيهات حمراء (جنودك يُضربون خارج الشاشة، وزعيمك). ترسم نفسها كل إطار
         _Memo('arrows', 0, () => Positioned.fill(child: IgnorePointer(child: RepaintBoundary(child: CustomPaint(painter: _EdgeArrows(screen)))))),
         // اللعب المحلي: المضيف أوقف المباراة، أو لا يصل دور جديد منه
-        if (screen.lanText case final t?) _Memo('lan', t, () => Positioned(top: 84, left: 0, right: 0, child: IgnorePointer(child: Center(child: _Box(
-            child: Text(t, style: const TextStyle(color: gold, fontSize: 13, fontWeight: FontWeight.w700))))))),
+        if (screen.lanText case final t?) _Memo('lan', t, () => Positioned(top: 84, left: 0, right: 0, child: IgnorePointer(child: Center(child: Snap(child: _Box(
+            child: Text(t, style: const TextStyle(color: gold, fontSize: 13, fontWeight: FontWeight.w700)))))))),
         // الإشعار تحت الصف الأعلى في الوسط، صغيراً ولا يلتقط اللمس
-        if (s.notice case final n?) _Memo('notice', '${n.text}|${n.mine}', () => Positioned(top: 46, left: 200, right: 200, child: IgnorePointer(child: Center(child: _Box(
+        if (s.notice case final n?) _Memo('notice', '${n.text}|${n.mine}', () => Positioned(top: 46, left: 200, right: 200, child: IgnorePointer(child: Center(child: Snap(child: _Box(
             child: Text(n.text, textAlign: TextAlign.center, maxLines: 2,
-                style: TextStyle(color: n.mine ? gold : ink, fontSize: 12, fontWeight: FontWeight.w600))))))),
+                style: TextStyle(color: n.mine ? gold : ink, fontSize: 12, fontWeight: FontWeight.w600)))))))),
         // شريط القوة يساراً: لمسة تطويه إلى سطرك وحدك
-        _Memo('power', _powerSig(s), () => Positioned(top: 44, left: 6, child: RepaintBoundary(child: _Power(s)))),
+        _Memo('power', _powerSig(s), () => Positioned(top: 44, left: 6, child: Snap(child: _Power(s)))),
         // مجموعات التحكم على الحافة اليمنى
-        _Memo('groups', _groupSig(s), () => Positioned(right: 8, top: 0, bottom: 0, child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+        _Memo('groups', _groupSig(s), () => Positioned(right: 8, top: 0, bottom: 0, child: Center(child: Snap(child: Column(mainAxisSize: MainAxisSize.min, children: [
           for (var g = 1; g <= 5; g++) _Group(screen, g),
-        ])))),
+        ]))))),
         // عدّاد الأداء: يتحدث وحده مرة في الثانية
         _Memo('meter', 0, () => Positioned(left: 6, bottom: 6, child: ValueListenableBuilder<String?>(valueListenable: screen.meter,
-            builder: (_, t, _) => t == null ? const SizedBox.shrink() : RepaintBoundary(child: _Meter(screen, t))))),
-        if (screen.menuDistrict != null) Positioned(left: 0, right: 0, bottom: 8, child: Center(child: _EmpireMenu(screen, screen.menuDistrict!))),
+            builder: (_, t, _) => t == null ? const SizedBox.shrink() : Snap(child: _Meter(screen, t))))),
+        if (screen.menuDistrict != null) Positioned(left: 0, right: 0, bottom: 8, child: Center(child: Snap(child: _EmpireMenu(screen, screen.menuDistrict!)))),
         if (screen.paused && s.matchResult == null) Positioned.fill(child: _Pause(screen)),
         if (s.matchResult != null) Positioned.fill(child: _End(screen, s.matchResult!)),
       ]);

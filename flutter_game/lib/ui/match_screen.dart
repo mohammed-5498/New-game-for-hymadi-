@@ -34,6 +34,7 @@ import '../render/unit_atlas.dart';
 import '../render/weather_art.dart';
 import '../render/empire_art.dart';
 import '../render/fog.dart';
+import 'cpu_guard.dart';
 import 'crash_report.dart' show crumb;
 import 'hud.dart';
 import 'menus.dart';
@@ -64,6 +65,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
   String? get lanText => lanRole == null ? null : Lan.status();
   int _activeUntil = 0;
   Timer? _rest;
+  double _restFps = 0;            // الإيقاع الذي ينتظر به الآن (markActive يوقظه إن صار أسرع)
   double _camX = 0, _camY = 0, _camZ = 0;
   CityArt? art;
   CityLayer? layer;
@@ -81,6 +83,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
   final _mw = Stopwatch()..start();
   void toggleMeter() {
     meter.value = meter.value == null ? 'يقيس...' : null;
+    CpuGuard.detail = meter.value != null;   // خيوط اللعبة تُقرأ والعدّاد ظاهر وحده
     _mAt = 0;
     // انشغال الخيط خارج الإطارات (2.1.4): مؤقت كل 10 ملي ث، وتأخره عن موعده = ما أوقف الخيط بين الإطارات (صوت، ذاكرة...)
     _lagTimer?.cancel();
@@ -118,10 +121,14 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     if (_mAt == 0) { _mAt = now; return; }
     if (now - _mAt < 1000) return;
     String ms(int sum, int n, int max) => '${n == 0 ? '-' : (sum / n / 1000).toStringAsFixed(1)} (أقصى ${(max / 1000).toStringAsFixed(1)})';
-    final sec = (now - _mAt) / 1000, heavy = DateTime.now().millisecondsSinceEpoch <= _heavyUntil;
+    final sec = (now - _mAt) / 1000;
     final alive = s.units.where((u) => u.state != 'dead').length;
+    String pct(double cores) => (cores / CpuGuard.cores * 100).toStringAsFixed(1);
     meter.value = [
-      'الإطارات ${(_mFrames / sec).round()}/ث • متأخرة $_mSlow من $_mTimed • ${heavy ? '30 ثابتة' : 'حتى ${_targetFps(s).round()}'}',
+      'الإطارات ${(_mFrames / sec).round()}/ث • متأخرة $_mSlow من $_mTimed • حتى ${_targetFps(s).round()}',
+      // اللعبة على المعالج بنسبتها من الجهاز (رقم رسالة سامسونج نفسه)، وحصتها، ودرجة إيقاع حارس المعالج، وأثقل خيوطها (2.8.0)
+      if (CpuGuard.used >= 0) 'المعالج ${pct(CpuGuard.used)}% من الجهاز (${CpuGuard.used.toStringAsFixed(2)} نواة من ${CpuGuard.cores}) • الحد ${pct(CpuGuard.budget)}% • درجة الإيقاع ${CpuGuard.fps.round()}',
+      if (CpuGuard.threads.isNotEmpty) 'الخيوط: ${CpuGuard.threads.take(4).map((t) => '${t.$1} ${(t.$2 * 100).round()}%').join(' • ')}',
       'تجهيز الإطار (المعالج) ${ms(_mBuild, _mTimed, _mBuildMax)} ملي ث',
       'رسمه (كرت الشاشة) ${ms(_mRaster, _mTimed, _mRasterMax)} ملي ث',
       'رسم المشهد ${ms(_mPaint, _mPaints, _mPaintMax)} • المنطق ${ms(_mSim, _mTicks, _mSimMax)} ملي ث',
@@ -182,6 +189,8 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
 
   @override
   void dispose() {
+    CpuGuard.leave();
+    CpuGuard.detail = false;
     crumb('القوائم');
     GameSound.matchSilence(false);
     GameSound.menuMusic(true);
@@ -298,7 +307,9 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
       }
     });
     GameSound.matchSilence(false, s.map.city);
+    wakeTicker(_ticker, context);   // إعادة المباراة بعد نهايتها: كانت التكتكة مكتومة بلا موعد (الإيقاع صفر)
     _ticker.start();
+    CpuGuard.enter();
     _crumb('أول إطار');
   }
 
@@ -348,6 +359,8 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
 
   void restart() {
     storyResult = null;
+    _rest?.cancel();
+    CpuGuard.leave();
     _ticker.stop();
     layer?.dispose();
     art?.dispose();
@@ -370,7 +383,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
   void openPause({bool saveNow = false}) {
     final s = state;
     if (s == null || s.matchResult != null) return;
-    if (!paused) { paused = true; hud.value++; if (s.lanRole != 'client') GameSound.cityMusic(null); }
+    if (!paused) { paused = true; hud.value++; if (s.lanRole != 'client') GameSound.cityMusic(null); CpuGuard.leave(); }
     if (s.lanRole == 'host') Lan.pause(true);
     if (s.lanRole != null) return;
     if (saveNow) { saveMatch(); return; }
@@ -381,6 +394,11 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
   void closePause() {
     paused = false;
     hud.value++;
+    // الإيقاف بلا إطارات (الإيقاع صفر): المشهد يعود الآن من حيث وقف (بلا قفزة بطول الإيقاف)، وحارس المعالج يحكم بعد ثانيتين
+    _rest?.cancel();
+    _last = Duration.zero;
+    wakeTicker(_ticker, context);
+    CpuGuard.enter(grace: 2);
     if (lanRole != 'client') GameSound.cityMusic(state?.map.city);
     if (lanRole == 'host') Lan.pause(false);
   }
@@ -412,6 +430,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
   void _ended(MatchState s) {
     if (_recorded) return;
     _recorded = true;
+    CpuGuard.leave();
     if (s.lanRole == null) clearSavedMatch();
     final r = s.matchResult!;
     GameSound.cityMusic(null);
@@ -423,30 +442,27 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     }
   }
 
-  // إيقاع الرسم (PACE): الإيقاف والنهاية 5، وتوفير البطارية 30، و60 مع اللمس والكاميرا والقتال، و30 بعدها
+  // إيقاع الرسم (PACE، 2.8.0): لا إطار في الإيقاف والنهاية (يُرسم مرة حين يتغير شيء؛ واللعب المحلي بإيقاع الإيقاف القديم
+  // لأن رسائل الشبكة تُعالج في التكتكة)، وفي اللعب PACE.fps أو أقل منه بدرجة حارس المعالج، وcalmFps بعد activeMs بلا لمس
+  // ولا كاميرا ولا جندي ظاهر يتحرك. وتوفير البطارية saverFps وsaverCalm
   double _targetFps(MatchState s) {
-    if (paused || s.matchResult != null) return GRAPHICS.d('idleFps');
-    if (Settings.battery) return GRAPHICS.d('batteryFps');
-    final now = DateTime.now().millisecondsSinceEpoch;
-    return now <= _activeUntil && now > _heavyUntil ? 60 : PACE.calmFps;
+    if (paused || s.matchResult != null) return s.lanRole == null ? 0 : GRAPHICS.d('idleFps');
+    final saver = Settings.battery, play = math.min(saver ? PACE.saverFps : PACE.fps, CpuGuard.fps);
+    return DateTime.now().millisecondsSinceEpoch <= _activeUntil ? play : math.min(play, saver ? PACE.saverCalm : PACE.calmFps);
   }
 
-  // أزمنة إطارات الجهاز نفسه (يرسلها المحرك كل ثانية تقريباً): إن لم يلحق بـ 60 فـ 30 ثابتة بدل إطارات متفاوتة
-  int _heavyUntil = 0;
-  static bool noHeavy = false;   // للفحص: perf_test يقيس كل إطار (وضع الفحص أبطأ من الجوال فيدخل الـ 30 الثابتة)
+  // أزمنة إطارات الجهاز نفسه (يرسلها المحرك كل ثانية تقريباً) لعدّاد الأداء
   void _timings(List<ui.FrameTiming> list) {
-    if (meter.value != null) {
-      for (final t in list) {
-        final b = t.buildDuration.inMicroseconds, r = t.rasterDuration.inMicroseconds;
-        _mTimed++; _mBuild += b; _mRaster += r;
-        if (b > _mBuildMax) _mBuildMax = b;
-        if (r > _mRasterMax) _mRasterMax = r;
-        if (math.max(b, r) > 16700) _mSlow++;
-      }
+    final s = state;
+    if (meter.value == null || s == null) return;
+    final slow = 1e6 / math.max(1, _targetFps(s));   // متأخر: أطول من موعد الإطار بالإيقاع الحالي
+    for (final t in list) {
+      final b = t.buildDuration.inMicroseconds, r = t.rasterDuration.inMicroseconds;
+      _mTimed++; _mBuild += b; _mRaster += r;
+      if (b > _mBuildMax) _mBuildMax = b;
+      if (r > _mRasterMax) _mRasterMax = r;
+      if (math.max(b, r) > slow) _mSlow++;
     }
-    if (list.length < 8 || noHeavy) return;
-    final slow = list.where((t) => math.max(t.buildDuration.inMicroseconds, t.rasterDuration.inMicroseconds) > PACE.slowMs * 1000).length;
-    if (slow > list.length * PACE.slowShare) _heavyUntil = DateTime.now().millisecondsSinceEpoch + PACE.heavyMs;
   }
 
   // اختيار حي على الخريطة بعد خانة الترياد أو الصاروخ (takePick في empireMenu.js)
@@ -462,10 +478,9 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
 
   void markActive() {
     _activeUntil = DateTime.now().millisecondsSinceEpoch + PACE.activeMs;
-    // يوقظ الرسم فوراً إلا إن كان الحد 30 مقصوداً (الجهاز لا يلحق، أو توفير البطارية، أو الإيقاف): كان القتال الظاهر
-    // يوقظه مع كل إطار فلا يثبت الـ 30 في المعارك (2.1.3)
+    // يوقظ الرسم فوراً إن صار إيقاعه أسرع مما ينتظر به (لمسة بعد الهدوء)، لا مع كل إطار فيه قتال (2.1.3)، ولا في الإيقاف
     final s = state;
-    if (_ticker.muted && (s == null || _targetFps(s) >= 60)) { _rest?.cancel(); wakeTicker(_ticker, context); }
+    if (_ticker.muted && s != null && _targetFps(s) > _restFps) { _rest?.cancel(); wakeTicker(_ticker, context); }
   }
 
   void _onTick(Duration now) {
@@ -537,7 +552,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     _liveTexts(s);
     if (meter.value != null) _meterTick(s);
     _rest?.cancel();
-    _rest = restTicker(_ticker, _targetFps(s), context);
+    _rest = restTicker(_ticker, _restFps = _targetFps(s), context);
   }
 
   // بصمة مستويات القواعد (صورة القاعدة وساحة تدريبها)
@@ -863,9 +878,10 @@ class _MatchPainter extends CustomPainter {
       final d = (i + j).floor().clamp(0, depths - 1);
       _rows[d].add(u);
       visible++;
-      if (u.state == 'attacking' || (u.selected && u.state == 'moving')) busy = true;
+      if (u.state == 'attacking' || u.state == 'moving') busy = true;
     }
-    if (busy) v.markActive();   // قتال ظاهر أو جنودك المحددون يمشون: 60 إطاراً
+    // جندي ظاهر يقاتل أو يمشي، أو سهم طائر في الشاشة (تحت): إيقاع اللعب (PACE.fps)، وبلا شيء منها يهدأ إلى calmFps (2.8.0)
+    if (busy) v.markActive();
     v.visibleUnits = visible;
     final crowded = visible > COMBAT_REALISM.m('lod').i('fullUnits');
     b.reset();
@@ -922,7 +938,12 @@ class _MatchPainter extends CustomPainter {
       _mark('flush');
     });
     if (!v.hideFog) fog?.paint(canvas, left, right, top, bottom);   // ضباب الحرب فوق المدينة كلها، وما بعده يُرسم لما يُرى وحده
-    for (final shot in s.projectiles) { if (sees(shot.x, shot.y)) drawProjectile(b, shot, alpha); }
+    for (final shot in s.projectiles) {
+      if (!sees(shot.x, shot.y)) continue;
+      drawProjectile(b, shot, alpha);
+      final x = (shot.x - shot.y) * TILE_HALF_W, y = (shot.x + shot.y) * TILE_HALF_H;
+      if (x >= left && x <= right && y >= top && y <= bottom) v.markActive();
+    }
     drawEmpireShots(b, s, alpha, fog == null ? null : (u) => fog.friendly(s, u.playerId) || fog.sees(u.x, u.y));
     drawFlagArrows(b, s, time, left, right, top, bottom, fog?.sees);
     for (final fx in s.fx) {
