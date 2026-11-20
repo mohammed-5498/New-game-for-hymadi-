@@ -11,7 +11,7 @@ app = os.environ['APP']
 disp = ':%d' % (90 + os.getpid() % 50)
 xv = subprocess.Popen(['Xvfb', disp, '-screen', '0', '1920x1080x24', '-nolisten', 'tcp'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 time.sleep(1.5)
-env = dict(os.environ, DISPLAY=disp, GC_Q=q, GC_METER='1', GC_HIDE=os.environ.get('HIDE', ''), **({'GC_NOHUD': '1'} if os.environ.get('NOHUD') else {}), GDK_SCALE=os.environ.get('SCALE', '2'), GC_NOGUARD='1', **({'GC_PAUSE': '1'} if os.environ.get('PAUSE') else {}), **({'GC_BLANK': '1'} if os.environ.get('BLANK') else {}), LIBGL_ALWAYS_SOFTWARE='1', HOME=f'{SP}/benchhome')
+env = dict(os.environ, DISPLAY=disp, GC_Q=q, GC_METER='1', GC_HIDE=os.environ.get('HIDE', ''), **({'GC_NOHUD': '1'} if os.environ.get('NOHUD') else {}), GDK_SCALE=os.environ.get('SCALE', '2'), GC_NOGUARD='1', **({'GC_PAUSE': '1'} if os.environ.get('PAUSE') else {}), **({'GC_BLANK': '1'} if os.environ.get('BLANK') else {}), **({'GC_SKIPGROUND': '1'} if os.environ.get('SKIPGROUND') else {}), **({'GC_SKIPROWS': '1'} if os.environ.get('SKIPROWS') else {}), LIBGL_ALWAYS_SOFTWARE='1', HOME=f'{SP}/benchhome')
 os.makedirs(env['HOME'], exist_ok=True)
 p = subprocess.Popen([app], env=env, stdout=open(f'{SP}/bench_{name}.log', 'w'), stderr=subprocess.STDOUT)
 def sample():

@@ -135,9 +135,10 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
       'الجنود $alive (ظاهر $visibleUnits) • تقريب ${s.camera.z.toStringAsFixed(1)}',
       'توقف الخيط بين الإطارات: أقصى ${(_mLag / 1000).toStringAsFixed(1)} ملي ث • مجموعه ${(_mLagSum / 1000).round()} في الثانية',
       // ما يثقل كرت الشاشة (2.3.2): الطقس وأضواؤه، وصور الضباب الجديدة، وأوامر رسم الدفعات في الإطار
-      'الطقس ${s.weather} • أضواء ${WeatherFx.lights} • صور الضباب ${(Fog.bakes / sec).round()}/ث • دفعات ${(TriBatch.draws / math.max(1, _mFrames)).round()}/إطار',
+      'الطقس ${s.weather} • أضواء ${WeatherFx.lights} • صور الضباب ${(Fog.bakes / sec).round()}/ث • صور الأرض ${(GroundCache.renders / sec).round()}/ث • دفعات ${(TriBatch.draws / math.max(1, _mFrames)).round()}/إطار',
     ].join('\n');
     Fog.bakes = 0;
+    GroundCache.renders = 0;
     TriBatch.draws = 0;
     _mLag = _mLagSum = 0;
     _mAt = now;
@@ -168,6 +169,8 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
   int _lastTapAt = 0, _lastDistrictTapAt = 0, _lastDistrictTap = -1;
   final batch = TriBatch();
   final weather = WeatherFx();
+  final ground = GroundCache();       // الأرض وحدود الأحياء صورة جاهزة (2.9.0)
+  double dpr = 1;                     // نقاط الجهاز لكل نقطة شاشة (صورة الأرض بدقة الجهاز)
   Fog? fog;                           // ضباب الحرب (null: مطفأ، أو مشاهدة بلا لاعب)
   double frameDt = 0;                 // زمن الإطار للطقس (صفر في الإيقاف)
 
@@ -203,6 +206,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     _ticker.dispose();
     layer?.dispose();
     fog?.dispose();
+    ground.dispose();
     art?.dispose();
     units?.image.dispose();
     super.dispose();
@@ -758,6 +762,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     if (s == null || art == null || units == null) return LoadingScreen(progress: loadProgress, tip: tip);
     final size = MediaQuery.sizeOf(context);
     s.viewW = size.width; s.viewH = size.height;
+    dpr = MediaQuery.devicePixelRatioOf(context);
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) { if (!didPop) onBack(); },
@@ -886,8 +891,15 @@ class _MatchPainter extends CustomPainter {
     final crowded = visible > COMBAT_REALISM.m('lod').i('fullUnits');
     b.reset();
     _mark('sortUnits');
-    layer.paint(canvas, art.image, c.y - halfH, c.y + halfH, skip: v.hideCity, onGround: () {
-      _drawBorders(canvas, b, s, img);
+    // الأرض وحدود الأحياء من صورتها الجاهزة (2.9.0)، أو مباشرة كما كانت (التقريب يتغير، أو الكاميرا تجري، أو المدينة مخفية)
+    final borders = _borderVerts(b, s);
+    final cached = !v.hideCity && v.ground.paint(canvas, Rect.fromLTRB(c.x - halfW, c.y - halfH, c.x + halfW, c.y + halfH), c.z, v.dpr,
+        Object.hash(layer, layer.groundVersion, _borderSig), (gc, area) {
+      layer.paintGround(gc, art.image, area.top, area.bottom);
+      TriBatch.drawBaked(gc, img, borders);
+    });
+    layer.paint(canvas, art.image, c.y - halfH, c.y + halfH, skip: v.hideCity, ground: !cached, onGround: () {
+      if (!cached) TriBatch.drawBaked(canvas, img, borders);
       for (final f in s.fires) { drawFire(b, f, time); }
       for (final z in s.zones) { drawZone(b, z, time); }
       if (s.feature != null) drawFeatureGround(b, s, time);
@@ -1002,7 +1014,7 @@ class _MatchPainter extends CustomPainter {
   ui.Vertices? _borderV;
   int _borderSig = 0;
   GameMap? _borderMap;
-  void _drawBorders(Canvas canvas, TriBatch b, MatchState s, ui.Image img) {
+  ui.Vertices _borderVerts(TriBatch b, MatchState s) {
     var sig = 0;
     for (final d in s.map.districts) {
       if (d.tintColor != null && d.tintMix > 0) sig = Object.hash(sig, d.id, d.tintColor, d.tintMix);
@@ -1014,7 +1026,7 @@ class _MatchPainter extends CustomPainter {
       _borderSig = sig;
       _borderMap = s.map;
     }
-    TriBatch.drawBaked(canvas, img, _borderV!);
+    return _borderV!;
   }
 
   void _borders(TriBatch b, MatchState s) {

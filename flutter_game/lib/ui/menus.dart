@@ -364,6 +364,8 @@ class _MenuBackdropState extends State<MenuBackdrop> with SingleTickerProviderSt
   final _frame = ValueNotifier(0);
   double x = 0, y = 0, vx = 0, vy = 0, zoom = 1;
   Size view = Size.zero;               // مقاس الشاشة (من الرسم)
+  double dpr = 1;
+  final cache = GroundCache();         // المدينة كلها صورة جاهزة (2.9.0): لا جنود هنا، والكاميرا تنجرف ببطء
   Duration _last = Duration.zero;
   final J _M = UI.m('menuScene');
 
@@ -424,13 +426,17 @@ class _MenuBackdropState extends State<MenuBackdrop> with SingleTickerProviderSt
   void dispose() {
     _rest?.cancel();
     _ticker.dispose();
+    cache.dispose();
     layer?.dispose();
     art?.dispose();
     super.dispose();
   }
 
   @override
-  Widget build(BuildContext context) => CustomPaint(painter: _BackdropPainter(this), isComplex: true);
+  Widget build(BuildContext context) {
+    dpr = MediaQuery.devicePixelRatioOf(context);
+    return CustomPaint(painter: _BackdropPainter(this), isComplex: true);
+  }
 }
 
 class _BackdropPainter extends CustomPainter {
@@ -447,8 +453,11 @@ class _BackdropPainter extends CustomPainter {
     canvas.translate(size.width / 2, size.height / 2);
     canvas.scale(z);
     canvas.translate(-v.x, -v.y);
-    final half = size.height / 2 / z;
-    l.paint(canvas, a.image, v.y - half, v.y + half);
+    final half = size.height / 2 / z, hw = size.width / 2 / z;
+    if (!v.cache.paint(canvas, Rect.fromLTRB(v.x - hw, v.y - half, v.x + hw, v.y + half), z, v.dpr, l,
+        (c, area) => l.paint(c, a.image, area.top, area.bottom))) {
+      l.paint(canvas, a.image, v.y - half, v.y + half);
+    }
     canvas.restore();
   }
   @override

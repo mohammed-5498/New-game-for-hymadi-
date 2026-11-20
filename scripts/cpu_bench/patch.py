@@ -1,6 +1,6 @@
 # خطافات القياس على نسخة لينكس من اللعبة (2.8.0، لا تمس المستودع): الإعداد من GC_Q (كـ ?match=1... في المتصفح)، وعدّاد
 # الأداء يُطبع كل 5 ث (GC_METER)، وإخفاء طبقات (GC_HIDE=city,units,fog,weather، وGC_NOHUD، وGC_BLANK مشهد فارغ)، وإيقاف بعد
-# 8 ث (GC_PAUSE)، وحارس المعالج لا يحكم (GC_NOGUARD: خيوط llvmpipe تُحسب على اللعبة هنا)، وImpeller ونافذة بمقاس الجوال
+# 8 ث (GC_PAUSE)، وبلا أرض المدينة (GC_SKIPGROUND) أو بلا صفوفها (GC_SKIPROWS)، وحارس المعالج لا يحكم (GC_NOGUARD: خيوط llvmpipe تُحسب على اللعبة هنا)، وImpeller ونافذة بمقاس الجوال
 # الاستعمال: python3 patch.py <مجلد النسخة>
 import sys, re
 b = sys.argv[1]
@@ -16,6 +16,13 @@ if 'GC_METER' not in s:
     if "import 'dart:io'" not in s: s = "import 'dart:io' show Platform;\n" + s
     s = s.replace("Positioned.fill(child: RepaintBoundary(child: MatchHud(screen: this))),", "if (Platform.environment['GC_NOHUD'] == null) Positioned.fill(child: RepaintBoundary(child: MatchHud(screen: this))),", 1)
     s = s.replace("    canvas.drawColor(const Color(0xFF1B1611), BlendMode.src);\n    final s = v.state,", "    canvas.drawColor(const Color(0xFF1B1611), BlendMode.src);\n    if (Platform.environment['GC_BLANK'] != null) return;\n    final s = v.state,", 1)
+    open(p, 'w', encoding='utf-8').write(s)
+p = f'{b}/lib/render/city_layer.dart'; s = open(p, encoding='utf-8').read()
+if 'GC_SKIPGROUND' not in s:
+    s = "import 'dart:io' show Platform;\n" + s
+    s = s.replace("    final any = !skip && b0 <= b1;", "    final any = !skip && b0 <= b1 && Platform.environment['GC_SKIPGROUND'] == null;", 1)
+    s = s.replace("      if (row != null) canvas.drawVertices(row, ui.BlendMode.dst, _paint);", "      if (row != null && Platform.environment['GC_SKIPROWS'] == null) canvas.drawVertices(row, ui.BlendMode.dst, _paint);", 1)
+    s = s.replace("      if (b > a) {\n        // نوافذ الصف", "      if (b > a && Platform.environment['GC_SKIPROWS'] == null) {\n        // نوافذ الصف", 1)
     open(p, 'w', encoding='utf-8').write(s)
 p = f'{b}/lib/ui/cpu_guard.dart'
 try:

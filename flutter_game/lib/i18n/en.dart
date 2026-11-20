@@ -1136,4 +1136,7 @@ const EN = <String, String>{
   'المعالج {}% من الجهاز ({} نواة من {}) • الحد {}% • درجة الإيقاع {}': 'CPU {}% of the device ({} of {} cores) • limit {}% • pace step {}',
   'الخيوط: {}': 'Threads: {}',
   'توفير البطارية (20 إطاراً)': 'Battery saver (20 fps)',
+  // 2.9.0: صورة الأرض الجاهزة في عدّاد الأداء
+  'الطقس {} • أضواء {} • صور الضباب {}/ث • صور الأرض {}/ث • دفعات {}/إطار': 'Weather {} • Lights {} • Fog images {}/s • Ground images {}/s • Batches {}/frame',
+  'صور الأرض {}/ث': 'Ground images {}/s',
 };

@@ -21,7 +21,8 @@ import java.io.File
 
 class MainActivity : FlutterActivity() {
     private var lock: WifiManager.MulticastLock? = null
-    private var pool: SoundPool? = null   // لا يمسه إلا خيط الصوت
+    private var pool: SoundPool? = null   // لا يمسه إلا خيط الصوت (إن تعذر الخلاط على الجهاز)
+    @Volatile private var mixer: SfxMixer? = null   // خلاط المؤثرات (2.9.0، SfxMixer.kt): قناة واحدة لكل الأصوات
     // خيط خاص بالصوت (2.1.4، وأعيد في 2.3.1): منذ Flutter 3.29 يعمل كود Dart على خيط أندرويد الرئيسي نفسه، فكان كل صوت في
     // القتال (SoundPool.play) يوقف تجهيز الإطار حتى يرد نظام الصوت. أُلغي في 2.1.6 ظناً أنه سبب الانهيار، والسبب كان الضباب (2.2.2)
     private val sfxThread = HandlerThread("gangcity-sfx").apply { start() }
@@ -54,6 +55,8 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
+        mixer?.release()
+        mixer = null
         onSfx { pool?.release(); pool = null }
         sfxThread.quitSafely()
         super.onDestroy()
@@ -62,8 +65,9 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         val messenger = flutterEngine.dartExecutor.binaryMessenger
-        // مؤثرات الصوت (audio/sound.dart): SoundPool واحد يفك كل ملف مرة واحدة عند التشغيل ويبقيه في الذاكرة، فلا يُفك
-        // ملف مع كل ضربة. load: مسارات الأصول ← أرقامها، play: [رقم، ارتفاع، سرعة، أولوية]، hold: إيقاف مؤقت أو متابعة
+        // مؤثرات الصوت (audio/sound.dart): كل ملف يُفك مرة واحدة عند التشغيل، وخلاط واحد يخلطها في قناة واحدة (2.9.0: كانت
+        // SoundPool تفتح قناة لكل ضربة، 38% من نواة في معارك جوال المستخدم)، وSoundPool إن تعذر الخلاط على الجهاز.
+        // load: مسارات الأصول ← أرقامها، plays: [رقم، ارتفاع، سرعة، أولوية] لكل صوت متتالية، hold: إيقاف مؤقت أو متابعة
         MethodChannel(messenger, "gangcity/sfx").setMethodCallHandler { call, result ->
             try {
                 when (call.method) {
@@ -73,28 +77,42 @@ class MainActivity : FlutterActivity() {
                         onSfx {
                             var ids = paths.map { 0 }   // يرد دائماً (ولو فشل) فلا تنتظر اللعبة عند فتحها
                             try {
-                                val p = pool ?: SoundPool.Builder().setMaxStreams(voices).setAudioAttributes(AudioAttributes.Builder()
-                                    .setUsage(AudioAttributes.USAGE_GAME).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
-                                    .build().also { pool = it }
                                 val loader = FlutterInjector.instance().flutterLoader()
-                                ids = paths.map { path ->
-                                    try { assets.openFd(loader.getLookupKeyForAsset(path)).use { p.load(it, 1) } } catch (_: Exception) { 0 }
+                                fun open(path: String) = try { assets.openFd(loader.getLookupKeyForAsset(path)) } catch (_: Exception) { null }
+                                val m = try { SfxMixer(voices) { e -> note("mix", e) } } catch (e: Throwable) { note("mix", e); null }
+                                val mixed = try { m?.load(paths.map { open(it) }) } catch (e: Throwable) { note("mix", e); null }
+                                if (m != null && mixed != null && mixed.any { it > 0 }) {
+                                    mixer = m
+                                    ids = mixed
+                                } else {
+                                    m?.release()
+                                    val p = pool ?: SoundPool.Builder().setMaxStreams(voices).setAudioAttributes(AudioAttributes.Builder()
+                                        .setUsage(AudioAttributes.USAGE_GAME).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
+                                        .build().also { pool = it }
+                                    ids = paths.map { path -> try { open(path)?.use { p.load(it, 1) } ?: 0 } catch (_: Exception) { 0 } }
                                 }
                             } finally {
                                 main.post { result.success(ids) }
                             }
                         }
                     }
-                    "play" -> {
+                    "plays" -> {
+                        // أصوات التحديث كلها في رسالة واحدة (2.9.0): البدء في الخلاط إضافة إلى قائمة، فيُطلب هنا مباشرة
                         val a = call.arguments as List<*>
-                        val id = (a[0] as Number).toInt(); val v = (a[1] as Number).toFloat()
-                        val rate = (a[2] as Number).toFloat().coerceIn(0.5f, 2f); val pri = (a[3] as Number).toInt()
-                        onSfx { pool?.play(id, v, v, pri, 0, rate) }
+                        val m = mixer
+                        var k = 0
+                        while (k + 3 < a.size) {
+                            val id = (a[k] as Number).toInt(); val v = (a[k + 1] as Number).toFloat()
+                            val rate = (a[k + 2] as Number).toFloat().coerceIn(0.5f, 2f); val pri = (a[k + 3] as Number).toInt()
+                            if (m != null) m.play(id, v, rate, pri) else onSfx { pool?.play(id, v, v, pri, 0, rate) }
+                            k += 4
+                        }
                         result.success(null)
                     }
                     "hold" -> {
                         val on = call.arguments == true
-                        onSfx { if (on) pool?.autoPause() else pool?.autoResume() }
+                        val m = mixer
+                        if (m != null) m.hold(on) else onSfx { if (on) pool?.autoPause() else pool?.autoResume() }
                         result.success(null)
                     }
                     else -> result.notImplemented()

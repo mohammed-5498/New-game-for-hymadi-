@@ -154,7 +154,15 @@ class GameSound {
     _next = (slot + 1) % _busyUntil.length;
     _busyUntil[slot] = now + 0.6;
     _fight[slot] = fight;
-    _native.invokeMethod<void>('play', [id, vol, rate, fight ? 1 : 2]).catchError((_) {});
+    // أصوات التحديث كله في رسالة واحدة بعده (2.9.0): كانت رسالة لكل صوت إلى خيط أندرويد
+    if (_batch.isEmpty) scheduleMicrotask(_send);
+    _batch.addAll([id, vol, rate, fight ? 1 : 2]);
+  }
+  static final _batch = <num>[];
+  static void _send() {
+    if (_batch.isEmpty) return;
+    _native.invokeMethod<void>('plays', List<num>.of(_batch)).catchError((_) {});
+    _batch.clear();
   }
 
   static void _flush() {

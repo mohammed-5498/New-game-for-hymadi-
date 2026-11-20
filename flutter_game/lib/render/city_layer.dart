@@ -254,6 +254,7 @@ class CityLayer {
   final Uint8List _isMask;
   final _applied = <int, (String?, double)>{};
   bool tinted = false;
+  int groundVersion = 0;             // تزيد كلما تغير لون الأرض (صورة الأرض الجاهزة ترسم نفسها من جديد)
   final List<Light> lights;          // إضاءة الليل الثابتة (weather_art.dart)
   final Map<int, int> _tileItem, _tileMask;   // المربع ← رقم صورته وقناعها (لتبديل صورة مربع واحد)
   final Map<int, Sprite?> _tileSprite;
@@ -511,7 +512,7 @@ class CityLayer {
       if (g != null && (_gBase![m] >> 24 & 255) == 255) g[m] = owner == null || a <= 0 ? _gBase[m] : _modulate(c, _gKindBase![m], faint: false);
       dirty = true;
     }
-    if (dirty) _ground.stale();
+    if (dirty) { _ground.stale(); groundVersion++; }
     tinted = false;
     for (var m = 0; m < spriteCol.length; m++) {
       final id = _spriteDistrict[m];
@@ -531,17 +532,23 @@ class CityLayer {
 
   // top وbottom: حدا الشاشة بوحدات العالم. onGround بعد الأرض (الظلال والحدود والنار)، وafterRow(d) بعد كل صف
   // (الجنود الواقفون فيه: يغطيهم ما أمامهم من مبانٍ ولا يغطيهم ما خلفهم)
+  // ground: false حين تكون الأرض من صورتها الجاهزة (GroundCache)
   void paint(ui.Canvas canvas, ui.Image atlas, double top, double bottom,
-      {void Function()? onGround, void Function(int d)? afterRow, bool skip = false}) {
-    // الأرض ثم خطوطها، للشرائح الظاهرة وحدها (حلقة الدوار وحافة الساحات تتجاوز مربعها قليلاً: هامش 48)
+      {void Function()? onGround, void Function(int d)? afterRow, bool skip = false, bool ground = true}) {
+    // skip: المدينة مخفية (مفتاح عدّاد الأداء)، وما فوقها يُرسم كما هو
+    if (!skip && ground) paintGround(canvas, atlas, top, bottom);
+    _rows(canvas, atlas, top, bottom, onGround, afterRow, skip);
+  }
+
+  // الأرض بطبقاتها للشرائح بين top وbottom (حلقة الدوار وحافة الساحات تتجاوز مربعها قليلاً: هامش 48). الشرائح الظاهرة
+  // متجاورة (b0..b1): كل طبقة بأمر رسم واحد لها كلها (2.8.0، كانت أمراً لكل شريحة)، والترتيب بين الطبقات كما كان
+  void paintGround(ui.Canvas canvas, ui.Image atlas, double top, double bottom) {
     bool seen(int b) => (b * band - 1) * TILE_HALF_H - 48 <= bottom && ((b + 1) * band + 1) * TILE_HALF_H + 48 >= top;
-    // skip: المدينة مخفية (مفتاح عدّاد الأداء)، وما فوقها يُرسم كما هو. الشرائح الظاهرة متجاورة (b0..b1): كل طبقة أرض
-    // بأمر رسم واحد لها كلها (2.8.0، كانت أمراً لكل شريحة)، والترتيب بين الطبقات كما كان
     final bands = _bandStart.length - 1;
     var b0 = 0, b1 = bands - 1;
     while (b0 < bands && !seen(b0)) { b0++; }
     while (b1 >= b0 && !seen(b1)) { b1--; }
-    final any = !skip && b0 <= b1;
+    final any = b0 <= b1;
     if (any) {
       _ground.paint(canvas, b0, b1, _paint);
       // صور الأرض فوق لونها المسطح (يسد ما بين حوافها)
@@ -551,7 +558,7 @@ class CityLayer {
             Int32List.sublistView(_gCol!, a, b), ui.BlendMode.modulate, null, _atlasPaint);
       }
     }
-    if (!skip) _margin?.paint(canvas);
+    _margin?.paint(canvas);
     if (any) {
       // العلامات بالكود وصورها، ثم الرصيف ووجوه حافته، ثم ظل قواعد المباني وحافة الخريطة الأمامية
       _marks.paint(canvas, b0, b1, _paint);
@@ -559,6 +566,9 @@ class CityLayer {
       _reliefSprites.paint(canvas, atlas, b0, b1, _reliefPaint);
       _reliefVec.paint(canvas, b0, b1, _paint);
     }
+  }
+
+  void _rows(ui.Canvas canvas, ui.Image atlas, double top, double bottom, void Function()? onGround, void Function(int d)? afterRow, bool skip) {
     onGround?.call();
     for (var d = 0; d < rows.length; d++) {
       final y = d * TILE_HALF_H;
@@ -788,5 +798,67 @@ class _Sprites {
   void paint(ui.Canvas canvas, ui.Image atlas, int b0, int b1, ui.Paint paint) {
     final a = start[b0], b = start[b1 + 1];
     if (b > a) canvas.drawRawAtlas(atlas, Float32List.sublistView(xf, a * 4, b * 4), Float32List.sublistView(rects, a * 4, b * 4), null, null, null, paint);
+  }
+}
+
+// أرض المدينة صورة جاهزة (2.9.0، الخطوة الثانية بطلب المستخدم: "اجعل اللعبة تعمل على 30 إطاراً ثابتة"): طبقات الأرض (وحدود
+// الأحياء في المباراة) أثقل ما في رسم المدينة (78% منه في أداة القياس) ولا تتغير إلا قليلاً. تُرسم مرة في صورة تغطي الشاشة وربعها
+// حولها بتقريب الكاميرا ونقاط الجهاز، ويعرضها كل إطار بأمر واحد على نقاط الشاشة نفسها. تُرسم من جديد حين تخرج الشاشة عنها (ولا
+// أكثر من مرة كل GROUND_CACHE.gap إطارات: والكاميرا تجري تُرسم الأرض مباشرة كما كانت)، أو يستقر تقريب جديد (وأثناء التقريب
+// مباشرة)، أو يتغير ما فيها (key). والمباني والجنود فوقها كما كانوا، فما خلف المبنى يبقى مخفياً. والقائمة الرئيسية تضع المدينة
+// كلها فيها (بلا جنود)
+class GroundCache {
+  ui.Image? _img;
+  ui.Rect _area = ui.Rect.zero;   // ما تغطيه الصورة بوحدات العالم
+  double _z = 0, _px = 0, _lastZ = -1;   // تقريب الكاميرا حين رُسمت، ونقاط الصورة لكل وحدة
+  Object? _key;
+  int _still = 0, _frame = 0, _drawnAt = -1000;
+  static int renders = 0;         // كم صورة أرض رُسمت (عدّاد الأداء)
+  static final _imgPaint = ui.Paint()..filterQuality = ui.FilterQuality.low;
+
+  // يعرض الصورة ويعيد true، أو false فيرسم المستدعي الأرض مباشرة. view: الشاشة بوحدات العالم، z: تقريب الكاميرا، dpr: نقاط
+  // الجهاز لكل نقطة شاشة، key: ما يغيّر محتواها، draw: ترسم ما فيها لمساحة بوحدات العالم (على لوحة بوحدات العالم)
+  bool paint(ui.Canvas canvas, ui.Rect view, double z, double dpr, Object key, void Function(ui.Canvas c, ui.Rect area) draw) {
+    _frame++;
+    if (z != _lastZ) { _lastZ = z; _still = 0; } else { _still++; }
+    var img = _img;
+    if (img == null || key != _key || z != _z || !_area.contains(view.topLeft) || !_area.contains(view.bottomRight)) {
+      if (_still < GROUND_CACHE.settle || _frame - _drawnAt < GROUND_CACHE.gap) return false;
+      img = _render(view, z, dpr, key, draw);
+    }
+    // ركن الصورة على نقطة جهاز كاملة (إزاحة أقل من نقطة)، فتقع كل نقطة منها على نقطة من الشاشة فلا تغبش
+    final m = canvas.getTransform(), sx = m[0] * dpr, sy = m[5] * dpr, tx = m[12] * dpr, ty = m[13] * dpr;
+    final left = ((_area.left * sx + tx).roundToDouble() - tx) / sx, top = ((_area.top * sy + ty).roundToDouble() - ty) / sy;
+    canvas.drawImageRect(img, ui.Rect.fromLTWH(0, 0, img.width.toDouble(), img.height.toDouble()),
+        ui.Rect.fromLTWH(left, top, img.width / _px, img.height / _px), _imgPaint);
+    return true;
+  }
+
+  ui.Image _render(ui.Rect view, double z, double dpr, Object key, void Function(ui.Canvas c, ui.Rect area) draw) {
+    final g = GROUND_CACHE.margin;
+    final area = ui.Rect.fromLTRB(view.left - view.width * g, view.top - view.height * g, view.right + view.width * g, view.bottom + view.height * g);
+    var px = z * dpr;
+    final w = area.width * px, h = area.height * px;
+    px *= math.min(1.0, math.min(GROUND_CACHE.maxSide / math.max(w, h), math.sqrt(GROUND_CACHE.maxPixels / (w * h))));   // الجوالات القديمة: حد كرت الشاشة والذاكرة
+    final rec = ui.PictureRecorder(), c = ui.Canvas(rec);
+    c.scale(px);
+    c.translate(-area.left, -area.top);
+    draw(c, area);
+    final pic = rec.endRecording(), img = pic.toImageSync((area.width * px).ceil(), (area.height * px).ceil());
+    pic.dispose();
+    _img?.dispose();
+    _img = img;
+    _area = area;
+    _z = z;
+    _px = px;
+    _key = key;
+    _drawnAt = _frame;
+    renders++;
+    return img;
+  }
+
+  void dispose() {
+    _img?.dispose();
+    _img = null;
   }
 }
