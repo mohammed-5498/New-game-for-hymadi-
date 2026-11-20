@@ -1124,4 +1124,11 @@ const EN = <String, String>{
   '{}/{} ث': '{}/{} s',
   'نخبة': 'Elite',
   'عادي': 'Normal',
+  'إعداد المباراة': 'Match Setup',
+  'اللاعبون': 'Players',
+  'النوع': 'Type',
+  'العصابة': 'Gang',
+  'اللون': 'Color',
+  'الفريق': 'Team',
+  'الصعوبة': 'Difficulty',
 };

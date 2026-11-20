@@ -161,6 +161,10 @@ String sideName(String side) => side == 'random' ? 'عشوائي' : _isElite(sid
     : _isNation(side) ? nations.m(side).s('name') : GANGS.m(side).s('name');
 String sideNote(String side) => side == 'random' ? '' : _isNation(side) ? nations.m(_baseSide(side)).s('gangName') : nations.s('classicNote');
 
+// بطل العصابة (أول ربع من صورتها، البطل يسارها): خانات المتجر والإعداد
+Widget heroThumb(String side) => ClipRect(child: Align(alignment: Alignment.centerLeft, widthFactor: 0.25,
+    child: Image.asset('assets/thumbs/side_$side.webp', fit: BoxFit.fitHeight, filterQuality: FilterQuality.medium)));
+
 // لوحة العصابات: تبويب لكل منطقة بأممها، ثم الكلاسيكية (SIDE_GROUPS)
 List<(String, List<String>)> get sideGroups => [
   for (final r in REGIONS.l('order').cast<String>()) (REGIONS.m(r).s('name'), REGIONS.m(r).l('nations').cast<String>()),
@@ -219,14 +223,19 @@ class _SidePickerState extends State<_SidePicker> {
               : nations.m('styles').m(g).s('name'), image: 'assets/thumbs/side_$g.webp', aspect: 2.5,
               selected: chosen == g, onTap: () => setState(() => chosen = g)),
       ]),
-  ], side: Container(width: 250, margin: const EdgeInsets.fromLTRB(10, 10, 0, 10), padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(color: card, borderRadius: BorderRadius.circular(10)),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Expanded(child: SingleChildScrollView(child: _details())),
-        const SizedBox(height: 8),
-        WideButton('اختيار', chosen == 'random' ? null : () => Navigator.pop(context, chosen), primary: true),
-      ])),
-    footer: [WideButton('عشوائي', () => Navigator.pop(context, 'random'), width: 160)]);
+  ], side: Container(width: 260, margin: const EdgeInsets.fromLTRB(10, 10, 0, 10), clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0x80E2B55A)),
+          gradient: const LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0xF2302519), Color(0xF2171210)])),
+      // الشخصيات حية برسم اللعبة (2.7.0)، كعرض المتجر، ثم وصفها يُمرَّران معاً، وزر الاختيار أسفل اللوحة بجوار "عشوائي"
+      child: SingleChildScrollView(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        if (chosen != 'random') SizedBox(height: 112, child: ShowcaseStage(gang: _isNation(chosen) ? nations.m(_baseSide(chosen)).s('style') : chosen,
+            nation: _isNation(chosen) ? _baseSide(chosen) : null, elite: _isElite(chosen))),
+        Padding(padding: const EdgeInsets.fromLTRB(10, 8, 10, 8), child: _details()),
+      ]))),
+    footer: [
+      WideButton('اختيار', chosen == 'random' ? null : () => Navigator.pop(context, chosen), primary: true, width: 160),
+      WideButton('عشوائي', () => Navigator.pop(context, 'random'), width: 160),
+    ]);
 }
 
 // ===================== القائمة الرئيسية =====================
@@ -615,9 +624,65 @@ class _SetupScreenState extends State<SetupScreen> {
     Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => MatchScreen(settings: m.build())));
   }
 
-  Widget _cell(double w, Widget child, [VoidCallback? onTap]) => SizedBox(width: w, height: 40, child: Material(
-      color: card, borderRadius: BorderRadius.circular(7),
-      child: InkWell(borderRadius: BorderRadius.circular(7), onTap: onTap, child: Center(child: child))));
+  // --- قائمة اللعب (2.7.0، بطلب المستخدم: "باقي تحسين قائمة اللعب"): بشكل المتجر والقائمة الرئيسية ---
+  static const _frame = Color(0x66E2B55A);
+  static BoxDecoration _plate([double r = 12]) => BoxDecoration(gradient: plateGrad, borderRadius: BorderRadius.circular(r),
+      border: Border.all(color: _frame), boxShadow: const [BoxShadow(color: Color(0x66000000), blurRadius: 6, offset: Offset(0, 2))]);
+  static Widget _tap(VoidCallback? onTap, Widget child) =>
+      GestureDetector(behavior: HitTestBehavior.opaque, onTap: onTap == null ? null : () { sound('ui_tap'); onTap(); }, child: child);
+  static Widget _badge(IconData icon) => Container(width: 32, height: 32, decoration: BoxDecoration(shape: BoxShape.circle,
+      color: const Color(0x24E2B55A), border: Border.all(color: const Color(0x80E2B55A))), child: Icon(icon, size: 18, color: gold));
+
+  // خانة إعداد: أيقونة وعنوان وقيمة وسطر، ولمستها تفتح خياراتها
+  Widget _setting({required IconData icon, required String title, required String value, String? note, required VoidCallback onTap,
+      Widget? trailing}) => _tap(onTap, Container(padding: const EdgeInsets.fromLTRB(10, 5, 8, 5), decoration: _plate(), child: Row(children: [
+    _badge(icon),
+    const SizedBox(width: 10),
+    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(title, style: const TextStyle(color: dim, fontSize: 11)),
+      Text(value, maxLines: 1, overflow: TextOverflow.ellipsis,
+          style: const TextStyle(color: ink, fontSize: 15.5, fontWeight: FontWeight.w700, height: 1.2)),
+      if (note != null) Text(note, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Color(0xFFB9AB91), fontSize: 11)),
+    ])),
+    trailing ?? const Icon(Icons.chevron_right_rounded, color: gold, size: 22),
+  ])));
+
+  // خانة صغيرة: الخريطة والطقس والحد
+  Widget _mini(IconData icon, String title, String value, String? note, VoidCallback onTap) => Expanded(child: _tap(onTap, Container(
+    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6), decoration: _plate(),
+    child: Column(mainAxisSize: MainAxisSize.min, children: [
+      Row(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(icon, size: 15, color: gold), const SizedBox(width: 4),
+        Flexible(child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: dim, fontSize: 11)))]),
+      Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: ink, fontSize: 14.5, fontWeight: FontWeight.w700, height: 1.25)),
+      Text(note ?? ' ', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Color(0xFFB9AB91), fontSize: 10.5)),
+    ]))));
+
+  // المدينة بصورتها من رسم اللعبة، أو رمز للعشوائية ومدينة المضيف
+  Widget _cityCard() {
+    final c = m.city, img = c == 'random' || c == 'host' ? null : 'assets/thumbs/city_$c.webp';
+    return _tap(_pickCity, Container(height: 82, clipBehavior: Clip.antiAlias, decoration: _plate(), child: Stack(fit: StackFit.expand, children: [
+      if (img != null) Image.asset(img, fit: BoxFit.cover)
+      else Align(alignment: AlignmentDirectional.centerEnd, child: Padding(padding: const EdgeInsetsDirectional.only(end: 18),
+          child: Icon(c == 'random' ? Icons.casino_rounded : Icons.flag_rounded, size: 54, color: const Color(0x66E2B55A)))),
+      const DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter,
+          colors: [Color(0x00000000), Color(0x40000000), Color(0xE6000000)], stops: [0, 0.4, 1]))),
+      PositionedDirectional(start: 10, end: 12, bottom: 6, child: Row(children: [
+        _badge(Icons.location_city_rounded),
+        const SizedBox(width: 10),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(cityShort(c), maxLines: 1, style: const TextStyle(color: ink, fontSize: 17, fontWeight: FontWeight.w700, shadows: [Shadow(blurRadius: 3)])),
+          Text(c == 'random' ? 'تُختار عند البدء' : cityName(c), maxLines: 1, overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: Color(0xFFCBBD9F), fontSize: 11)),
+        ])),
+      ])),
+    ])));
+  }
+
+  // خلية في سطر لاعب: لوح صغير، ولمستها تغيّر قيمتها
+  Widget _cell(double? w, Widget child, [VoidCallback? onTap]) => _tap(onTap, Container(width: w, height: 37,
+      padding: const EdgeInsets.symmetric(horizontal: 5), alignment: Alignment.center,
+      decoration: BoxDecoration(gradient: plateGrad, borderRadius: BorderRadius.circular(9), border: Border.all(color: const Color(0x40E2B55A))),
+      child: child));
 
   Widget _row(int k) {
     final s = m.slots[k], surv = m.survival;
@@ -627,25 +692,34 @@ class _SetupScreenState extends State<SetupScreen> {
     const st = TextStyle(color: ink, fontSize: 13);
     final level = k > 0 && !closed && s.type != 'net' ? BOT.m(s.difficulty) : null;
     return Opacity(opacity: closed ? 0.45 : 1, child: Padding(padding: const EdgeInsets.symmetric(vertical: 2), child: Row(children: [
-      SizedBox(width: 18, child: Text('${k + 1}', style: const TextStyle(color: dim, fontSize: 12))),
-      _cell(64, Text(surv ? (k == 0 ? 'أنت' : closed ? 'مغلقة' : 'حليف') : s.type == 'net' ? s.name : _slotTypes[s.type]!, style: st,
-          overflow: TextOverflow.ellipsis),
+      Container(width: 22, height: 22, alignment: Alignment.center, decoration: BoxDecoration(shape: BoxShape.circle,
+          border: Border.all(color: const Color(0x80E2B55A))), child: Text('${k + 1}', style: const TextStyle(color: gold, fontSize: 11))),
+      const SizedBox(width: 5),
+      _cell(64, Text(surv ? (k == 0 ? 'أنت' : closed ? 'مغلقة' : 'حليف') : s.type == 'net' ? s.name : _slotTypes[s.type]!,
+          style: k == 0 ? st.copyWith(color: gold, fontWeight: FontWeight.w700) : st, overflow: TextOverflow.ellipsis),
           () { if (k > 0 && !surv && s.type != 'net') setState(() => s.type = s.type == 'bot' ? 'closed' : 'bot'); }),
-      const SizedBox(width: 4),
-      _cell(120, Column(mainAxisSize: MainAxisSize.min, children: [
-        Text(sideName(s.side), style: st),
-        if (sideNote(s.side).isNotEmpty) Text(sideNote(s.side), style: const TextStyle(color: dim, fontSize: 10)),
-      ]), () { if (!openIfClosed() && s.type != 'net') _pickSide(k); }),   // الصديق يختار أمته بنفسه
-      const SizedBox(width: 4),
-      _cell(40, Container(width: 22, height: 22, decoration: BoxDecoration(color: colorOf(colorHex(s.color)), shape: BoxShape.circle)),
+      const SizedBox(width: 5),
+      Expanded(child: _cell(null, Row(children: [
+        if (s.side == 'random') const SizedBox(width: 24, child: Icon(Icons.casino_rounded, size: 20, color: gold))
+        else SizedBox(height: 34, child: heroThumb(s.side)),
+        const SizedBox(width: 6),
+        Expanded(child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(sideName(s.side), maxLines: 1, overflow: TextOverflow.ellipsis, style: st.copyWith(height: 1.15)),
+          if (sideNote(s.side).isNotEmpty) Text(sideNote(s.side), maxLines: 1, overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: dim, fontSize: 10, height: 1.15)),
+        ])),
+      ]), () { if (!openIfClosed() && s.type != 'net') _pickSide(k); })),   // الصديق يختار أمته بنفسه
+      const SizedBox(width: 5),
+      _cell(44, Container(width: 22, height: 22, decoration: BoxDecoration(color: colorOf(colorHex(s.color)), shape: BoxShape.circle,
+          border: Border.all(color: const Color(0xCCF2E6CF), width: 1.5), boxShadow: const [BoxShadow(color: Color(0x80000000), blurRadius: 3)])),
           () { if (!openIfClosed()) setState(() => s.color = _nextColor(k)); }),
-      const SizedBox(width: 4),
-      _cell(64, Text(surv ? 'فريق 1' : s.team == 0 ? 'بدون' : 'فريق ${s.team}', style: st),
+      const SizedBox(width: 5),
+      _cell(70, Text(surv ? 'فريق 1' : s.team == 0 ? 'بدون' : 'فريق ${s.team}', style: st),
           () { if (!openIfClosed() && !surv) setState(() => s.team = (s.team + 1) % 5); }),
-      const SizedBox(width: 4),
-      _cell(82, Column(mainAxisSize: MainAxisSize.min, children: [
-        Text(level?.s('name') ?? '—', style: st),
-        if (level?.ss('note') != null) Text(level!.s('note'), style: const TextStyle(color: dim, fontSize: 9)),
+      const SizedBox(width: 5),
+      _cell(86, Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+        Text(level?.s('name') ?? '—', style: st.copyWith(height: 1.15)),
+        if (level?.ss('note') != null) Text(level!.s('note'), maxLines: 1, style: const TextStyle(color: dim, fontSize: 9, height: 1.1)),
       ]), () {
         if (openIfClosed() || level == null) return;
         setState(() => s.difficulty = BOT_LEVELS[(BOT_LEVELS.indexOf(s.difficulty) + 1) % BOT_LEVELS.length] as String);
@@ -657,52 +731,80 @@ class _SetupScreenState extends State<SetupScreen> {
   Widget build(BuildContext context) {
     final size = MAP_SIZES.m(m.mapSize);
     if (widget.lan) _sendLobby();
-    return Scaffold(body: SafeArea(child: Column(children: [
-      Expanded(child: SingleChildScrollView(padding: const EdgeInsets.all(10), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Column(children: [
-          PickTile(title: 'طور اللعب', value: _GM.m(m.mode).s('name'), icon: Icons.flag, width: 300, note: _modeNote(), onTap: _pickMode),
-          const SizedBox(height: 6),
-          PickTile(title: 'المدينة', value: cityShort(m.city), note: m.city == 'random' ? 'تُختار عند البدء' : cityName(m.city),
-              image: m.city == 'random' || m.city == 'host' ? null : 'assets/thumbs/city_${m.city}.webp', icon: Icons.location_city, width: 300, onTap: _pickCity),
-          const SizedBox(height: 6),
-          Row(children: [
-            PickTile(title: 'الخريطة', value: size.s('name'), note: 'حتى ${size.i('maxPlayers')} لاعبين', icon: Icons.map, width: 96,
-                onTap: () => _choose<String>('حجم الخريطة', ['small', 'medium', 'large'], (k) => MAP_SIZES.m(k).s('name'), m.mapSize, (v) => m.mapSize = v)),
-            const SizedBox(width: 6),
-            PickTile(title: 'الطقس', value: m.weather == 'random' ? 'عشوائي' : WEATHER.m(m.weather).s('name'),
-                note: m.weather == 'night' ? 'رؤية أقل' : m.weather == 'snow' ? 'مشي أبطأ' : m.weather == 'rain' ? 'رمي أضعف' : null,
-                icon: m.weather == 'night' ? Icons.nightlight : m.weather == 'snow' ? Icons.ac_unit : m.weather == 'rain' ? Icons.water_drop : Icons.wb_sunny,
-                width: 96, onTap: () => _choose<String>('الطقس', [for (final w in WEATHER_KEYS) w as String, 'random'],
-                    (k) => k == 'random' ? 'عشوائي' : WEATHER.m(k).s('name'), m.weather, (v) => m.weather = v)),
-            const SizedBox(width: 6),
-            PickTile(title: 'الحد', value: '${m.maxUnits} وحدة', note: 'لكل لاعب', icon: Icons.groups, width: 96,
-                onTap: () => _choose<int>('الحد الأقصى للوحدات', [for (final v in UNITS.l('maxUnitsChoices')) v as int], (v) => '$v', m.maxUnits, (v) => m.maxUnits = v)),
-          ]),
-          const SizedBox(height: 6),
-          PickTile(title: 'ضباب الحرب', value: m.fog ? 'مفعّل' : 'بدون', note: m.fog ? 'الخريطة تنكشف بالاستكشاف' : 'الخريطة كلها ظاهرة',
-              icon: m.fog ? Icons.cloud : Icons.visibility, width: 300, onTap: () => setState(() { m.fog = !m.fog; m.save(); })),
+    Widget label(String t, [double? w]) => SizedBox(width: w, child: Text(t, textAlign: TextAlign.center, style: const TextStyle(color: dim, fontSize: 10.5)));
+    return Scaffold(body: DecoratedBox(
+      decoration: const BoxDecoration(gradient: RadialGradient(center: Alignment(0.35, -0.5), radius: 1.35,
+          colors: [Color(0xFF3B2D1D), Color(0xFF120E0A)])),
+      child: SafeArea(child: Padding(padding: const EdgeInsets.fromLTRB(12, 8, 12, 8), child: Column(children: [
+        Row(children: [
+          Container(width: 36, height: 36, decoration: BoxDecoration(shape: BoxShape.circle, gradient: goldGrad, border: Border.all(color: const Color(0xFFFFE6A8))),
+              child: const IconTheme(data: IconThemeData(color: Color(0xFF2A1A08), size: 20), child: Center(child: SwordsIcon()))),
+          const SizedBox(width: 10),
+          GoldTitle(widget.lan ? 'لعب محلي' : 'إعداد المباراة', size: 24),
+          const Spacer(),
+          _Pill(Icons.arrow_back_rounded, 'رجوع', on: false, onTap: () => Navigator.pop(context)),
         ]),
-        const SizedBox(width: 12),
-        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          if (widget.lan) SizedBox(width: 404, child: Text('مباراة محلية باسم «${Lan.name}»'
-              '${Lan.ips.isNotEmpty ? ' • عنوانك: ${Lan.ips.join(' أو ')}' : ''}'
-              '${m.slots.any((s) => s.type == 'net') ? ' • انضم ${m.slots.where((s) => s.type == 'net').length}' : ' • بانتظار الأصدقاء…'}',
-              style: const TextStyle(color: gold, fontSize: 12.5))),
-          SizedBox(width: 404, child: Text(m.survival ? 'أنت و${m.allies} حلفاء ضد موجات الشرطة • الحد ${m.limit} لاعبين'
-              : widget.lan ? 'الخانة الأولى أنت • كل صديق ينضم يأخذ خانة بوت • الحد ${m.limit} لاعبين'
-              : 'الخانة الأولى أنت • الحد على هذه الخريطة ${m.limit} لاعبين', style: const TextStyle(color: dim, fontSize: 12))),
-          const SizedBox(height: 4),
-          for (var k = 0; k < _maxSlots; k++) _row(k),
+        const SizedBox(height: 8),
+        Expanded(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          SizedBox(width: 300, child: SingleChildScrollView(child: Column(children: [
+            _setting(icon: Icons.flag_rounded, title: 'طور اللعب', value: _GM.m(m.mode).s('name'), note: _modeNote(), onTap: _pickMode),
+            const SizedBox(height: 6),
+            _cityCard(),
+            const SizedBox(height: 6),
+            Row(children: [
+              _mini(Icons.map_rounded, 'الخريطة', size.s('name'), 'حتى ${size.i('maxPlayers')} لاعبين',
+                  () => _choose<String>('حجم الخريطة', ['small', 'medium', 'large'], (k) => MAP_SIZES.m(k).s('name'), m.mapSize, (v) => m.mapSize = v)),
+              const SizedBox(width: 6),
+              _mini(m.weather == 'night' ? Icons.nightlight_round : m.weather == 'snow' ? Icons.ac_unit_rounded : m.weather == 'rain' ? Icons.water_drop_rounded
+                  : m.weather == 'random' ? Icons.casino_rounded : Icons.wb_sunny_rounded, 'الطقس',
+                  m.weather == 'random' ? 'عشوائي' : WEATHER.m(m.weather).s('name'),
+                  m.weather == 'night' ? 'رؤية أقل' : m.weather == 'snow' ? 'مشي أبطأ' : m.weather == 'rain' ? 'رمي أضعف' : null,
+                  () => _choose<String>('الطقس', [for (final w in WEATHER_KEYS) w as String, 'random'],
+                      (k) => k == 'random' ? 'عشوائي' : WEATHER.m(k).s('name'), m.weather, (v) => m.weather = v)),
+              const SizedBox(width: 6),
+              _mini(Icons.groups_rounded, 'الحد', '${m.maxUnits} وحدة', 'لكل لاعب',
+                  () => _choose<int>('الحد الأقصى للوحدات', [for (final v in UNITS.l('maxUnitsChoices')) v as int], (v) => '$v', m.maxUnits, (v) => m.maxUnits = v)),
+            ]),
+            const SizedBox(height: 6),
+            _setting(icon: m.fog ? Icons.cloud_rounded : Icons.visibility_rounded, title: 'ضباب الحرب', value: m.fog ? 'مفعّل' : 'بدون',
+                note: m.fog ? 'الخريطة تنكشف بالاستكشاف' : 'الخريطة كلها ظاهرة', onTap: () => setState(() { m.fog = !m.fog; m.save(); }),
+                trailing: Switch(value: m.fog, activeThumbColor: gold, onChanged: (v) => setState(() { m.fog = v; m.save(); }))),
+          ]))),
+          const SizedBox(width: 12),
+          Expanded(child: Container(
+            padding: const EdgeInsets.fromLTRB(10, 8, 10, 6),
+            decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0x80E2B55A)),
+                gradient: const LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0xF2302519), Color(0xF2171210)]),
+                boxShadow: const [BoxShadow(color: Color(0x99000000), blurRadius: 14, offset: Offset(0, 4))]),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              Row(children: [
+                const Icon(Icons.groups_rounded, color: gold, size: 20),
+                const SizedBox(width: 6),
+                const Text('اللاعبون', style: TextStyle(color: gold, fontSize: 16, fontWeight: FontWeight.w700)),
+                const SizedBox(width: 10),
+                Expanded(child: Text(m.survival ? 'أنت و${m.allies} حلفاء ضد موجات الشرطة • الحد ${m.limit} لاعبين'
+                    : widget.lan ? 'الخانة الأولى أنت • كل صديق ينضم يأخذ خانة بوت • الحد ${m.limit} لاعبين'
+                    : 'الخانة الأولى أنت • الحد على هذه الخريطة ${m.limit} لاعبين', maxLines: 2, style: const TextStyle(color: dim, fontSize: 11.5))),
+              ]),
+              if (widget.lan) Text('مباراة محلية باسم «${Lan.name}»'
+                  '${Lan.ips.isNotEmpty ? ' • عنوانك: ${Lan.ips.join(' أو ')}' : ''}'
+                  '${m.slots.any((s) => s.type == 'net') ? ' • انضم ${m.slots.where((s) => s.type == 'net').length}' : ' • بانتظار الأصدقاء…'}',
+                  style: const TextStyle(color: gold, fontSize: 12)),
+              const SizedBox(height: 4),
+              Row(children: [const SizedBox(width: 27), label('النوع', 64), const SizedBox(width: 5), Expanded(child: label('العصابة')),
+                const SizedBox(width: 5), label('اللون', 44), const SizedBox(width: 5), label('الفريق', 70), const SizedBox(width: 5), label('الصعوبة', 86)]),
+              Expanded(child: ListView(padding: EdgeInsets.zero, children: [for (var k = 0; k < _maxSlots; k++) _row(k)])),
+            ]),
+          )),
+        ])),
+        const SizedBox(height: 6),
+        Row(children: [
+          Expanded(child: Text(error ?? (!widget.lan && Prefs.raw(UI.s('matchKey')) != null ? 'بدء مباراة جديدة يحذف المباراة المحفوظة.' : ''),
+              style: TextStyle(color: error != null ? danger : dim, fontSize: 12.5))),
+          SizedBox(width: 230, child: MenuButton(const SwordsIcon(), 'ابدأ', gilt: true, onTap: _start)),
         ]),
       ]))),
-      Container(color: const Color(0xFF1C1611), padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), child: Row(children: [
-        Expanded(child: Text(error ?? (!widget.lan && Prefs.raw(UI.s('matchKey')) != null ? 'بدء مباراة جديدة يحذف المباراة المحفوظة.' : ''),
-            style: TextStyle(color: error != null ? danger : dim, fontSize: 12.5))),
-        WideButton('رجوع', () => Navigator.pop(context), ghost: true, width: 120),
-        const SizedBox(width: 8),
-        WideButton('ابدأ', _start, primary: true, width: 160),
-      ])),
-    ])));
+    ));
   }
 }
 
@@ -874,13 +976,10 @@ class _StoreScreenState extends State<StoreScreen> {
     _caption(cityShort(c), cityName(c), 10),
   ]);
 
-  // البطل كبيراً (أول ربع من صورة العصابة، البطل يسارها) على مسرح صغير
-  Widget _hero(String side) => ClipRect(child: Align(alignment: Alignment.centerLeft, widthFactor: 0.25,
-      child: Image.asset('assets/thumbs/side_$side.webp', fit: BoxFit.fitHeight, filterQuality: FilterQuality.medium)));
   Widget _sideCard(String s) => _card(selected: s == chosenSide, free: _freeSide(s), onTap: () => setState(() { chosenSide = s; normalLook = false; }), children: [
     const DecoratedBox(decoration: BoxDecoration(gradient: RadialGradient(center: Alignment(-0.55, 0.25), radius: 0.95,
         colors: [Color(0xFF5A4326), Color(0xFF17120D)]))),
-    PositionedDirectional(end: 2, top: 4, bottom: -2, child: _hero(s)),
+    PositionedDirectional(end: 2, top: 4, bottom: -2, child: heroThumb(s)),
     _caption(sideName(s), sideNote(s), 66),
   ]);
 
@@ -938,12 +1037,7 @@ class _StoreScreenState extends State<StoreScreen> {
     final note = elite ? nation!.s('gangName') : nation != null ? nation.s('name') : sideNote(s);
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       SizedBox(height: 182, child: Stack(fit: StackFit.expand, children: [
-        const DecoratedBox(decoration: BoxDecoration(gradient: RadialGradient(center: Alignment(0, -0.1), radius: 0.95,
-            colors: [Color(0xFF5E4628), Color(0xFF1A140E)]))),
-        Align(alignment: const Alignment(0, 0.72), child: FractionallySizedBox(widthFactor: 0.92, child: Container(height: 30,
-            decoration: const BoxDecoration(borderRadius: BorderRadius.all(Radius.elliptical(160, 15)),
-                gradient: RadialGradient(colors: [Color(0x80FFD27A), Color(0x00FFD27A)]))))),
-        CharacterShowcase(gang: style, nation: nation != null ? base : null, elite: elite && !normalLook),
+        ShowcaseStage(gang: style, nation: nation != null ? base : null, elite: elite && !normalLook),
         if (elite) PositionedDirectional(top: 8, start: 8, child: Row(children: [
           for (final (normal, label) in const [(false, 'نخبة'), (true, 'عادي')])
             Padding(padding: const EdgeInsetsDirectional.only(end: 6),

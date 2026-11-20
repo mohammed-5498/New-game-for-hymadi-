@@ -255,8 +255,9 @@ class PickCard extends StatelessWidget {
     child: InkWell(borderRadius: BorderRadius.circular(10), onTap: onTap, child: Container(
       decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), border: Border.all(color: selected ? gold : Colors.transparent, width: 1.5)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
-        if (image != null) ClipRRect(borderRadius: const BorderRadius.vertical(top: Radius.circular(9)),
-            child: AspectRatio(aspectRatio: aspect, child: Image.asset(image!, fit: BoxFit.cover))),
+        // Flexible: في خانة بارتفاع ثابت تتنازل الصورة عن بضع نقاط للسطرين (خط El Messiri أطول سطراً) فلا يخرج الوصف عن الخانة
+        if (image != null) Flexible(child: ClipRRect(borderRadius: const BorderRadius.vertical(top: Radius.circular(9)),
+            child: AspectRatio(aspectRatio: aspect, child: Image.asset(image!, fit: BoxFit.cover)))),
         Padding(padding: const EdgeInsets.fromLTRB(6, 4, 6, 5), child: Row(children: [
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(title, style: const TextStyle(color: ink, fontSize: 13, fontWeight: FontWeight.w700), overflow: TextOverflow.ellipsis),

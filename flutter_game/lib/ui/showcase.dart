@@ -124,3 +124,20 @@ class _ShowcasePainter extends CustomPainter {
   @override
   bool shouldRepaint(_ShowcasePainter old) => true;
 }
+
+// المسرح: إضاءة دافئة وأرضية متوهجة والشخصيات عليها (المتجر ولوحة اختيار العصابة في الإعداد، 2.7.0)
+class ShowcaseStage extends StatelessWidget {
+  final String gang;
+  final String? nation;
+  final bool elite;
+  const ShowcaseStage({super.key, required this.gang, this.nation, this.elite = false});
+  @override
+  Widget build(BuildContext context) => Stack(fit: StackFit.expand, children: [
+    const DecoratedBox(decoration: BoxDecoration(gradient: RadialGradient(center: Alignment(0, -0.1), radius: 0.95,
+        colors: [Color(0xFF5E4628), Color(0xFF1A140E)]))),
+    Align(alignment: const Alignment(0, 0.72), child: FractionallySizedBox(widthFactor: 0.92, child: Container(height: 30,
+        decoration: const BoxDecoration(borderRadius: BorderRadius.all(Radius.elliptical(160, 15)),
+            gradient: RadialGradient(colors: [Color(0x80FFD27A), Color(0x00FFD27A)]))))),
+    CharacterShowcase(gang: gang, nation: nation, elite: elite),
+  ]);
+}
