@@ -1,6 +1,6 @@
 # خطافات القياس على نسخة لينكس من اللعبة (2.8.0، لا تمس المستودع): الإعداد من GC_Q (كـ ?match=1... في المتصفح)، وعدّاد
 # الأداء يُطبع كل 5 ث (GC_METER)، وإخفاء طبقات (GC_HIDE=city,units,fog,weather، وGC_NOHUD، وGC_BLANK مشهد فارغ)، وإيقاف بعد
-# 8 ث (GC_PAUSE)، وبلا أرض المدينة (GC_SKIPGROUND) أو بلا صفوفها (GC_SKIPROWS)، وحارس المعالج لا يحكم (GC_NOGUARD: خيوط llvmpipe تُحسب على اللعبة هنا)، وImpeller ونافذة بمقاس الجوال
+# 8 ث (GC_PAUSE)، وتجميد المشهد بعد ثوانٍ (GC_FREEZE)، وبلا أرض المدينة (GC_SKIPGROUND) أو بلا صفوفها (GC_SKIPROWS)، وحارس المعالج لا يحكم (GC_NOGUARD: خيوط llvmpipe تُحسب على اللعبة هنا)، وImpeller ونافذة بمقاس الجوال
 # الاستعمال: python3 patch.py <مجلد النسخة>
 import sys, re
 b = sys.argv[1]
@@ -16,6 +16,17 @@ if 'GC_METER' not in s:
     if "import 'dart:io'" not in s: s = "import 'dart:io' show Platform;\n" + s
     s = s.replace("Positioned.fill(child: RepaintBoundary(child: MatchHud(screen: this))),", "if (Platform.environment['GC_NOHUD'] == null) Positioned.fill(child: RepaintBoundary(child: MatchHud(screen: this))),", 1)
     s = s.replace("    canvas.drawColor(const Color(0xFF1B1611), BlendMode.src);\n    final s = v.state,", "    canvas.drawColor(const Color(0xFF1B1611), BlendMode.src);\n    if (Platform.environment['GC_BLANK'] != null) return;\n    final s = v.state,", 1)
+    open(p, 'w', encoding='utf-8').write(s)
+if 'GC_FREEZE' not in s:
+    # GC_FREEZE=<تحديثات>: بعدها يتوقف المنطق (والكاميرا على أكبر اشتباك مع watch=1) ويبقى الرسم 30 إطاراً، فتقيس النسختان
+    # الإطار نفسه (المحاكاة ببذرة: الحالة بعد عدد التحديثات نفسه واحدة)
+    s = s.replace("  double _targetFps(MatchState s) {\n", "  double _targetFps(MatchState s) {\n    if (_gcFrozen) return PACE.fps;\n", 1)
+    s = s.replace("      if (paused || s.matchResult != null) dt = 0;", "      if (paused || s.matchResult != null || _gcFrozen) dt = 0;", 1)
+    s = s.replace("        if (++ticks > PACE.maxTicks) {", "        if (_gcFrozen || ++ticks > PACE.maxTicks) {", 1)
+    s = s.replace("    if (settings['watch'] == true && _ticks % 20 == 0) _watch(s);",
+                  "    if (_gcFrozen && !_gcSnapped) { _gcSnapped = true; if (settings['watch'] == true) _watch(s); }\n    if (settings['watch'] == true && _ticks % 20 == 0 && !_gcFrozen) _watch(s);", 1)
+    s = s.replace("  void _onTick(Duration now) {", "  late final int _gcFreeze = int.tryParse(Platform.environment['GC_FREEZE'] ?? '') ?? 0;\n  bool _gcSnapped = false;\n  bool get _gcFrozen => _gcFreeze > 0 && _ticks >= _gcFreeze;\n  void _onTick(Duration now) {", 1)
+    assert s.count('_gcFrozen') == 6, s.count('_gcFrozen')
     open(p, 'w', encoding='utf-8').write(s)
 p = f'{b}/lib/render/city_layer.dart'; s = open(p, encoding='utf-8').read()
 if 'GC_SKIPGROUND' not in s:

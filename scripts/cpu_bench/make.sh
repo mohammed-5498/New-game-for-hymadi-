@@ -8,5 +8,5 @@ mkdir -p "$dir"
 rm -rf "$dir/lib" "$dir/test" "$dir/tool"
 (cd "$game" && tar cf - --exclude=./build --exclude=./.dart_tool --exclude=./android --exclude=./linux .) | tar xf - -C "$dir"
 if [ -n "$rev" ]; then rm -rf "$dir/lib"; (cd "$game/.." && git archive "$rev" flutter_game/lib) | tar xf - -C "$dir" --strip-components=1; fi
-python3 "$here/patch.py" "$dir"
+python3 "$here/patch.py" "$dir"; [ -n "$EXTRA" ] && python3 "$EXTRA" "$dir"
 (cd "$dir" && flutter build linux --release 2>&1 | tail -1)

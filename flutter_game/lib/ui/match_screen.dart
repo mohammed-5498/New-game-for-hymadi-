@@ -2,6 +2,7 @@
 // والكاميرا، ورسم المدينة صفاً صفاً بالعمق والجنود في صفوفهم، واللمس (js/ui/input.js): تحديد وتحريك وهجوم
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart' hide Text;
@@ -34,6 +35,7 @@ import '../render/unit_atlas.dart';
 import '../render/weather_art.dart';
 import '../render/empire_art.dart';
 import '../render/fog.dart';
+import '../render/occlusion.dart';
 import 'cpu_guard.dart';
 import 'crash_report.dart' show crumb;
 import 'hud.dart';
@@ -891,15 +893,8 @@ class _MatchPainter extends CustomPainter {
     final crowded = visible > COMBAT_REALISM.m('lod').i('fullUnits');
     b.reset();
     _mark('sortUnits');
-    // الأرض وحدود الأحياء من صورتها الجاهزة (2.9.0)، أو مباشرة كما كانت (التقريب يتغير، أو الكاميرا تجري، أو المدينة مخفية)
-    final borders = _borderVerts(b, s);
-    final cached = !v.hideCity && v.ground.paint(canvas, Rect.fromLTRB(c.x - halfW, c.y - halfH, c.x + halfW, c.y + halfH), c.z, v.dpr,
-        Object.hash(layer, layer.groundVersion, _borderSig), (gc, area) {
-      layer.paintGround(gc, art.image, area.top, area.bottom);
-      TriBatch.drawBaked(gc, img, borders);
-    });
-    layer.paint(canvas, art.image, c.y - halfH, c.y + halfH, skip: v.hideCity, ground: !cached, onGround: () {
-      if (!cached) TriBatch.drawBaked(canvas, img, borders);
+    // ما على الأرض تحت المباني كلها: النار ومناطق الضربات وأحداث المدينة وهالات المباني وهالة جنودك
+    void groundFx() {
       for (final f in s.fires) { drawFire(b, f, time); }
       for (final z in s.zones) { drawZone(b, z, time); }
       if (s.feature != null) drawFeatureGround(b, s, time);
@@ -912,21 +907,25 @@ class _MatchPainter extends CustomPainter {
           b.restore();
         }
       }
-      b.flush(canvas, img);
-    }, afterRow: (d) {
+    }
+    // أعلام الصف d وجنوده، وحدود كل منها في شبكة ما يُغطى (g) إن كانت المدينة صورة جاهزة
+    void rowContent(int d, OcclusionGrid? g) {
       for (final fl in _flagsAt(s, d)) {
         final fx = (fl.capture!.i - fl.capture!.j) * TILE_HALF_W;
         if (fx < left || fx > right) continue;   // خارج الشاشة يميناً أو يساراً (الصف يعبر الخريطة كلها)
         if (fog != null && !fog.known(fl.capture!.i.toDouble(), fl.capture!.j.toDouble())) continue;   // لم يُستكشف
+        final f0 = b.count;
         _flag(b, s, fl, time);
         if (fl.hill) drawHillCrown(b, (fl.capture!.i - fl.capture!.j) * TILE_HALF_W, (fl.capture!.i + fl.capture!.j) * TILE_HALF_H, time,
             (s.modeState as ModeState?)?.blocked ?? false);
+        if (g != null && b.count > f0) g.markRect(b.bounds(f0, b.count), d);
       }
       final row = _rows[d];
       _mark('city+flags');
       if (row.isNotEmpty && !v.hideUnits) {
         row.sort((p, q) => (p.x + p.y).compareTo(q.x + q.y));
         for (final u in row) {
+          final u0 = b.count;
           // شكل الجندي (وضعيته وأجزاؤه) يُحسب unitHz مرة في الثانية، وبينها يُعاد رسمه المحفوظ بمكانه الجديد
           // وقدماه أخفض في الشارع (الأرض البارزة 18.10أ)
           final i = u.prevX + (u.x - u.prevX) * alpha, j = u.prevY + (u.y - u.prevY) * alpha, dz = layer.drop(i, j);
@@ -943,12 +942,31 @@ class _MatchPainter extends CustomPainter {
             clip..x = x..y = y..t = time..z = c.z;
           }
           if (u.cargo && u.state != 'dead') drawCargo(b, x, y);
+          if (g != null && b.count > u0) g.markRect(b.bounds(u0, b.count), d);
         }
       }
       _mark('units');
-      b.flush(canvas, img);
+    }
+    // المدينة كلها صورة جاهزة (2.9.0 الأرض والحدود، و2.10.0 صفوف المباني معها)، أو مباشرة كما كانت (التقريب يتغير، أو الكاميرا
+    // تجري، أو المدينة مخفية)
+    final view = Rect.fromLTRB(c.x - halfW, c.y - halfH, c.x + halfW, c.y + halfH);
+    final borders = _borderVerts(b, s);
+    final cached = !v.hideCity && v.ground.paint(canvas, view, c.z, v.dpr, Object.hash(layer, layer.version, _borderSig),
+        (gc, area) => layer.paint(gc, art.image, area.top, area.bottom, onGround: () => TriBatch.drawBaked(gc, img, borders)));
+    if (cached) {
+      _layered(canvas, layer, art.image, img, view, groundFx, rowContent);
       _mark('flush');
-    });
+    } else {
+      layer.paint(canvas, art.image, c.y - halfH, c.y + halfH, skip: v.hideCity, onGround: () {
+        TriBatch.drawBaked(canvas, img, borders);
+        groundFx();
+        b.flush(canvas, img);
+      }, afterRow: (d) {
+        rowContent(d, null);
+        b.flush(canvas, img);
+        _mark('flush');
+      });
+    }
     if (!v.hideFog) fog?.paint(canvas, left, right, top, bottom);   // ضباب الحرب فوق المدينة كلها، وما بعده يُرسم لما يُرى وحده
     for (final shot in s.projectiles) {
       if (!sees(shot.x, shot.y)) continue;
@@ -1006,6 +1024,54 @@ class _MatchPainter extends CustomPainter {
       canvas.drawRect(r, Paint()..color = const Color(0xCCF3EAD6)..style = PaintingStyle.stroke..strokeWidth = 1);
     }
     if (p0 != 0) v.notePaint(_clockUs() - p0);
+  }
+
+  // المدينة صورة جاهزة (2.10.0، بطلب المستخدم: "ابدأ بتخفيف الأعلام والحدود وصفوف المباني"): ما على الأرض والأعلام والجنود فوقها
+  // بترتيب العمق، وكل مبنى يقع أمام شيء منها يُرسم ثانية فوقه بين أجزائها: ما خلف الصف e يُرسم ثم مباني e المعادة ثم ما بعدها. فالترتيب
+  // كما في الرسم المباشر، والأوامر دفعات قليلة بدل أمرين لكل صف ظاهر ودفعة لكل صف فيه جنود. (جُرّبت طبقة يُمسح منها شكل المبنى: أدق
+  // في حوافه، لكن الطبقة نفسها أثقل على خيط الرسم وكرت الشاشة مما توفره)
+  final _occ = OcclusionGrid();
+  Int32List _rowFrom = Int32List(0);
+  final _pickRow = <int>[], _pickSprite = <int>[];
+  Int32List _redraw = Int32List(256);
+  void _layered(Canvas canvas, CityLayer layer, ui.Image cityAtlas, ui.Image img, Rect view,
+      void Function() groundFx, void Function(int d, OcclusionGrid? g) rowContent) {
+    final b = v.batch, g = _occ..reset(view), n = layer.rows.length;
+    b.reset();
+    groundFx();
+    final ground = b.count;
+    g.markTriangles(b.positions, 0, ground, -1);   // تحت المباني كلها
+    if (_rowFrom.length < n + 1) _rowFrom = Int32List(n + 1);
+    for (var d = 0; d < n; d++) {
+      _rowFrom[d] = b.count;
+      final y = d * TILE_HALF_H;
+      if (y >= view.top - 60 && y <= view.bottom + 120) rowContent(d, g);   // صفوف afterRow في الرسم المباشر
+    }
+    _rowFrom[n] = b.count;
+    _pickRow.clear(); _pickSprite.clear();
+    layer.occluders(g, view.top, view.bottom, (e, m) { _pickRow.add(e); _pickSprite.add(m); });
+    var cursor = 0, ready = ground, pending = 0, p = 0;   // محتوى لم يُرسم [cursor، ready)، وصور تنتظر الإعادة
+    void redrawNow() {
+      if (pending == 0) return;
+      layer.redraw(canvas, cityAtlas, _redraw, pending);
+      pending = 0;
+    }
+    for (var e = 0; e < n; e++) {
+      if (p < _pickRow.length && _pickRow[p] == e) {
+        if (ready > cursor) { b.flushRange(canvas, img, cursor, ready); cursor = ready; }   // ما خلف مباني e قبلها
+        for (; p < _pickRow.length && _pickRow[p] == e; p++) {
+          if (pending == _redraw.length) _redraw = Int32List(_redraw.length * 2)..setRange(0, pending, _redraw);
+          _redraw[pending++] = _pickSprite[p];
+        }
+      }
+      if (_rowFrom[e + 1] > _rowFrom[e]) {   // محتوى الصف e فوق مبانيه المعادة
+        redrawNow();
+        ready = _rowFrom[e + 1];
+      }
+    }
+    redrawNow();
+    b.flushRange(canvas, img, cursor, ready);
+    b.reset();
   }
 
   // حدود الأحياء المملوكة بلون مالكها (CAPTURE.border)

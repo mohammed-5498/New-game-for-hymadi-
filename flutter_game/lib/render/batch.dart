@@ -189,6 +189,30 @@ class TriBatch {
       ..shader = ui.ImageShader(atlas, ui.TileMode.clamp, ui.TileMode.clamp, Float64List.fromList(
           [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]), filterQuality: ui.FilterQuality.medium));
   static int draws = 0;   // أوامر الرسم منذ آخر قراءة (عدّاد الأداء)
+
+  // صورة المدينة الجاهزة (2.10.0): الجنود والأعلام وما على الأرض كلهم في الدفعة، وتُرسم أجزاء منها بين ما يُمسح من المباني
+  // بلا تفريغها. وأركان ما رُسم بين رأسين، وكل رؤوسها (لشبكة ما يُغطى)
+  void flushRange(ui.Canvas canvas, ui.Image atlas, int from, int to) {
+    if (to <= from) return;
+    draws++;
+    final v = ui.Vertices.raw(ui.VertexMode.triangles, Float32List.sublistView(_pos, from * 2, to * 2),
+        textureCoordinates: Float32List.sublistView(_uv, from * 2, to * 2), colors: Int32List.sublistView(_col, from, to));
+    canvas.drawVertices(v, ui.BlendMode.modulate, _paintOf(atlas));
+    v.dispose();
+  }
+  ui.Rect bounds(int from, int to) {
+    var x0 = double.infinity, y0 = double.infinity, x1 = -double.infinity, y1 = -double.infinity;
+    for (var k = from * 2; k < to * 2; k += 2) {
+      final x = _pos[k], y = _pos[k + 1];
+      if (x < x0) x0 = x;
+      if (x > x1) x1 = x;
+      if (y < y0) y0 = y;
+      if (y > y1) y1 = y;
+    }
+    return ui.Rect.fromLTRB(x0, y0, x1, y1);
+  }
+  Float32List get positions => _pos;
+
   void flush(ui.Canvas canvas, ui.Image atlas) {
     if (_n == 0) return;
     draws++;

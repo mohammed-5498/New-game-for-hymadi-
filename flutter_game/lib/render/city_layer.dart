@@ -12,6 +12,7 @@ import '../data/js_config.dart' show EMPIRE;
 import '../game/state.dart';
 import '../map/generator.dart';
 import '../map/sizes.dart';
+import 'occlusion.dart';
 import 'city_art.dart';
 import 'colors.dart';
 import 'decor.dart';
@@ -254,7 +255,7 @@ class CityLayer {
   final Uint8List _isMask;
   final _applied = <int, (String?, double)>{};
   bool tinted = false;
-  int groundVersion = 0;             // تزيد كلما تغير لون الأرض (صورة الأرض الجاهزة ترسم نفسها من جديد)
+  int version = 0;                   // تزيد كلما تغير شيء فيها (لون حي، أو مبنى، أو سور): صورة المدينة الجاهزة ترسم نفسها من جديد
   final List<Light> lights;          // إضاءة الليل الثابتة (weather_art.dart)
   final Map<int, int> _tileItem, _tileMask;   // المربع ← رقم صورته وقناعها (لتبديل صورة مربع واحد)
   final Map<int, Sprite?> _tileSprite;
@@ -472,6 +473,7 @@ class CityLayer {
       _put(m, now?.$1, x, y, sc, art.px, k, n);
       if (mm != null) _put(mm, now?.$1, x, y, sc, art.px, k, n);
       _tileSprite[k] = now?.$1;
+      version++;
     }
     return true;
   }
@@ -489,6 +491,7 @@ class CityLayer {
       final x = _slotPos[id * 3], y = _slotPos[id * 3 + 1], k = _slotPos[id * 3 + 2].toInt();
       _put(_slotItem[id], s, x, y, sc, art.px, k, map.n);
       _put(_slotMask[id], s, x, y, sc, art.px, k, map.n);
+      version++;
     }
   }
 
@@ -512,7 +515,8 @@ class CityLayer {
       if (g != null && (_gBase![m] >> 24 & 255) == 255) g[m] = owner == null || a <= 0 ? _gBase[m] : _modulate(c, _gKindBase![m], faint: false);
       dirty = true;
     }
-    if (dirty) { _ground.stale(); groundVersion++; }
+    if (dirty) _ground.stale();
+    version++;
     tinted = false;
     for (var m = 0; m < spriteCol.length; m++) {
       final id = _spriteDistrict[m];
@@ -532,11 +536,10 @@ class CityLayer {
 
   // top وbottom: حدا الشاشة بوحدات العالم. onGround بعد الأرض (الظلال والحدود والنار)، وafterRow(d) بعد كل صف
   // (الجنود الواقفون فيه: يغطيهم ما أمامهم من مبانٍ ولا يغطيهم ما خلفهم)
-  // ground: false حين تكون الأرض من صورتها الجاهزة (GroundCache)
   void paint(ui.Canvas canvas, ui.Image atlas, double top, double bottom,
-      {void Function()? onGround, void Function(int d)? afterRow, bool skip = false, bool ground = true}) {
+      {void Function()? onGround, void Function(int d)? afterRow, bool skip = false}) {
     // skip: المدينة مخفية (مفتاح عدّاد الأداء)، وما فوقها يُرسم كما هو
-    if (!skip && ground) paintGround(canvas, atlas, top, bottom);
+    if (!skip) paintGround(canvas, atlas, top, bottom);
     _rows(canvas, atlas, top, bottom, onGround, afterRow, skip);
   }
 
@@ -587,6 +590,54 @@ class CityLayer {
   }
 
   late final _views = List<(Float32List, Float32List, Int32List)?>.filled(rows.length, null);
+
+  // ما يُعاد فوق الجنود (2.10.0، OcclusionGrid): كل صورة في الصف e تغطي من الشبكة ما عمقه أصغر من e (خلفها)، ومعها قناع رايات
+  // مالكها، بترتيبهما في الصف، للصفوف الظاهرة بين top وbottom. والمعادة نفسها تدخل الشبكة بعمقها، فما أمامها يُعاد بعدها (وإلا
+  // غطّته). وزينة الصفوف المرسومة بالكود لا تُعاد: كلها على الأرض أو صغيرة
+  void occluders(OcclusionGrid g, double top, double bottom, void Function(int e, int m) pick) {
+    if (!g.any) return;
+    for (var e = 0; e < rows.length; e++) {
+      final y = e * TILE_HALF_H;
+      if (y < top - _down || y - _up > bottom) continue;
+      var first = -1;
+      for (var m = rowStart[e]; m < rowStart[e + 1]; m++) {
+        final o = m * 4, w = rects[o + 2] - rects[o], h = rects[o + 3] - rects[o + 1];
+        if (_isMask[m] == 1 || w <= 0 || h <= 0) continue;
+        final u = xf[o], x = xf[o + 2], t = xf[o + 3];
+        if (!g.covers(x, t, x + u * w, t + u * h, e)) continue;
+        g.markBox(x, t, x + u * w, t + u * h, e);
+        _picked[m] = 1;
+        final mm = _maskOf[m];
+        if (mm >= 0 && spriteCol[mm] != 0) _picked[mm] = 1;   // قناع بلا مالك شفاف
+        if (first < 0) first = m;
+      }
+      if (first < 0) continue;
+      for (var m = first; m < rowStart[e + 1]; m++) { if (_picked[m] == 1) { _picked[m] = 0; pick(e, m); } }
+    }
+  }
+  late final _picked = Uint8List(spriteCol.length);
+  // قناع كل صورة أو -1 (الأقنعة بعد صورها في صفها، وقد تفصل بينهما صورة زينة في المربع نفسه)
+  late final Int32List _maskOf = () {
+    final r = Int32List(spriteCol.length)..fillRange(0, spriteCol.length, -1);
+    _tileItem.forEach((k, m) { final mm = _tileMask[k]; if (mm != null) r[m] = mm; });
+    for (var s = 0; s < _slotItem.length; s++) { r[_slotItem[s]] = _slotMask[s]; }
+    return r;
+  }();
+
+  // ترسم الصور المختارة ثانية بلونها كما في صفها (فوق ما خلفها من جنود وأعلام)
+  static int redrawn = 0;           // كم صورة أُعيدت (للفحص)
+  void redraw(ui.Canvas canvas, ui.Image atlas, Int32List picks, int n) {
+    if (n == 0) return;
+    redrawn += n;
+    final x = Float32List(n * 4), r = Float32List(n * 4), c = Int32List(n);
+    for (var k = 0; k < n; k++) {
+      final m = picks[k], o = m * 4;
+      x.setRange(k * 4, k * 4 + 4, xf, o);
+      r.setRange(k * 4, k * 4 + 4, rects, o);
+      c[k] = spriteCol[m];
+    }
+    canvas.drawRawAtlas(atlas, x, r, tinted ? c : null, tinted ? ui.BlendMode.modulate : null, null, _atlasPaint);
+  }
 
   // كم تنزل قدما الجندي عند (i، j): صفر على أرض الحي والرصيف وdrop في الشارع، بتدرج خُمس مربع عند الحافة
   double drop(double i, double j) {
@@ -805,8 +856,8 @@ class _Sprites {
 // الأحياء في المباراة) أثقل ما في رسم المدينة (78% منه في أداة القياس) ولا تتغير إلا قليلاً. تُرسم مرة في صورة تغطي الشاشة وربعها
 // حولها بتقريب الكاميرا ونقاط الجهاز، ويعرضها كل إطار بأمر واحد على نقاط الشاشة نفسها. تُرسم من جديد حين تخرج الشاشة عنها (ولا
 // أكثر من مرة كل GROUND_CACHE.gap إطارات: والكاميرا تجري تُرسم الأرض مباشرة كما كانت)، أو يستقر تقريب جديد (وأثناء التقريب
-// مباشرة)، أو يتغير ما فيها (key). والمباني والجنود فوقها كما كانوا، فما خلف المبنى يبقى مخفياً. والقائمة الرئيسية تضع المدينة
-// كلها فيها (بلا جنود)
+// مباشرة)، أو يتغير ما فيها (key). ومنذ 2.10.0 فيها المدينة كلها بمبانيها في المباراة أيضاً، والجنود فوقها ويُعاد فوقهم ما أمامهم
+// من مبانٍ (_layered في match_screen.dart). والقائمة الرئيسية تضع المدينة كلها فيها (بلا جنود)
 class GroundCache {
   ui.Image? _img;
   ui.Rect _area = ui.Rect.zero;   // ما تغطيه الصورة بوحدات العالم
@@ -814,11 +865,13 @@ class GroundCache {
   Object? _key;
   int _still = 0, _frame = 0, _drawnAt = -1000;
   static int renders = 0;         // كم صورة أرض رُسمت (عدّاد الأداء)
+  static bool enabled = true;     // للفحص: الرسم المباشر وحده (test/city_image_test.dart يقارن بينهما)
   static final _imgPaint = ui.Paint()..filterQuality = ui.FilterQuality.low;
 
   // يعرض الصورة ويعيد true، أو false فيرسم المستدعي الأرض مباشرة. view: الشاشة بوحدات العالم، z: تقريب الكاميرا، dpr: نقاط
   // الجهاز لكل نقطة شاشة، key: ما يغيّر محتواها، draw: ترسم ما فيها لمساحة بوحدات العالم (على لوحة بوحدات العالم)
   bool paint(ui.Canvas canvas, ui.Rect view, double z, double dpr, Object key, void Function(ui.Canvas c, ui.Rect area) draw) {
+    if (!enabled) return false;
     _frame++;
     if (z != _lastZ) { _lastZ = z; _still = 0; } else { _still++; }
     var img = _img;
