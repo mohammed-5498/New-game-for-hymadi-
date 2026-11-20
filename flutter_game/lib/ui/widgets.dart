@@ -32,6 +32,7 @@ class RenderSnap extends RenderProxyBox {
   set margin(double v) { if (v != _margin) { _margin = v; markNeedsPaint(); } }
   ui.Image? _img;
   static final _paint = Paint()..filterQuality = FilterQuality.low;
+  static int renders = 0;          // كم صورة صُنعت (عدّاد الأداء، 2.11.0)
 
   @override
   bool get isRepaintBoundary => true;
@@ -41,6 +42,7 @@ class RenderSnap extends RenderProxyBox {
     _img?.dispose();
     _img = null;
     if (size.isEmpty || child == null) return;
+    renders++;
     final box = (Offset.zero & size).inflate(_margin), layer = OffsetLayer(), ctx = PaintingContext(layer, box);
     super.paint(ctx, Offset.zero);
     // ignore: invalid_use_of_protected_member

@@ -28,7 +28,7 @@ void main() {
     // المعركة الكبيرة كما في جوال المستخدم: PERF_CITY=gondar PERF_SIZE=large PERF_FF=600 PERF_ZOOM=1.2 PERF_TEMPLES=1
     final env = Platform.environment;
     await tester.runAsync(() => tester.pumpWidget(MaterialApp(home: MatchScreen(key: key, settings: {
-      'seed': 777, 'mapSize': env['PERF_SIZE'] ?? 'medium', 'city': env['PERF_CITY'] ?? 'rio', 'weather': 'night', 'mode': 'conquest', 'maxUnits': 100,
+      'seed': 777, 'mapSize': env['PERF_SIZE'] ?? 'medium', 'city': env['PERF_CITY'] ?? 'rio', 'weather': env['PERF_WEATHER'] ?? 'night', 'mode': env['PERF_MODE'] ?? 'conquest', 'maxUnits': 100,
       'ff': double.parse(env['PERF_FF'] ?? '240'), 'watch': true, 'fog': env['PERF_FOG'] == '1', 'temples': env['PERF_TEMPLES'] == '1',
       'players': [
         for (var k = 0; k < 4; k++)
@@ -47,7 +47,7 @@ void main() {
     final sw = Stopwatch()..start();
     final worst = <(int, Map<String, int>)>[];
     // تسخين: أول 400 إطار يبنيها مترجم وضع الفحص (لا يوجد في التطبيق)، ثم القياس
-    for (var k = 0; k < 400; k++) { updateMatch(s); await tester.pump(const Duration(milliseconds: 17)); }
+    for (var k = 0; k < 400; k++) { updateMatch(s); key.currentState!.frame.value++; await tester.pump(const Duration(milliseconds: 17)); }
     probe.clear();
     // كما في التطبيق: تحديث منطقي كل ثلاثة إطارات (20 في الثانية و60 إطاراً)، والإطارات بينها بنسبة alpha
     for (var k = 0; k < 400; k++) {
@@ -56,6 +56,7 @@ void main() {
       key.currentState!.alpha = (k % 3) / 3;
       if (k % 3 == 0) sims.add(sw.elapsedMicroseconds);
       final before = Map.of(probe), h0 = key.currentState!.hud.value;
+      key.currentState!.frame.value++;   // المشهد يُرسم كل إطار (التكتكة قد تكون مكتومة في الفحص: restTicker)
       sw.reset();
       await tester.pump(const Duration(milliseconds: 17));
       frames.add(sw.elapsedMicroseconds);

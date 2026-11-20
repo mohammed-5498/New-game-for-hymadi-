@@ -8,7 +8,6 @@ import android.media.AudioTrack
 import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat
-import android.os.Build
 import android.os.Process
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -28,7 +27,9 @@ class SfxMixer(private val voices: Int, private val onError: (Throwable) -> Unit
     @Volatile private var running = true
     @Volatile private var held = false
     private val rate = AudioTrack.getNativeOutputSampleRate(AudioManager.STREAM_MUSIC).takeIf { it in 8000..192000 } ?: 48000
-    private val chunk = 256                                // عينات كل دفعة (5 ملي ث تقريباً)
+    // عينات كل دفعة (10 ملي ث تقريباً) وقناة بأربع دفعات (نحو 43 ملي ث) بلا وضع التأخير القصير (2.11.0): كان الخيط يصحو نحو 190 مرة
+    // في الثانية لقناة قصيرة (8% من نواة في عدّاد جوال المستخدم)، والآن مع دورة خلاط النظام (نحو 50)، والصوت أبطأ بنحو 40 ملي ث
+    private val chunk = 512
     private val track: AudioTrack = AudioTrack.Builder()
         .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_GAME)
             .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
@@ -36,7 +37,6 @@ class SfxMixer(private val voices: Int, private val onError: (Throwable) -> Unit
             .setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build())
         .setTransferMode(AudioTrack.MODE_STREAM)
         .setBufferSizeInBytes(maxOf(AudioTrack.getMinBufferSize(rate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT), chunk * 2 * 4))
-        .apply { if (Build.VERSION.SDK_INT >= 26) setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY) }
         .build()
     // قناة لم تُفتح على هذا الجهاز: يفشل الخلاط هنا فتعود اللعبة إلى SoundPool وقت التحميل (MainActivity)، لا صمت بعده
     init { if (track.state != AudioTrack.STATE_INITIALIZED) { track.release(); throw IllegalStateException("AudioTrack ${track.state}") } }

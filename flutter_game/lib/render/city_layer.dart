@@ -594,7 +594,8 @@ class CityLayer {
   // ما يُعاد فوق الجنود (2.10.0، OcclusionGrid): كل صورة في الصف e تغطي من الشبكة ما عمقه أصغر من e (خلفها)، ومعها قناع رايات
   // مالكها، بترتيبهما في الصف، للصفوف الظاهرة بين top وbottom. والمعادة نفسها تدخل الشبكة بعمقها، فما أمامها يُعاد بعدها (وإلا
   // غطّته). وزينة الصفوف المرسومة بالكود لا تُعاد: كلها على الأرض أو صغيرة
-  void occluders(OcclusionGrid g, double top, double bottom, void Function(int e, int m) pick) {
+  // afterRow(e): بعد صور الصف e (أعلام الصف في الصورة الجاهزة، 2.11.0)
+  void occluders(OcclusionGrid g, double top, double bottom, void Function(int e, int m) pick, [void Function(int e)? afterRow]) {
     if (!g.any) return;
     for (var e = 0; e < rows.length; e++) {
       final y = e * TILE_HALF_H;
@@ -611,8 +612,10 @@ class CityLayer {
         if (mm >= 0 && spriteCol[mm] != 0) _picked[mm] = 1;   // قناع بلا مالك شفاف
         if (first < 0) first = m;
       }
-      if (first < 0) continue;
-      for (var m = first; m < rowStart[e + 1]; m++) { if (_picked[m] == 1) { _picked[m] = 0; pick(e, m); } }
+      if (first >= 0) {
+        for (var m = first; m < rowStart[e + 1]; m++) { if (_picked[m] == 1) { _picked[m] = 0; pick(e, m); } }
+      }
+      afterRow?.call(e);
     }
   }
   late final _picked = Uint8List(spriteCol.length);

@@ -30,7 +30,7 @@ const EN = <String, String>{
   'رسمه (كرت الشاشة) {} ملي ث': 'Raster (GPU) {} ms',
   'رسم المشهد {} • المنطق {} ملي ث': 'Scene draw {} • Logic {} ms',
   'الجنود {} (ظاهر {}) • تقريب {}': 'Soldiers {} (visible {}) • Zoom {}',
-  'توقف الخيط بين الإطارات: أقصى {} ملي ث • مجموعه {} في الثانية': 'Thread stalls between frames: max {} ms • total {} per second',
+  'إطارات الشاشة {}/ث • رسم المشهد {} • صور الواجهة {}': 'Screen frames {}/s • scene paints {} • HUD images {}',
   'الطقس {} • أضواء {} • صور الضباب {}/ث • دفعات {}/إطار': 'Weather {} • Lights {} • Fog images {}/s • Batches {}/frame',
   'القوائم': 'Menus',
   'تجهيز المباراة': 'Preparing the match',
@@ -1135,7 +1135,6 @@ const EN = <String, String>{
   'الإطارات {}/ث • متأخرة {} من {} • حتى {}': 'Frames {}/s • Late {} of {} • up to {}',
   'المعالج {}% من الجهاز ({} نواة من {}) • الحد {}% • درجة الإيقاع {}': 'CPU {}% of the device ({} of {} cores) • limit {}% • pace step {}',
   'الخيوط: {}': 'Threads: {}',
-  'توفير البطارية (20 إطاراً)': 'Battery saver (20 fps)',
   // 2.9.0: صورة الأرض الجاهزة في عدّاد الأداء
   'الطقس {} • أضواء {} • صور الضباب {}/ث • صور الأرض {}/ث • دفعات {}/إطار': 'Weather {} • Lights {} • Fog images {}/s • Ground images {}/s • Batches {}/frame',
   'صور الأرض {}/ث': 'Ground images {}/s',

@@ -68,7 +68,7 @@ class _CharacterShowcaseState extends State<CharacterShowcase> with SingleTicker
     super.initState();
     _ticker = createTicker((e) {
       _time.value = e.inMicroseconds / 1e6;
-      _rest = restTicker(_ticker, PACE.showFps, context);   // 20 إطاراً تكفي العرض، والبطارية أهم (2.8.0، كانت 30)
+      _rest = restTicker(_ticker, PACE.showFps, context);   // 30 إطاراً كالقائمة (2.11.0، وكانت 20 في 2.8.0)
     })..start();
     _load();
   }

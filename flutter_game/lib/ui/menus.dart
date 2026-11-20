@@ -419,7 +419,7 @@ class _MenuBackdropState extends State<MenuBackdrop> with SingleTickerProviderSt
     }
     _frame.value++;
     _rest?.cancel();
-    _rest = restTicker(_ticker, PACE.menuFps, context);   // 12 إطاراً فعلاً (2.8.0، كانت 20؛ والكاميرا تنجرف ببطء)
+    _rest = restTicker(_ticker, PACE.menuFps, context);   // 30 إطاراً (2.11.0 بطلب المستخدم، وكانت 12 في 2.8.0)
   }
 
   @override
@@ -841,7 +841,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Text('${(Settings.music * 100).round()}%', style: const TextStyle(color: dim))]),
         Toggle('كتم كل الأصوات', Settings.mute, (v) => _set(() => Settings.mute = v)),
         Toggle('الكلمات الطائرة في القتال', Settings.pops, (v) => _set(() => Settings.pops = v)),
-        Toggle('توفير البطارية (20 إطاراً)', Settings.battery, (v) => _set(() => Settings.battery = v)),
+        Toggle('توفير البطارية (30 إطاراً)', Settings.battery, (v) => _set(() => Settings.battery = v)),   // 60 بلاه (2.11.0)
         Row(children: [const SizedBox(width: 110, child: Text('اللغة', style: TextStyle(color: ink))),
           for (final (code, name) in const [('ar', 'العربية'), ('en', 'English')])
             Padding(padding: const EdgeInsetsDirectional.only(end: 8), child: ChoiceChip(label: RawText(name), selected: Lang.code == code,

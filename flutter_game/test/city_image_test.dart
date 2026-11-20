@@ -1,5 +1,5 @@
 // المدينة صورة جاهزة (2.10.0): إطار معركة في شبام (أبراج عالية وجنود خلفها وأمامها) بالصورة والمباني المعادة فوق الجنود كالإطار
-// المرسوم مباشرة، والإعادة تحدث فعلاً. OUT=<مجلد> يحفظ الإطارين صوراً، وCITY وFF لمشهد آخر
+// المرسوم مباشرة، والإعادة تحدث فعلاً. OUT=<مجلد> يحفظ الإطارين صوراً، وCITY وFF وZOOM لمشهد آخر
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -21,7 +21,7 @@ void main() {
     final key = GlobalKey<MatchScreenState>();
     await tester.runAsync(() => tester.pumpWidget(MaterialApp(home: MatchScreen(key: key, settings: {
       'seed': 777, 'mapSize': 'medium', 'city': Platform.environment['CITY'] ?? 'shibam', 'weather': 'day', 'mode': 'conquest', 'maxUnits': 100,
-      'ff': double.parse(Platform.environment['FF'] ?? '150'), 'watch': true, 'fog': false, 'temples': true, 'zoom': 2.2,
+      'ff': double.parse(Platform.environment['FF'] ?? '150'), 'watch': true, 'fog': false, 'temples': true, 'zoom': double.parse(Platform.environment['ZOOM'] ?? '2.2'),
       'players': [
         for (var k = 0; k < 4; k++)
           {'name': 'p$k', 'gang': ['crows', 'hammers', 'vipers', 'scorpions'][k], 'nation': null, 'color': ['blue', 'red', 'green', 'yellow'][k],

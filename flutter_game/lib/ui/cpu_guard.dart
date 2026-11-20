@@ -16,7 +16,7 @@ class CpuGuard {
   // الحصة بالأنوية: share من الجهاز، ولا أكثر من CPU.cores، وأقل مع توفير البطارية
   static double get budget => math.min(CPU.cores, CPU.share * cores) * (Settings.battery ? CPU.saver : 1);
   static int step = 0;                     // درجة إيقاع اللعب في CPU.steps
-  static double get fps => CPU.steps[step];
+  static double get fps => (Settings.battery ? CPU.saverSteps : CPU.steps)[step];   // 60 ثم 30، أو 30 ثم 20 مع توفير البطارية
   static double used = -1;                 // متوسط آخر ثوانٍ بالأنوية (-1: لا يُقرأ هنا)
   static bool detail = false;              // عدّاد الأداء ظاهر: يقرأ الخيوط أيضاً
   static List<(String, double)> threads = const [];   // أثقل الخيوط بنسبة نواة

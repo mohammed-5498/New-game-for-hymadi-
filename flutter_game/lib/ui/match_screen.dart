@@ -10,7 +10,7 @@ import 'package:flutter/scheduler.dart';
 
 import '../i18n/tr.dart';
 import '../core/cfg.dart';
-import '../config.dart' show PACE, FOG;
+import '../config.dart' show PACE, FOG, FLAG_BAKE;
 import '../core/fmath.dart';
 import '../data/js_config.dart';
 import '../audio/sound.dart';
@@ -87,21 +87,12 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     meter.value = meter.value == null ? 'يقيس...' : null;
     CpuGuard.detail = meter.value != null;   // خيوط اللعبة تُقرأ والعدّاد ظاهر وحده
     _mAt = 0;
-    // انشغال الخيط خارج الإطارات (2.1.4): مؤقت كل 10 ملي ث، وتأخره عن موعده = ما أوقف الخيط بين الإطارات (صوت، ذاكرة...)
-    _lagTimer?.cancel();
-    _lagTimer = null;
-    if (meter.value != null) {
-      var last = _mw.elapsedMicroseconds;
-      _lagTimer = Timer.periodic(const Duration(milliseconds: 10), (_) {
-        final now = _mw.elapsedMicroseconds, late = now - last - 10000;
-        last = now;
-        if (late > _mLag) _mLag = late;
-        if (late > 8000) _mLagSum += late;
-      });
-    }
   }
-  Timer? _lagTimer;
-  int _mLag = 0, _mLagSum = 0;
+  // كل إطارات الشاشة (2.11.0): عدّاد جواله كتب 52 إطاراً في الثانية والمشهد 15، فهذا السطر يقسمها إلى المشهد وصور الواجهة لمعرفة
+  // مصدر الباقي. ومؤقت "توقف الخيط بين الإطارات" (100 مرة في الثانية) حُذف: كان يوقظ الخيط ويثقل ما يقيسه
+  static int framesDrawn = 0;
+  static bool _countingFrames = false;
+  int _mDrawn = 0, _mSnaps = 0;
   // الزمن والنقاط في الشريط العلوي: كل منهما يتحدث وحده حين يتغير نصه، لا مع الواجهة كلها (2.1.2)
   final clockText = ValueNotifier<String>(''), pointsText = ValueNotifier<(int, String)?>(null);
   int _clockSec = -1, _taps = 0, _tapAt = 0;
@@ -135,14 +126,15 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
       'رسمه (كرت الشاشة) ${ms(_mRaster, _mTimed, _mRasterMax)} ملي ث',
       'رسم المشهد ${ms(_mPaint, _mPaints, _mPaintMax)} • المنطق ${ms(_mSim, _mTicks, _mSimMax)} ملي ث',
       'الجنود $alive (ظاهر $visibleUnits) • تقريب ${s.camera.z.toStringAsFixed(1)}',
-      'توقف الخيط بين الإطارات: أقصى ${(_mLag / 1000).toStringAsFixed(1)} ملي ث • مجموعه ${(_mLagSum / 1000).round()} في الثانية',
+      'إطارات الشاشة ${((framesDrawn - _mDrawn) / sec).round()}/ث • رسم المشهد ${(_mPaints / sec).round()} • صور الواجهة ${((RenderSnap.renders - _mSnaps) / sec).round()}',
       // ما يثقل كرت الشاشة (2.3.2): الطقس وأضواؤه، وصور الضباب الجديدة، وأوامر رسم الدفعات في الإطار
       'الطقس ${s.weather} • أضواء ${WeatherFx.lights} • صور الضباب ${(Fog.bakes / sec).round()}/ث • صور الأرض ${(GroundCache.renders / sec).round()}/ث • دفعات ${(TriBatch.draws / math.max(1, _mFrames)).round()}/إطار',
     ].join('\n');
     Fog.bakes = 0;
     GroundCache.renders = 0;
     TriBatch.draws = 0;
-    _mLag = _mLagSum = 0;
+    _mDrawn = framesDrawn;
+    _mSnaps = RenderSnap.renders;
     _mAt = now;
     _mFrames = _mTimed = _mSlow = _mBuild = _mBuildMax = _mRaster = _mRasterMax = 0;
     _mTicks = _mSim = _mSimMax = _mPaints = _mPaint = _mPaintMax = 0;
@@ -182,6 +174,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     _ticker = createTicker(_onTick);
     WidgetsBinding.instance.addObserver(this);
     SchedulerBinding.instance.addTimingsCallback(_timings);
+    if (!_countingFrames) { _countingFrames = true; SchedulerBinding.instance.addPersistentFrameCallback((_) => framesDrawn++); }
     if (widget.lanState != null) _lanSub = Lan.events.listen(_onLan);
     _start();
   }
@@ -202,7 +195,6 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     _lanSub?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     SchedulerBinding.instance.removeTimingsCallback(_timings);
-    _lagTimer?.cancel();
     meter.dispose(); clockText.dispose(); pointsText.dispose();
     _rest?.cancel();
     _ticker.dispose();
@@ -585,8 +577,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
 
   final J _cap = CAPTURE;
   void _retint(MatchState s) {
-    final steps = _cap.d('tintSteps');
-    layer?.retint([for (final d in s.map.districts) (d.tintColor, d.tintColor == null ? 0.0 : jsRound(d.tintMix * steps) / steps)],
+    layer?.retint([for (final d in s.map.districts) (d.tintColor, shownMix(d))],
         _cap.d('groundTintAlpha'), _cap.d('groundTintChroma'), _cap.d('wallTintAlpha'), _cap.d('tintChroma'));
   }
 
@@ -891,6 +882,7 @@ class _MatchPainter extends CustomPainter {
     if (busy) v.markActive();
     v.visibleUnits = visible;
     final crowded = visible > COMBAT_REALISM.m('lod').i('fullUnits');
+    final wave = c.z >= FLAG_BAKE.waveZoom;   // الراية ترفرف فوق الصورة (2.11.0)، أو ثابتة فيها والتقريب بعيد
     b.reset();
     _mark('sortUnits');
     // ما على الأرض تحت المباني كلها: النار ومناطق الضربات وأحداث المدينة وهالات المباني وهالة جنودك
@@ -915,7 +907,8 @@ class _MatchPainter extends CustomPainter {
         if (fx < left || fx > right) continue;   // خارج الشاشة يميناً أو يساراً (الصف يعبر الخريطة كلها)
         if (fog != null && !fog.known(fl.capture!.i.toDouble(), fl.capture!.j.toDouble())) continue;   // لم يُستكشف
         final f0 = b.count;
-        _flag(b, s, fl, time);
+        // المدينة صورة جاهزة: سارية العلم وحلقته فيها (والراية إن لم ترفرف)، وهنا ما يتحرك وحده (2.11.0)
+        if (g != null) { _flag(b, s, fl, time, base: false, cloth: wave); } else { _flag(b, s, fl, time); }
         if (fl.hill) drawHillCrown(b, (fl.capture!.i - fl.capture!.j) * TILE_HALF_W, (fl.capture!.i + fl.capture!.j) * TILE_HALF_H, time,
             (s.modeState as ModeState?)?.blocked ?? false);
         if (g != null && b.count > f0) g.markRect(b.bounds(f0, b.count), d);
@@ -951,10 +944,37 @@ class _MatchPainter extends CustomPainter {
     // تجري، أو المدينة مخفية)
     final view = Rect.fromLTRB(c.x - halfW, c.y - halfH, c.x + halfW, c.y + halfH);
     final borders = _borderVerts(b, s);
-    final cached = !v.hideCity && v.ground.paint(canvas, view, c.z, v.dpr, Object.hash(layer, layer.version, _borderSig),
-        (gc, area) => layer.paint(gc, art.image, area.top, area.bottom, onGround: () => TriBatch.drawBaked(gc, img, borders)));
+    // والأعلام فيها بترتيب صفوفها (2.11.0): تُرسم من جديد إن تغير مالك علم أو ظهر في الضباب أو بدأ يرفرف
+    var flagSig = wave ? 1 : 0;
+    for (final d in s.map.districts) {
+      final f = d.capture;
+      if (f != null) flagSig = Object.hash(flagSig, d.owner, d.police, fog == null || fog.known(f.i.toDouble(), f.j.toDouble()));
+    }
+    final cached = !v.hideCity && v.ground.paint(canvas, view, c.z, v.dpr, Object.hash(layer, layer.version, _borderSig, flagSig),
+        (gc, area) => layer.paint(gc, art.image, area.top, area.bottom, onGround: () => TriBatch.drawBaked(gc, img, borders),
+            afterRow: (d) {
+              for (final fl in _flagsAt(s, d)) {
+                if (fog == null || fog.known(fl.capture!.i.toDouble(), fl.capture!.j.toDouble())) _flag(_bake, s, fl, 0, cloth: !wave, wave: 0, progress: false);
+              }
+              _bake.flush(gc, img);
+            }));
     if (cached) {
-      _layered(canvas, layer, art.image, img, view, groundFx, rowContent);
+      // علم في الصورة أمام جندي أو مبنى معاد: يُرسم ثانية فوقه، ويدخل الشبكة فما أمامه يُعاد بعده
+      bool flagsBehind(int e, OcclusionGrid g) {
+        var any = false;
+        for (final fl in _flagsAt(s, e)) {
+          final f = fl.capture!, x = (f.i - f.j) * TILE_HALF_W, y = (f.i + f.j) * TILE_HALF_H;
+          if (x < left || x > right || (fog != null && !fog.known(f.i.toDouble(), f.j.toDouble()))) continue;
+          final x1 = wave ? x + 5 : x + 10.5;
+          if (!g.covers(x - 5, y - 23, x1, y + 3, e)) continue;   // ما قبل صفه (وجنود صفه بعده كما في الرسم المباشر)
+          g.markBox(x - 5, y - 23, x1, y + 3, e);
+          _flagPicks.add(fl);
+          any = true;
+        }
+        return any;
+      }
+      _layered(canvas, layer, art.image, img, view, groundFx, rowContent, flagsBehind,
+          (fl) => _flag(b, s, fl, 0, cloth: !wave, wave: 0, progress: false));
       _mark('flush');
     } else {
       layer.paint(canvas, art.image, c.y - halfH, c.y + halfH, skip: v.hideCity, onGround: () {
@@ -1032,10 +1052,12 @@ class _MatchPainter extends CustomPainter {
   // في حوافه، لكن الطبقة نفسها أثقل على خيط الرسم وكرت الشاشة مما توفره)
   final _occ = OcclusionGrid();
   Int32List _rowFrom = Int32List(0);
-  final _pickRow = <int>[], _pickSprite = <int>[];
+  final _pickRow = <int>[], _pickSprite = <int>[], _flagRowsPicked = <int>[];
+  final _flagPicks = <District>[], _flagCounts = <int>[];
   Int32List _redraw = Int32List(256);
   void _layered(Canvas canvas, CityLayer layer, ui.Image cityAtlas, ui.Image img, Rect view,
-      void Function() groundFx, void Function(int d, OcclusionGrid? g) rowContent) {
+      void Function() groundFx, void Function(int d, OcclusionGrid? g) rowContent,
+      bool Function(int e, OcclusionGrid g) flagsBehind, void Function(District d) drawFlag) {
     final b = v.batch, g = _occ..reset(view), n = layer.rows.length;
     b.reset();
     groundFx();
@@ -1048,21 +1070,32 @@ class _MatchPainter extends CustomPainter {
       if (y >= view.top - 60 && y <= view.bottom + 120) rowContent(d, g);   // صفوف afterRow في الرسم المباشر
     }
     _rowFrom[n] = b.count;
-    _pickRow.clear(); _pickSprite.clear();
-    layer.occluders(g, view.top, view.bottom, (e, m) { _pickRow.add(e); _pickSprite.add(m); });
-    var cursor = 0, ready = ground, pending = 0, p = 0;   // محتوى لم يُرسم [cursor، ready)، وصور تنتظر الإعادة
+    _pickRow.clear(); _pickSprite.clear(); _flagPicks.clear(); _flagRowsPicked.clear(); _flagCounts.clear();
+    layer.occluders(g, view.top, view.bottom, (e, m) { _pickRow.add(e); _pickSprite.add(m); }, (e) {
+      final n0 = _flagPicks.length;
+      if (flagsBehind(e, g)) { _flagRowsPicked.add(e); _flagCounts.add(_flagPicks.length - n0); }
+    });
+    var cursor = 0, ready = ground, pending = 0, p = 0, q = 0, fp = 0;   // محتوى لم يُرسم [cursor، ready)، وصور تنتظر الإعادة
     void redrawNow() {
       if (pending == 0) return;
       layer.redraw(canvas, cityAtlas, _redraw, pending);
       pending = 0;
     }
     for (var e = 0; e < n; e++) {
-      if (p < _pickRow.length && _pickRow[p] == e) {
+      final flags = q < _flagRowsPicked.length && _flagRowsPicked[q] == e;
+      if ((p < _pickRow.length && _pickRow[p] == e) || flags) {
         if (ready > cursor) { b.flushRange(canvas, img, cursor, ready); cursor = ready; }   // ما خلف مباني e قبلها
         for (; p < _pickRow.length && _pickRow[p] == e; p++) {
           if (pending == _redraw.length) _redraw = Int32List(_redraw.length * 2)..setRange(0, pending, _redraw);
           _redraw[pending++] = _pickSprite[p];
         }
+      }
+      if (flags) {   // أعلام الصف بعد مبانيه وقبل جنوده، رؤوسها في آخر الدفعة
+        redrawNow();
+        final f0 = b.count;
+        for (final end = fp + _flagCounts[q]; fp < end; fp++) { drawFlag(_flagPicks[fp]); }
+        b.flushRange(canvas, img, f0, b.count);
+        q++;
       }
       if (_rowFrom[e + 1] > _rowFrom[e]) {   // محتوى الصف e فوق مبانيه المعادة
         redrawNow();
@@ -1083,7 +1116,8 @@ class _MatchPainter extends CustomPainter {
   ui.Vertices _borderVerts(TriBatch b, MatchState s) {
     var sig = 0;
     for (final d in s.map.districts) {
-      if (d.tintColor != null && d.tintMix > 0) sig = Object.hash(sig, d.id, d.tintColor, d.tintMix);
+      final mix = shownMix(d);
+      if (mix > 0) sig = Object.hash(sig, d.id, d.tintColor, mix);
     }
     if (_borderV == null || sig != _borderSig || _borderMap != s.map) {
       _borderV?.dispose();
@@ -1100,11 +1134,12 @@ class _MatchPainter extends CustomPainter {
     final edges = _edges[m] ??= _buildEdges(m);
     final B = CAPTURE.m('border');
     for (final d in m.districts) {
-      if (d.tintColor == null || d.tintMix <= 0) continue;
-      final col = hexRgb(d.tintColor!), al = B.d('alpha') * d.tintMix;
+      final mix = shownMix(d);
+      if (mix <= 0) continue;
+      final col = hexRgb(d.tintColor!), al = B.d('alpha') * mix;
       final e = edges[d.id];
       // لكل ضلع رباعيان: الظل الداكن ثم الخط بلون المالك
-      for (var k = 0; k < e.length; k += 16) { b.quad(e[k], e[k + 1], e[k + 2], e[k + 3], e[k + 4], e[k + 5], e[k + 6], e[k + 7], 0x18120c, 0.45 * d.tintMix); }
+      for (var k = 0; k < e.length; k += 16) { b.quad(e[k], e[k + 1], e[k + 2], e[k + 3], e[k + 4], e[k + 5], e[k + 6], e[k + 7], 0x18120c, 0.45 * mix); }
       for (var k = 8; k < e.length; k += 16) { b.quad(e[k], e[k + 1], e[k + 2], e[k + 3], e[k + 4], e[k + 5], e[k + 6], e[k + 7], col, al); }
     }
   }
@@ -1163,16 +1198,20 @@ class _MatchPainter extends CustomPainter {
   }
 
   // علم الحي: سارية وراية بلون المالك (أو محايدة)، وحلقة تقدم الاستيلاء
+  // base: الظل والحلقة والسارية، وcloth: الراية (wave: ارتفاع رفرفتها)، وprogress: حلقة التقدم. في صورة المدينة الجاهزة الثابت منها
+  // وحده (2.11.0)، وفوقها ما يتحرك
   static final _flagBase = Expando<TriClip>();
-  void _flag(TriBatch b, MatchState s, District d, double time) {
+  static final _bake = TriBatch();
+  void _flag(TriBatch b, MatchState s, District d, double time, {bool base = true, bool cloth = true, double wave = 0.8, bool progress = true}) {
     final c = d.capture!;
     final x = (c.i - c.j) * TILE_HALF_W, y = (c.i + c.j) * TILE_HALF_H;
     final owner = d.owner != null ? s.players[d.owner!] : null;
     final col = owner != null ? hexRgb(owner.gang == 'police' ? UNIT_ART.s('policeColor') : owner.color) : (d.police ? 0x8fa6c4 : 0xe8e2d6);
     // ظل العلم وحلقته وساريته لا تتغير: تُحسب مرة وتُعاد كما هي (2.1.3)، والراية وحلقة التقدم كل إطار
-    final base = _flagBase[d];
-    if (base != null && base.x == x && base.y == y) {
-      b.replay(base, 0, 0);
+    final kept = _flagBase[d];
+    if (!base) {
+    } else if (kept != null && kept.x == x && kept.y == y) {
+      b.replay(kept, 0, 0);
     } else {
       final from = b.count;
       b.ellipse(x, y, 3.2, 1.5, 0x000000, 0.3);
@@ -1181,9 +1220,9 @@ class _MatchPainter extends CustomPainter {
       b.keep(_flagBase[d] ??= TriClip(), from);
       _flagBase[d]!..x = x..y = y;
     }
-    final wv = math.sin(time * 3 + c.i) * 0.8;
-    b.quad(x, y - 22, x + 10, y - 20 + wv, x + 10, y - 15 + wv, x, y - 16, col);
-    if (d.progress > 0 && d.progress < 100 && d.progressOwner != null) {
+    final wv = wave == 0 ? 0.0 : math.sin(time * 3 + c.i) * wave;
+    if (cloth) b.quad(x, y - 22, x + 10, y - 20 + wv, x + 10, y - 15 + wv, x, y - 16, col);
+    if (progress && d.progress > 0 && d.progress < 100 && d.progressOwner != null) {
       final po = s.players[d.progressOwner!];
       final pc = hexRgb(po.gang == 'police' ? UNIT_ART.s('policeColor') : po.color);
       b.ring(x, y, 9, 4.5, 1.6, 0x141210, 0.6, 32);
@@ -1211,3 +1250,8 @@ class _MatchPainter extends CustomPainter {
 }
 
 double tintOf(District d) => tintAmount(d, 1);
+
+// لون المالك على الحي والحد كما يُرسم: بثلاث درجات (CITY_CACHE.tintSteps كما في chunkCache.js، 2.11.0؛ كانت عشراً): كل درجة تعيد
+// رسم صورة المدينة الجاهزة، فكان الحي المستولى عليه يعيدها حتى عشر مرات في نصف ثانية
+final double _shownSteps = CITY_CACHE.d('tintSteps');
+double shownMix(District d) => d.tintColor == null ? 0.0 : jsRound(d.tintMix * _shownSteps) / _shownSteps;
