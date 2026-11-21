@@ -31,6 +31,7 @@ Future<void> main() async {
   await migrateOldSave();     // أول تشغيل فوق اللعبة القديمة: إحصائياتها وتقدمها وإعداداتها (ui/migrate.dart)
   Settings.load();
   Wallet.load();              // الذهب والمشتريات (2.12.0)
+  Wallet.testGift();          // ذهب التجربة مرة واحدة (2.16.0)
   Achievements.load();        // الإنجازات (2.13.0)
   Daily.load();               // المكافآت اليومية (2.14.0)
   await GameSound.init();

@@ -226,7 +226,7 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
           for (final t in _tiers.keys) Padding(padding: const EdgeInsetsDirectional.only(end: 8), child: Pill(_tiers[t]!.icon,
               '${_tiers[t]!.name} ${doneIn(t)}/${achievements.where((a) => a.tier == t).length}', on: tier == t, onTap: () => setState(() => tier = t))),
           const SizedBox(width: 6),
-          Expanded(child: Text(reward, maxLines: 1, overflow: TextOverflow.ellipsis,
+          Expanded(child: Text(reward, maxLines: 2, overflow: TextOverflow.ellipsis,
               style: TextStyle(color: tier == 'insane' ? gemColor : gold, fontSize: 13))),
         ]),
         const SizedBox(height: 10),

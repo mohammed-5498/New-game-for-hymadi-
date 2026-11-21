@@ -4,17 +4,20 @@
 // اللعبة (الحزمة تثبته)، والأقدام فوق الأرض والحوض ينزل حتى تصلها (النخبة)
 import 'dart:math' as math;
 
+import '../config.dart' show RIG_ART, RIG_TWEAKS;
 import '../core/cfg.dart';
 import '../data/rig_sprites.dart';
 import 'batch.dart';
 import 'pose.dart';
 
 class Rig {
-  final String sheet;
-  final bool elite, outfit;   // elite: رسم حزمة النخبة (والأزياء الجديدة معها)، وoutfit: ما زادته حزمة الأزياء
+  final String sheet, style;   // base البديلة، elite النخبة، outfit الأزياء الجديدة، r3 الأرجنتين والمكسيك والبرازيل المحسّنة (2.16.0)
   final J def, meta;
   final Map<String, List<double>> parts;
-  Rig(this.sheet, this.elite, this.def, this.meta, this.parts, [this.outfit = false]);
+  Rig(this.sheet, this.style, this.def, this.meta, this.parts);
+  bool get elite => style != 'base';                     // رسم حزمة النخبة (والحزم بعدها)
+  bool get outfit => style == 'outfit' || style == 'r3';  // وما زادته حزمة الأزياء
+  bool get r3 => style == 'r3';                           // وما صححته حزمة R3
   double d(String k, double or) => (def[k] as num?)?.toDouble() ?? or;
   String get weapon => def['weapon'] as String? ?? 'fists';
   bool get twoH => def['twoH'] == true;
@@ -35,9 +38,9 @@ Rig? rigFor(String key, String? skin) {
     for (final sheet in [if (skin != null) '${nation}_$skin', '${nation}_rig']) {
       final u = ((RIG_SHEETS[sheet] as J?)?['units'] as J?)?[base] as J?;
       if (u == null) continue;
-      final def = u['def'] as J, style = (RIG_SHEETS[sheet] as J)['style'];
-      return Rig(sheet, style != 'base', def, (def['parts'] as J?) ?? const {},
-          {for (final e in (u['parts'] as J).entries) e.key: [for (final x in e.value as List) (x as num).toDouble()]}, style == 'outfit');
+      final raw = u['def'] as J, tweak = RIG_TWEAKS[sheet]?[base], def = tweak == null ? raw : <String, Object?>{...raw, ...tweak};
+      return Rig(sheet, (RIG_SHEETS[sheet] as J)['style'] as String, def, (def['parts'] as J?) ?? const {},
+          {for (final e in (u['parts'] as J).entries) e.key: [for (final x in e.value as List) (x as num).toDouble()]});
     }
     return null;
   });
@@ -78,6 +81,12 @@ class _Draw {
   }
   void segment(String n, double ax, double ay, double bx, double by, double height) =>
       sprite(n, (ax + bx) / 2, (ay + by) / 2, height, _ang(ax, ay, bx, by) - math.pi / 2);
+  // ساق حزمة R3: تنتهي فوق القدم بمقدار الكُمّ (cuff) فلا تغطي الحذاء
+  void shin(String n, double ax, double ay, double bx, double by, double height, double len) {
+    const cuff = 0.75;
+    final t = 0.5 - cuff / len;
+    sprite(n, ax + (bx - ax) * t, ay + (by - ay) * t, height - cuff, _ang(ax, ay, bx, by) - math.pi / 2);
+  }
   double ratio(String n) { final q = r.parts[n]; return q == null || q[2] == 0 ? 1 : q[3] / q[2]; }
 }
 
@@ -290,7 +299,7 @@ void _elite(_Draw k, Pose p, bool ground, bool away, RigJoints j) {
   }
   void leg(double lx, List<double> f, String s) {
     final (kx, ky) = knee(lx, hy, f);
-    k.segment('shin$s', kx, ky, f[0], f[1], 6.8);
+    if (r.r3) { k.shin('shin$s', kx, ky, f[0], f[1], 6.8, 6); } else { k.segment('shin$s', kx, ky, f[0], f[1], 6.8); }
     k.segment('thigh$s', lx, hy, kx, ky, 6.6);
     final lift = math.max(0.0, _ankle - f[1]), q = r.parts['foot$s'];
     if (q == null) return;
@@ -321,19 +330,21 @@ void _elite(_Draw k, Pose p, bool ground, bool away, RigJoints j) {
       height = type == 'falcon' ? 7 : type == 'firepot' ? 4.5 : type == 'drum' ? 5.5 : type == 'horn' ? 8 : type == 'knuckles' ? 2.5 : type == 'sling' ? 7 : h;
       g = (gx, type == 'falcon' ? 0.88 : type == 'shield' || type == 'drum' || type == 'knuckles' ? 0.5 : gy);
     } else if (type == 'berimbau') {
-      a = 0; height = 18; g = (r.m(name, 'gripX', 0.5), 0.5);
+      a = r.r3 ? 0.20 : 0; height = 18; g = (r.m(name, 'gripX', 0.5), 0.5);
     } else if (type == 'slingPouch') {
       a = 0; height = 1.0; g = (0.5, 0.5);
     }
     if (r.outfit && type == 'lantern') { g = r.pair('grip') ?? g; height = r.d('weaponLength', height); }
     if (r.outfit && type == 'banner') g = (r.m(name, 'handleX', 0.1), g.$2);
+    if (r.r3 && const ['blade', 'dual', 'dagger', 'club', 'stick', 'staff', 'spear', 'torch', 'atlatl'].contains(type)) g = (r.m(name, 'handleX', g.$1), g.$2);
     if (r.tipDown(name) && ['blade', 'dual', 'dagger', 'club', 'stick', 'staff', 'spear'].contains(type)) { a -= math.pi; g = (g.$1, 1 - g.$2); }
     k.sprite(name, hxx, hyy, height, a, g.$1, g.$2);
   }
   if (r.parts['accessory'] != null) {
     final sc = r.def['scabbard'] == true;
-    if (r.def['backcloth'] == true) {   // عباءة خلف الكتفين تتدلى من الصدر (الأزياء الجديدة)
-      k.sprite('accessory', cx - 2, cy - 0.5, r.d('backclothLength', 17), -0.10 + a2 * 0.35, 0.5, 0);
+    if (r.def['backcloth'] == true) {   // الوشاح خلف الكتفين يتدلى من الصدر (موضع حزمة R3 وطولها، 2.16.0)
+      final (w1, w2) = _rot(-3.3, -0.4, a2);
+      k.sprite('accessory', cx + w1, cy + w2, math.min(r.d('backclothLength', RIG_ART.backclothMax), RIG_ART.backclothMax), -0.10 + a2 * 0.35, 0.5, 0);
     } else {
       k.sprite('accessory', sc ? hx - 2 : cx - 3, sc ? hy - 1 : cy + 1, sc ? 12 : 10, sc ? 0.45 : -0.25);
     }

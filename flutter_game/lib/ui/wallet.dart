@@ -41,6 +41,12 @@ class Wallet {
     final old = [for (final k in owned) if (k.startsWith('skin:') && !k.contains('_')) k];
     if (old.isNotEmpty) { owned..removeAll(old)..addAll([for (final k in old) '${k}_elite']); save(); }
   }
+  // ذهب التجربة (SHOP.testGold) مرة واحدة، من main.dart بعد load
+  static void testGift() {
+    if (SHOP.testGold <= 0 || Prefs.raw(SHOP.testGoldKey) != null) return;
+    Prefs.writeRaw(SHOP.testGoldKey, '1');
+    earn(SHOP.testGold);
+  }
   static final changed = ValueNotifier<int>(0);   // الرصيد ظاهر في شاشات كثيرة: يُعاد رسمه مع كل تغيير (GoldChip)
   static void save() {
     Prefs.write(_key, {'gold': gold, 'gems': gems, 'owned': owned.toList()});

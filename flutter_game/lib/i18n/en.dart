@@ -74,6 +74,12 @@ const EN = <String, String>{
   'اللعب المحلي في تطبيق أندرويد: ثبّتوا نفس ملف اللعبة على كل جوال.': 'Local play works in the Android app: install the same game file on every phone.',
   'رجوع': 'Back',
   // lib/ui/hud.dart
+  'التجنيد': 'Recruit',
+  'المبنى': 'Building',
+  'البرج': 'Tower',
+  'ترقيات العصابة': 'Gang upgrades',
+  'بناء': 'Build',
+  'السور': 'Walls',
   '  +{}/ث': '  +{}/s',
   'تحديد': 'Select',
   'كل جنودك': 'All your soldiers',

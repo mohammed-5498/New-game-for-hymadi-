@@ -5,7 +5,9 @@
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart' as m;
+import 'package:flutter/rendering.dart';
 
+import '../config.dart' show TEXT_FIT;
 import '../ui/prefs.dart';
 import 'en.dart';
 
@@ -153,8 +155,78 @@ class Text extends m.StatelessWidget {
     final d = data;
     // الترتيب من اليمين لليسار في اللغتين، والجملة الإنجليزية نفسها من اليسار لليمين (فلا تنقلب علامات الترقيم)
     final dir = textDirection ?? (Lang.en ? m.TextDirection.ltr : null);
-    if (d != null) return m.Text(tr(d), style: style, textAlign: textAlign, textDirection: dir, overflow: overflow, maxLines: maxLines);
-    return m.Text.rich(trSpan(textSpan!), style: style, textAlign: textAlign, textDirection: dir, overflow: overflow, maxLines: maxLines);
+    final t = d != null ? m.Text(tr(d), style: style, textAlign: textAlign, textDirection: dir, overflow: overflow, maxLines: maxLines)
+        : m.Text.rich(trSpan(textSpan!), style: style, textAlign: textAlign, textDirection: dir, overflow: overflow, maxLines: maxLines);
+    // النص المحدود بأسطر أو بنقاط القطع يصغر خطه ليظهر كاملاً في مكانه (2.16.0)
+    return maxLines != null || overflow == m.TextOverflow.ellipsis ? _Fit(child: t) : t;
+  }
+}
+
+// نص يصغر ليتسع لمكانه بدل أن يُقطع (2.16.0، بطلب المستخدم: "النصوص لا تظهر بشكل كامل لذلك صغر الخط ليتناسب مع المكان"):
+// يُرتّب النص بعرض أوسع ويُرسم مصغراً بالنسبة نفسها، بأكبر نسبة يتسع بها لأسطره، حتى TEXT_FIT.minScale ثم يُقطع كما كان
+class _Fit extends m.SingleChildRenderObjectWidget {
+  const _Fit({super.child});
+  @override
+  RenderObject createRenderObject(m.BuildContext context) => _RenderFit();
+}
+
+class _RenderFit extends RenderProxyBox {
+  double _k = 1;
+
+  RenderParagraph? get _paragraph {
+    RenderObject? c = child;
+    while (c is RenderProxyBox) { c = c.child; }
+    return c is RenderParagraph ? c : null;
+  }
+
+  bool _fits(RenderBox c, RenderParagraph? p, double k) {
+    c.layout(BoxConstraints(minWidth: constraints.minWidth / k, maxWidth: constraints.maxWidth / k), parentUsesSize: true);
+    return !(p?.didExceedMaxLines ?? false);
+  }
+
+  @override
+  void performLayout() {
+    final c = child;
+    if (c == null) { size = constraints.smallest; return; }
+    final p = _paragraph;
+    var k = 1.0;
+    if (!_fits(c, p, 1) && constraints.hasBoundedWidth && p != null) {
+      var lo = TEXT_FIT.minScale, hi = 1.0;
+      if (_fits(c, p, lo)) {
+        for (var n = 0; n < TEXT_FIT.steps; n++) {
+          final mid = (lo + hi) / 2;
+          if (_fits(c, p, mid)) { lo = mid; } else { hi = mid; }
+        }
+        _fits(c, p, lo);
+      }
+      k = lo;
+    }
+    _k = k;
+    size = constraints.constrain(Size(c.size.width * k, c.size.height * k));
+  }
+
+  @override
+  double? computeDistanceToActualBaseline(TextBaseline baseline) {
+    final b = child?.getDistanceToActualBaseline(baseline);
+    return b == null ? null : b * _k;
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    final c = child;
+    if (c == null) return;
+    if (_k == 1) { context.paintChild(c, offset); return; }
+    context.pushTransform(needsCompositing, offset, Matrix4.diagonal3Values(_k, _k, 1), (ctx, o) => ctx.paintChild(c, o));
+  }
+
+  @override
+  void applyPaintTransform(RenderBox child, Matrix4 transform) => transform.multiply(Matrix4.diagonal3Values(_k, _k, 1));
+
+  @override
+  bool hitTestChildren(BoxHitTestResult result, {required Offset position}) {
+    final c = child;
+    return c != null && result.addWithPaintTransform(transform: Matrix4.diagonal3Values(_k, _k, 1), position: position,
+        hitTest: (r, q) => c.hitTest(r, position: q));
   }
 }
 

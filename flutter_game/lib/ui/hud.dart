@@ -6,6 +6,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart' hide Text;
 
 import '../i18n/tr.dart';
+import '../config.dart' show GROUPS;
 import '../core/cfg.dart';
 import '../data/js_config.dart';
 import '../game/empire.dart';
@@ -37,7 +38,7 @@ class MatchHud extends StatelessWidget {
     builder: (context, _, _) {
       final s = screen.state!;
       final me = s.humanId >= 0 ? s.players[s.humanId] : null;
-      final bar = modeBar(s);
+      final bar = modeBar(s), groups = _groups(s);
       return Stack(children: [
         // الصف الأعلى: الزمن والمدينة والنقاط يساراً، والأزرار يميناً، وشريط الطور في المساحة بينهما وحدها (يصغر ولا يتداخل).
         // الزمن والنقاط يتحدث كل منهما وحده (clockText وpointsText)، وثلاث لمسات على الزمن تفتح عدّاد الأداء
@@ -72,20 +73,24 @@ class MatchHud extends StatelessWidget {
         // اللعب المحلي: المضيف أوقف المباراة، أو لا يصل دور جديد منه
         if (screen.lanText case final t?) _Memo('lan', t, () => Positioned(top: 84, left: 0, right: 0, child: IgnorePointer(child: Center(child: Snap(child: _Box(
             child: Text(t, style: const TextStyle(color: gold, fontSize: 13, fontWeight: FontWeight.w700)))))))),
-        // الإشعار تحت الصف الأعلى في الوسط، صغيراً ولا يلتقط اللمس
-        if (s.notice case final n?) _Memo('notice', '${n.text}|${n.mine}', () => Positioned(top: 46, left: 200, right: 200, child: IgnorePointer(child: Center(child: Snap(child: _Box(
-            child: Text(n.text, textAlign: TextAlign.center, maxLines: 2,
-                style: TextStyle(color: n.mine ? gold : ink, fontSize: 12, fontWeight: FontWeight.w600)))))))),
         // شريط القوة يساراً: لمسة تطويه إلى سطرك وحدك
         _Memo('power', _powerSig(s), () => Positioned(top: 44, left: 6, child: Snap(child: _Power(s)))),
-        // مجموعات التحكم على الحافة اليمنى
-        _Memo('groups', _groupSig(s), () => Positioned(right: 8, top: 0, bottom: 0, child: Center(child: Snap(child: Column(mainAxisSize: MainAxisSize.min, children: [
-          for (var g = 1; g <= 5; g++) _Group(screen, g),
+        // مجموعات التحكم على الحافة اليمنى (GROUPS.count خانات)، والمحددة الآن بإطار ذهبي
+        _Memo('groups', groups.join(), () => Positioned(right: 6, top: 0, bottom: 0, child: Align(alignment: const Alignment(0, -0.3), child: Snap(child: Column(mainAxisSize: MainAxisSize.min, children: [
+          for (var g = 1; g <= groups.length; g++) _Group(screen, g, groups[g - 1].$1, groups[g - 1].$2),
         ]))))),
         // عدّاد الأداء: يتحدث وحده مرة في الثانية
         _Memo('meter', 0, () => Positioned(left: 6, bottom: 6, child: ValueListenableBuilder<String?>(valueListenable: screen.meter,
             builder: (_, t, _) => t == null ? const SizedBox.shrink() : Snap(child: _Meter(screen, t))))),
-        if (screen.menuDistrict != null) Positioned(left: 0, right: 0, bottom: 8, child: Center(child: Snap(child: _EmpireMenu(screen, screen.menuDistrict!)))),
+        // أسفل الوسط: الإشعار سطراً صغيراً شفافاً لا يلتقط اللمس، وقائمة الحي تحته إن كانت مفتوحة (2.16.0، بطلب المستخدم: "في بعض
+        // الاطوار الرساله تغطي على الهدف و التنبيهات مزعجه": كان الإشعار أعلى الوسط فوق شريط الطور)
+        Positioned(left: 6, right: 6, bottom: 6, child: Column(mainAxisSize: MainAxisSize.min, children: [
+          if (s.notice case final n?) _Memo('notice', '${n.text}|${n.mine}', () => IgnorePointer(child: Snap(child: _NoticeLine(n)))),
+          if (screen.menuDistrict != null) ...[
+            const SizedBox(height: 4),
+            Snap(margin: 12, child: _EmpireMenu(screen, screen.menuDistrict!)),
+          ],
+        ])),
         if (screen.paused && s.matchResult == null) Positioned.fill(child: _Pause(screen)),
         if (s.matchResult != null) Positioned.fill(child: _End(screen, s.matchResult!)),
       ]);
@@ -117,10 +122,16 @@ String _powerSig(MatchState s) {
   return b.toString();
 }
 
-String _groupSig(MatchState s) {
-  final n = List.filled(6, 0);
-  for (final u in s.units) { if (u.group > 0 && u.group < 6 && u.state != 'dead') n[u.group]++; }
-  return n.join(',');
+// عدد كل مجموعة، وهل هي المحدد وحده الآن
+List<(int, bool)> _groups(MatchState s) {
+  final c = GROUPS.count, n = List.filled(c + 1, 0), sel = List.filled(c + 1, 0);
+  var all = 0;
+  for (final u in s.units) {
+    if (u.state == 'dead') continue;
+    if (u.selected) all++;
+    if (u.group > 0 && u.group <= c) { n[u.group]++; if (u.selected) sel[u.group]++; }
+  }
+  return [for (var g = 1; g <= c; g++) (n[g], n[g] > 0 && sel[g] == n[g] && all == n[g])];
 }
 
 // جزء من الواجهة يعيد ما بناه نفسه ما دام مفتاحه sig كما هو، فلا يُبنى ما تحته ولا يُرسم (وطبقته وحدها حين يتغير).
@@ -154,6 +165,21 @@ class _Box extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(color: panel, borderRadius: BorderRadius.circular(9), border: Border.all(color: const Color(0x55E2B55A))),
       child: child);
+}
+
+// الإشعار: سطر صغير شفاف أسفل الوسط، بلون ذهبي خافت لما يخصك
+class _NoticeLine extends StatelessWidget {
+  final Notice n;
+  const _NoticeLine(this.n);
+  @override
+  Widget build(BuildContext context) => ConstrainedBox(
+    constraints: BoxConstraints(maxWidth: math.min(460.0, MediaQuery.sizeOf(context).width * 0.62)),
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(color: const Color(0xA0120E0A), borderRadius: BorderRadius.circular(12)),
+      child: Text(n.text, textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis,
+          style: TextStyle(color: n.mine ? const Color(0xFFEBD08E) : ink, fontSize: 11, height: 1.25))),
+  );
 }
 
 class _Btn extends StatelessWidget {
@@ -315,41 +341,47 @@ class _EdgeArrows extends CustomPainter {
   bool shouldRepaint(_EdgeArrows old) => true;
 }
 
-// مجموعة تحكم: ضغطة مطوّلة تحفظ المحدد، ولمسة تحدده، ولمستان تنقلان الكاميرا إليه
+// مجموعة تحكم: ضغطة مطوّلة تحفظ المحدد، ولمسة تحدده فوراً، والثانية خلال doubleTapMs تنقل الكاميرا إليه أيضاً. كان InkWell
+// بلمستين ينتظر الثانية 300 ملي ث قبل أن يحدد (2.16.0، بطلب المستخدم: "الضغط متأخر وليس سلس وكأنه لا يستجيب")
 class _Group extends StatelessWidget {
   final MatchScreenState screen;
-  final int g;
-  const _Group(this.screen, this.g);
-  @override
-  Widget build(BuildContext context) {
-    final s = screen.state!;
-    final n = s.units.where((u) => u.group == g && u.state != 'dead').length;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Material(color: n > 0 ? panel : const Color(0x88261E17), borderRadius: BorderRadius.circular(9), child: InkWell(
-        borderRadius: BorderRadius.circular(9),
-        onLongPress: () {
-          for (final u in s.units) { if (u.group == g) u.group = 0; if (u.selected) u.group = g; }
-          screen.hud.value++;
-        },
-        onTap: () {
-          for (final u in s.units) { u.selected = u.group == g && u.state != 'dead'; }
-          screen.hud.value++;
-        },
-        onDoubleTap: () {
-          final list = s.units.where((u) => u.group == g && u.state != 'dead').toList();
-          if (list.isEmpty) return;
-          screen.centerOn(list.map((u) => u.x).reduce((a, b) => a + b) / list.length, list.map((u) => u.y).reduce((a, b) => a + b) / list.length);
-        },
-        child: SizedBox(width: 40, height: 36, child: Center(child: Text(n > 0 ? '$g·$n' : '$g',
-            style: TextStyle(color: n > 0 ? gold : dim, fontSize: 13, fontWeight: FontWeight.w700)))),
-      )),
-    );
+  final int g, n;
+  final bool on;
+  const _Group(this.screen, this.g, this.n, this.on);
+  static final _last = <int, int>{};   // آخر لمسة لكل خانة (ملي ثانية)
+
+  void _tap() {
+    final s = screen.state!, now = DateTime.now().millisecondsSinceEpoch;
+    final twice = now - (_last[g] ?? 0) < controlGroups.i('doubleTapMs');
+    _last[g] = twice ? 0 : now;
+    var x = 0.0, y = 0.0, k = 0;
+    for (final u in s.units) {
+      u.selected = u.group == g && u.state != 'dead';
+      if (u.selected) { x += u.x; y += u.y; k++; }
+    }
+    if (twice && k > 0) screen.centerOn(x / k, y / k);
+    screen.hud.value++;
   }
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 2.5),
+    child: Material(color: on ? cardOn : n > 0 ? panel : const Color(0x88261E17),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: on ? const BorderSide(color: gold, width: 1.5) : BorderSide.none),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onLongPress: () {
+          for (final u in screen.state!.units) { if (u.group == g) u.group = 0; if (u.selected) u.group = g; }
+          screen.hud.value++;
+        },
+        onTap: _tap,
+        child: SizedBox(width: 34, height: 30, child: Center(child: FittedBox(fit: BoxFit.scaleDown, child: Text(n > 0 ? '$g·$n' : '$g',
+            style: TextStyle(color: n > 0 ? gold : dim, fontSize: 12, fontWeight: FontWeight.w700))))),
+      )),
+  );
 }
 
-// قائمة الحي (empireMenu.js): خانات صغيرة برمزها وسعرها ونقاط مستواها وما تعطيه بأرقامه (رقائق)، وسطر حجم الحي وقدرة
-// مبناه، والطابور بشريط تقدمه
+// رقائق قائمة الحي (empireMenu.js): ما تعطيه كل خانة بأرقامه، وحجم الحي وقدرة مبناه
 const _chipIcon = {'coin': Icons.toll, 'shield': Icons.shield, 'castle': Icons.fort, 'sword': Icons.sports_martial_arts,
   'range': Icons.gps_fixed, 'clock': Icons.schedule, 'heart': Icons.favorite, 'boot': Icons.double_arrow, 'gear': Icons.settings,
   'people': Icons.groups, 'block': Icons.crop_square};
@@ -403,16 +435,20 @@ List<_Chip>? _statsChips(MatchState s, District d) {
   return null;
 }
 
-Widget _chips(List<_Chip> list, {double size = 9.5, Color color = dim, Color icon = dim}) => Wrap(
-  spacing: 4, runSpacing: 0, alignment: WrapAlignment.center,
+// رقائق ما تعطيه الخانة بأرقامها في سطر واحد
+Widget _chips(List<_Chip> list, {double size = 9, Color color = dim, Color icon = dim}) => Row(
+  mainAxisSize: MainAxisSize.min, textDirection: TextDirection.ltr,
   children: [
-    for (final (k, t) in list) Row(mainAxisSize: MainAxisSize.min, textDirection: TextDirection.ltr, children: [
+    for (final (n, (k, t)) in list.indexed) ...[
+      if (n > 0) const SizedBox(width: 4),
       Icon(_chipIcon[k], size: size + 1, color: icon),
       if (t.isNotEmpty) Text(t, textDirection: TextDirection.ltr, style: TextStyle(color: color, fontSize: size)),
-    ]),
+    ],
   ],
 );
 
+// قائمة الحي (2.16.0، بطلب المستخدم: "قائمه التطويرات تحتاج تحسين وتجميل وترتيب افضل"): شريط أسفل الشاشة بأقسام معنونة في صف
+// واحد (الجنود، والمبنى، وترقيات العصابة، والبناء، والسور) يُمرَّر إن لم يتسع، وفوقها اسم المبنى وحجم الحي والطابور والنقاط
 class _EmpireMenu extends StatelessWidget {
   final MatchScreenState screen;
   final int did;
@@ -423,30 +459,34 @@ class _EmpireMenu extends StatelessWidget {
     final s = screen.state!, d = s.map.districts[did], pid = s.humanId;
     if (d.owner != pid) return const SizedBox.shrink();
     final me = s.players[pid], e = s.empire!;
-    final slots = <Widget>[];
-    // بصمة ما تعرضه الخانات: تُبنى خاناتها من جديد حين يتغير شيء منها وحده (كانت تُبنى مع كل تحديث للواجهة، مرتين في الثانية)
+    final sections = <(String, List<Widget>)>[];
+    void section(String name) => sections.add((name, <Widget>[]));
+    // بصمة ما تعرضه الخانات: تُبنى من جديد حين يتغير شيء منها وحده
     final sig = StringBuffer('$did');
     int next(int level, int max) => math.min(level + 1, max);
     void slot(String label, int? cost, Result check, VoidCallback act,
         {int count = 0, IconData icon = Icons.circle, int level = 0, int max = 0, List<_Chip> perks = const [], String? note}) {
       final affordable = cost == null || e.points[pid] >= cost;
       sig.write('|$label,$cost,${check.ok},${check.reason},$count,$level,$max,$affordable,$note');
-      slots.add(_Slot(label: label, icon: icon, cost: cost, check: check, count: count, level: level, max: max, perks: perks, note: note,
-          affordable: affordable, onTap: check.ok ? () { act(); screen.hud.value++; } : null));
+      sections.last.$2.add(_Slot(label: label, icon: icon, cost: cost, check: check, count: count, level: level, max: max, perks: perks,
+          note: note, affordable: affordable, onTap: check.ok ? () { act(); screen.hud.value++; } : null));
     }
     final queue = e.queues[did] ?? const [];
     var hasQueue = false;
-    // مبنى ميزة المدينة (القسم 3.11): ما يعطيه، وخانات التجنيد والترياد والصاروخ والأجراس
+    // مبنى ميزة المدينة (القسم 3.11): ما يعطيه، وخانات التجنيد، والترياد والصاروخ والأجراس
     String? info;
     if ((d.featureTile != null || d.merc) && d.feature != null) {
       info = FEATURES.m('desc').ss(d.feature!);
-      for (final kind in recruitsAt(d) ?? const <String>[]) {
+      final kinds = recruitsAt(d) ?? const <String>[];
+      if (kinds.isNotEmpty) section('التجنيد');
+      for (final kind in kinds) {
         final R = FEATURES.m('recruits').m(kind);
         hasQueue = true;
         slot(R.ss('name') ?? kind, unitPrice(s, pid, kind), canQueue(s, pid, d, kind), () => screen.empire('queue', did, kind),
             icon: Icons.person_add, count: queue.where((x) => x.kind == kind).length);
       }
       final F = FEATURES;
+      if (const ['triads', 'powder', 'cathedral'].contains(d.feature)) section('المبنى');
       if (d.feature == 'triads') {
         slot('هجوم الترياد', F.m('triads').i('cost'), canCallTriads(s, pid, d),
             () => screen.startPick('triads', did, 'المس حياً لعدوك ليهجم عليه الترياد'), icon: Icons.groups,
@@ -465,8 +505,11 @@ class _EmpireMenu extends StatelessWidget {
     }
     final title = d.featureTile != null && d.feature != null ? 'مبنى المدينة'
         : d.building == 'hq' ? 'القاعدة الرئيسية' : d.building == 'tower' ? 'برج رماية' : d.building == 'hospital' ? 'مستشفى' : 'حي';
+    final titleIcon = d.featureTile != null && d.feature != null ? Icons.account_balance
+        : d.building == null ? Icons.crop_square : _buildIcon[d.building] ?? Icons.home_work;
     if (d.building == 'hq') {
       hasQueue = true;
+      section('الجنود');
       for (final kind in EMPIRE.m('units').l('order').cast<String>()) {
         final hero = heroFor(me, kind);
         final name = kind == 'leader' ? CHAMPIONS.m(me.gang).s('name') : hero != null ? HEROES.m(hero).s('name') : 'فرد';
@@ -481,6 +524,7 @@ class _EmpireMenu extends StatelessWidget {
     }
     final b = d.building == null ? null : EMPIRE.m('buildings').mm(d.building!);
     if (b != null) {
+      section(d.building == 'hq' ? 'القاعدة' : d.building == 'tower' ? 'البرج' : 'المستشفى');
       for (final key in b.m('upgrades').l('order').cast<String>()) {
         final next0 = nextBuildingUpgrade(d, key, s), max = b.m('upgrades').m(key).l('costs').length, lv = d.blv[key] ?? 0;
         slot(b.m('upgrades').m(key).s('name'), next0?.cost, canUpgradeBuilding(s, pid, d, key), () => screen.empire('improve', did, key),
@@ -488,6 +532,7 @@ class _EmpireMenu extends StatelessWidget {
       }
     }
     if (d.building == 'hq') {
+      section('ترقيات العصابة');
       for (final key in EMPIRE.m('upgrades').l('order').cast<String>()) {
         final U = EMPIRE.m('upgrades').m(key), max = U.l('costs').length, lv = e.levels[pid][key], n = next(lv, max);
         // الخانة الرابعة بفئة العصابة (2026-11-12): الضربة المحيطية للصامد، والمدى والاختراق للرامي، وسرعة الاحتلال للحشد
@@ -502,6 +547,7 @@ class _EmpireMenu extends StatelessWidget {
       }
     }
     if (d.building == null && d.featureTile == null) {
+      section('بناء');
       for (final type in EMPIRE.m('buildings').l('order').cast<String>()) {
         slot(EMPIRE.m('buildings').m(type).s('name'), buildCost(s, type), canBuild(s, pid, d, type), () => screen.empire('build', did, type),
             icon: _buildIcon[type] ?? Icons.home_work, perks: _buildPerks(d, type));
@@ -510,37 +556,68 @@ class _EmpireMenu extends StatelessWidget {
     final fort = nextFort(d, s, pid), fmax = EMPIRE.m('fortify').l('costs').length;
     // لا خانة سور للمعبد والمرتزقة والحدائق (2.4.1)
     if (fortifiable(s.map, d)) {
+      section('السور');
       slot('سور', fort?.cost, canFortify(s, pid, d), () => screen.empire('fortify', did, null), icon: Icons.fort, level: d.fort, max: fmax,
           perks: [('castle', '+${_pct(EMPIRE.m('fortify').l('capture')[next(d.fort, fmax) - 1] as num)}')]);
     }
+    final shown = [for (final x in sections) if (x.$2.isNotEmpty) x];
     final stats = _statsChips(s, d);
     final item = queue.isEmpty ? null : queue.first;
     final done = item == null ? 0.0 : math.min(1.0, item.t / productionTime(s, d, item.kind));
     return ConstrainedBox(
-      constraints: BoxConstraints(maxWidth: (MediaQuery.sizeOf(context).width * 0.64).clamp(340.0, 600.0)),
-      child: _Box(child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Row(mainAxisSize: MainAxisSize.min, children: [
-          Text(title, style: const TextStyle(color: gold, fontSize: 12.5, fontWeight: FontWeight.w700)),
-          const SizedBox(width: 8),
-          const Icon(Icons.toll, size: 12, color: gold),
-          Text(' ${e.points[pid].floor()}', style: const TextStyle(color: gold, fontSize: 12)),
-          const SizedBox(width: 4),
-          InkWell(onTap: () { screen.menuDistrict = null; screen.hud.value++; },
-              child: const Padding(padding: EdgeInsets.all(4), child: Icon(Icons.close, color: dim, size: 16))),
+      constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width - 12),
+      child: IntrinsicWidth(child: Container(
+        padding: const EdgeInsets.fromLTRB(8, 5, 8, 7),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0xF2332619), Color(0xF217120D)]),
+          borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0x80E2B55A)),
+          boxShadow: const [BoxShadow(color: Color(0x99000000), blurRadius: 10, offset: Offset(0, 3))]),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          // اسم المبنى وحجم الحي وقدرته، والطابور، والنقاط، والإغلاق
+          Row(children: [
+            Container(width: 22, height: 22, decoration: const BoxDecoration(shape: BoxShape.circle, gradient: goldGrad),
+                child: Icon(titleIcon, size: 14, color: const Color(0xFF2A1A08))),
+            const SizedBox(width: 6),
+            Text(title, style: const TextStyle(color: gold, fontSize: 13, fontWeight: FontWeight.w800)),
+            const SizedBox(width: 8),
+            Flexible(child: FittedBox(fit: BoxFit.scaleDown, alignment: AlignmentDirectional.centerStart,
+                child: _chips([..._sizeChips(d), ...?stats], size: 9.5, color: ink, icon: gold))),
+            const Spacer(),
+            if (hasQueue) ...[
+              Text(item == null ? 'الطابور فارغ' : 'الطابور ${queue.length}/${EMPIRE.i('queueMax')}', style: const TextStyle(color: dim, fontSize: 10)),
+              const SizedBox(width: 5),
+              SizedBox(width: 56, height: 5, child: ClipRRect(borderRadius: BorderRadius.circular(3), child: LinearProgressIndicator(
+                  value: done, color: const Color(0xFFE8C45A), backgroundColor: const Color(0x55000000)))),
+              const SizedBox(width: 10),
+            ],
+            const Icon(Icons.toll, size: 13, color: gold),
+            Text(' ${e.points[pid].floor()}', style: const TextStyle(color: gold, fontSize: 12.5, fontWeight: FontWeight.w700)),
+            const SizedBox(width: 6),
+            InkWell(onTap: () { screen.menuDistrict = null; screen.hud.value++; }, customBorder: const CircleBorder(),
+                child: Container(width: 22, height: 22, decoration: BoxDecoration(shape: BoxShape.circle, color: const Color(0x33000000),
+                    border: Border.all(color: const Color(0x55E2B55A))), child: const Icon(Icons.close, color: dim, size: 14))),
+          ]),
+          if (info != null) Padding(padding: const EdgeInsets.only(top: 3), child: Text(info, textAlign: TextAlign.center, maxLines: 2,
+              overflow: TextOverflow.ellipsis, style: const TextStyle(color: ink, fontSize: 10.5))),
+          const SizedBox(height: 4),
+          _Memo('slots', sig.toString(), () => SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(
+            mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              for (final (n, (name, list)) in shown.indexed) ...[
+                if (n > 0) Container(width: 1, height: _slotH - 6, margin: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
+                    color: const Color(0x40E2B55A)),
+                Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Padding(padding: const EdgeInsets.only(bottom: 3, right: 2, left: 2), child: Text(name,
+                      style: const TextStyle(color: Color(0xFFBFA77A), fontSize: 9.5, fontWeight: FontWeight.w700))),
+                  Row(mainAxisSize: MainAxisSize.min, children: [
+                    for (final (k, w) in list.indexed) ...[if (k > 0) const SizedBox(width: 4), w],
+                  ]),
+                ]),
+              ],
+            ],
+          ))),
         ]),
-        // حجم الحي وتحصينه، وقدرة البرج أو المستشفى الآن
-        _chips([..._sizeChips(d), ...?stats], size: 10, color: ink, icon: gold),
-        if (info != null) Padding(padding: const EdgeInsets.only(top: 2), child: Text(info, textAlign: TextAlign.center, maxLines: 2,
-            overflow: TextOverflow.ellipsis, style: const TextStyle(color: ink, fontSize: 10.5))),
-        if (hasQueue) Padding(padding: const EdgeInsets.symmetric(vertical: 3), child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Text(item == null ? 'الطابور فارغ' : 'الطابور ${queue.length}/${EMPIRE.i('queueMax')}', style: const TextStyle(color: ink, fontSize: 10.5)),
-          const SizedBox(width: 6),
-          SizedBox(width: 90, height: 5, child: ClipRRect(borderRadius: BorderRadius.circular(3), child: LinearProgressIndicator(
-              value: done, color: const Color(0xFFE8C45A), backgroundColor: const Color(0x55000000)))),
-        ])),
-        const SizedBox(height: 2),
-        _Memo('slots', sig.toString(), () => Wrap(spacing: 4, runSpacing: 4, alignment: WrapAlignment.center, children: slots)),
-      ])),
+      )),
     );
   }
 }
@@ -551,8 +628,10 @@ const _upgradeIcon = {'hp': Icons.favorite, 'damage': Icons.sports_martial_arts,
   'hq.production': Icons.settings, 'tower.damage': Icons.sports_martial_arts, 'tower.rate': Icons.schedule,
   'hospital.radius': Icons.gps_fixed, 'hospital.rate': Icons.favorite};
 const _buildIcon = {'tower': Icons.cell_tower, 'hospital': Icons.local_hospital, 'hq': Icons.fort};
+const _slotW = 52.0, _slotH = 78.0;   // والإطار يأخذ نقطة من كل جهة
 
-// خانة صغيرة: رمزها واسمها، ثم سعرها دائماً (أحمر حين لا تكفي النقاط)، ونقاط المستوى، وسبب المنع القصير إن لم يكن النقاط
+// خانة: شريط المستوى أعلاها، ورمزها وعدد ما في الطابور منها، واسمها في سطرين، وما تعطيه أو سبب المنع، وسعرها (أحمر حين لا
+// تكفي النقاط) أو حالتها
 class _Slot extends StatelessWidget {
   final String label;
   final IconData icon;
@@ -569,35 +648,45 @@ class _Slot extends StatelessWidget {
   Widget build(BuildContext context) {
     final maxed = check.reason == 'أعلى مستوى';
     final why = !check.ok && !maxed && check.reason != 'النقاط لا تكفي' ? check.reason : '';
-    final on = onTap != null;
-    return Material(
-      color: on ? const Color(0xFF3A2E22) : const Color(0xFF241D16),
-      borderRadius: BorderRadius.circular(7),
-      child: InkWell(borderRadius: BorderRadius.circular(7), onTap: onTap, child: Container(
-        width: 70,
-        padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 3),
-        child: Opacity(opacity: on || maxed ? 1 : 0.7, child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Row(mainAxisSize: MainAxisSize.min, children: [
-            Icon(icon, size: 14, color: on ? gold : dim),
-            if (count > 0) Text('×$count', style: const TextStyle(color: gold, fontSize: 10, fontWeight: FontWeight.w700)),
-          ]),
-          Text(label, maxLines: 1, overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: on ? ink : dim, fontSize: 10.5, fontWeight: FontWeight.w600)),
-          if (perks.isNotEmpty) _chips(perks),
-          if (max > 0) Padding(padding: const EdgeInsets.symmetric(vertical: 1), child: Row(mainAxisSize: MainAxisSize.min, children: [
-            for (var k = 0; k < max; k++) Container(width: 5, height: 5, margin: const EdgeInsets.symmetric(horizontal: 1),
-                decoration: BoxDecoration(shape: BoxShape.circle, color: k < level ? gold : const Color(0x55E2B55A))),
+    final on = onTap != null, lit = on || maxed;
+    const red = Color(0xFFD07A6A);
+    return SizedBox(width: _slotW, height: _slotH, child: Material(type: MaterialType.transparency, child: Ink(
+      decoration: BoxDecoration(borderRadius: BorderRadius.circular(9),
+          border: Border.all(color: maxed ? const Color(0xB3E2B55A) : on ? const Color(0x8CE2B55A) : const Color(0x2EE2B55A)),
+          gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter,
+              colors: on ? const [Color(0xFF4B3A27), Color(0xFF2A2018)] : const [Color(0xFF2A221A), Color(0xFF1B1611)])),
+      child: InkWell(borderRadius: BorderRadius.circular(9), onTap: onTap, child: Opacity(opacity: lit ? 1 : 0.6, child: Padding(
+        padding: const EdgeInsets.fromLTRB(3, 3, 3, 3),
+        child: Column(children: [
+          // شريط المستوى
+          SizedBox(height: 3, child: max == 0 ? null : Row(children: [
+            for (var k = 0; k < max; k++) Expanded(child: Container(margin: const EdgeInsets.symmetric(horizontal: 1),
+                decoration: BoxDecoration(borderRadius: BorderRadius.circular(2), color: k < level ? gold : const Color(0x40E2B55A)))),
           ])),
-          if (cost != null) Row(mainAxisSize: MainAxisSize.min, children: [
-            Icon(Icons.toll, size: 10, color: affordable ? gold : const Color(0xFFD07A6A)),
-            Text(' $cost', style: TextStyle(color: affordable ? gold : const Color(0xFFD07A6A), fontSize: 11, fontWeight: FontWeight.w700)),
-          ])
-          else Text(note ?? (maxed ? 'الأعلى' : check.ok ? 'جاهز' : check.reason), maxLines: 1, overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: dim, fontSize: 9.5)),
-          if (why.isNotEmpty) Text(why, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Color(0xFFD08A6A), fontSize: 9)),
-        ])),
-      )),
-    );
+          const SizedBox(height: 2),
+          // كل جزء بارتفاع ثابت يصغر ما فيه ليتسع، فلا تخرج الخانة عن حجمها بأي خط
+          SizedBox(height: 16, child: FittedBox(fit: BoxFit.scaleDown, child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(icon, size: 16, color: lit ? gold : dim),
+            if (count > 0) Text(' ×$count', style: const TextStyle(color: gold, fontSize: 10, height: 1.2, fontWeight: FontWeight.w800)),
+          ]))),
+          SizedBox(height: 22, child: Center(child: Text(label, textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: on ? ink : dim, fontSize: 10, height: 1.1, fontWeight: FontWeight.w600)))),
+          SizedBox(height: 11, child: Center(child: why.isNotEmpty
+              ? Text(why, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: red, fontSize: 9, height: 1.2))
+              : perks.isEmpty ? null : FittedBox(fit: BoxFit.scaleDown, child: _chips(perks)))),
+          const Spacer(),
+          SizedBox(height: 15, child: Center(child: cost != null ? Container(
+            padding: const EdgeInsets.symmetric(horizontal: 5),
+            decoration: BoxDecoration(color: const Color(0x55000000), borderRadius: BorderRadius.circular(6)),
+            child: FittedBox(fit: BoxFit.scaleDown, child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(Icons.toll, size: 10, color: affordable ? gold : red),
+              Text(' $cost', style: TextStyle(color: affordable ? gold : red, fontSize: 10.5, height: 1.2, fontWeight: FontWeight.w700)),
+            ])))
+          : Text(note ?? (maxed ? 'الأعلى' : check.ok ? 'جاهز' : check.reason), maxLines: 1, overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: maxed ? gold : dim, fontSize: 9.5, height: 1.2, fontWeight: maxed ? FontWeight.w700 : FontWeight.w400)))),
+        ]),
+      ))),
+    )));
   }
 }
 

@@ -528,6 +528,7 @@ void _star(TriBatch b, double x, double y, double r, [int rgb = 0xffffff, double
 }
 
 const _shadow = 0x000000;
+const _handWeapons = {'club', 'staff', 'stick', 'blade', 'dagger', 'spear', 'hammer', 'flail', 'dual', 'banner', 'knuckles', 'lantern', 'fists'};
 final _rj = RigJoints();
 int _hex(String c) => hexRgb(c);
 final _hexCache = <String, int>{};
@@ -540,7 +541,10 @@ void drawOne(TriBatch b, UnitAtlas atlas, Unit unit, String key, double x, doubl
   final rt = time + sub, animT = rt + (unit.id % 17) * 0.13;
   final dead = unit.state == 'dead';
   final style = fightStyle(unit), big = fightBig(unit);
-  final sw = dead ? null : _swingOf(unit, rt, ud, style, big, sub);
+  var sw = dead ? null : _swingOf(unit, rt, ud, style, big, sub);
+  // من يرمي بلا قوس في مظهره (عصا زعيم النسر في الأزياء الجديدة، 2.16.0، بطلب المستخدم: "يطبق ضربات العصا او العاديه"):
+  // يضرب بسلاحه ضربة الرمي، لا شدّ وتر
+  if (sw != null && sw.key == 'shoot' && rig != null && _handWeapons.contains(rig.weapon)) sw = _Swing('throw', sw.a, sw.ult, sw.node, sw.landed, sw.stop);
   final deadT = dead ? COMBAT.d('deathTime') - (unit.deathTimer - sub) : 0.0;
   // الترول الثلجي والفارس الأسود (2.2.1): حركاتهما الجاهزة بحالة الوحدة، والموت كله في زمن موت الجندي ثم يخفت
   final beast = unit.creature == 'troll' ? 'ice_troll' : unit.blackKnight ? 'black_knight' : null;

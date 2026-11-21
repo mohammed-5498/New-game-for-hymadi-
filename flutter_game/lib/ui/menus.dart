@@ -13,7 +13,6 @@ import '../core/fmath.dart';
 import '../data/campaigns.dart';
 import '../data/cities.dart';
 import '../data/js_config.dart';
-import '../data/rig_sprites.dart';
 import '../map/generator.dart';
 import '../render/city_art.dart';
 import '../render/city_layer.dart';
@@ -336,14 +335,17 @@ class _MainMenuState extends State<MainMenu> {
             note: 'أنجزت ${achievements.where((a) => Achievements.done.contains(a.id)).length} من ${achievements.length} • جوائز ذهب وجواهر',
             onTap: () => _go(const AchievementsScreen())),
       ])))))),
-      PositionedDirectional(end: 14, top: 12, child: SafeArea(child: Snap(child: Row(children: [
+      // صف الذهب والأزرار يصغر في الشاشة الضيقة فلا يغطي عنوان اللوحة (2.16.0)
+      PositionedDirectional(end: 14, top: 12, child: SafeArea(child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: math.max(200.0, MediaQuery.sizeOf(context).width - 350)),
+          child: FittedBox(fit: BoxFit.scaleDown, alignment: AlignmentDirectional.topEnd, child: Snap(child: Row(children: [
         const GoldChip(size: 16),
         const SizedBox(width: 10),
         RoundButton(Icons.calendar_month_rounded, 'المكافآت', () => _go(const DailyScreen()), dot: Daily.ready),
         RoundButton(Icons.settings_rounded, 'الإعدادات', () => _go(const SettingsScreen())),
         RoundButton(Icons.bar_chart_rounded, 'الإحصائيات', () => _go(const StatsScreen())),
         RoundButton(Icons.language_rounded, 'اللغة', () => pickLanguage(context)),
-      ])))),
+      ])))))),
       PositionedDirectional(end: 18, bottom: 14, child: SafeArea(child: Snap(child: _OfferCard(onTap: () => _go(const StoreScreen(section: 'offers')))))),
     ]));
   }
@@ -763,6 +765,8 @@ class _SetupScreenState extends State<SetupScreen> {
     ])));
   }
 
+  ({double settings, double type, double color, double team, double level}) _w = (settings: 300, type: 64, color: 44, team: 70, level: 86);
+
   // خلية في سطر لاعب: لوح صغير، ولمستها تغيّر قيمتها
   Widget _cell(double? w, Widget child, [VoidCallback? onTap]) => _tap(onTap, Container(width: w, height: 37,
       padding: const EdgeInsets.symmetric(horizontal: 5), alignment: Alignment.center,
@@ -780,7 +784,7 @@ class _SetupScreenState extends State<SetupScreen> {
       Container(width: 22, height: 22, alignment: Alignment.center, decoration: BoxDecoration(shape: BoxShape.circle,
           border: Border.all(color: const Color(0x80E2B55A))), child: Text('${k + 1}', style: const TextStyle(color: gold, fontSize: 11))),
       const SizedBox(width: 5),
-      _cell(64, Text(surv ? (k == 0 ? 'أنت' : closed ? 'مغلقة' : 'حليف') : s.type == 'net' ? s.name : _slotTypes[s.type]!,
+      _cell(_w.type, Text(surv ? (k == 0 ? 'أنت' : closed ? 'مغلقة' : 'حليف') : s.type == 'net' ? s.name : _slotTypes[s.type]!,
           style: k == 0 ? st.copyWith(color: gold, fontWeight: FontWeight.w700) : st, overflow: TextOverflow.ellipsis),
           () { if (k > 0 && !surv && s.type != 'net') setState(() => s.type = s.type == 'bot' ? 'closed' : 'bot'); }),
       const SizedBox(width: 5),
@@ -795,15 +799,15 @@ class _SetupScreenState extends State<SetupScreen> {
         ])),
       ]), () { if (!openIfClosed() && s.type != 'net') _pickSide(k); })),   // الصديق يختار أمته بنفسه
       const SizedBox(width: 5),
-      _cell(44, Container(width: 22, height: 22, decoration: BoxDecoration(color: colorOf(colorHex(s.color)), shape: BoxShape.circle,
+      _cell(_w.color, Container(width: 22, height: 22, decoration: BoxDecoration(color: colorOf(colorHex(s.color)), shape: BoxShape.circle,
           border: Border.all(color: const Color(0xCCF2E6CF), width: 1.5), boxShadow: const [BoxShadow(color: Color(0x80000000), blurRadius: 3)])),
           () { if (!openIfClosed()) setState(() => s.color = _nextColor(k)); }),
       const SizedBox(width: 5),
-      _cell(70, Text(surv ? 'فريق 1' : s.team == 0 ? 'بدون' : 'فريق ${s.team}', style: st),
+      _cell(_w.team, Text(surv ? 'فريق 1' : s.team == 0 ? 'بدون' : 'فريق ${s.team}', maxLines: 1, style: st),
           () { if (!openIfClosed() && !surv) setState(() => s.team = (s.team + 1) % 5); }),
       const SizedBox(width: 5),
-      _cell(86, Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-        Text(level?.s('name') ?? '—', style: st.copyWith(height: 1.15)),
+      _cell(_w.level, Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+        Text(level?.s('name') ?? '—', maxLines: 1, style: st.copyWith(height: 1.15)),
         if (level?.ss('note') != null) Text(level!.s('note'), maxLines: 1, style: const TextStyle(color: dim, fontSize: 9, height: 1.1)),
       ]), () {
         if (openIfClosed() || level == null) return;
@@ -816,7 +820,10 @@ class _SetupScreenState extends State<SetupScreen> {
   Widget build(BuildContext context) {
     final size = MAP_SIZES.m(m.mapSize);
     if (widget.lan) _sendLobby();
-    Widget label(String t, [double? w]) => SizedBox(width: w, child: Text(t, textAlign: TextAlign.center, style: const TextStyle(color: dim, fontSize: 10.5)));
+    Widget label(String t, [double? w]) => SizedBox(width: w, child: Text(t, textAlign: TextAlign.center, maxLines: 1, style: const TextStyle(color: dim, fontSize: 10.5)));
+    // أعمدة أضيق في الشاشة الضيقة فيبقى لعمود العصابة مكان لاسمها (2.16.0: كان يضيق حتى يختفي الاسم في جوال بعرض 690)
+    final narrow = MediaQuery.sizeOf(context).width < 820;
+    _w = narrow ? (settings: 250.0, type: 52.0, color: 34.0, team: 56.0, level: 66.0) : (settings: 300.0, type: 64.0, color: 44.0, team: 70.0, level: 86.0);
     return Scaffold(body: DecoratedBox(
       decoration: const BoxDecoration(gradient: RadialGradient(center: Alignment(0.35, -0.5), radius: 1.35,
           colors: [Color(0xFF3B2D1D), Color(0xFF120E0A)])),
@@ -831,7 +838,7 @@ class _SetupScreenState extends State<SetupScreen> {
         ]),
         const SizedBox(height: 8),
         Expanded(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          SizedBox(width: 300, child: SingleChildScrollView(child: Column(children: [
+          SizedBox(width: _w.settings, child: SingleChildScrollView(child: Column(children: [
             _setting(icon: Icons.flag_rounded, title: 'طور اللعب', value: _GM.m(m.mode).s('name'), note: _modeNote(), onTap: _pickMode),
             const SizedBox(height: 6),
             _cityCard(),
@@ -876,8 +883,9 @@ class _SetupScreenState extends State<SetupScreen> {
                   '${m.slots.any((s) => s.type == 'net') ? ' • انضم ${m.slots.where((s) => s.type == 'net').length}' : ' • بانتظار الأصدقاء…'}',
                   style: const TextStyle(color: gold, fontSize: 12)),
               const SizedBox(height: 4),
-              Row(children: [const SizedBox(width: 27), label('النوع', 64), const SizedBox(width: 5), Expanded(child: label('العصابة')),
-                const SizedBox(width: 5), label('اللون', 44), const SizedBox(width: 5), label('الفريق', 70), const SizedBox(width: 5), label('الصعوبة', 86)]),
+              Row(children: [const SizedBox(width: 27), label('النوع', _w.type), const SizedBox(width: 5), Expanded(child: label('العصابة')),
+                const SizedBox(width: 5), label('اللون', _w.color), const SizedBox(width: 5), label('الفريق', _w.team), const SizedBox(width: 5),
+                label('الصعوبة', _w.level)]),
               Expanded(child: ListView(padding: EdgeInsets.zero, children: [for (var k = 0; k < _maxSlots; k++) _row(k)])),
             ]),
           )),
@@ -1012,7 +1020,6 @@ class _StoreScreenState extends State<StoreScreen> {
             : sideGroups;
     if (region >= groups.length) region = 0;
     final items = groups[region].$2;
-    final maps = [for (final r in REGIONS.l('order').cast<String>()) ...REGIONS.m(r).l('cities')].where((c) => !RETIRED_CITIES.contains(c)).length;
     return Scaffold(body: DecoratedBox(
       decoration: const BoxDecoration(gradient: RadialGradient(center: Alignment(0.35, -0.5), radius: 1.35,
           colors: [Color(0xFF3B2D1D), Color(0xFF120E0A)])),
@@ -1022,11 +1029,10 @@ class _StoreScreenState extends State<StoreScreen> {
           Container(width: 36, height: 36, decoration: BoxDecoration(shape: BoxShape.circle, gradient: goldGrad,
               border: Border.all(color: const Color(0xFFFFE6A8))),
               child: const Icon(Icons.storefront_rounded, size: 20, color: Color(0xFF2A1A08))),
-          const SizedBox(width: 10),
-          const GoldTitle('المتجر', size: 26),
-          const SizedBox(width: 16),
-          // الأقسام تُمرَّر في الشاشة الضيقة (أربعة أقسام منذ العروض)
-          Expanded(child: SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [
+          // في الشاشة الضيقة بلا العنوان، والأقسام تصغر لتظهر كلها (2.16.0: كان قسم المظاهر خارج الشاشة)
+          if (MediaQuery.sizeOf(context).width >= 760) ...[const SizedBox(width: 10), const GoldTitle('المتجر', size: 26)],
+          const SizedBox(width: 14),
+          Expanded(child: FittedBox(fit: BoxFit.scaleDown, alignment: AlignmentDirectional.centerStart, child: Row(children: [
             for (final (k, label, icon) in const [('offers', 'العروض', Icons.local_offer_rounded), ('maps', 'الخرائط', Icons.map_rounded),
                 ('sides', 'العصابات', Icons.groups_rounded), ('skins', 'المظاهر', Icons.checkroom_rounded)])
               Padding(padding: const EdgeInsetsDirectional.only(end: 8), child: Pill(icon, label, on: section == k, onTap: () => setState(() {

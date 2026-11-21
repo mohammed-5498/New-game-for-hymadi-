@@ -10,6 +10,7 @@
 #   و python3 -I scripts/import_rigged.py --thumbs <المجلد>
 #   ومظهر آخر لكل أمة (2.15.0، الأزياء الجديدة GangCity-New-Outfits-Rigged): يضيف ألواح <أمة>_<مظهر> وحدها ويُبقي الموجود كما هو
 #   python3 -I scripts/import_rigged.py --outfit <مظهر> <rig> <sheets...>   (ATLAS_OUT=<مجلد> للتجربة خارج المستودع)
+#   والأرجنتين والمكسيك والبرازيل المحسّنة (2.16.0، حزمة R3): RIG_STYLE=r3 ... --outfit rig <rig> <rig>/assets/sheets
 # كل جزء يُصغَّر بمعامل واحد لشخصيته (الفخذ ~52 بكسلاً، كدقة أطالس الشخصيات الحالية)، وقناع لون اللاعب من لون الجسد
 # (اليدان لون الجسد خالصاً): درجته ±16 بحواف ناعمة، كـ tint_mask_n في slice_units.py
 import json
@@ -171,7 +172,8 @@ def outfit(variant, rig_dir, sheet_dirs):
         name = f'{nation}_{variant}'
         height, rect, (sat, val) = pack(name, {k: (v[0], v[1], v[2]) for k, v in cs.items()})
         units = {k: {'def': v[3], 'parts': rect[k]} for k, v in cs.items()}
-        lines[name] = f"  '{name}': {dart({'src': f'assets/units/{name}.webp', 'h': height, 'sat': sat, 'val': val, 'style': 'outfit', 'units': units})},"
+        style = os.environ.get('RIG_STYLE', 'outfit')   # r3: الأرجنتين والمكسيك والبرازيل المحسّنة (2.16.0) برسم حزمتها الأحدث
+        lines[name] = f"  '{name}': {dart({'src': f'assets/units/{name}.webp', 'h': height, 'sat': sat, 'val': val, 'style': style, 'units': units})},"
         print(f'{name:18s} {len(cs)} شخصيات، أطلس {WIDTH}x{height * 2}، الجسد {hue:.0f}°، تشبع {sat} إضاءة {val}')
     if os.environ.get('ATLAS_OUT'): return   # تجربة: الألواح وحدها
     text = open(DART, encoding='utf-8').read().split('\n')
