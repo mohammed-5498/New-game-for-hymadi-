@@ -156,7 +156,7 @@ export function updateFeatures(state) {
   // ميزة المدينة مرة واحدة في البداية، بعد سمة الأمة وتلميح قائمة الحي (إشعار لهذا الجهاز وحده)
   if (!state.featureHinted && state.empireHinted && !state.notice) {
     state.featureHinted = true;
-    state.notice = { text: 'ميزة المدينة — ' + F.desc[state.feature], mine: true, t: F.hintSeconds };
+    if (!storyQuiet(state)) state.notice = { text: 'ميزة المدينة — ' + F.desc[state.feature], mine: true, t: F.hintSeconds };
   } else if (state.featureHinted && !state.buildingHinted && !state.notice && F.buildings[state.map.city]) {
     state.buildingHinted = true;                        // ومبنى مدينة الأحداث بعدها (12هـ)
     state.notice = { text: 'مبنى المدينة — ' + F.desc[F.buildings[state.map.city]], mine: true, t: F.hintSeconds };
@@ -505,8 +505,11 @@ export function spawnRecruit(state, player, d, kind) {
 // ================= قطاع الطرق (غيونغجو وكانو) =================
 // الموجة n تظهر في وسط الخريطة عند first + (n − 1) × every، وكل think ثانية يقرر من لا يقاتل منهم وجهته.
 // لا موجات في الصمود (الطور لموجات الشرطة وحدها)
+// في طور القصة لا موجات قطاع طرق ولا انقلابات: قوات القصة وحدها تأخذ الأحياء، فلا يُفشل طرف ثالث مهمة
+const storyQuiet = (state) => !!state.story && (state.feature === 'bandits' || state.feature === 'coups');
+
 function updateBandits(state) {
-  if (state.mode === 'survival') return;
+  if (state.mode === 'survival' || state.story) return;
   const B = F.bandits, tick = tickOf(state), first = ticks(B.first), every = ticks(B.every);
   if (tick >= first && (tick - first) % every === 0) spawnBandits(state, (tick - first) / every + 1);
   if (tick % ticks(B.think) === 0) thinkBandits(state);
@@ -571,7 +574,7 @@ function raid(state, player, free, cap, near) {
 // ================= الانقلابات (باريس) =================
 // الانقلاب n عند first + (n − 1) × every: من كل عصابة تملك at[k] حياً فأكثر يتمرد k + 1 حياً، ثم المتمردون كل think ثانية
 function updateCoups(state) {
-  if (state.mode === 'survival') return;
+  if (state.mode === 'survival' || state.story) return;
   const C = F.coups, tick = tickOf(state), first = ticks(C.first), every = ticks(C.every);
   if (tick >= first && (tick - first) % every === 0) coup(state, (tick - first) / every + 1);
   if (tick % ticks(C.think) === 0) thinkRebels(state);

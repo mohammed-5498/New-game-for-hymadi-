@@ -5,6 +5,7 @@ import 'package:gangcity/game/match.dart';
 import 'package:gangcity/game/modes.dart';
 import 'package:gangcity/game/save.dart';
 import 'package:gangcity/game/state.dart';
+import 'package:gangcity/game/story.dart' show storyPlayers;
 
 String sig(MatchState s) => [
   s.time.toStringAsFixed(3), s.units.length, s.nextUnitId,
@@ -43,4 +44,18 @@ void main() {
       expect(back.time, greaterThan(s.time));
     });
   }
+  // الإخلاء إلى القاعدة (2.17.0): من أين خرجت العائلات يبقى بعد المتابعة
+  test('حفظ ومتابعة: إخلاء القصة إلى القاعدة', () {
+    simRng = Rng(7);
+    final s = createMatch({'mode': 'conquest', 'mapSize': 'medium', 'maxUnits': 100, 'weather': 'night', 'city': 'cairo',
+        'story': {'campaign': 'egypt', 'level': 3, 'bonus': <String, Object?>{}}, 'players': storyPlayers('egypt', 3, 'medium')})..seed = 7;
+    s.running = true;
+    s.story!..step = 0..cur = null..nextAt = 0;   // المهمة التالية: أخلِ العائلات
+    for (var t = 0; t < 20 * 8; t++) { updateMatch(s); }
+    expect(s.story!.step, 1);
+    expect(s.story!.cur!.src, isNotNull);
+    final back = decodeMatch(encodeMatch(s));
+    expect(back.story!.cur!.src, s.story!.cur!.src);
+    expect(sig(back), sig(s));
+  });
 }

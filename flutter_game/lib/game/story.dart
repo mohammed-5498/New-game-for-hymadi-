@@ -13,6 +13,7 @@ import 'alerts.dart';
 import 'capture.dart';
 import 'combat.dart';
 import 'empire.dart';
+import 'features.dart' show featureIncome;
 import 'realism.dart';
 import 'state.dart';
 import 'units.dart';
@@ -32,7 +33,7 @@ class StoryCur {
   double end = 0, nextWave = 0, thinkAt = 0, since = 0;
   int waves = 0, arrived = 0, count = 0;
   bool spawned = false;
-  (double, double)? dest;
+  (double, double)? dest, src;   // src: من أين خرجت القافلة (2.17.0)
   StoryCur(this.t0);
 }
 
@@ -112,6 +113,12 @@ void initStory(MatchState s) {
   final me = s.players[s.humanId];
   final steps = level.l('steps').cast<J>();
   for (var n = 0; n < steps.length; n++) { _prepareStep(s, steps[n], n); }
+  // ميزة المدينة التي تدرّ نقاطاً (الهرم وقصر سلوى...) بيد قوات القصة وحراسها أول المرحلة (2.17.0): كان العدو يأخذها أول
+  // دقيقة فيتضاعف دخله، وتأخذها أنت إن غلبت حراسها
+  final used = s.story!.slots.values.toSet();
+  for (final d in s.map.districts) {
+    if (d.owner == null && featureIncome(d) != null && !used.contains(d.id)) { _own(d, _forces(s)!.id); _guard(s, d, _at(S.l('guards'), s).toInt(), -1); }
+  }
   _applyBonus(s, st.mm('bonus') ?? const {}, me);
   snapDistrictTints(s);
   s.notice = Notice('المرحلة ${k + 1}: ${level.s('title')} — ${level.s('goal')}', true, 6, true);
@@ -282,10 +289,11 @@ void _startStep(MatchState s, J step) {
   final k = st.step, type = step.s('type');
   if (type == 'defend') { cur.end = t + _at(S.l('defendSeconds'), s); cur.nextWave = t + S.d('firstWave'); }
   if (type == 'rescue' || type == 'destroy' || type == 'hold') cur.end = t + _at(S.l('timeLimit'), s);
+  // الحماية: من قاعدتك إلى حي المهمة، أو بـ to: 'home' من حي المهمة إلى قاعدتك (إخلاء، 2.17.0)، وwho اسم من يمشون
   if (type == 'escort') {
-    final home = _homeOf(s), me = s.players[s.humanId];
-    final units = _spawnSquad(s, me, home.$1, home.$2, S.m('escort').i('merchants'), 'merchant', k);
-    for (final u in units) { u.harmless = true; u.cargo = true; u.name = 'تاجر القافلة'; u.color = S.m('colors').s('escort'); }
+    final me = s.players[s.humanId], from = cur.src = step['to'] == 'home' && d != null ? _cap(d) : _homeOf(s);
+    final units = _spawnSquad(s, me, from.$1, from.$2, S.m('escort').i('merchants'), 'merchant', k);
+    for (final u in units) { u.harmless = true; u.cargo = true; u.name = step.ss('who') ?? 'تاجر القافلة'; u.color = S.m('colors').s('escort'); }
     cur.nextWave = t + 5;
   }
   if (type == 'intercept') cur.nextWave = t + S.m('runner').d('delay');
@@ -329,14 +337,15 @@ String? _runStep(MatchState s, J step, StoryCur cur) {
   final think = t >= cur.thinkAt;
   if (think) cur.thinkAt = t + S.d('think');
   bool mine(Unit u) => u.story != null && u.story!.step == k;
+  final fail = step.ss('fail');   // سبب الفشل بلسان الحملة (2.17.0)، وإلا العام
   switch (step.s('type')) {
     case 'defend':
-      if (d == null || d.owner != me) return 'سقط ${step.s('text').replaceFirst(RegExp('^دافع عن '), '')}';
+      if (d == null || d.owner != me) return fail ?? 'سقط ${step.s('text').replaceFirst(RegExp('^دافع عن '), '')}';
       if (t >= cur.nextWave && t < cur.end - 5) { _wave(s, _cap(d), k, 'wave'); cur.nextWave = t + _at(S.l('waveEvery'), s); }
       if (think) _push(s, (u) => mine(u) && u.story!.role == 'wave', _cap(d));
       return t >= cur.end ? 'ok' : null;
     case 'escort':
-      final dest = d != null ? _cap(d) : null;
+      final dest = step['to'] == 'home' ? _homeOf(s) : d != null ? _cap(d) : null;
       final merchants = s.units.where((u) => mine(u) && u.story!.role == 'merchant' && _alive(u)).toList();
       if (dest != null) {
         for (final u in merchants) {
@@ -348,14 +357,14 @@ String? _runStep(MatchState s, J step, StoryCur cur) {
       }
       s.units.removeWhere((u) => u.story != null && u.story!.role == 'arrived' && u.story!.step == k);
       final walking = merchants.where((u) => u.story!.role == 'merchant').toList();
-      if (walking.isEmpty) return cur.arrived > 0 ? 'ok' : 'سقط كل تجار القافلة';
+      if (walking.isEmpty) return cur.arrived > 0 ? 'ok' : fail ?? 'سقط كل تجار القافلة';
       if (think && dest != null) {
         final idle = walking.where((u) => u.state == 'idle').toList();
         if (idle.isNotEmpty) commandMove(s, dest.$1, dest.$2, idle, false);
       }
       if (t >= cur.nextWave && cur.waves < S.m('escort').i('ambushes') && dest != null) {
-        final home = _homeOf(s), f = 0.4 + 0.3 * cur.waves;
-        _wave(s, (home.$1 + (dest.$1 - home.$1) * f, home.$2 + (dest.$2 - home.$2) * f), k, 'ambush', 0);
+        final from = cur.src ?? _homeOf(s), f = 0.4 + 0.3 * cur.waves;
+        _wave(s, (from.$1 + (dest.$1 - from.$1) * f, from.$2 + (dest.$2 - from.$2) * f), k, 'ambush', 0);
         cur.nextWave = t + 10;
       }
       if (think && walking.isNotEmpty) {
@@ -375,7 +384,7 @@ String? _runStep(MatchState s, J step, StoryCur cur) {
         for (final u in units) {
           u.harmless = true;
           u.cargo = true;
-          u.name = step['to'] == 'home' ? 'متفجّر' : 'رسول';
+          u.name = step.ss('who') ?? (step['to'] == 'home' ? 'متفجّر' : 'رسول');
           u.stats = {...u.stats, 'speed': u.stats.d('speed') * S.m('runner').d('speed'), 'capturePower': 0};
         }
         raiseAlert(s, 'story', d.capture!.i, d.capture!.j);
@@ -384,7 +393,7 @@ String? _runStep(MatchState s, J step, StoryCur cur) {
       final runners = s.units.where((u) => mine(u) && u.story!.role == 'runner' && _alive(u)).toList();
       if (runners.isEmpty) return 'ok';
       for (final u in runners) {
-        if (_dist((u.x, u.y), cur.dest!) <= S.m('runner').d('exitRadius')) return step['to'] == 'home' ? 'وصل متفجّر إلى قاعدتك' : 'هرب الرسول';
+        if (_dist((u.x, u.y), cur.dest!) <= S.m('runner').d('exitRadius')) return fail ?? (step['to'] == 'home' ? 'وصل متفجّر إلى قاعدتك' : 'هرب الرسول');
       }
       if (think) {
         final idle = runners.where((u) => u.state == 'idle').toList();
@@ -393,10 +402,10 @@ String? _runStep(MatchState s, J step, StoryCur cur) {
       return null;
     case 'rescue':
       if (d != null && d.owner == me) { _freeCaptives(s, k); return 'ok'; }
-      return t >= cur.end ? 'نقلت الشبكة الأسرى بعيداً' : null;
+      return t >= cur.end ? fail ?? 'نُقل الأسرى بعيداً' : null;
     case 'destroy':
       if (d != null && d.owner == me) { _razeTower(s, d); return 'ok'; }
-      return t >= cur.end ? 'نقطة المراقبة ما زالت قائمة' : null;
+      return t >= cur.end ? fail ?? 'انتهى الوقت والهدف قائم' : null;
     case 'capture':
     case 'storm':
       return d != null && d.owner == me ? 'ok' : null;
@@ -414,7 +423,7 @@ String? _runStep(MatchState s, J step, StoryCur cur) {
       }
       cur.since = mineIn && !foe ? cur.since + TICK_SEC : 0;
       if (cur.since + 1e-6 >= _at(S.m('hold').l('seconds'), s)) return 'ok';
-      return t >= cur.end ? 'انفجرت العبوة' : null;
+      return t >= cur.end ? fail ?? 'انتهى الوقت' : null;
     case 'gather':
       final home = _homeOf(s);
       var n = 0;
@@ -524,6 +533,15 @@ String _clock(double t) => '${(t / 60).floor()}:${(t % 60).floor().toString().pa
   step ??= st.cur != null ? L.$2.l('steps')[st.step] as J : null;
   if (step == null) return null;
   if (step.s('type') == 'intercept' && st.cur?.dest != null) return (st.cur!.dest!.$1, st.cur!.dest!.$2, S.m('runner').d('exitRadius'));
+  // الإخلاء إلى قاعدتك: الحلقة فوق من يمشون (يخرجون بعيداً عنها)
+  if (step.s('type') == 'escort' && step['to'] == 'home' && st.cur != null) {
+    var n = 0, ci = 0.0, cj = 0.0;
+    for (final u in s.units) {
+      if (u.story == null || u.story!.step != st.step || u.story!.role != 'merchant' || !_alive(u)) continue;
+      ci += u.x; cj += u.y; n++;
+    }
+    if (n > 0) return (ci / n, cj / n, 2.6);
+  }
   if (step.s('type') == 'gather') { final h = _homeOf(s); return (h.$1, h.$2, S.m('gather').d('radius')); }
   final d = _stepDistrict(s, step);
   return d != null ? (d.capture!.i.toDouble(), d.capture!.j.toDouble(), step.s('type') == 'hold' ? S.m('hold').d('radius') : 2.6) : null;

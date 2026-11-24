@@ -401,7 +401,7 @@ Map<String, Object?>? _storyJson(StoryState? st) {
   return {
     'step': st.step, 'nextAt': st.nextAt, 'done': st.done, 'won': st.won, 'exit': st.exitAt == null ? null : [st.exitAt!.$1, st.exitAt!.$2],
     'cur': c == null ? null : [c.t0, c.end, c.nextWave, c.thinkAt, c.since, c.waves, c.arrived, c.count, c.spawned,
-      c.dest == null ? null : [c.dest!.$1, c.dest!.$2]],
+      c.dest == null ? null : [c.dest!.$1, c.dest!.$2], c.src == null ? null : [c.src!.$1, c.src!.$2]],
   };
 }
 
@@ -412,7 +412,8 @@ void _storyBack(StoryState? st, Map? j) {
   st.exitAt = ex == null ? null : (_n(ex[0])!, _n(ex[1])!);
   final c = j['cur'] as List?;
   if (c == null) { st.cur = null; return; }
-  final dest = c[9] as List?;
+  final dest = c[9] as List?, src = c.length > 10 ? c[10] as List? : null;   // src منذ 2.17.0
   st.cur = StoryCur(_n(c[0])!)..end = _n(c[1])!..nextWave = _n(c[2])!..thinkAt = _n(c[3])!..since = _n(c[4])!..waves = c[5] as int
-    ..arrived = c[6] as int..count = c[7] as int..spawned = c[8] == true..dest = dest == null ? null : (_n(dest[0])!, _n(dest[1])!);
+    ..arrived = c[6] as int..count = c[7] as int..spawned = c[8] == true..dest = dest == null ? null : (_n(dest[0])!, _n(dest[1])!)
+    ..src = src == null ? null : (_n(src[0])!, _n(src[1])!);
 }

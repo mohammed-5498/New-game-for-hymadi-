@@ -13,6 +13,7 @@ import { finish } from './victory.js';
 import { raiseAlert } from './alerts.js';
 import { addUltFx } from './realism.js';
 import { snapDistrictTints } from './capture.js';
+import { featureIncome } from './features.js';
 import { sound, soundAt } from '../audio/sound.js';
 import { hypot } from './hypot.js';
 
@@ -87,6 +88,12 @@ export function initStory(state) {
   };
   const st = state.story, me = state.players[state.humanId];
   level.steps.forEach((step, k) => prepareStep(state, step, k));
+  // ميزة المدينة التي تدرّ نقاطاً (الهرم وقصر سلوى...) بيد قوات القصة وحراسها أول المرحلة: كان العدو يأخذها أول دقيقة
+  // فيتضاعف دخله، وتأخذها أنت إن غلبت حراسها
+  const used = new Set(Object.values(st.slots));
+  for (const d of state.map.districts) {
+    if (d.owner === null && featureIncome(d) && !used.has(d.id)) { own(d, forces(state).id); guard(state, d, at(S.guards, state), -1); }
+  }
   applyBonus(state, state.settings.story.bonus || {}, me);
   snapDistrictTints(state);
   state.notice = { text: 'المرحلة ' + (st.level + 1) + ': ' + level.title + ' — ' + level.goal, mine: true, t: 6, keep: true };
@@ -252,11 +259,13 @@ function startStep(state, step) {
   const k = st.step;
   if (step.type === 'defend') { cur.end = t + at(S.defendSeconds, state); cur.nextWave = t + S.firstWave; }
   if (step.type === 'rescue' || step.type === 'destroy' || step.type === 'hold') cur.end = t + at(S.timeLimit, state);
+  // الحماية: من قاعدتك إلى حي المهمة، أو بـ to: 'home' من حي المهمة إلى قاعدتك (إخلاء)، وwho اسم من يمشون
   if (step.type === 'escort') {
     const home = state.map.districts[state.players[state.humanId].homeDistrictId].capture;
     const me = state.players[state.humanId];
-    const units = spawnSquad(state, me, home.i, home.j, S.escort.merchants, 'merchant', k);
-    for (const u of units) { u.harmless = true; u.cargo = true; u.name = 'تاجر القافلة'; u.color = S.colors.escort; }
+    const from = cur.src = step.to === 'home' && d ? d.capture : home;
+    const units = spawnSquad(state, me, from.i, from.j, S.escort.merchants, 'merchant', k);
+    for (const u of units) { u.harmless = true; u.cargo = true; u.name = step.who || 'تاجر القافلة'; u.color = S.colors.escort; }
     cur.nextWave = t + 5;
   }
   if (step.type === 'intercept') cur.nextWave = t + S.runner.delay;
@@ -298,15 +307,16 @@ function runStep(state, step, cur) {
   const think = t >= cur.thinkAt;
   if (think) cur.thinkAt = t + S.think;
   const mine = (u) => u.story && u.story.step === k;
+  const fail = step.fail;   // سبب الفشل بلسان الحملة، وإلا العام
   switch (step.type) {
     case 'defend': {
-      if (!d || d.owner !== me) return 'سقط ' + step.text.replace(/^دافع عن /, '');
+      if (!d || d.owner !== me) return fail || 'سقط ' + step.text.replace(/^دافع عن /, '');
       if (t >= cur.nextWave && t < cur.end - 5) { wave(state, d.capture, k, 'wave'); cur.nextWave = t + at(S.waveEvery, state); }
       if (think) push(state, (u) => mine(u) && u.story.role === 'wave', d.capture);
       return t >= cur.end ? 'ok' : null;
     }
     case 'escort': {
-      const dest = d ? d.capture : null;
+      const dest = step.to === 'home' ? state.map.districts[state.players[me].homeDistrictId].capture : d ? d.capture : null;
       const merchants = state.units.filter(u => mine(u) && u.story.role === 'merchant' && isAlive(u));
       if (dest) for (const u of merchants) {
         if (dist({ i: u.x, j: u.y }, dest) > S.escort.arrive) continue;
@@ -316,15 +326,15 @@ function runStep(state, step, cur) {
       }
       state.units = state.units.filter(u => !(u.story && u.story.role === 'arrived' && u.story.step === k));
       const walking = merchants.filter(u => u.story.role === 'merchant');
-      if (!walking.length) return cur.arrived ? 'ok' : 'سقط كل تجار القافلة';
+      if (!walking.length) return cur.arrived ? 'ok' : fail || 'سقط كل تجار القافلة';
       if (think && dest) {
         const idle = walking.filter(u => u.state === 'idle');
         if (idle.length) commandMove(state, dest.i, dest.j, idle, false);
       }
       if (t >= cur.nextWave && cur.waves < S.escort.ambushes && dest) {
-        const home = state.map.districts[state.players[me].homeDistrictId].capture;
+        const from = cur.src || state.map.districts[state.players[me].homeDistrictId].capture;
         const f = 0.4 + 0.3 * cur.waves;
-        wave(state, { i: home.i + (dest.i - home.i) * f, j: home.j + (dest.j - home.j) * f }, k, 'ambush', 0);
+        wave(state, { i: from.i + (dest.i - from.i) * f, j: from.j + (dest.j - from.j) * f }, k, 'ambush', 0);
         cur.nextWave = t + 10;
       }
       if (think && walking.length) {
@@ -341,7 +351,7 @@ function runStep(state, step, cur) {
         for (const u of units) {
           u.harmless = true;
           u.cargo = true;
-          u.name = step.to === 'home' ? 'متفجّر' : 'رسول';
+          u.name = step.who || (step.to === 'home' ? 'متفجّر' : 'رسول');
           u.stats = { ...u.stats, speed: u.stats.speed * S.runner.speed, capturePower: 0 };
         }
         raiseAlert(state, 'story', d.capture.i, d.capture.j);
@@ -349,7 +359,7 @@ function runStep(state, step, cur) {
       if (!cur.spawned) return null;
       const runners = state.units.filter(u => mine(u) && u.story.role === 'runner' && isAlive(u));
       if (!runners.length) return 'ok';
-      for (const u of runners) if (dist({ i: u.x, j: u.y }, cur.dest) <= S.runner.exitRadius) return step.to === 'home' ? 'وصل متفجّر إلى قاعدتك' : 'هرب الرسول';
+      for (const u of runners) if (dist({ i: u.x, j: u.y }, cur.dest) <= S.runner.exitRadius) return fail || (step.to === 'home' ? 'وصل متفجّر إلى قاعدتك' : 'هرب الرسول');
       if (think) {
         const idle = runners.filter(u => u.state === 'idle');
         if (idle.length) commandMove(state, cur.dest.i, cur.dest.j, idle, false);
@@ -358,11 +368,11 @@ function runStep(state, step, cur) {
     }
     case 'rescue': {
       if (d && d.owner === me) { freeCaptives(state, k); return 'ok'; }
-      return t >= cur.end ? 'نقلت الشبكة الأسرى بعيداً' : null;
+      return t >= cur.end ? fail || 'نُقل الأسرى بعيداً' : null;
     }
     case 'destroy': {
       if (d && d.owner === me) { razeTower(state, d); return 'ok'; }
-      return t >= cur.end ? 'نقطة المراقبة ما زالت قائمة' : null;
+      return t >= cur.end ? fail || 'انتهى الوقت والهدف قائم' : null;
     }
     case 'capture':
     case 'storm':
@@ -378,7 +388,7 @@ function runStep(state, step, cur) {
       }
       cur.since = mineIn && !foe ? cur.since + TICK_SEC : 0;
       if (cur.since + 1e-6 >= at(S.hold.seconds, state)) return 'ok';
-      return t >= cur.end ? 'انفجرت العبوة' : null;
+      return t >= cur.end ? fail || 'انتهى الوقت' : null;
     }
     case 'gather': {
       const home = state.map.districts[state.players[me].homeDistrictId].capture;
@@ -488,6 +498,11 @@ export function targetPoint(state, step = null) {
   step = step || (st.cur ? L.level.steps[st.step] : null);
   if (!step) return null;
   if (step.type === 'intercept' && st.cur && st.cur.dest) return { ...st.cur.dest, r: S.runner.exitRadius };
+  // الإخلاء إلى قاعدتك: الحلقة فوق من يمشون (يخرجون بعيداً عنها)
+  if (step.type === 'escort' && step.to === 'home' && st.cur) {
+    const walking = state.units.filter(u => u.story && u.story.step === st.step && u.story.role === 'merchant' && isAlive(u));
+    if (walking.length) return { i: walking.reduce((a, u) => a + u.x, 0) / walking.length, j: walking.reduce((a, u) => a + u.y, 0) / walking.length, r: 2.6 };
+  }
   if (step.type === 'gather') {
     const home = state.map.districts[state.players[state.humanId].homeDistrictId].capture;
     return { i: home.i, j: home.j, r: S.gather.radius };

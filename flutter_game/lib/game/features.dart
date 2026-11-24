@@ -115,7 +115,7 @@ void updateFeatures(MatchState s) {
   final building = F.m('buildings').ss(s.map.city);
   if (!s.featureHinted && s.empireHinted && s.notice == null) {
     s.featureHinted = true;
-    s.notice = Notice('ميزة المدينة — ${F.m('desc').s(s.feature!)}', true, F.d('hintSeconds'));
+    if (!_storyQuiet(s)) s.notice = Notice('ميزة المدينة — ${F.m('desc').s(s.feature!)}', true, F.d('hintSeconds'));
   } else if (s.featureHinted && !s.buildingHinted && s.notice == null && building != null) {
     s.buildingHinted = true;
     s.notice = Notice('مبنى المدينة — ${F.m('desc').s(building)}', true, F.d('hintSeconds'));
@@ -462,9 +462,12 @@ bool spawnRecruit(MatchState s, Player player, District d, String kind) {
   return true;
 }
 
+// في طور القصة لا موجات قطاع طرق ولا انقلابات (2.17.0): قوات القصة وحدها تأخذ الأحياء، فلا يُفشل طرف ثالث مهمة
+bool _storyQuiet(MatchState s) => s.story != null && (s.feature == 'bandits' || s.feature == 'coups');
+
 // ================= قطاع الطرق (غيونغجو وكانو) =================
 void _updateBandits(MatchState s) {
-  if (s.mode == 'survival') return;
+  if (s.mode == 'survival' || s.story != null) return;
   final B = F.m('bandits'), tick = _tickOf(s), first = _ticks(B.d('first')), every = _ticks(B.d('every'));
   if (tick >= first && (tick - first) % every == 0) _spawnBandits(s, (tick - first) ~/ every + 1);
   if (tick % _ticks(B.d('think')) == 0) _thinkBandits(s);
@@ -547,7 +550,7 @@ void _raid(MatchState s, Player player, List<Unit> free, double cap, (double, do
 
 // ================= الانقلابات (باريس) =================
 void _updateCoups(MatchState s) {
-  if (s.mode == 'survival') return;
+  if (s.mode == 'survival' || s.story != null) return;
   final C = F.m('coups'), tick = _tickOf(s), first = _ticks(C.d('first')), every = _ticks(C.d('every'));
   if (tick >= first && (tick - first) % every == 0) _coup(s, (tick - first) ~/ every + 1);
   if (tick % _ticks(C.d('think')) == 0) _thinkRebels(s);
