@@ -114,10 +114,10 @@ void initStory(MatchState s) {
   final steps = level.l('steps').cast<J>();
   for (var n = 0; n < steps.length; n++) { _prepareStep(s, steps[n], n); }
   // ميزة المدينة التي تدرّ نقاطاً (الهرم وقصر سلوى...) بيد قوات القصة وحراسها أول المرحلة (2.17.0): كان العدو يأخذها أول
-  // دقيقة فيتضاعف دخله، وتأخذها أنت إن غلبت حراسها
+  // دقيقة فيتضاعف دخله، وتأخذها أنت إن غلبت حراسها. ومعها برج الساعة في برمنغهام (دخل مالكه +30% وإنتاجه أسرع، 2.18.0)
   final used = s.story!.slots.values.toSet();
   for (final d in s.map.districts) {
-    if (d.owner == null && featureIncome(d) != null && !used.contains(d.id)) { _own(d, _forces(s)!.id); _guard(s, d, _at(S.l('guards'), s).toInt(), -1); }
+    if (d.owner == null && (featureIncome(d) != null || d.feature == 'clock') && !used.contains(d.id)) { _own(d, _forces(s)!.id); _guard(s, d, _at(S.l('guards'), s).toInt(), -1); }
   }
   _applyBonus(s, st.mm('bonus') ?? const {}, me);
   snapDistrictTints(s);

@@ -108,7 +108,8 @@ void main() {
                 'وأحياؤك ${s.map.districts.where((d) => d.owner == me).length} ونقاطك ${e.points[me].round()} • مالك قاعدتك ${home.owner} • '
                 'العدو ${s.units.where((u) => _alive(u) && u.playerId == 1).length} جندياً و${s.map.districts.where((d) => d.owner == 1).length} حياً '
                 'وكسب ${e.earned[1].round()} • قوات القصة ${s.units.where((u) => _alive(u) && s.players[u.playerId].storyRole == 'forces').length} • '
-                'من يركض ${[for (final u in s.units) if (u.story?.role == 'runner' && _alive(u)) '${u.x.round()},${u.y.round()} دم ${u.hp.round()}'].join('، ')}');
+                'من يركض ${[for (final u in s.units) if (u.story?.role == 'runner' && _alive(u)) '${u.x.round()},${u.y.round()} دم ${u.hp.round()}'].join('، ')} • '
+                'المزايا ${[for (final d in s.map.districts) if (d.feature != null) '${d.feature}:${d.owner}'].join(' ')}');
           }
         }
         final r = s.matchResult;

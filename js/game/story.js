@@ -89,10 +89,10 @@ export function initStory(state) {
   const st = state.story, me = state.players[state.humanId];
   level.steps.forEach((step, k) => prepareStep(state, step, k));
   // ميزة المدينة التي تدرّ نقاطاً (الهرم وقصر سلوى...) بيد قوات القصة وحراسها أول المرحلة: كان العدو يأخذها أول دقيقة
-  // فيتضاعف دخله، وتأخذها أنت إن غلبت حراسها
+  // فيتضاعف دخله، وتأخذها أنت إن غلبت حراسها. ومعها برج الساعة في برمنغهام (دخل مالكه +30% وإنتاجه أسرع، 2.18.0)
   const used = new Set(Object.values(st.slots));
   for (const d of state.map.districts) {
-    if (d.owner === null && featureIncome(d) && !used.has(d.id)) { own(d, forces(state).id); guard(state, d, at(S.guards, state), -1); }
+    if (d.owner === null && (featureIncome(d) || d.feature === 'clock') && !used.has(d.id)) { own(d, forces(state).id); guard(state, d, at(S.guards, state), -1); }
   }
   applyBonus(state, state.settings.story.bonus || {}, me);
   snapDistrictTints(state);
