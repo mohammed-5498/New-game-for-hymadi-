@@ -293,7 +293,11 @@ void _startStep(MatchState s, J step) {
   if (type == 'escort') {
     final me = s.players[s.humanId], from = cur.src = step['to'] == 'home' && d != null ? _cap(d) : _homeOf(s);
     final units = _spawnSquad(s, me, from.$1, from.$2, S.m('escort').i('merchants'), 'merchant', k);
-    for (final u in units) { u.harmless = true; u.cargo = true; u.name = step.ss('who') ?? 'تاجر القافلة'; u.color = S.m('colors').s('escort'); }
+    for (final u in units) {
+      u.harmless = true; u.cargo = true; u.name = step.ss('who') ?? 'تاجر القافلة'; u.color = S.m('colors').s('escort');
+      final hp = S.m('escort').d('hp');   // دم ثابت لا يتبع فئتك (2.20.0)
+      u.stats = {...u.stats, 'hp': hp}; u.hp = hp; u.maxHp = hp;
+    }
     cur.nextWave = t + 5;
   }
   if (type == 'intercept') cur.nextWave = t + S.m('runner').d('delay');
@@ -385,7 +389,10 @@ String? _runStep(MatchState s, J step, StoryCur cur) {
           u.harmless = true;
           u.cargo = true;
           u.name = step.ss('who') ?? (step['to'] == 'home' ? 'متفجّر' : 'رسول');
-          u.stats = {...u.stats, 'speed': u.stats.d('speed') * S.m('runner').d('speed'), 'capturePower': 0};
+          // سرعة ودم ثابتان لا يتبعان فئة العدو (2.20.0: رسل الخاطف كانوا أسرع 30% فيفلتون من الحشد)
+          final hp = S.m('runner').d('hp');
+          u.stats = {...u.stats, 'speed': UNIT_BASE.d('speed') * S.m('runner').d('speed'), 'capturePower': 0, 'hp': hp};
+          u.hp = hp; u.maxHp = hp;
         }
         raiseAlert(s, 'story', d.capture!.i, d.capture!.j);
       }

@@ -64,7 +64,8 @@ const isAlive = (unit) => unit.state !== 'dead' && unit.hp > 0;
 const distanceTo = (unit, district) => hypot(unit.x - district.capture.i, unit.y - district.capture.j);
 
 function decide(state, player, config) {
-  const units = state.units.filter(u => u.playerId === player.id && isAlive(u));
+  // من لا يقاتل (عائلات القصة وتجارها حين يقود البوت جيش اللاعب) لا يأخذ أوامر البوت: يمشي إلى مقصده وحده
+  const units = state.units.filter(u => u.playerId === player.id && isAlive(u) && !u.harmless);
   if (!units.length) return;
 
   // الوحدات المشتبكة تُترك تقاتل؛ نوزّع المهام على الباقي

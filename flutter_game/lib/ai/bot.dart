@@ -62,7 +62,8 @@ J _modeConfig(MatchState state, J config) {
 }
 
 void _decide(MatchState state, Player player, J config) {
-  final units = state.units.where((u) => u.playerId == player.id && _alive(u)).toList();
+  // من لا يقاتل (عائلات القصة وتجارها حين يقود البوت جيش اللاعب) لا يأخذ أوامر البوت: يمشي إلى مقصده وحده
+  final units = state.units.where((u) => u.playerId == player.id && _alive(u) && !u.harmless).toList();
   if (units.isEmpty) return;
   final free = <Unit>[];
   for (final unit in units) {

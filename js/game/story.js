@@ -3,7 +3,7 @@
 // كل مهمة من أدوات موجودة: الاستيلاء على الأحياء، وموجات تستولي كقطاع الطرق، وأسرى ينضمون كأهل القرى، وزعيم
 // بحراسه كالفارس الأسود، وتجار بلا قتال كالقافلة، ونقطة يُبقى عندها كالكنز، وبرج العدو من مباني الاقتصاد.
 // الفوز بإكمال آخر مهمة، والخسارة بفشل مهمة أو بخسارة كل جنودك وأحيائك (victory.js). الأرقام في STORY.
-import { TICK_SEC, STORY as S, PLAYER_COLORS, nations } from '../config.js';
+import { TICK_SEC, STORY as S, PLAYER_COLORS, nations, UNIT_BASE } from '../config.js';
 import { CAMPAIGNS } from '../story/campaigns.js';
 import { createUnit, commandMove, commandAttackMove } from './units.js';
 import { findFreeTiles } from '../map/pathfinding.js';
@@ -265,7 +265,10 @@ function startStep(state, step) {
     const me = state.players[state.humanId];
     const from = cur.src = step.to === 'home' && d ? d.capture : home;
     const units = spawnSquad(state, me, from.i, from.j, S.escort.merchants, 'merchant', k);
-    for (const u of units) { u.harmless = true; u.cargo = true; u.name = step.who || 'تاجر القافلة'; u.color = S.colors.escort; }
+    for (const u of units) {
+      u.harmless = true; u.cargo = true; u.name = step.who || 'تاجر القافلة'; u.color = S.colors.escort;
+      u.stats = { ...u.stats, hp: S.escort.hp }; u.hp = u.maxHp = S.escort.hp;   // دم ثابت لا يتبع فئتك
+    }
     cur.nextWave = t + 5;
   }
   if (step.type === 'intercept') cur.nextWave = t + S.runner.delay;
@@ -352,7 +355,9 @@ function runStep(state, step, cur) {
           u.harmless = true;
           u.cargo = true;
           u.name = step.who || (step.to === 'home' ? 'متفجّر' : 'رسول');
-          u.stats = { ...u.stats, speed: u.stats.speed * S.runner.speed, capturePower: 0 };
+          // سرعة ودم ثابتان لا يتبعان فئة العدو (2.20.0: رسل الخاطف كانوا أسرع 30% فيفلتون من الحشد)
+          u.stats = { ...u.stats, speed: UNIT_BASE.speed * S.runner.speed, capturePower: 0, hp: S.runner.hp };
+          u.hp = u.maxHp = S.runner.hp;
         }
         raiseAlert(state, 'story', d.capture.i, d.capture.j);
       }

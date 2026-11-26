@@ -271,53 +271,56 @@ export const GANGS = {
 
 export const GANG_IDS = ['crows', 'hammers', 'vipers', 'scorpions'];
 
-// --- الأنماط الأربعة: حجر وورقة ومقص (القسم 3.12، بطلب المستخدم) ---
+// --- الأنماط الأربعة (القسم 3.12، بطلب المستخدم) ---
 // النمط من عصابة الوحدة (unit.gang): الخاطف crows، الصامد hammers، الرامي vipers، الحشد scorpions.
-// مزايا لا تقوية: كل نمط يغلب نمطاً واحداً (beats) بضرر +counter. والمخلوقات (الترول والفيل) خارجها
+// موازنة 2.20.0 (بطلب المستخدم: "اخلي الفارق بسيط جدًا"، GAME_SPEC 18.24): سعر واحد للفئات، ومزاياها أصغر، وبلا ضرر الغلبة
+// (counter صفر)، ويبقى للخاطف خرق درع الصامد (beats وpierce). القياس بمباريات البوتات وبمعارك الشوارع. والمخلوقات خارجها
 export const STYLE_PERKS = {
   soldierDamage: 0.8,            // ضرر كل الجنود (والشرطة والأطراف المحايدة) أضعف 20%، لا المخلوقات ولا الأبراج
   soldierHeal: 0.3,              // علاج الجنود (الطبيب والهالة والضربات المميزة والمستشفى المميز): 0.6 في 11ب كي لا يلغي العلاجُ الضررَ في معارك الحشد، ثم −50% بطلب المستخدم (12أ)
   beats: { crows: 'hammers', hammers: 'vipers', vipers: 'crows' },
-  // ضرر كل نمط على النمط الذي يغلبه: الخاطف +40% (كان +50% بعد 11هـ، و−20% منه بطلب المستخدم 2026-11-06)، والبقية +20%
-  counter: { crows: 0.4, hammers: 0.2, vipers: 0.2 },
-  pierce: 0.48,                  // الخاطف يتجاوز 48% من درع الصامد (كان 60%، و−20% منه بطلب المستخدم)
-  swiftRate: 0.35,               // والخاطف يضرب أسرع 35% في كل قتال (فصار يغلب الصامد 5 من 8 في مبارزات البوتات)
-  shotGuard: 0.2,                // الصامد يتلقى من المقذوفات (السهام والحجارة والأبراج) 20% أقل
+  // ضرر كل نمط على النمط الذي يغلبه: كان الخاطف +40% والبقية +20%، وأُلغي في 2.20.0
+  counter: { crows: 0, hammers: 0, vipers: 0 },
+  pierce: 0.4,                   // الخاطف يتجاوز 40% من درع الصامد (كان 48%)
+  swiftRate: 0.15,               // والخاطف يضرب أسرع 15% في كل قتال (كان 35%)
+  shotGuard: 0,                  // الصامد يتلقى من المقذوفات ضرراً أقل بهذه النسبة (كانت 20%، وأُلغيت في 2.20.0)
   shotSpeed: 0.35,               // مقذوفات الرامي تطير أسرع 35%
-  fireRate: 0.5,                 // والرامي يرمي أسرع 50% (كان 25%، وجعله المستخدم أسرع 20% منه: 1.25 × 1.2 = 1.5)
-  // الحشد: إنتاجه في القاعدة أسرع 30%، وضرره أكبر كلما اجتمع: عدد أفراده من لاعبه داخل radius مربع (معه نفسه)
-  horde: { production: 0.3, radius: 3, tiers: [[14, 0.15], [9, 0.10], [6, 0.05]] },
-  // تسعير الفئات وقوتها (بطلب المستخدم، 2026-11-06): سعر جنود القاعدة × price، وكل وحدات النمط: الدم × hp والضرر × damage
-  // والمشي × speed، ومدى الرمي + range (ومعه الرصد، وإلا لم يرَ من في مداه الجديد). الشرطة والمخلوقات خارجها
+  fireRate: 0.25,                // والرامي يرمي أسرع 25% (كان 50%)
+  // الحشد: إنتاجه في القاعدة أسرع 15% (كان 30%)، وضرره أكبر كلما اجتمع: عدد أفراده من لاعبه داخل radius مربع (معه نفسه)
+  horde: { production: 0.15, radius: 3, tiers: [[14, 0.15], [9, 0.10], [6, 0.05]] },
+  // قوة الفئات: كل وحدات النمط: الدم × hp والضرر × damage والمشي × speed، ومدى الرمي + range (ومعه الرصد، وإلا لم يرَ من
+  // في مداه الجديد)، والسعر × price إن وُجد (كان الصامد 1.3 والخاطف 1.1 والحشد 0.75، وصار السعر واحداً في 2.20.0). الشرطة والمخلوقات خارجها
   classes: {
-    hammers:   { price: 1.3, hp: 1.2, damage: 0.85 },
-    crows:     { price: 1.1, hp: 0.85, speed: 1.15 },
-    vipers:    { range: 1 },
-    scorpions: { price: 0.75, hp: 0.85 }
+    hammers:   { hp: 0.9, damage: 0.9 },     // كانت 1.2 و0.85 (ودم فرده 120 ودرعه 15% من GANGS)
+    crows:     { hp: 0.9, speed: 1.15 },     // كان الدم 0.85
+    vipers:    { range: 1, hp: 1.1, damage: 1.05 },
+    scorpions: { hp: 0.95, damage: 1.05 }    // كان الدم 0.85
   }
 };
 
 // --- الشخصيات المميزة: شخصيتان لكل عصابة ---
-// كل شخصية تبدأ من الوحدة الأساسية ثم تُطبق قيمها فوقها
+// كل شخصية تبدأ من الوحدة الأساسية ثم تُطبق قيمها فوقها.
+// موازنة 2.20.0 (GAME_SPEC 18.24): الدم والضرر والضربات المميزة من القياس. الضربة المميزة تمتلئ في نحو 33 ث من المشي،
+// فكل مميز يبدأ معاركه بها: الضربات الجماعية (الحريق والضربة الأرضية) أضعف، والفردية والداعمة أقوى. الأرقام القديمة بجوار كل سطر
 export const HEROES = {
   // الغربان
   spear: {
     id: 'spear', name: 'حامل الرمح', gang: 'crows',
     // مدى 1.8 مربع: يطعن من الصف الثاني من خلف رفاقه
     stats: {
-      hp: 150, damage: 12, attackTime: 1.3, attackRange: 1.8, visionRange: 4.5, speed: 2.2,
-      // طعنة قاضية: ضعف الضرر وتخترق أول عدوين في خط الطعنة
-      ult: { kind: 'pierce', needs: 'enemy', range: 1.8, damage: 24, targets: 2 }
+      hp: 260, damage: 21, attackTime: 1.3, attackRange: 1.8, visionRange: 4.5, speed: 2.2,   // كانا 150 و12
+      // طعنة قاضية تخترق أول عدوين في خط الطعنة (كانت 24)
+      ult: { kind: 'pierce', needs: 'enemy', range: 1.8, damage: 45, targets: 2 }
     }
   },
   dual: {
     id: 'dual', name: 'المزدوج', gang: 'crows',
     // يتسارع في الاشتباك: كل ضربة متتالية على نفس الهدف تقصّر زمن الضربة
     stats: {
-      hp: 95, damage: 7, attackTime: 0.8, speed: 2.6,
+      hp: 140, damage: 10.5, attackTime: 0.8, speed: 2.6,   // كانا 95 و7
       combo: { step: 0.12, maxStacks: 4, minAttackTime: 0.5, resetSeconds: 2, sameTarget: true },
-      // وابل: 4 ضربات متتالية خلال ثانية واحدة
-      ult: { kind: 'flurry', needs: 'enemy', range: 1.0, hits: 4, damage: 7, duration: 1 }
+      // وابل: 4 ضربات متتالية خلال ثانية واحدة (كانت 7 لكل ضربة)
+      ult: { kind: 'flurry', needs: 'enemy', range: 1.0, hits: 4, damage: 14, duration: 1 }
     }
   },
 
@@ -326,17 +329,17 @@ export const HEROES = {
     id: 'armored', name: 'المصفّح', gang: 'hammers',
     // تصلّب: لا يتلقى أي ضرر لمدة 3 ثوانٍ
     stats: {
-      hp: 320, armor: 0.50, damage: 8, attackTime: 1.2, speed: 1.6,
+      hp: 384, armor: 0.50, damage: 9.5, attackTime: 1.2, speed: 1.6,   // كانا 320 و8 (ودم فئته صار × 0.9 بدل × 1.2)
       ult: { kind: 'harden', needs: 'enemy', duration: 3 }
     }
   },
   smasher: {
     id: 'smasher', name: 'المحطِّم', gang: 'hammers',
-    // ضربته تصيب كل الأعداء داخل دائرة نصف قطرها مربع واحد حول الهدف
+    // ضربته تصيب كل الأعداء داخل نصف مربع حول الهدف (كان مربعاً)
     stats: {
-      hp: 200, armor: 0.20, damage: 28, attackTime: 2.2, attackRange: 1.2, speed: 1.8, splashRadius: 1,
-      // ضربة أرضية: 60 ضرراً لكل عدو داخل 2.5 مربع مع إبطائهم
-      ult: { kind: 'slam', needs: 'enemy', radius: 2.5, damage: 60, slow: 0.30, slowDuration: 2 }
+      hp: 170, armor: 0.20, damage: 24, attackTime: 2.2, attackRange: 1.2, speed: 1.8, splashRadius: 0.5,   // كانا 200 و28
+      // ضربة أرضية لكل عدو داخل 2.5 مربع مع إبطائهم (كانت 60)
+      ult: { kind: 'slam', needs: 'enemy', radius: 2.5, damage: 30, slow: 0.30, slowDuration: 2 }
     }
   },
 
@@ -344,21 +347,21 @@ export const HEROES = {
   sniper: {
     id: 'sniper', name: 'القناص', gang: 'vipers',
     stats: {
-      hp: 80, damage: 26, attackTime: 2.5, attackRange: 7, visionRange: 7.5, speed: 2.0,
+      hp: 140, damage: 30, attackTime: 2.5, attackRange: 7, visionRange: 7.5, speed: 2.0,   // كانا 80 و26
       projectile: 'arrow', meleeRange: 1.5, meleeDamage: 4, meleeAttackTime: 1.0,
-      // طلقة بعيدة: مدى 10 مربعات وضرر 55
-      ult: { kind: 'shot', needs: 'enemy', range: 10, damage: 55 }
+      // طلقة بعيدة: مدى 10 مربعات (كانت 55)
+      ult: { kind: 'shot', needs: 'enemy', range: 10, damage: 45 }
     }
   },
   firebomber: {
     id: 'firebomber', name: 'رامي النار', gang: 'vipers',
     // الزجاجة لا تضر مباشرة، بل تشعل الأرض
     stats: {
-      hp: 90, damage: 0, attackTime: 5, attackRange: 4, visionRange: 4.5, speed: 2.1,
-      projectile: 'bottle', fire: { radius: 1.2, duration: 4, damagePerSecond: 6 },
+      hp: 54, damage: 0, attackTime: 5, attackRange: 4, visionRange: 4.5, speed: 2.1,   // كان 90
+      projectile: 'bottle', fire: { radius: 1.2, duration: 4, damagePerSecond: 3.6 },   // كانت 6
       meleeRange: 1.5, meleeDamage: 5, meleeAttackTime: 1.0,
-      // حريق أكبر: دائرة 2.5 مربع لمدة 7 ثوانٍ بـ 12 دم/ث
-      ult: { kind: 'fire', needs: 'enemy', range: 4, fire: { radius: 2.5, duration: 7, damagePerSecond: 12 } }
+      // حريق أكبر: دائرة 2.5 مربع لمدة 7 ثوانٍ (كان 12 دم/ث)
+      ult: { kind: 'fire', needs: 'enemy', range: 4, fire: { radius: 2.5, duration: 7, damagePerSecond: 3 } }
     }
   },
 
@@ -366,17 +369,17 @@ export const HEROES = {
   boss: {
     id: 'boss', name: 'الزعيم', gang: 'scorpions',
     stats: {
-      hp: 160, armor: 0.10, damage: 12, speed: 2.0, aura: { radius: 3, damageBonus: 0.20 },
-      // توحّش: الحلفاء داخل 3 مربعات +50% ضرر و+20% سرعة ضرب لمدة 5 ثوانٍ
-      ult: { kind: 'buff', needs: 'enemy', radius: 3, damageBonus: 0.50, attackSpeedBonus: 0.20, duration: 5 }
+      hp: 215, armor: 0.10, damage: 16, speed: 2.0, aura: { radius: 3, damageBonus: 0.18 },   // كانت 160 و12 و0.20
+      // توحّش: الحلفاء داخل 3 مربعات +85% ضرر (كان +50%) و+20% سرعة ضرب لمدة 5 ثوانٍ
+      ult: { kind: 'buff', needs: 'enemy', radius: 3, damageBonus: 0.85, attackSpeedBonus: 0.20, duration: 5 }
     }
   },
   medic: {
     id: 'medic', name: 'الطبيب', gang: 'scorpions',
     stats: {
-      hp: 100, damage: 5, speed: 2.2, heal: { radius: 3, perSecond: 10 },
-      // علاج جماعي: 60 دماً دفعة واحدة لكل حليف داخل 2.5 مربع
-      ult: { kind: 'heal', needs: 'ally', radius: 2.5, heal: 60 }
+      hp: 150, damage: 8, speed: 2.2, heal: { radius: 3, perSecond: 10 },   // كانا 100 و5
+      // علاج جماعي دفعة واحدة لكل حليف داخل 2.5 مربع (كان 60)
+      ult: { kind: 'heal', needs: 'ally', radius: 2.5, heal: 70 }
     }
   }
 };
@@ -628,7 +631,9 @@ export const ULT = {
 };
 
 // --- الأبطال: بطل واحد لكل عصابة (القسم 6.6) ---
-// الرسم فقط في المرحلة 2؛ قواعد الظهور والقدرات في المرحلة 4
+// الرسم فقط في المرحلة 2؛ قواعد الظهور والقدرات في المرحلة 4.
+// موازنة 2.20.0 (GAME_SPEC 18.24): أول المباراة معارك صغيرة يكون البطل فيها نصف الجيش، فبطل الحشد (هالته وحدها لا تكفي فيها)
+// صار مقاتلاً قوياً، وسهام بطل الأفاعي أخف. والأمم تأخذ أرقام بطل نمطها وضربتها الخاصة كما هي
 export const CHAMPIONS = {
   crows: {
     id: 'crow_hero', name: 'بطل الغربان', gang: 'crows',
@@ -636,27 +641,27 @@ export const CHAMPIONS = {
     stats: {
       hp: 260, armor: 0.10, damage: 18, attackTime: 1.2, attackRange: 2.2, speed: 2.5,
       combo: { step: 0.08, minFactor: 0.5, resetSeconds: 3, sameTarget: false },
-      // ضربات قاضية متعددة: كل الأعداء داخل قوس أمامه بنصف قطر 2.5
-      ult: { kind: 'arc', needs: 'enemy', radius: 2.5, damage: 36 }
+      // ضربات قاضية متعددة: كل الأعداء داخل قوس أمامه بنصف قطر 2.5 (كانت 36)
+      ult: { kind: 'arc', needs: 'enemy', radius: 2.5, damage: 60 }
     }
   },
   hammers: {
     id: 'hammer_hero', name: 'بطل المطارق', gang: 'hammers',
     stats: {
       hp: 420, armor: 0.40, damage: 26, attackTime: 1.8, attackRange: 1.2, speed: 1.7,
-      // تصلّب + ضربة أرضية معاً
-      ult: { kind: 'slam', needs: 'enemy', radius: 3, damage: 70, harden: 3 }
+      // تصلّب + ضربة أرضية معاً (كانت 70)
+      ult: { kind: 'slam', needs: 'enemy', radius: 3, damage: 65, harden: 3 }
     }
   },
   vipers: {
     id: 'viper_hero', name: 'بطل الأفاعي', gang: 'vipers',
-    // ثلاثة سهام في الطلقة الواحدة، كل سهم 12 ضرراً
+    // ثلاثة سهام في الطلقة الواحدة، كل سهم 9 ضرراً (كان 12)
     stats: {
-      hp: 240, armor: 0, damage: 12, attackTime: 2.2, attackRange: 6.5, visionRange: 7, speed: 2.0,
+      hp: 240, armor: 0, damage: 9, attackTime: 2.2, attackRange: 6.5, visionRange: 7, speed: 2.0,
       projectile: 'arrow', arrows: 3,
-      // ثلاثة سهام نارية: كل سهم 20 ضرراً ويشعل بقعة صغيرة
+      // ثلاثة سهام نارية: كل سهم 10.5 ضرراً (كان 20) ويشعل بقعة صغيرة
       ult: {
-        kind: 'arrows', needs: 'enemy', range: 6.5, arrows: 3, damage: 20,
+        kind: 'arrows', needs: 'enemy', range: 6.5, arrows: 3, damage: 10.5,
         fire: { radius: 1, duration: 4, damagePerSecond: 8 }
       }
     }
@@ -665,10 +670,10 @@ export const CHAMPIONS = {
     id: 'scorp_hero', name: 'بطل العقارب', gang: 'scorpions',
     // قائد وطبيب معاً: هالة واحدة تعطي الحلفاء الضرر والعلاج
     stats: {
-      hp: 280, armor: 0.15, damage: 16, attackTime: 1.3, attackRange: 1.0, speed: 2.1,
+      hp: 580, armor: 0.15, damage: 33, attackTime: 1.3, attackRange: 1.0, speed: 2.1,   // كانا 280 و16
       aura: { radius: 3.5, damageBonus: 0.25, healPerSecond: 4 },
-      // تحفيز وعلاج معاً: +50% ضرر لمدة 5 ثوانٍ و60 دماً فورياً
-      ult: { kind: 'buff', needs: 'either', radius: 3.5, damageBonus: 0.50, duration: 5, heal: 60 }
+      // تحفيز وعلاج معاً: +50% ضرر لمدة 5 ثوانٍ و65 دماً فورياً (كان 60)
+      ult: { kind: 'buff', needs: 'either', radius: 3.5, damageBonus: 0.50, duration: 5, heal: 65 }
     }
   }
 };
@@ -871,10 +876,10 @@ export const nations = {
   // الأنماط القتالية الأربعة (أسماؤها في قائمة الإعداد)
   // (ومزايا كل نمط على غيره في STYLE_PERKS)
   styles: {
-    crows:     { name: 'الخاطف', desc: 'سرعة والتفاف واستيلاء سريع • يغلب الصامد: +40% ويخترق 48% من درعه • يضرب أسرع 35% • أغلى 10%، مشي +15%، دم −15%' },
-    hammers:   { name: 'الصامد', desc: 'دم ودرع وضربات ثقيلة • يغلب الرامي: +20%، والمقذوفات عليه أضعف 20% • أغلى 30%، دم +20%، ضرر −15%' },
-    vipers:    { name: 'الرامي', desc: 'قتال من بعيد • يغلب الخاطف: +20%، ويرمي أسرع 50% بسهام أسرع • مدى +1' },
-    scorpions: { name: 'الحشد',  desc: 'عدد وهالات ودعم • ينتج أسرع 30%، و+5/10/15% ضرراً إذا اجتمع 6/9/14 • أرخص 25%، دم −15%' }
+    crows:     { name: 'الخاطف', desc: 'سرعة والتفاف واستيلاء سريع • يضرب أسرع 15%، ويخترق 40% من درع الصامد • مشي +15%، دم −10%' },
+    hammers:   { name: 'الصامد', desc: 'دم ودرع وضربات ثقيلة • درع 15% لكل فرد • دم −10%، ضرر −10%' },
+    vipers:    { name: 'الرامي', desc: 'قتال من بعيد • يرمي أسرع 25% بسهام أسرع • مدى +1، دم +10%، ضرر +5%' },
+    scorpions: { name: 'الحشد',  desc: 'عدد وهالات ودعم • ينتج أسرع 15%، و+5/10/15% ضرراً إذا اجتمع 6/9/14 • بطل مقاتل قوي' }
   },
   classicNote: 'كلاسيكية',       // السطر الصغير تحت العصابة الكلاسيكية في خانة اللاعب
   // آثار ضربات الأبطال: مدة الحلقة المتسعة وغبار ظهور الأفراد، وحلقة الصامدين تحت أقدامهم
@@ -1410,8 +1415,10 @@ export const STORY = {
   defendSeconds: [60, 70, 80, 90, 100],
   // زمن المهام المحدودة (إنقاذ وتدمير ونقطة)، والنهاية بفشل المهمة
   timeLimit: [240, 240, 220, 210, 200],
-  escort: { merchants: 3, arrive: 2.2, ambushes: 2 },
-  runner: { speed: 0.6, exitRadius: 1.6, delay: 4 },   // الرسل والمتفجرون أبطأ: وقت للحاق بهم (0.7 حتى 2.17.0: كانوا يفلتون كثيراً)
+  // دم من يُحمى ومن يركض، وسرعة من يركض (UNIT_BASE.speed × runner.speed)، ثابتة لا تتبع فئة صاحبها (2.20.0: كانت عائلات حملة
+  // الصامد تنزل من 144 إلى 108 مع موازنة الفئات، ورسل الخاطف أسرع 30% من غيرهم)
+  escort: { merchants: 3, arrive: 2.2, ambushes: 2, hp: 140 },
+  runner: { speed: 0.6, exitRadius: 1.6, delay: 4, hp: 85 },   // الرسل والمتفجرون أبطأ: وقت للحاق بهم (0.7 حتى 2.17.0: كانوا يفلتون كثيراً)
   hold: { radius: 1.6, seconds: [5, 5, 6, 6, 8] },
   gather: { radius: 4, count: [8, 8, 10, 10, 12] },
   // الزعيم: دمه وضرره أضعاف شخصيته، ودرع إضافي، وحراسه، وحد ابتعاده عن مكانه
@@ -2053,8 +2060,8 @@ export const UI = {
     tips: [
       'لمستان سريعتان على قاعدتك تفتحان قائمتها: الجنود وترقيات العصابة',
       'لمستان على حي تملكه بلا مبنى: ابنِ فيه برجاً أو مستشفى أو قاعدة',
-      'الخاطف يغلب الصامد، والصامد يغلب الرامي، والرامي يغلب الخاطف',
-      'الحشد أرخص وينتج أسرع، وضرره يزيد كلما اجتمع أفراده',
+      'الضربة الخاصة تمتلئ وجنودك يمشون، فتبدأ بها معركتهم',
+      'الحشد ينتج أسرع، وضرره يزيد كلما اجتمع أفراده',
       'السور يجعل احتلال حيك أبطأ على أعدائك، وكل مستوى أقوى من الذي قبله',
       'ترقية سرعة المشي تعطي جنودك فرصة لتجنب الضربة كلها',
       'اضغط مطولاً على زر مجموعة لتحفظ فيه جنودك المحددين',
