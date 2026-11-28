@@ -14,6 +14,7 @@ import 'features.dart';
 import 'modes.dart';
 import 'nations.dart';
 import 'police.dart';
+import 'potions.dart' show updatePotions;
 import 'spatial.dart';
 import 'spawn.dart';
 import 'story.dart';
@@ -115,6 +116,7 @@ void updateMatch(MatchState state) {
   updateSpawn(state);
   updatePolice(state);
   updateFeatures(state);
+  if (state.potions != null) updatePotions(state);   // الجرعات (2.21.0)
   updateBots(state);
   updateMode(state);
   updateFades(state);

@@ -895,7 +895,7 @@ void _burstFireworks(MatchState s, Firework f) {
     if (dx * dx + dy * dy <= r2 && _alive(u) && (!rocket || isEnemyId(s, f.owner!, u.playerId)) &&
         (rocket || u.playerId != templeOwner(s, 'heaven'))) hit.add(u);   // معبد السماء (3.14)
   });
-  for (final u in hit) { applyDamage(s, by, u, rocket ? F.m('powder').d('damage') : W.d('damage')); }
+  for (final u in hit) { applyDamage(s, by, u, f.damage ?? (rocket ? F.m('powder').d('damage') : W.d('damage'))); }
   soundAt(s, 'fire', f.x, f.y);
 }
 
@@ -1478,6 +1478,22 @@ Result callTriads(MatchState s, int pid, int districtId, int? targetId) {
   }
   return _ok();
 }
+
+// صاروخ جرعة الضربة الصاروخية (2.21.0، potions.dart): يسقط على وسط الحي بعد delay، ومن قربه يبتعد كما من الألعاب النارية
+void addRocket(MatchState s, int pid, District d, double delay, double damage) {
+  final x = d.capture!.i.toDouble(), y = d.capture!.j.toDouble();
+  s.fireworks.add(Firework(x, y, _tickOf(s) + _ticks(delay), pid, damage));
+  _dodgeFireworks(s, x, y);
+}
+// انفجار الصواريخ وتلاشيها في كل مدينة (وفي مدينة الألعاب النارية يتولاهما _updateFireworks)
+void updateRockets(MatchState s) {
+  if (s.feature == 'fireworks' || s.fireworks.isEmpty) return;
+  final tick = _tickOf(s), fade = _ticks(F.m('fireworks').d('fade'));
+  for (final f in s.fireworks) { if (!f.done && tick >= f.at) _burstFireworks(s, f); }
+  if (s.fireworks.any((f) => f.done && tick - f.at >= fade)) s.fireworks = s.fireworks.where((f) => !f.done || tick - f.at < fade).toList();
+}
+// من له موعد رحيل (مقاتلو الترياد والتعزيزات) يرحل فيه
+void expireTemporary(MatchState s) => _expireTriads(s);
 
 void _expireTriads(MatchState s) {
   Set<Unit>? gone;

@@ -6,12 +6,13 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart' hide Text;
 
 import '../i18n/tr.dart';
-import '../config.dart' show GROUPS;
+import '../config.dart' show GROUPS, POTIONS;
 import '../core/cfg.dart';
 import '../data/js_config.dart';
 import '../game/empire.dart';
 import '../game/features.dart';
 import '../game/modes.dart';
+import '../game/potions.dart' show POTION_NAMES, potionDesc;
 import '../game/story.dart';
 import '../game/spawn.dart';
 import '../game/state.dart';
@@ -22,6 +23,7 @@ import '../map/sizes.dart';
 import 'achievements.dart';
 import 'match_screen.dart';
 import 'prefs.dart';
+import 'wallet.dart' show Wallet, PotionBadge;
 import 'widgets.dart';
 
 
@@ -75,6 +77,11 @@ class MatchHud extends StatelessWidget {
             child: Text(t, style: const TextStyle(color: gold, fontSize: 13, fontWeight: FontWeight.w700)))))))),
         // شريط القوة يساراً: لمسة تطويه إلى سطرك وحدك
         _Memo('power', _powerSig(s), () => Positioned(top: 44, left: 6, child: Snap(child: _Power(s)))),
+        // الجرعات يساراً تحت شريط القوة (2.21.0، بطلب المستخدم: "في يسار الشاشه وبحجم صغير"): خانات اللاعب، وحول كل زر حلقة
+        // تنقص حتى ينتهي أثره، ولمسة مطولة تكتب ما تفعله
+        if (me != null && s.economy && screen.potionSlots.any((p) => p != null))
+          _Memo('potions', _potionSig(screen, s), () => Positioned(left: 6, top: 0, bottom: 0, child: Align(alignment: const Alignment(0, 0.2), child: Snap(
+              child: Column(mainAxisSize: MainAxisSize.min, children: [for (final id in screen.potionSlots) if (id != null) _PotionButton(screen, id)]))))),
         // مجموعات التحكم على الحافة اليمنى (GROUPS.count خانات)، والمحددة الآن بإطار ذهبي
         _Memo('groups', groups.join(), () => Positioned(right: 6, top: 0, bottom: 0, child: Align(alignment: const Alignment(0, -0.3), child: Snap(child: Column(mainAxisSize: MainAxisSize.min, children: [
           for (var g = 1; g <= groups.length; g++) _Group(screen, g, groups[g - 1].$1, groups[g - 1].$2),
@@ -343,6 +350,37 @@ class _EdgeArrows extends CustomPainter {
 
 // مجموعة تحكم: ضغطة مطوّلة تحفظ المحدد، ولمسة تحدده فوراً، والثانية خلال doubleTapMs تنقل الكاميرا إليه أيضاً. كان InkWell
 // بلمستين ينتظر الثانية 300 ملي ث قبل أن يحدد (2.16.0، بطلب المستخدم: "الضغط متأخر وليس سلس وكأنه لا يستجيب")
+// ما يتغير في أزرار الجرعات: المستعمل منها، وما تملكه، وحلقة أثر كل جرعة بعشرين درجة
+String _potionSig(MatchScreenState screen, MatchState s) {
+  final p = s.potions, me = s.humanId;
+  final used = p == null ? '' : p.used[me].join(',');
+  final rings = [for (final e in POTIONS.list.entries) if (e.value.seconds > 0) ((p?.left(me, e.key, s.time) ?? 0) / e.value.seconds * 20).ceil()].join();
+  return '$used|${screen.potionSent}|${Wallet.potions}|$rings';
+}
+
+class _PotionButton extends StatelessWidget {
+  final MatchScreenState screen;
+  final String id;
+  const _PotionButton(this.screen, this.id);
+  @override
+  Widget build(BuildContext context) {
+    final s = screen.state!, used = screen.potionUsed(id), n = Wallet.potionCount(id), seconds = POTIONS.list[id]!.seconds;
+    final left = s.potions?.left(s.humanId, id, s.time) ?? 0, active = seconds > 0 && left > 0;
+    return Padding(padding: const EdgeInsets.symmetric(vertical: 3), child: GestureDetector(
+      onTap: () => screen.usePotion(id),
+      onLongPress: () { s.notice = Notice('${POTION_NAMES[id]} — ${potionDesc(id)}', true, 3.5); screen.hud.value++; },
+      child: SizedBox(width: 38, height: 38, child: Stack(clipBehavior: Clip.none, children: [
+        PotionBadge(id, size: 38, dim: !active && (used || n == 0)),
+        if (active) Positioned.fill(child: CircularProgressIndicator(value: left / seconds, strokeWidth: 3, color: gold)),
+        if (used && !active) const Center(child: Icon(Icons.check_rounded, size: 20, color: Color(0xFFCFC6B6))),
+        if (!used) Positioned(right: -5, bottom: -4, child: Container(   // جهة وسط الشاشة لا حافتها
+            padding: const EdgeInsets.symmetric(horizontal: 4), decoration: BoxDecoration(color: const Color(0xE6261E17), borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: const Color(0x80E2B55A))),
+            child: Text('$n', style: TextStyle(color: n > 0 ? gold : danger, fontSize: 10, fontWeight: FontWeight.w700)))),
+      ]))));
+  }
+}
+
 class _Group extends StatelessWidget {
   final MatchScreenState screen;
   final int g, n;

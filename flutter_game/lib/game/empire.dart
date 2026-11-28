@@ -16,6 +16,7 @@ import 'features.dart';
 import 'spatial.dart';
 import 'spawn.dart';
 import 'state.dart';
+import 'potions.dart' show usePotion, potionRush, potionIncome;
 import 'units.dart';
 
 export '../map/parks.dart' show buildSpot;
@@ -110,7 +111,8 @@ void _collectIncome(MatchState state, EmpireState ms) {
   final mul = (ms.incomeMul != 0 ? ms.incomeMul : 1) * TICK_SEC;
   for (final d in state.map.districts) {
     if (d.owner == null || d.capture == null || state.players[d.owner!].neutral) continue;
-    final gain = templeIncome(state, d, districtIncome(d)) * mul * _botIncome(state.players[d.owner!]) * featureIncomeMul(state, d.owner!) * eventIncomeMul(state, d);
+    final gain = templeIncome(state, d, districtIncome(d)) * mul * _botIncome(state.players[d.owner!]) * featureIncomeMul(state, d.owner!) * eventIncomeMul(state, d) *
+        potionIncome(state, d.owner!);
     ms.points[d.owner!] += gain;
     ms.earned[d.owner!] += gain;
   }
@@ -149,7 +151,7 @@ double productionTime(MatchState state, District district, String kind) {
   final horde = owner != null && owner.gang == 'scorpions' && E.m('units').has(kind) ? 1 + STYLE_PERKS.m('horde').d('production') : 1;
   return _unitCost(kind).d('seconds') * (E.m('buildings').m('hq').m('upgrades').m('production').l('times')[level] as num) *
       _DS.m('production').d(sizeOf(district)) *
-      (owner != null ? _botFactor(owner) * featureProductionMul(state, owner.id) : 1) * eventProductionMul(state) / horde *
+      (owner != null ? _botFactor(owner) * featureProductionMul(state, owner.id) / potionRush(state, owner.id) : 1) * eventProductionMul(state) / horde *
       (state.story != null && owner != null && owner.team == 2 ? (STORY.l('enemyProduction')[state.story!.level] as num) : 1);
 }
 
@@ -519,6 +521,7 @@ Result empireCommand(MatchState state, int playerId, String a, int d, Object? x)
   if (a == 'triads') return callTriads(state, playerId, d, x as int?);
   if (a == 'bells') return ringBells(state, playerId, d);
   if (a == 'rocket') return launchRocket(state, playerId, d, x as int?);
+  if (a == 'potion' && x is String) return usePotion(state, playerId, x, d);   // الجرعات (2.21.0): d حي الصاروخ
   if (a == 'upgrade' && E.m('upgrades').l('order').contains(x)) return buyUpgrade(state, playerId, x as String);
   if (a == 'fortify') return fortifyDistrict(state, playerId, d);
   if (a == 'rally') return setRally(state, playerId, d, x as num);
@@ -536,5 +539,5 @@ double incomeOf(MatchState state, int playerId) {
     if (d.owner != playerId || d.capture == null) continue;
     total += templeIncome(state, d, districtIncome(d)) * eventIncomeMul(state, d);
   }
-  return total * (state.empire!.incomeMul != 0 ? state.empire!.incomeMul : 1) * featureIncomeMul(state, playerId);
+  return total * (state.empire!.incomeMul != 0 ? state.empire!.incomeMul : 1) * featureIncomeMul(state, playerId) * potionIncome(state, playerId);
 }

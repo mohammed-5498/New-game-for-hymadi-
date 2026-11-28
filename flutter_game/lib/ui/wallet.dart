@@ -6,7 +6,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart' hide Text;
 
-import '../config.dart' show SHOP, OFFERS, DAILY, RETIRED_CITIES;
+import '../config.dart' show SHOP, OFFERS, DAILY, RETIRED_CITIES, POTIONS, POTION_TIERS;
 import '../core/cfg.dart';
 import '../core/fmath.dart' show Rng;
 import '../data/js_config.dart';
@@ -28,6 +28,9 @@ class Wallet {
   static const _key = 'gangcity.wallet';
   static int gold = 0, gems = 0;
   static final owned = <String>{};   // 'city:<مدينة>' و'side:<أمة>' و'skin:<أمة>_<نوع>'
+  // الجرعات (2.21.0، GAME_SPEC 18.25): ما يملكه من كل جرعة (حتى max بندرتها)، والخانات الثلاث التي تظهر في المباراة
+  static final potions = <String, int>{};
+  static final slots = List<String?>.filled(POTIONS.slots, null);
 
   static void load() {
     final w = Prefs.read(_key);
@@ -37,6 +40,11 @@ class Wallet {
     gems = (w['gems'] as num?)?.toInt() ?? 0;
     final list = w['owned'];
     if (list is List) owned.addAll(list.whereType<String>());
+    potions.clear();
+    slots.fillRange(0, slots.length, null);
+    final pot = w['potions'], sl = w['slots'];
+    if (pot is Map) { for (final e in pot.entries) { if (POTIONS.list.containsKey(e.key) && e.value is num) potions['${e.key}'] = (e.value as num).toInt(); } }
+    if (sl is List) { for (var k = 0; k < slots.length && k < sl.length; k++) { if (POTIONS.list.containsKey(sl[k])) slots[k] = sl[k] as String; } }
     // مظهر النخبة كان 'skin:<أمة>' قبل الأزياء الجديدة (2.15.0)
     final old = [for (final k in owned) if (k.startsWith('skin:') && !k.contains('_')) k];
     if (old.isNotEmpty) { owned..removeAll(old)..addAll([for (final k in old) '${k}_elite']); save(); }
@@ -49,7 +57,7 @@ class Wallet {
   }
   static final changed = ValueNotifier<int>(0);   // الرصيد ظاهر في شاشات كثيرة: يُعاد رسمه مع كل تغيير (GoldChip)
   static void save() {
-    Prefs.write(_key, {'gold': gold, 'gems': gems, 'owned': owned.toList()});
+    Prefs.write(_key, {'gold': gold, 'gems': gems, 'owned': owned.toList(), 'potions': potions, 'slots': slots});
     changed.value++;
   }
 
@@ -86,6 +94,31 @@ class Wallet {
     return true;
   }
   static void grant(String kind, String id) { owned.add('$kind:$id'); save(); }
+
+  // --- الجرعات: تُشترى واحدة واحدة حتى حد ندرتها، وتنقص واحدة بكل استعمال ---
+  static int potionCount(String id) => potions[id] ?? 0;
+  static int potionMax(String id) => POTION_TIERS[POTIONS.list[id]!.tier]!.max;
+  static int potionPrice(String id) => POTION_TIERS[POTIONS.list[id]!.tier]!.price;
+  static String? potionBlocked(String id) {
+    if (potionCount(id) >= potionMax(id)) return 'معك أقصى عدد منها (${potionMax(id)})';
+    if (gold < potionPrice(id)) return 'ينقصك ${potionPrice(id) - gold} ذهب';
+    return null;
+  }
+  static bool buyPotion(String id) {
+    if (potionBlocked(id) != null) return false;
+    gold -= potionPrice(id);
+    potions[id] = potionCount(id) + 1;
+    save();
+    return true;
+  }
+  static void spendPotion(String id) { potions[id] = math.max(0, potionCount(id) - 1); save(); }
+  // الجرعة في خانة واحدة: إن كانت في غيرها انتقلت إليها، ولمسة على خانتها تفرغها
+  static void setSlot(int k, String id) {
+    final was = slots[k] == id;
+    for (var n = 0; n < slots.length; n++) { if (slots[n] == id) slots[n] = null; }
+    if (!was) slots[k] = id;
+    save();
+  }
   static void earn(int n) { gold += n; save(); }
 
   // ذهب الفوز (2.13.0، بطلب المستخدم): بصعوبة البوتات إن كانت كلها واحدة، وmixedReward إن اختلفت، وزيادة الضباب؛ ولا شيء
@@ -215,4 +248,32 @@ Future<bool> buyDialog(BuildContext context, String kind, String id, String name
     ],
   ));
   return ok == true;
+}
+
+// --- الجرعات في الواجهة (2.21.0): رمز كل جرعة على قرص بلون ندرتها (رموز مؤقتة حتى تصل صور المستخدم) ---
+const potionIcons = <String, IconData>{
+  'strength': Icons.fitness_center, 'iron': Icons.shield, 'swift': Icons.directions_run, 'heal': Icons.favorite,
+  'pouch': Icons.savings, 'rush': Icons.precision_manufacturing, 'income': Icons.trending_up, 'banner': Icons.flag,
+  'bribe': Icons.handshake, 'warcry': Icons.campaign, 'reinforce': Icons.groups, 'rocket': Icons.rocket_launch,
+  'shield': Icons.verified_user,
+};
+const tierColors = {'normal': Color(0xFFB8C0C8), 'special': Color(0xFF6FA8E8), 'rare': Color(0xFFE2B55A)};
+Color potionColor(String id) => tierColors[POTIONS.list[id]!.tier]!;
+
+class PotionBadge extends StatelessWidget {
+  final String id;
+  final double size;
+  final bool dim;   // مستعملة أو لا تملكها
+  const PotionBadge(this.id, {super.key, this.size = 40, this.dim = false});
+  @override
+  Widget build(BuildContext context) {
+    final c = potionColor(id);
+    return Container(width: size, height: size,
+      decoration: BoxDecoration(shape: BoxShape.circle,
+        gradient: RadialGradient(center: const Alignment(-0.3, -0.35), colors: dim ? const [Color(0xFF4A443C), Color(0xFF221D18)]
+            : [Color.lerp(c, Colors.white, 0.25)!, Color.lerp(c, Colors.black, 0.55)!]),
+        border: Border.all(color: dim ? const Color(0x66A0968A) : c, width: size > 50 ? 2.5 : 1.5),
+        boxShadow: dim ? null : [BoxShadow(color: c.withValues(alpha: 0.45), blurRadius: size / 5)]),
+      child: Icon(potionIcons[id], size: size * 0.52, color: dim ? const Color(0xFF8A8278) : const Color(0xFF1B140C)));
+  }
 }

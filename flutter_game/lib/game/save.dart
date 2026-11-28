@@ -13,6 +13,7 @@ import 'empire.dart';
 import 'match.dart';
 import 'modes.dart';
 import 'police.dart';
+import 'potions.dart' show PotionState;
 import 'realism.dart';
 import 'state.dart';
 import 'story.dart';
@@ -166,7 +167,8 @@ String encodeMatch(MatchState s) {
     },
     'mode': _modeJson(modeOf(s)),
     'hints': [s.featureHinted, s.buildingHinted, s.eventHinted],
-    'fireworks': [for (final f in s.fireworks) [f.x, f.y, f.at, f.done, f.owner]],
+    'fireworks': [for (final f in s.fireworks) [f.x, f.y, f.at, f.done, f.owner, f.damage]],
+    'potions': s.potions?.toJson(),   // الجرعات (2.21.0)
     'event': _eventJson(s.cityEvent),
     'story': _storyJson(s.story),
     'net': s.netCams == null ? null : [s.netTick, [for (final c in s.netCams!) c == null ? null : [c.x, c.y, c.z, c.w, c.h]]],
@@ -326,7 +328,8 @@ MatchState decodeMatch(String text) {
   _modeBack(modeOf(s), (j['mode'] as Map).cast<String, Object?>());
   final h = j['hints'] as List;
   s..featureHinted = h[0] == true..buildingHinted = h[1] == true..eventHinted = h[2] == true;
-  s.fireworks = [for (final f in j['fireworks'] as List) Firework(_n((f as List)[0])!, _n(f[1])!, f[2] as int, f[4] as int?)..done = f[3] == true];
+  s.fireworks = [for (final f in j['fireworks'] as List) Firework(_n((f as List)[0])!, _n(f[1])!, f[2] as int, f[4] as int?, f.length > 5 ? _n(f[5]) : null)..done = f[3] == true];
+  s.potions = PotionState.fromJson(j['potions'], s.players.length);
   s.cityEvent = _eventBack(j['event'] as Map?);
   _storyBack(s.story, j['story'] as Map?);
   final net = j['net'] as List?;

@@ -4,6 +4,7 @@ import '../data/js_config.dart';
 import 'empire.dart';
 import 'features.dart';
 import 'state.dart';
+import 'potions.dart' show potionSpeed;
 
 double visionRange(MatchState state, Unit unit) {
   if (unit.stats.b('weatherProof')) return unit.stats.d('visionRange');
@@ -21,6 +22,7 @@ double moveSpeed(MatchState state, Unit unit) {
   if (state.feature == 'coups' && buildingOwner(state, 'arch') == unit.playerId) speed *= 1 + CITY_FEATURES.m('arch').d('speed');
   if (state.feature != null) speed *= eventSpeedMul(state, unit);
   if (state.economy) speed *= empireSpeedMul(state, unit.playerId);
+  if (state.potions != null) speed *= potionSpeed(state, unit.playerId);   // جرعة الخفة (2.21.0)
   if (unit.slowUntil > state.time) return speed * (1 - unit.slowFactor);
   return speed;
 }

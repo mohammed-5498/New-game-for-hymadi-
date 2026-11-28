@@ -13,6 +13,7 @@ import 'empire.dart' show classCaptureMul;
 import 'features.dart';
 import 'nations.dart';
 import 'state.dart';
+import 'potions.dart' show potionCapture;
 
 void buildCaptureZones(MatchState state) {
   final map = state.map;
@@ -77,7 +78,8 @@ void updateCapture(MatchState state) {
 final _fortCapture = EMPIRE.m('fortify').l('capture');
 void _advanceProgress(MatchState state, District district, int playerId, double power) {
   var step = CAPTURE.d('pointsPerSecond') * power * TICK_SEC * featureCaptureMul(district) * DISTRICT_SIZES.m('capture').d(sizeOf(district));
-  if (state.economy) step *= classCaptureMul(state, playerId);   // ترقية الحشد (2026-11-12)
+  if (state.economy) step *= classCaptureMul(state, playerId);
+  if (state.potions != null) step *= potionCapture(state, playerId);   // راية الاستيلاء (2.21.0)   // ترقية الحشد (2026-11-12)
   if (district.fort != 0 && (district.owner == null || !_allied(state, playerId, district.owner!))) {
     step /= 1 + (_fortCapture[district.fort - 1] as num);
   }

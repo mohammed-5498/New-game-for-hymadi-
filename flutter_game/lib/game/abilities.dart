@@ -12,6 +12,7 @@ import 'police.dart';
 import 'spatial.dart';
 import 'spawn.dart';
 import 'state.dart';
+import 'potions.dart' show potionDamage, potionTaken;
 
 bool _alive(Unit u) => u.state != 'dead' && u.hp > 0;
 bool _allied(MatchState state, Unit a, Unit b) => a.playerId == b.playerId || !isEnemy(state, a, b);
@@ -85,6 +86,7 @@ void _applyDamageBonuses(MatchState state) {
     final ph = phalanx[unit.playerId];
     if (ph != null && _inGroup(state, unit, ph)) taken = 1 - ph.d('reduce');
     if (pyramids != null) taken *= pyramidTaken(pyramids, unit);
+    if (state.potions != null) { taken *= potionTaken(state, unit.playerId); multiplier += potionDamage(state, unit.playerId); }   // الجرعات (2.21.0)
     unit.takenMul = taken;
     double speed = 0;
     if (statues != null && inZone(statues, unit)) {

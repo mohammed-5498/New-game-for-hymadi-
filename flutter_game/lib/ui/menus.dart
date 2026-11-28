@@ -8,7 +8,7 @@ import 'package:flutter/scheduler.dart';
 
 import '../i18n/tr.dart';
 import '../core/cfg.dart';
-import '../config.dart' show PACE, RETIRED_CITIES, OFFERS;
+import '../config.dart' show PACE, RETIRED_CITIES, OFFERS, POTIONS, POTION_TIERS;
 import '../core/fmath.dart';
 import '../data/campaigns.dart';
 import '../data/cities.dart';
@@ -18,6 +18,7 @@ import '../render/city_art.dart';
 import '../render/city_layer.dart';
 import '../audio/sound.dart';
 import '../game/match.dart';
+import '../game/potions.dart' show POTION_NAMES, potionDesc;
 import '../game/state.dart';
 import '../net/session.dart';
 import 'achievements.dart';
@@ -980,6 +981,7 @@ class _StoreScreenState extends State<StoreScreen> {
   int region = 0;
   bool normalLook = false;   // في المظاهر: الشكل العادي للمقارنة
   String offerKind = 'city';   // نوع المختار في قسم العروض (2.14.0): خريطة أو عصابة أو مظهر
+  String chosenPotion = POTIONS.list.keys.first;   // في قسم الجرعات (2.21.0)
 
   @override
   void initState() {
@@ -1012,7 +1014,10 @@ class _StoreScreenState extends State<StoreScreen> {
   @override
   Widget build(BuildContext context) {
     final offers = section == 'offers';
-    final groups = offers ? [('العروض', [for (final o in _offers) '${o.$1}:${o.$2}'])] : section == 'maps'
+    final potions = section == 'potions';
+    final groups = potions
+        ? [for (final t in POTION_TIERS.keys) (POTION_TIERS[t]!.name, [for (final e in POTIONS.list.entries) if (e.value.tier == t) e.key])]
+        : offers ? [('العروض', [for (final o in _offers) '${o.$1}:${o.$2}'])] : section == 'maps'
         ? [for (final r in REGIONS.l('order').cast<String>()) (REGIONS.m(r).s('name'), [for (final c in REGIONS.m(r).l('cities').cast<String>()) if (!RETIRED_CITIES.contains(c)) c])]
         : section == 'skins'
             ? [for (final r in REGIONS.l('order').cast<String>()) (REGIONS.m(r).s('name'),
@@ -1034,7 +1039,8 @@ class _StoreScreenState extends State<StoreScreen> {
           const SizedBox(width: 14),
           Expanded(child: FittedBox(fit: BoxFit.scaleDown, alignment: AlignmentDirectional.centerStart, child: Row(children: [
             for (final (k, label, icon) in const [('offers', 'العروض', Icons.local_offer_rounded), ('maps', 'الخرائط', Icons.map_rounded),
-                ('sides', 'العصابات', Icons.groups_rounded), ('skins', 'المظاهر', Icons.checkroom_rounded)])
+                ('sides', 'العصابات', Icons.groups_rounded), ('skins', 'المظاهر', Icons.checkroom_rounded),
+                ('potions', 'الجرعات', Icons.science_rounded)])
               Padding(padding: const EdgeInsetsDirectional.only(end: 8), child: Pill(icon, label, on: section == k, onTap: () => setState(() {
                 section = k; region = 0; normalLook = false;
                 if (k == 'offers') _pickOffer(Offers.flash());
@@ -1059,14 +1065,14 @@ class _StoreScreenState extends State<StoreScreen> {
             ])),
             const SizedBox(height: 8),
             Expanded(child: GridView.extent(maxCrossAxisExtent: 200, childAspectRatio: 1.55, mainAxisSpacing: 10, crossAxisSpacing: 10,
-                children: [for (final it in items) offers ? _offerCard(it) : section == 'maps' ? _mapCard(it) : _sideCard(it)])),
+                children: [for (final it in items) potions ? _potionCard(it) : offers ? _offerCard(it) : section == 'maps' ? _mapCard(it) : _sideCard(it)])),
           ])),
           const SizedBox(width: 12),
           SizedBox(width: 330, child: Container(clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0x80E2B55A)),
                 gradient: const LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0xF2302519), Color(0xF2171210)]),
                 boxShadow: const [BoxShadow(color: Color(0x99000000), blurRadius: 14, offset: Offset(0, 4))]),
-            child: section == 'maps' || (offers && offerKind == 'city') ? _mapShow() : _sideShow())),
+            child: potions ? _potionShow() : section == 'maps' || (offers && offerKind == 'city') ? _mapShow() : _sideShow())),
         ])),
       ]))),
     ));
@@ -1109,6 +1115,18 @@ class _StoreScreenState extends State<StoreScreen> {
     _caption(cityShort(c), cityName(c), 10),
   ]);
 
+  // الجرعات (2.21.0، GAME_SPEC 18.25): خانة بقرص الجرعة وسعرها، وتحتها كم تملك من حد ندرتها
+  Widget _potionCard(String id) {
+    final n = Wallet.potionCount(id), max = Wallet.potionMax(id);
+    return _card(selected: id == chosenPotion, tag: n >= max ? ('معك أقصى عدد', 1) : ('${Wallet.potionPrice(id)} ذهب', 0),
+        onTap: () => setState(() => chosenPotion = id), children: [
+      DecoratedBox(decoration: BoxDecoration(gradient: RadialGradient(center: const Alignment(0, -0.25), radius: 0.9,
+          colors: [Color.lerp(potionColor(id), const Color(0xFF17120D), 0.72)!, const Color(0xFF17120D)]))),
+      PositionedDirectional(end: 10, top: 0, bottom: 0, child: Center(child: PotionBadge(id, size: 46))),
+      _caption(POTION_NAMES[id]!, '${POTION_TIERS[POTIONS.list[id]!.tier]!.name} • معك $n من $max', 64),
+    ]);
+  }
+
   Widget _sideCard(String s) => _card(selected: s == chosenSide && (section != 'offers' || offerKind != 'city'), tag: _sideTag(s),
       onTap: () => setState(() { chosenSide = s; normalLook = false; offerKind = _isSkin(s) ? 'skin' : 'side'; }), children: [
     const DecoratedBox(decoration: BoxDecoration(gradient: RadialGradient(center: Alignment(-0.55, 0.25), radius: 0.95,
@@ -1148,6 +1166,45 @@ class _StoreScreenState extends State<StoreScreen> {
       const SizedBox(width: 7),
       Expanded(child: Text(text, style: const TextStyle(color: ink, fontSize: 12.5, height: 1.35))),
     ]));
+
+  // لوحة الجرعة: ما تفعله، والشراء حتى حد ندرتها، وخانات المباراة الثلاث
+  Widget _potionShow() {
+    final id = chosenPotion, P = POTIONS.list[id]!, tier = POTION_TIERS[P.tier]!, n = Wallet.potionCount(id), block = Wallet.potionBlocked(id);
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      SizedBox(height: 60, child: DecoratedBox(
+        decoration: BoxDecoration(gradient: RadialGradient(radius: 0.8, colors: [Color.lerp(potionColor(id), const Color(0xFF171210), 0.6)!, const Color(0x00171210)])),
+        child: Center(child: PotionBadge(id, size: 48)))),
+      Expanded(child: SingleChildScrollView(padding: const EdgeInsets.fromLTRB(14, 4, 14, 8), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Text(POTION_NAMES[id]!, style: const TextStyle(color: gold, fontSize: 19, fontWeight: FontWeight.w700, height: 1.2)),
+        Text('جرعة ${tier.name} • معك $n من ${tier.max}', style: TextStyle(color: potionColor(id), fontSize: 12.5, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 6),
+        _line(Icons.auto_awesome_rounded, potionDesc(id)),
+        Padding(padding: const EdgeInsets.only(top: 2, bottom: 4), child: WideButton('شراء بـ ${tier.price} ذهب', block != null ? null : () {
+          if (Wallet.buyPotion(id)) { sound('capture_special'); setState(() {}); }
+        }, primary: true, width: double.infinity)),
+        if (block != null) Text(block, textAlign: TextAlign.center, style: const TextStyle(color: danger, fontSize: 11.5)),
+        const SizedBox(height: 6),
+        const Text('خاناتك في المباراة', style: TextStyle(color: gold, fontSize: 13.5, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 4),
+        Row(children: [for (var k = 0; k < POTIONS.slots; k++) Expanded(child: _slot(k))]),
+        const SizedBox(height: 4),
+        const Text('المس خانة لتضع فيها هذه الجرعة، ومرة أخرى لتفرغها • كل خانة مرة واحدة في المباراة، وتنقص الجرعة مما تملك',
+            textAlign: TextAlign.center, style: TextStyle(color: dim, fontSize: 11)),
+      ]))),
+    ]);
+  }
+  Widget _slot(int k) {
+    final id = Wallet.slots[k], here = id == chosenPotion;
+    return GestureDetector(onTap: () { sound('ui_tap'); setState(() => Wallet.setSlot(k, chosenPotion)); }, child: Container(
+      height: 56, margin: const EdgeInsets.symmetric(horizontal: 3), padding: const EdgeInsets.symmetric(vertical: 3),
+      decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), color: const Color(0x33000000),
+          border: Border.all(color: here ? gold : const Color(0x55E2B55A), width: here ? 2 : 1)),
+      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+        id != null ? PotionBadge(id, size: 32, dim: Wallet.potionCount(id) == 0) : const Icon(Icons.add_rounded, size: 26, color: dim),
+        const SizedBox(height: 2),
+        Text('الخانة ${k + 1}', style: const TextStyle(color: dim, fontSize: 10)),
+      ])));
+  }
 
   Widget _mapShow() {
     final c = chosenMap;

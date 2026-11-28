@@ -19,6 +19,7 @@ import '../game/combat.dart';
 import '../game/empire.dart';
 import '../game/match.dart';
 import '../game/modes.dart';
+import '../game/potions.dart' show potionBlocked;
 import '../game/state.dart';
 import '../game/save.dart';
 import '../game/story.dart';
@@ -67,6 +68,9 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
   bool goldDoubled = false;       // بمضاعف الذهب من المكافآت اليومية (2.14.0)
   String goldNote = '';           // لماذا لا ذهب لفوز (2.13.0)
   final newAch = <Ach>[];         // إنجازات هذه المباراة (2.13.0)
+  // الجرعات (2.21.0، GAME_SPEC 18.25): خانات اللاعب الثلاث كما كانت عند بدء المباراة، وما أُرسل منها في اللعب المحلي ولم يُنفذ بعد
+  final potionSlots = List<String?>.of(Wallet.slots);
+  final potionSent = <String>{};
   late bool _resumePending = widget.resume;
   StreamSubscription<String>? _lanSub;
   int _frames = 0;
@@ -353,6 +357,28 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
     final r = empireCommand(s, s.humanId, a, did, x);
     if (!r.ok && r.reason.isNotEmpty) s.notice = Notice(r.reason, true, 2.5);
     if (r.ok) _achieved(s, Achievements.command(s, a, did));
+  }
+
+  // جرعة من خانتها: تُستعمل إن كنت تملكها ولم تستعملها في هذه المباراة، والصاروخ بعد لمسة على حي. في اللعب المحلي تُرسل فينفذها
+  // كل جهاز في التحديث نفسه، وتنقص من محفظتك حين تُرسل (وتُعلَّم مستعملة فلا تُرسل مرتين)
+  bool potionUsed(String id) => potionSent.contains(id) || (state?.potions?.used[state!.humanId].contains(id) ?? false);
+  void usePotion(String id, [int target = -1]) {
+    final s = state;
+    if (s == null || s.matchResult != null || s.humanId < 0 || potionUsed(id)) return;
+    markActive();
+    if (Wallet.potionCount(id) <= 0) { s.notice = Notice('لا تملك هذه الجرعة • تُشترى من المتجر', true, 2.5); hud.value++; return; }
+    if (id == 'rocket' && target == -1) { startPick('potion', -1, 'المس حياً على الخريطة ليسقط عليه الصاروخ'); return; }
+    final why = potionBlocked(s, s.humanId, id, target);
+    if (why != null) { if (why.isNotEmpty) s.notice = Notice(why, true, 2.5); hud.value++; return; }
+    if (lanRole != null) {
+      potionSent.add(id);
+      Lan.command({'k': 'emp', 'a': 'potion', 'd': target, 'x': id});
+    } else {
+      final r = empireCommand(s, s.humanId, 'potion', target, id);
+      if (!r.ok) { if (r.reason.isNotEmpty) s.notice = Notice(r.reason, true, 2.5); hud.value++; return; }
+    }
+    Wallet.spendPotion(id);
+    hud.value++;
   }
 
   // إنجاز جديد أثناء المباراة: إشعار بجائزته، ويُعرض مع غيره في شاشة النهاية
@@ -713,6 +739,7 @@ class MatchScreenState extends State<MatchScreen> with SingleTickerProviderState
         return;
       }
       final target = _areaAt(s, p, size);
+      if (pick.$1 == 'potion') { usePotion('rocket', target?.id ?? -2); return; }   // صاروخ الجرعة (-2: لمسة خارج الأحياء)
       empire(pick.$1, pick.$2, target?.id);
       hud.value++;
       return;
@@ -1037,7 +1064,7 @@ class _MatchPainter extends CustomPainter {
     }
     for (final cl in s.clashes) { if (sees(cl.x, cl.y)) drawClash(b, (cl.x - cl.y) * TILE_HALF_W, (cl.x + cl.y) * TILE_HALF_H - 8 + layer.drop(cl.x, cl.y), cl.t); }
     for (final fx in s.ultFx) { drawUltFx(b, fx); }
-    if (s.feature != null) drawFeatureOver(b, s, time);
+    if (s.feature != null || s.fireworks.isNotEmpty) drawFeatureOver(b, s, time);   // وصاروخ الجرعة في كل مدينة (2.21.0)
     if (s.story != null) {
       final tp = targetPoint(s);
       if (tp != null) drawStoryMarker(b, tp.$1, tp.$2, tp.$3, time);

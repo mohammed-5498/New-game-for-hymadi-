@@ -14,6 +14,7 @@ import 'features.dart';
 import 'realism.dart';
 import 'spatial.dart';
 import 'state.dart';
+import 'potions.dart' show potionTruce;
 import 'ults.dart';
 import 'units.dart';
 import 'weather.dart';
@@ -44,6 +45,7 @@ bool isEnemyId(MatchState state, int a, int b) {
   final pa = state.players[a], pb = state.players[b];
   if (pa.passive || pb.passive) return false;
   if (pa.friendOf == b || pb.friendOf == a) return false;
+  if (state.potions != null && potionTruce(state, pa, pb)) return false;   // جرعة رشوة الشرطة (2.21.0)
   final teamA = pa.team, teamB = pb.team;
   if (teamA != 0 && teamB != 0 && teamA == teamB) return false;
   return true;

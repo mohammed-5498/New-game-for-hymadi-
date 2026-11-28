@@ -16,7 +16,7 @@ const server = http.createServer((req, res) => {
   const browser = await chromium.launch({ args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader'] });
   for (const arg of process.argv.slice(2)) {
     const [name, query] = [arg.slice(0, arg.indexOf('=')), arg.slice(arg.indexOf('=') + 1)];
-    const page = await browser.newPage({ viewport: { width: 868, height: 412 }, deviceScaleFactor: 2 });
+    const page = await browser.newPage({ viewport: { width: 868, height: 412 }, deviceScaleFactor: 2, locale: process.env.LOCALE || undefined });
     const errors = []; page.on('pageerror', e => errors.push(e.message)); page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
     await page.goto(`http://127.0.0.1:${server.address().port}/?${query}`);
     await page.waitForTimeout(18000);

@@ -12,6 +12,7 @@ import '../map/pathfinding.dart';
 import 'empire.dart' show EmpireState;
 import 'victory.dart' show MatchResult;
 import 'police.dart' show PoliceTimer;
+import 'potions.dart' show PotionState;
 
 // مولّد المنطق كله (الخريطة والمباراة): Math.random في اللعبة الحالية، ببذرة المباراة هنا
 Rng simRng = Rng(1);
@@ -348,6 +349,7 @@ class MatchState {
   CityEventState? cityEvent;
   StoryState? story;
   List<Firework> fireworks = [];
+  PotionState? potions;    // الجرعات (2.21.0): null حتى تُستعمل أول جرعة في المباراة
   bool featureHinted = false, buildingHinted = false, eventHinted = false;
   int maxUnits;
   final camera = Camera();
@@ -411,7 +413,8 @@ class Firework {
   final int at;          // رقم تحديث الانفجار
   bool done = false;
   final int? owner;      // صاروخ البارود: مالك الورشة
-  Firework(this.x, this.y, this.at, [this.owner]);
+  final double? damage;  // صاروخ الجرعة (2.21.0): ضرره، وغيره بضرر البارود أو الألعاب النارية
+  Firework(this.x, this.y, this.at, [this.owner, this.damage]);
 }
 
 class Band { final String axis; final double c; final int dir; bool on = false; Band(this.axis, this.c, this.dir); }

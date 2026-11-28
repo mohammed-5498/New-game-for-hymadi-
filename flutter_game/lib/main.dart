@@ -50,9 +50,13 @@ Future<void> main() async {
   ));
 }
 
-// للفحص في المتصفح: ?match=1&city=hk&size=small&bots=3&ff=60&watch=1&spectate=1&zoom=3&mode=points
+// للفحص في المتصفح: ?match=1&city=hk&size=small&bots=3&ff=60&watch=1&spectate=1&zoom=3&mode=points، و?store=potions للمتجر بقسمه،
+// وpotions=strength,rocket,shield تضع جرعات في خانات اللاعب (2.21.0)
 Widget? _testMatch() {
   final q = Uri.base.queryParameters;
+  final pot = q['potions']?.split(',') ?? const <String>[];
+  for (var k = 0; k < pot.length && k < Wallet.slots.length; k++) { Wallet.slots[k] = pot[k]; Wallet.potions[pot[k]] = 2; }
+  if (q['store'] case final section?) return StoreScreen(section: section);
   if (q['match'] != '1') return null;
   final gangs = [for (final g in GANG_IDS) g as String], colors = [for (final c in PLAYER_COLORS) (c as J).s('id')];
   final bots = int.tryParse(q['bots'] ?? '') ?? 3;
