@@ -250,8 +250,8 @@ Future<bool> buyDialog(BuildContext context, String kind, String id, String name
   return ok == true;
 }
 
-// --- الجرعات في الواجهة (2.21.0): رمز كل جرعة على قرص بلون ندرتها (رموز مؤقتة حتى تصل صور المستخدم) ---
-const potionIcons = <String, IconData>{
+// --- الجرعات في الواجهة (2.21.1، الحل أ): صورة القارورة (scripts/import_potions.py من صور كانفا) على قرص داكن بلون ندرتها ---
+const potionIcons = <String, IconData>{   // لجرعة لم تصل صورتها بعد
   'strength': Icons.fitness_center, 'iron': Icons.shield, 'swift': Icons.directions_run, 'heal': Icons.favorite,
   'pouch': Icons.savings, 'rush': Icons.precision_manufacturing, 'income': Icons.trending_up, 'banner': Icons.flag,
   'bribe': Icons.handshake, 'warcry': Icons.campaign, 'reinforce': Icons.groups, 'rocket': Icons.rocket_launch,
@@ -265,15 +265,18 @@ class PotionBadge extends StatelessWidget {
   final double size;
   final bool dim;   // مستعملة أو لا تملكها
   const PotionBadge(this.id, {super.key, this.size = 40, this.dim = false});
+  static const _ink = Color(0xFF15110D);
   @override
   Widget build(BuildContext context) {
-    final c = potionColor(id);
-    return Container(width: size, height: size,
+    final c = dim ? const Color(0xFF6E665C) : potionColor(id);
+    return Container(width: size, height: size, padding: EdgeInsets.all(size * 0.1),
       decoration: BoxDecoration(shape: BoxShape.circle,
-        gradient: RadialGradient(center: const Alignment(-0.3, -0.35), colors: dim ? const [Color(0xFF4A443C), Color(0xFF221D18)]
-            : [Color.lerp(c, Colors.white, 0.25)!, Color.lerp(c, Colors.black, 0.55)!]),
+        gradient: RadialGradient(center: const Alignment(0, -0.25), colors: [Color.lerp(c, _ink, 0.62)!, Color.lerp(c, _ink, 0.86)!]),
         border: Border.all(color: dim ? const Color(0x66A0968A) : c, width: size > 50 ? 2.5 : 1.5),
-        boxShadow: dim ? null : [BoxShadow(color: c.withValues(alpha: 0.45), blurRadius: size / 5)]),
-      child: Icon(potionIcons[id], size: size * 0.52, color: dim ? const Color(0xFF8A8278) : const Color(0xFF1B140C)));
+        boxShadow: const [BoxShadow(color: Color(0x66000000), blurRadius: 3, offset: Offset(0, 1))]),
+      child: Image.asset('assets/potions/$id.webp', filterQuality: FilterQuality.medium,
+          color: dim ? const Color(0xFF808080) : null, colorBlendMode: dim ? BlendMode.saturation : null,   // المستعملة رمادية
+          opacity: dim ? const AlwaysStoppedAnimation(0.55) : null,
+          errorBuilder: (_, _, _) => FittedBox(child: Icon(potionIcons[id], color: dim ? const Color(0xFF8A8278) : c))));
   }
 }

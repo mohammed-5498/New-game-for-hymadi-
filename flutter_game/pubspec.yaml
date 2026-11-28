@@ -64,6 +64,7 @@ flutter:
     - assets/audio/synth/ # المؤثرات المولَّدة (scripts/export_synth_sounds.cjs)
     - assets/thumbs/      # صور مصغرة للمدن والعصابات في القوائم (scripts/export_thumbs.cjs)
     - assets/units/       # صور الشخصيات مقطّعة (scripts/slice_units.py): أجزاؤها في lib/data/unit_sprites.dart
+    - assets/potions/     # صور الجرعات الـ13 من كانفا (scripts/import_potions.py)
     - assets/fonts/OFL.txt   # رخصة الخط (صفحة الرخص في التطبيق)
 
   # خط اللعبة (2.5.0، اختيار المستخدم: El Messiri، رخصة SIL OFL 1.1): عربي وإنجليزي، من Google Fonts بأوزانه الأربعة
